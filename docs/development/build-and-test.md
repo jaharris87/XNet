@@ -157,11 +157,11 @@ runs. It has unreliable pass/fail reporting.
 - prints a warning and writes `diff_*` when results differ.
 
 The wrapper invokes the selected executable without capturing or propagating
-its exit status. Later file operations and `test_diff` determine the wrapper's
-final status, and a request with no recognized problem ID can run no problem.
-A zero wrapper status establishes only the wrapper status. Confirm program
-invocation, direct program status, expected diagnostics, output production,
-and numerical agreement separately.
+its exit status. Its final commands normally leave a zero wrapper status even
+when the executable or intermediate file operations fail, and a request with
+no recognized problem ID can run no problem. Treat the wrapper status as
+uninformative. Confirm program invocation, direct program status, expected
+diagnostics, output production, and numerical agreement separately.
 
 A clean checkout currently supplies no tracked comparison files under
 `test/Test_Problems/Results/`. The script creates that directory. Ordinary

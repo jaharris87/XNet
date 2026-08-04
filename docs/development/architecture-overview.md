@@ -70,8 +70,9 @@ The main numerical flow is:
 ```text
 full_net()
   -> timestep()
-       -> state preparation and timestep selection
+       -> retain the prior timestep state and identify zones needing an initial estimate
        -> cross_sect() and yderiv() for zones needing an initial estimate
+       -> timestep selection and trial-state preparation
   -> selected BE or BDF implicit solve
        -> Newton iterations
        -> cross_sect()

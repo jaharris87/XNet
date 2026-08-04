@@ -1,0 +1,80 @@
+name: Initiative
+description: Coordinate a larger objective through bounded component issues
+labels: []
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What overall outcome is this initiative intended to achieve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why does this work belong together, and why should it be pursued now?
+    validations:
+      required: true
+
+  - type: textarea
+    id: authority_and_boundaries
+    attributes:
+      label: Authority and boundaries
+      description: What work does this initiative authorize, and which decisions remain with the human maintainer? The initiative does not authorize redesign or implementation beyond these stated limits.
+    validations:
+      required: true
+
+  - type: textarea
+    id: component_work
+    attributes:
+      label: Component work
+      description: List expected investigations, changes, or decision points. Component code changes should normally use their own bounded issue and pull request.
+      placeholder: |
+        - [ ] Investigation or component issue:
+        - [ ] Investigation or component issue:
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and ordering
+      description: Which components depend on earlier findings or merges?
+
+  - type: textarea
+    id: integration_criteria
+    attributes:
+      label: Integration criteria
+      description: What must be true after the component work is combined?
+    validations:
+      required: true
+
+  - type: textarea
+    id: final_validation
+    attributes:
+      label: Final validation
+      description: What repository-level, numerical, scientific, portability, or performance checks are needed before this initiative is complete?
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: What adjacent modernization or cleanup is intentionally excluded?
+
+  - type: textarea
+    id: completion_conditions
+    attributes:
+      label: Completion conditions
+      description: State the clear conditions under which this umbrella issue may be closed. Do not treat the initiative as one large implementation prompt.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add any other information needed to understand or coordinate the initiative.

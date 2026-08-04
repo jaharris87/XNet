@@ -1,0 +1,86 @@
+name: Bounded change
+description: Define a focused implementation with explicit completion evidence
+labels: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What behavior, limitation, or need does this change address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why does this matter to users, maintainers, scientific results, portability, or performance?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What cohesive implementation work is included? Do not use this issue for a broad modernization objective.
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: What related cleanup, redesign, migration, optimization, or follow-up work should be excluded?
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that will show the work is complete, rather than implementation steps.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: required_evidence
+    attributes:
+      label: Required evidence
+      description: State the build, execution, numerical, scientific, portability, interface, or performance evidence needed. Mark categories that do not apply.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: expected_effects
+    attributes:
+      label: Expected effects
+      description: Select effects that are expected or require checking. Leave this blank when none are known.
+      options:
+        - label: Numerical results
+        - label: Floating-point ordering or reproducibility
+        - label: Convergence behavior
+        - label: Scientific interpretation
+        - label: Runtime inputs or outputs
+        - label: Public interfaces
+        - label: Portability
+        - label: Performance
+        - label: Dependencies or language requirements
+
+  - type: textarea
+    id: test_effectiveness
+    attributes:
+      label: Test effectiveness
+      description: For a defect fix or behavioral change, state what incorrect or missing behavior the check should detect, whether it should fail before the fix, and how that will be shown when practical.
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and related work
+      description: List prerequisite investigations, related issues, upstream work, or deferred follow-up.
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add any other information needed to understand the proposed change.

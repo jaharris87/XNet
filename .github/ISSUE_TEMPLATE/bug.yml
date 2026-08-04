@@ -1,0 +1,106 @@
+name: Bug report
+description: Report incorrect behavior, a regression, or a reproducible failure
+labels: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is wrong? Describe the observed behavior concretely.
+      placeholder: Describe what happened, including relevant messages or results.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: What should have happened, and what supports that expectation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix_scope
+    attributes:
+      label: Fix scope
+      description: What behavior, inputs, or configurations should the fix cover? An implementation approach is not required.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest practical reproduction, including the working directory, commands, inputs or test problem, and runtime steps.
+      placeholder: |
+        Working directory: ...
+
+        ```text
+        exact command
+        ```
+
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Build and runtime configuration
+      description: Provide the relevant configuration. Include only details that apply.
+      placeholder: |
+        - Compiler and version:
+        - Relevant make variables, including MPI, OpenMP, accelerator, EOS, matrix solver, or linear-algebra settings:
+        - Operating system or HPC platform:
+        - Processor or accelerator:
+        - Revision or commit:
+        - Run size and parallel configuration:
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Provide important diagnostics, output excerpts, numerical differences, diff files, backtraces, or other evidence. A zero command status alone does not show that a legacy XNet test succeeded.
+      placeholder: Paste short excerpts here or attach larger files. Remove secrets and machine-specific credentials.
+    validations:
+      required: true
+
+  - type: textarea
+    id: completion_evidence
+    attributes:
+      label: Completion criteria and evidence
+      description: List observable conditions for considering the defect fixed and the evidence that should demonstrate them.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: known_working_case
+    attributes:
+      label: Known working case
+      description: Did this work with another revision, compiler, platform, network, input, or configuration?
+
+  - type: checkboxes
+    id: consequences
+    attributes:
+      label: Possible consequences
+      description: Select any effects that may apply. It is fine to select unknown.
+      options:
+        - label: Numerical results
+        - label: Scientific interpretation
+        - label: Portability
+        - label: Performance
+        - label: External interface or output format
+        - label: Build or execution behavior only
+        - label: Unknown
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add relevant files, suspected causes, related issues, references, or workarounds. A proposed fix is not required.

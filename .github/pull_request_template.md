@@ -19,15 +19,44 @@ List the exact commands and configurations used.
 command
 ```
 
+### Build
+
 - Compiler and version:
 - Relevant build variables:
+- Build result, or why not applicable:
+
+### Execution
+
 - Input or test problem:
-- Comparison or reference source:
-- Tolerances, when applicable:
-- Observed result:
+- Runtime and parallel configuration:
+- Completion evidence, including direct status and expected diagnostics:
 
 A successful build, zero exit status, or completed legacy test script is not by
 itself evidence of numerical or scientific correctness.
+
+### Numerical agreement
+
+- Comparison or reference source:
+- Tolerances, when applicable:
+- Result, or why not applicable:
+
+### Scientific validity
+
+- Evidence, reference, or maintainer decision needed:
+- Result, or why not applicable:
+
+### Portability
+
+- Configurations tested:
+- Configurations affected but not tested:
+- Known platform, compiler, MPI, accelerator, or library limitations:
+
+Do not claim portability from one successful configuration.
+
+### Performance
+
+- Measurement method and comparison case:
+- Result, or why not evaluated:
 
 ## Numerical, scientific, and performance effects
 
@@ -42,14 +71,6 @@ Select the statements that apply:
 - [ ] Performance was not evaluated because it is outside the scope of this change.
 
 Details:
-
-## Portability and configurations
-
-- Configurations tested:
-- Configurations affected but not tested:
-- Known platform, compiler, MPI, accelerator, or library limitations:
-
-Do not claim portability from one successful configuration.
 
 ## Test effectiveness
 

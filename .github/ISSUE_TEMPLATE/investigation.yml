@@ -65,7 +65,7 @@ body:
     attributes:
       label: Implementation authority
       options:
-        - label: This issue authorizes investigation and reporting only unless implementation work is explicitly included in the scope.
+        - label: This issue authorizes investigation and reporting only. Implementation requires explicit bounded scope, completion criteria, and evidence requirements in this issue or a separate bug or change issue.
           required: true
     validations:
       required: true

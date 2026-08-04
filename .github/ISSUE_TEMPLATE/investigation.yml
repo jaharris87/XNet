@@ -1,0 +1,77 @@
+name: Investigation
+description: Answer a bounded technical or scientific software question before implementation
+labels: []
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What specific question must this investigation answer? Keep it narrow enough to reach a concrete conclusion.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why does the answer matter, and what decision or later work depends on it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which code paths, configurations, files, behaviors, or alternatives should be examined?
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What should not be implemented, redesigned, or investigated as part of this issue?
+
+  - type: textarea
+    id: starting_points
+    attributes:
+      label: Relevant starting points
+      description: List known files, routines, test cases, branches, archived material, earlier issues, references, or configurations. Treat archived material and old branches as investigative leads until independently verified.
+
+  - type: textarea
+    id: evidence_expected
+    attributes:
+      label: Evidence expected
+      description: What evidence should support the conclusion?
+      placeholder: |
+        Examples: code-path tracing, exact build commands, reproduced output,
+        numerical comparisons, compiler or platform comparisons, small
+        experiments, documentation review, performance measurements, or
+        identified uncertainties.
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Deliverable or decision
+      description: What should the investigation produce?
+      placeholder: A written conclusion, recommendation, reproduction, bounded implementation issue, decision among alternatives, or finding that no code change is warranted.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: implementation_authority
+    attributes:
+      label: Implementation authority
+      options:
+        - label: This issue authorizes investigation and reporting only unless implementation work is explicitly included in the scope.
+          required: true
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add any other information needed to understand the investigation.

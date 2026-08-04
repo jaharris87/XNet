@@ -120,7 +120,9 @@ Self-review prepares the change for independent review.
 
 ## Opening the PR
 
-Open the feature PR against `development` and link the governing issue. Record:
+Open the feature PR against `development` and reference the governing issue in
+the PR description. Use the issue number or URL so the PR record remains
+traceable. A **Development** sidebar link is optional. Record:
 
 - the problem and implemented change;
 - explicit non-goals and deferred work;
@@ -215,6 +217,26 @@ The human maintainer owns final scientific and architectural judgment, the
 merge of ordinary feature PRs, and the final integrated umbrella result. An
 umbrella issue can explicitly delegate component-PR merges to its orchestrator
 under the rules below.
+
+## Post-merge closeout
+
+After the human maintainer merges an ordinary feature PR into `development`:
+
+1. confirm that the merged PR satisfies the governing issue's acceptance
+   criteria, or record the remaining work and keep the issue open;
+2. when the issue is complete, close it as completed; and
+3. add a closing comment that links the merged PR and identifies any deferred
+   follow-up work.
+
+The human maintainer initiates this closeout. An agent may prepare the record
+or close the issue only with explicit maintainer authorization.
+
+GitHub processes issue-closing keywords such as `Closes #123` only for pull
+requests targeting the repository's default branch. XNet feature PRs target
+`development`, so those keywords do not close the issue and do not replace
+this post-merge step. If a later PR to `main` is intended to close an issue
+that remains open, put the closing keyword in that PR description or in a
+commit message merged into `main`.
 
 ## Coordinated umbrella work
 

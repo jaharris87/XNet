@@ -120,9 +120,9 @@ Self-review prepares the change for independent review.
 
 ## Opening the PR
 
-Open the feature PR against `development` and manually link the governing
-issue through the PR or issue **Development** sidebar. A closing keyword in a
-`development`-targeted PR does not create that GitHub link. Record:
+Open the feature PR against `development` and reference the governing issue in
+the PR description. Use the issue number or URL so the PR record remains
+traceable. A **Development** sidebar link is optional. Record:
 
 - the problem and implemented change;
 - explicit non-goals and deferred work;
@@ -233,10 +233,10 @@ or close the issue only with explicit maintainer authorization.
 
 GitHub processes issue-closing keywords such as `Closes #123` only for pull
 requests targeting the repository's default branch. XNet feature PRs target
-`development`, so those keywords create no GitHub link and do not replace this
-post-merge step. If a later PR to `main` is intended to close an issue that
-remains open, put the closing keyword in that PR description or in a commit
-message merged into `main`.
+`development`, so those keywords do not close the issue and do not replace
+this post-merge step. If a later PR to `main` is intended to close an issue
+that remains open, put the closing keyword in that PR description or in a
+commit message merged into `main`.
 
 ## Coordinated umbrella work
 

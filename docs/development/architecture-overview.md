@@ -69,16 +69,18 @@ The main numerical flow is:
 
 ```text
 full_net()
-  -> timestep selection and state preparation
-  -> cross_sect()
-       -> EOS-dependent quantities
-       -> screening and partition functions
-       -> weak and neutrino rates
-       -> velocity-integrated reaction-rate arrays
-  -> yderiv()
-       -> abundance derivatives
+  -> timestep()
+       -> state preparation and timestep selection
+       -> cross_sect() and yderiv() for zones needing an initial estimate
   -> selected BE or BDF implicit solve
        -> Newton iterations
+       -> cross_sect()
+            -> EOS-dependent quantities
+            -> screening and partition functions
+            -> weak and neutrino rates
+            -> velocity-integrated reaction-rate arrays
+       -> yderiv()
+            -> abundance derivatives
        -> jacobian_build()
        -> jacobian factorization/solve
        -> abundance and optional temperature update
@@ -96,13 +98,20 @@ choices. `source/Makefile.internal` maps those choices to compilers, flags,
 sources, and libraries. `source/Makefile.dev` adds the accelerator-specific
 bindings and directive selections.
 
-Important selections change which file supplies a common module name:
+Important selections change which file is intended to supply a common module
+name:
 
 - `xnet_parallel.F90` or `xnet_parallel_stubs.F90` supplies
   `xnet_parallel`.
 - `xnet_eos_starkiller.F90`, `xnet_eos_helm.F90`, or
   `xnet_eos_bahcall.F90` supplies `xnet_eos`.
 - one `xnet_jacobian_*.F90` file supplies `xnet_jacobian`.
+
+The current `xnet_output.o` prerequisite names `xnet_parallel.o` directly.
+Consequently, a forced build with `MPI_MODE=OFF` can compile both
+`xnet_parallel.F90` and `xnet_parallel_stubs.F90`, even though the linked
+driver selects the stubs. Both define the same module. See
+`build-and-test.md` for the clean-build consequence.
 
 Consequently, source inspection and tests must follow the configuration named
 by the task. See `build-and-test.md` for clean-build requirements.

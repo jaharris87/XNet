@@ -13,7 +13,9 @@ tolerances, and trusted comparisons.
 
 Evaluate each relevant category explicitly:
 
-- **Execution:** Does the program build and complete the intended path?
+- **Build:** Does the requested configuration compile and link?
+- **Runtime execution:** Does the program start, complete the intended path,
+  and produce the expected diagnostics or outputs?
 - **Software behavior:** Does the implementation meet the specified interface
   and error-handling requirements?
 - **Numerical agreement:** Do computed quantities agree with a justified
@@ -25,8 +27,10 @@ Evaluate each relevant category explicitly:
 - **Performance:** Does the change preserve or improve the relevant runtime,
   memory use, transfer cost, or scaling behavior?
 
-Report evidence by category. A build result answers the execution question. A
-numerical comparison requires its own quantities, reference, and tolerances.
+Report evidence by category. A build result answers the build question.
+Runtime completion requires direct program status and expected runtime
+evidence. A numerical comparison requires its own quantities, reference, and
+tolerances.
 
 ## Evidence for defect fixes
 

@@ -27,6 +27,19 @@ codex/<issue-number>-<short-name>
 Confirm the base branch and worktree state before branching. Preserve user
 changes and report any overlap with the intended work.
 
+For a feature branch:
+
+1. inspect the worktree and current branch;
+2. fetch `origin`;
+3. compare local `development` with `origin/development`, including ahead,
+   behind, and divergence state;
+4. resolve unexpected local commits or missing remote commits with the
+   maintainer;
+5. branch from the exact `development` commit confirmed for the issue.
+
+A clean worktree describes file state. The branch comparison establishes the
+base commit for the proposed change.
+
 The maintainer decides when accumulated work on `development` is ready for an
 upstream PR or other upstream integration process. After upstream accepts the
 work, synchronize the fork's `main` and reconcile `development` as directed by
@@ -198,8 +211,10 @@ Hand the PR to the human maintainer with:
 - remaining non-blocking work and limitations;
 - any scientific or architectural decisions requiring human judgment.
 
-The human maintainer owns final scientific and architectural judgment and the
-final feature-PR merge.
+The human maintainer owns final scientific and architectural judgment, the
+merge of ordinary feature PRs, and the final integrated umbrella result. An
+umbrella issue can explicitly delegate component-PR merges to its orchestrator
+under the rules below.
 
 ## Coordinated umbrella work
 
@@ -215,8 +230,8 @@ The orchestrator:
 - tracks decisions and evidence across components;
 - prevents component work from broadening into neighboring scopes;
 - reviews component findings and dispositions;
-- makes component merge decisions within the authority granted by the
-  umbrella issue;
+- assesses component readiness and, when the umbrella issue explicitly grants
+  it, performs component-PR merges;
 - performs integrated build, numerical, compatibility, and performance checks
   required by the parent issue;
 - hands the final integrated result to the human maintainer.

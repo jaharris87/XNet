@@ -39,7 +39,7 @@ The tracked defaults currently resolve to:
 | `EXE` | `xnet` | Main executable name |
 | `CMODE` | `OPT` | Optimized build |
 | `PE_ENV` | `GNU` | GNU compiler configuration |
-| `MPI_MODE` | `OFF` | Serial driver with parallel stubs |
+| `MPI_MODE` | `OFF` | Selects parallel stubs for the linked driver; see the current dependency limitation below |
 | `OPENMP_MODE` | `OFF` | OpenMP host threading disabled |
 | `GPU_MODE` | `OFF` | Accelerator runtime and libraries disabled |
 | `GPU_BACKEND` | `CUDA` | Accelerator vendor selection when GPU mode is enabled |
@@ -77,6 +77,20 @@ This includes changes to compiler, compile mode, numerical flags, MPI,
 threading, accelerator mode, EOS, matrix solver, or CPU/GPU linear algebra.
 The clean target removes objects and module files while leaving some
 executables. Confirm the requested target was linked in the new build output.
+
+### Current MPI dependency limitation
+
+With `MPI_MODE=OFF`, `source/Makefile` selects
+`xnet_parallel_stubs.o` for the linked executable. The explicit prerequisite
+for `xnet_output.o` currently names `xnet_parallel.o` directly. A forced clean
+or parallel build therefore schedules both `xnet_parallel_stubs.F90` with the
+selected Fortran compiler and `xnet_parallel.F90` with `mpifort`.
+
+Both files define the `xnet_parallel` module. The nominal serial build can
+require an MPI compiler and can compile two providers of the same module file
+concurrently. Until the dependency is corrected, inspect clean build output
+for both compilations and record MPI compiler availability even when
+`MPI_MODE=OFF`.
 
 Pass local configuration choices on the Make command line and leave tracked
 defaults unchanged. The main selection variables include:
@@ -142,9 +156,20 @@ runs. It has unreliable pass/fail reporting.
 - removes timer sections before comparison;
 - prints a warning and writes `diff_*` when results differ.
 
-A numerical mismatch in `test_diff` can still leave the script with a zero
-exit status. Treat command completion, output production, and numerical
-agreement as separate observations.
+The wrapper invokes the selected executable without capturing or propagating
+its exit status. Later file operations and `test_diff` determine the wrapper's
+final status, and a request with no recognized problem ID can run no problem.
+A zero wrapper status establishes only the wrapper status. Confirm program
+invocation, direct program status, expected diagnostics, output production,
+and numerical agreement separately.
+
+A clean checkout currently supplies no tracked comparison files under
+`test/Test_Problems/Results/`. The script creates that directory. Ordinary
+problem paths then attempt comparison against absent results. The `xnse` path
+copies the current result into the reference location when the expected file
+is absent, and those diagnostic files are ignored by `.gitignore`. Establish
+an independent comparison result with recorded provenance before claiming
+numerical agreement.
 
 The `source/Makefile` includes `test`, `test_serial`, `test_heat`,
 `test_simple`, `test_batch`, `test_setup`, and `test_nse` targets. Inspect the
@@ -158,11 +183,16 @@ verify every command needed for a current task.
 
 After any legacy run:
 
-1. inspect program diagnostics and exit status;
-2. inspect generated `diff_*` files and both compared results;
-3. state the quantities and tolerances used for the conclusion;
-4. inspect `git status` for generated or modified files;
-5. preserve tracked reference data unless the issue explicitly changes it.
+1. capture direct program status or state why the wrapper obscures it;
+2. confirm that the requested problem ran and produced expected diagnostics;
+3. inspect generated `diff_*` files and identify whether an independent
+   comparison result exists;
+4. record the comparison result's provenance;
+5. state the quantities and tolerances used for the conclusion;
+6. inspect ignored files as well as `git status` for generated or modified
+   files;
+7. preserve established reference data unless the issue explicitly changes
+   it.
 
 ## Evidence for new work
 

@@ -75,10 +75,11 @@ mode, accelerator mode, EOS, linear-algebra library, or matrix solver, then
 rebuild the requested target.
 
 The legacy test commands provide useful run recipes and comparisons with
-unreliable pass/fail behavior. A zero exit status confirms execution only.
-Inspect diagnostics and diff files before reporting numerical agreement. See
-`docs/development/build-and-test.md` for tracked defaults, utility targets,
-runtime inputs, test side effects, and evidence requirements.
+unreliable pass/fail behavior. Treat the wrapper's exit status as wrapper
+status. Confirm XNet invocation and completion from direct program status and
+produced diagnostics, then inspect diff files before reporting numerical
+agreement. See `docs/development/build-and-test.md` for tracked defaults,
+utility targets, runtime inputs, test side effects, and evidence requirements.
 
 ## Core change rules
 
@@ -123,9 +124,9 @@ files may follow external conventions.
 ## Development workflow
 
 The fork's `main` branch mirrors upstream `main`. Feature work branches from
-the current `development` branch and targets PRs back to `development`. The
-maintainer coordinates eventual upstream integration and subsequent branch
-synchronization. See `docs/development/maintainer-workflow.md` before
+the verified current `development` base and targets PRs back to `development`.
+The maintainer coordinates eventual upstream integration and subsequent
+branch synchronization. See `docs/development/maintainer-workflow.md` before
 performing repository operations.
 
 Repository work intended for merge follows this compact flow:

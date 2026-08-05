@@ -11,12 +11,14 @@ import pytest
 
 from xnet_regression import (
     CharacterizationReference,
+    CompositionNorms,
     ComparisonFailure,
     ExecutionFailure,
     ParsingFailure,
     RegressionCase,
     SetupFailure,
     Tolerance,
+    calculate_composition_norms,
     compare_final_states,
     parse_diagnostic,
     prepare_work_directory,
@@ -49,8 +51,7 @@ def _synthetic_reference() -> CharacterizationReference:
     fields = {
         name: Tolerance(value, atol=1e-6, rtol=1e-6)
         for name, value in {
-            "stop_time": 2.0,
-            "time": 2.0,
+            "target_time": 2.0,
             "temperature_gk": 2.0,
             "density": 4.0e6,
             "electron_fraction": 0.5,
@@ -62,8 +63,27 @@ def _synthetic_reference() -> CharacterizationReference:
         final_step_atol=2,
         fields=fields,
         mass_fractions={
-            "c12": Tolerance(0.5, atol=1e-8, rtol=1e-8),
-            "o16": Tolerance(0.5, atol=1e-8, rtol=1e-8),
+            species: 0.5 if species in {"c12", "o16"} else 0.0
+            for species in (
+                "he4",
+                "c12",
+                "o16",
+                "ne20",
+                "mg24",
+                "si28",
+                "s32",
+                "ar36",
+                "ca40",
+                "ti44",
+                "cr48",
+                "fe52",
+                "ni56",
+                "zn60",
+            )
+        },
+        mass_fraction_policies={
+            "si28": Tolerance(0.0, atol=1e-8, rtol=1e-8),
+            "s32": Tolerance(0.0, atol=1e-8, rtol=1e-8),
         },
         mass_fraction_sum_atol=1e-8,
     )
@@ -125,6 +145,33 @@ def test_final_step_outside_tolerance_fails() -> None:
     state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
     with pytest.raises(ComparisonFailure, match="final step 45"):
         compare_final_states((replace(state, step=45),), _synthetic_reference())
+
+
+def test_achieved_time_must_reach_target_time() -> None:
+    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
+    with pytest.raises(ComparisonFailure, match="did not reach target time"):
+        compare_final_states((replace(state, time=1.9),), _synthetic_reference())
+
+
+def test_composition_norms_are_diagnostic_only() -> None:
+    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
+    perturbed_mass_fractions = dict(state.mass_fractions)
+    perturbed_mass_fractions["c12"] += 1e-4
+    perturbed_mass_fractions["o16"] -= 1e-4
+    perturbed = replace(state, mass_fractions=perturbed_mass_fractions)
+    reference = _synthetic_reference()
+
+    diagnostics = calculate_composition_norms((perturbed,), reference)
+    assert diagnostics == (
+        CompositionNorms(
+            zone=1,
+            l1=pytest.approx(2e-4),
+            l2=pytest.approx(2**0.5 * 1e-4),
+            linf=pytest.approx(1e-4),
+            linf_species="c12",
+        ),
+    )
+    compare_final_states((perturbed,), reference)
 
 
 def test_missing_final_output_is_a_parsing_failure() -> None:

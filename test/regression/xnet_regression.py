@@ -101,7 +101,7 @@ class ProcessResult:
 class FinalState:
     zone: int
     step: int
-    stop_time: float
+    target_time: float
     time: float
     temperature_gk: float
     density: float
@@ -122,8 +122,18 @@ class CharacterizationReference:
     final_step: int
     final_step_atol: int
     fields: Mapping[str, Tolerance]
-    mass_fractions: Mapping[str, Tolerance]
+    mass_fractions: Mapping[str, float]
+    mass_fraction_policies: Mapping[str, Tolerance]
     mass_fraction_sum_atol: float
+
+
+@dataclass(frozen=True)
+class CompositionNorms:
+    zone: int
+    l1: float
+    l2: float
+    linf: float
+    linf_species: str | None
 
 
 def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
@@ -448,7 +458,7 @@ def parse_diagnostic(
         states[zone] = FinalState(
             zone=zone,
             step=step,
-            stop_time=values[0],
+            target_time=values[0],
             time=values[1],
             temperature_gk=values[2],
             density=values[3],
@@ -481,6 +491,16 @@ def _load_tolerance(item: object, context: str) -> Tolerance:
     return tolerance
 
 
+def _load_mass_fraction_policy(
+    item: object, value: float, context: str
+) -> Tolerance:
+    if not isinstance(item, dict) or set(item) != {"atol", "rtol"}:
+        raise SetupFailure(
+            f"reference entry {context} must contain exactly atol and rtol"
+        )
+    return _load_tolerance({"value": value, **item}, context)
+
+
 def load_reference(path: Path) -> CharacterizationReference:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -498,16 +518,21 @@ def load_reference(path: Path) -> CharacterizationReference:
             for name, item in document["fields"].items()
         }
         mass_fractions = {
-            name: _load_tolerance(item, f"mass_fractions.{name}")
-            for name, item in document["mass_fractions"].items()
+            name: float(value)
+            for name, value in document["mass_fractions"].items()
+        }
+        mass_fraction_policies = {
+            name: _load_mass_fraction_policy(
+                item, mass_fractions[name], f"mass_fraction_tolerances.{name}"
+            )
+            for name, item in document["mass_fraction_tolerances"].items()
         }
         mass_fraction_sum_atol = float(document["mass_fraction_sum_atol"])
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise SetupFailure(f"invalid characterization reference structure in {path}: {error}") from error
 
     required_fields = {
-        "stop_time",
-        "time",
+        "target_time",
         "temperature_gk",
         "density",
         "electron_fraction",
@@ -528,9 +553,14 @@ def load_reference(path: Path) -> CharacterizationReference:
             "reference final step and its tolerance must be nonnegative integers"
         )
     if not mass_fractions or not all(
-        isinstance(species, str) and species for species in mass_fractions
+        isinstance(species, str)
+        and species
+        and math.isfinite(value)
+        for species, value in mass_fractions.items()
     ):
-        raise SetupFailure("reference mass-fraction selection is empty or invalid")
+        raise SetupFailure("reference composition is empty or invalid")
+    if not mass_fraction_policies:
+        raise SetupFailure("reference mass-fraction tolerance selection is empty")
     if not math.isfinite(mass_fraction_sum_atol) or mass_fraction_sum_atol < 0:
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
     return CharacterizationReference(
@@ -539,6 +569,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         final_step_atol=final_step_atol,
         fields=fields,
         mass_fractions=mass_fractions,
+        mass_fraction_policies=mass_fraction_policies,
         mass_fraction_sum_atol=mass_fraction_sum_atol,
     )
 
@@ -547,6 +578,57 @@ def _difference(actual: float, reference: Tolerance) -> tuple[bool, float, float
     absolute_difference = abs(actual - reference.value)
     allowed = reference.atol + reference.rtol * abs(reference.value)
     return absolute_difference <= allowed, absolute_difference, allowed
+
+
+def calculate_composition_norms(
+    states: Sequence[FinalState], reference: CharacterizationReference
+) -> tuple[CompositionNorms, ...]:
+    """Calculate diagnostic-only norms over the complete composition vector."""
+
+    diagnostics: list[CompositionNorms] = []
+    for state in states:
+        differences = {
+            species: abs(state.mass_fractions[species] - expected)
+            for species, expected in reference.mass_fractions.items()
+        }
+        maximum_species = max(differences, key=differences.__getitem__)
+        linf = differences[maximum_species]
+        diagnostics.append(
+            CompositionNorms(
+                zone=state.zone,
+                l1=math.fsum(differences.values()),
+                l2=math.sqrt(math.fsum(value * value for value in differences.values())),
+                linf=linf,
+                linf_species=maximum_species if linf > 0.0 else None,
+            )
+        )
+    return tuple(diagnostics)
+
+
+def _write_composition_diagnostics(
+    work_directory: Path, diagnostics: Sequence[CompositionNorms]
+) -> None:
+    document = {
+        "status": "diagnostic-only; these norms do not determine pass/fail",
+        "vector": "absolute mass-fraction errors for every species in the case",
+        "zones": [
+            {
+                "zone": item.zone,
+                "l1": item.l1,
+                "l2": item.l2,
+                "linf": item.linf,
+                "linf_species": item.linf_species,
+            }
+            for item in diagnostics
+        ],
+    }
+    path = work_directory / "composition_error_norms.json"
+    try:
+        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    except OSError as error:
+        raise ExecutionFailure(
+            f"could not preserve composition diagnostics in {path}: {error}"
+        ) from error
 
 
 def compare_final_states(
@@ -566,6 +648,18 @@ def compare_final_states(
                 f"allowed={reference.final_step_atol}"
             )
 
+        target_policy = reference.fields["target_time"]
+        completion_policy = Tolerance(
+            state.target_time, target_policy.atol, target_policy.rtol
+        )
+        completed, difference, allowed = _difference(state.time, completion_policy)
+        if not completed:
+            failures.append(
+                f"zone {state.zone} achieved time {state.time:.9e} did not reach "
+                f"target time {state.target_time:.9e}: |difference|={difference:.3e}, "
+                f"allowed={allowed:.3e}"
+            )
+
         for field, policy in reference.fields.items():
             actual = getattr(state, field)
             passed, difference, allowed = _difference(actual, policy)
@@ -577,7 +671,7 @@ def compare_final_states(
                     f"rtol={policy.rtol:.3e})"
                 )
 
-        for species, policy in reference.mass_fractions.items():
+        for species, policy in reference.mass_fraction_policies.items():
             actual = state.mass_fractions[species]
             passed, difference, allowed = _difference(actual, policy)
             if not passed:
@@ -637,7 +731,7 @@ def run_and_compare(
                 "reference expected_zones does not match the case definition: "
                 f"{reference.expected_zones} != {case.expected_zones}"
             )
-        unknown_reference_species = set(reference.mass_fractions).difference(
+        unknown_reference_species = set(reference.mass_fraction_policies).difference(
             case.expected_species
         )
         if unknown_reference_species:
@@ -645,6 +739,13 @@ def run_and_compare(
                 "reference selects species absent from the case definition: "
                 + ", ".join(sorted(unknown_reference_species))
             )
+        if tuple(reference.mass_fractions) != case.expected_species:
+            raise SetupFailure(
+                "composition reference does not match the case species: "
+                f"{tuple(reference.mass_fractions)} != {case.expected_species}"
+            )
+        diagnostics = calculate_composition_norms(states, reference)
+        _write_composition_diagnostics(prepared, diagnostics)
         compare_final_states(states, reference)
     except (ParsingFailure, ComparisonFailure) as error:
         raise type(error)(f"{error}; artifacts: {prepared}") from None

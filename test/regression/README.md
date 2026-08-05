@@ -42,10 +42,11 @@ current directory. Network-preprocessing products therefore stay inside the
 temporary directory rather than mutating `test/Data_alpha`. A nonempty work
 directory is a setup failure, so old diagnostics cannot satisfy a new run.
 
-Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`, and
-`xnet.status.txt` beside the XNet outputs. Failure messages give the work
-directory path. pytest retains recent temporary directories. To choose a
-stable diagnostic location for a run, use its standard option, for example:
+Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`,
+`xnet.status.txt`, and `composition_error_norms.json` beside the XNet outputs.
+Failure messages give the work directory path. pytest retains recent temporary
+directories. To choose a stable diagnostic location for a run, use its
+standard option, for example:
 
 ```bash
 python3 -m pytest test/regression \
@@ -116,8 +117,15 @@ larger shift fails and reports the actual, reference, difference, and allowed
 count. The parser independently requires each zone's `End` and `Counters`
 records to agree on the actual step count.
 
-The comparison also checks final time, trajectory time, temperature, density,
-electron fraction, and the eight non-trace final products `si28`, `s32`,
+The first two values in an `End` record are distinct even though both are 2.0
+in a successful pilot: the first is the requested target time (`tstop` in
+XNet), and the second is the achieved integration time (`t`). The target time
+is compared with the reference, and the achieved time must reach that target
+within the same printed-time tolerance. This makes completion explicit without
+maintaining two redundant comparisons to the same reference value.
+
+The comparison also checks temperature, density, electron fraction, and the
+eight non-trace final products `si28`, `s32`,
 `ar36`, `ca40`, `ti44`, `cr48`, `fe52`, and `ni56`. Every field has an
 explicit absolute tolerance reflecting half of its last printed decimal place
 and a relative tolerance of `5e-8`, reflecting half a unit at the diagnostic's
@@ -128,6 +136,22 @@ yet available. The numerical-field criterion is
 ```text
 abs(actual - reference) <= atol + rtol * abs(reference)
 ```
+
+The reference contains the final mass fraction for every alpha-network
+species. A separate `mass_fraction_tolerances` mapping identifies the eight
+species that currently have justified field-aware pass/fail policies. This
+keeps a complete reference state for diagnostic norms without inventing
+strict tolerances for trace species.
+
+For diagnosis, `composition_error_norms.json` reports raw `L1`, `L2`, and
+`L-infinity` norms of the absolute mass-fraction error over all 14 species for
+each zone, plus the species responsible for `L-infinity`. The complete
+composition reference and selected tolerance mapping are stored separately in
+`final_state.json`, so each species value has a single source. These norms have
+no acceptance threshold and do not affect pass/fail. Raw
+norms can be dominated by abundant species or conceal the identity of other
+changes, so the selected field-aware comparisons remain the regression
+criteria.
 
 Timer exclusion is structural rather than line-count based: only a
 `Timers Summary:` heading and immediately following timer-name/numeric-value

@@ -1,5 +1,6 @@
 """End-to-end regression cases for the compiled XNet executable."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -25,3 +26,12 @@ def test_tnsn_alpha(
     except RegressionFailure as error:
         category = error.__class__.__name__.removesuffix("Failure").lower()
         pytest.fail(f"{category} failure: {error}", pytrace=False)
+
+    diagnostics = json.loads(
+        (work_directory / "composition_error_norms.json").read_text(encoding="utf-8")
+    )
+    assert len(diagnostics["zones"]) == 10
+    assert all(
+        zone["l1"] == 0.0 and zone["l2"] == 0.0 and zone["linf"] == 0.0
+        for zone in diagnostics["zones"]
+    )

@@ -27,12 +27,7 @@
   "final_step": 2841,
   "final_step_atol": 2,
   "fields": {
-    "stop_time": {
-      "value": 2.0,
-      "atol": 5e-8,
-      "rtol": 5e-8
-    },
-    "time": {
+    "target_time": {
       "value": 2.0,
       "atol": 5e-8,
       "rtol": 5e-8
@@ -53,47 +48,55 @@
       "rtol": 5e-8
     }
   },
-  "mass_fractions": {
+  "mass_fraction_tolerances": {
     "si28": {
-      "value": 0.30212305,
       "atol": 5e-9,
       "rtol": 5e-8
     },
     "s32": {
-      "value": 0.34965091,
       "atol": 5e-9,
       "rtol": 5e-8
     },
     "ar36": {
-      "value": 0.13167765,
       "atol": 5e-9,
       "rtol": 5e-8
     },
     "ca40": {
-      "value": 0.19075684,
       "atol": 5e-9,
       "rtol": 5e-8
     },
     "ti44": {
-      "value": 0.00020973267,
       "atol": 5e-12,
       "rtol": 5e-8
     },
     "cr48": {
-      "value": 0.0081303739,
       "atol": 5e-11,
       "rtol": 5e-8
     },
     "fe52": {
-      "value": 0.010695266,
       "atol": 5e-10,
       "rtol": 5e-8
     },
     "ni56": {
-      "value": 0.0067485191,
       "atol": 5e-11,
       "rtol": 5e-8
     }
+  },
+  "mass_fractions": {
+    "he4": 7.0844553e-12,
+    "c12": 1.299695e-7,
+    "o16": 3.3225937e-6,
+    "ne20": 1.3172849e-10,
+    "mg24": 4.205449e-6,
+    "si28": 0.30212305,
+    "s32": 0.34965091,
+    "ar36": 0.13167765,
+    "ca40": 0.19075684,
+    "ti44": 0.00020973267,
+    "cr48": 0.0081303739,
+    "fe52": 0.010695266,
+    "ni56": 0.0067485191,
+    "zn60": 1.076499e-10
   },
   "mass_fraction_sum_atol": 2.1e-8
 }

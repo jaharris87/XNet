@@ -373,16 +373,35 @@ achieved times were identical at printed precision in every zone:
 | 5 | 548 | 0.0001 | 8.1086726 | 1.0000000e9 | 0.49953803 | 1.000000031608 | 5.0945e-8 | 76 |
 | 6 | 564 | 0.00001 | 9.2354937 | 3.1622777e9 | 0.49953848 | 1.000000007620 | 2.7537e-8 | 84 |
 
-Every zone stores all 160 values, including printed zeros and trace
-abundances down to the Backward Euler `1e-30` cutoff. Pass/fail species are the
-established silicon-burning anchors when present plus every species whose
-zone-specific baseline has `X >= 1e-4`; the reference records the exact
-ordered lists summarized by the final column. Each selected value and scalar
-field uses half its baseline's last printed place as `atol` and `5e-8` as
-`rtol`, matching the diagnostic's eight-significant-digit representation.
-Complete vectors still receive exact identity/order, uniqueness, finite,
-nonnegative, normalization, and diagnostic norm checks. Cross-integrator
-agreement is not evaluated in this increment.
+The parser preserves the source-labeled counter values separately from the
+`End` step. `xnet_output.F90` writes `End` from `kstep` and writes the five
+counter columns from `ktot(1:5)`. For Backward Euler, `TS` accumulates trial
+timestep attempts, `NR` accumulates Newton-Raphson iterations, and `Jacobian`,
+`Deriv`, and `CrossSect` count the corresponding builds or evaluations. These
+are solver diagnostics rather than pass/fail values. All three optimized runs
+produced the same records:
+
+| Zone | `End` | TS | NR | Jacobian | Deriv | CrossSect |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 668 | 668 | 1238 | 1238 | 1239 | 1239 |
+| 2 | 602 | 602 | 1103 | 1103 | 1104 | 1104 |
+| 3 | 548 | 548 | 1050 | 1050 | 1051 | 1051 |
+| 4 | 531 | 531 | 1013 | 1013 | 1014 | 1014 |
+| 5 | 548 | 548 | 1048 | 1048 | 1049 | 1049 |
+| 6 | 564 | 564 | 1084 | 1084 | 1085 | 1085 |
+
+Every zone stores all 160 values, including every trace abundance printed by
+this baseline. This particular reference contains no printed zeros and does
+not exercise values near the Backward Euler `1e-30` molar-abundance cutoff;
+the smallest printed mass fraction is zone 1 `ca48 = 1.9843634e-25`.
+Pass/fail species are the established silicon-burning anchors when present
+plus every species whose zone-specific baseline has `X >= 1e-4`; the reference
+records the exact ordered lists summarized by the final column. Each selected
+value and scalar field uses half its baseline's last printed place as `atol`
+and `5e-8` as `rtol`, matching the diagnostic's eight-significant-digit
+representation. Complete vectors still receive exact identity/order,
+uniqueness, finite, nonnegative, normalization, and diagnostic norm checks.
+Cross-integrator agreement is not evaluated in this increment.
 
 The required outputs totaled 30,663,926 bytes: 47,898 bytes for `net_diag01`,
 694,600 bytes for six ASCII histories, and 29,921,428 bytes for six binary
@@ -407,8 +426,9 @@ As a controlled end-to-end effectiveness check, a temporary reference changed
 zone 3 `ni56` from `0.065404983` to `0.07`. The real pytest case returned
 status 1 and reported a `4.595e-3` difference against an allowed `4.000e-9`.
 The reference value was then restored. Normal execution has no reference
-creation or update path. After restoration, the focused helpers passed 56
-tests and the complete optimized suite passed 60 tests in 3.91 seconds.
+creation or update path. After restoration and review fixes, the focused
+helpers passed 70 tests and the complete optimized suite passed 74 tests in
+4.94 seconds.
 
 ## Torch47 characterization evidence
 

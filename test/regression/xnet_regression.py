@@ -280,6 +280,9 @@ END_RECORD = re.compile(
 ABUNDANCE_PAIR = re.compile(rf"([A-Za-z][A-Za-z0-9]*)\s+({FLOAT_TOKEN})")
 TIMER_HEADING = re.compile(r"^Timers Summary:\s*$")
 TIMER_ROW = re.compile(rf"^\s+[A-Za-z][A-Za-z0-9_/-]*\s+{FLOAT_TOKEN}\s*$")
+COUNTER_HEADING = re.compile(
+    r"^Counters:\s+Zone\s+TS\s+NR\s+Jacobian\s+Deriv\s+CrossSect\s*$"
+)
 NONFINITE_TOKEN = re.compile(
     r"(?i)(?<![A-Za-z0-9_])[+-]?(?:nan|inf(?:inity)?)(?![A-Za-z0-9_])"
 )
@@ -350,6 +353,18 @@ class FinalState:
     density: float
     electron_fraction: float
     mass_fractions: Mapping[str, float]
+    counters: SolverCounters
+
+
+@dataclass(frozen=True)
+class SolverCounters:
+    """Source-labeled values from one XNet Counters record."""
+
+    ts: int
+    nr: int
+    jacobian: int
+    derivative: int
+    cross_section: int
 
 
 @dataclass(frozen=True)
@@ -371,6 +386,7 @@ class ToleranceBounds:
 class CharacterizationReference:
     """Complete expected final state plus selected pass/fail tolerances."""
 
+    case_name: str
     expected_zones: tuple[int, ...]
     final_steps: Mapping[int, int]
     fields: Mapping[int, Mapping[str, Tolerance]]
@@ -802,7 +818,7 @@ def parse_diagnostic(
                 f"unexpected species structure for zone {zone}: "
                 f"{', '.join(mass_fractions)}"
             )
-        if index >= len(lines) or not lines[index].startswith("Counters:"):
+        if index >= len(lines) or not COUNTER_HEADING.match(lines[index]):
             raise ParsingFailure(f"missing Counters record after zone {zone} final state")
         index += 1
         if index >= len(lines):
@@ -810,7 +826,9 @@ def parse_diagnostic(
         counters = lines[index].split()
         if len(counters) != 6 or not all(token.isdigit() for token in counters):
             raise ParsingFailure(f"malformed counter values for zone {zone}: {lines[index]}")
-        if int(counters[0]) != zone or int(counters[1]) != step:
+        counter_zone, *counter_values = (int(token) for token in counters)
+        solver_counters = SolverCounters(*counter_values)
+        if counter_zone != zone or solver_counters.ts != step:
             raise ParsingFailure(
                 f"zone {zone} counter record does not match its End record: {lines[index]}"
             )
@@ -824,6 +842,7 @@ def parse_diagnostic(
             density=values[3],
             electron_fraction=values[4],
             mass_fractions=mass_fractions,
+            counters=solver_counters,
         )
         index += 1
 
@@ -996,6 +1015,9 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure(f"invalid characterization reference {path}: {error}") from error
 
     try:
+        case_name = document["case"]
+        if not isinstance(case_name, str) or not case_name:
+            raise ValueError("case must be a nonempty string")
         zone_items = document["expected_zones"]
         if not isinstance(zone_items, list) or not all(
             isinstance(zone, int) and not isinstance(zone, bool)
@@ -1109,6 +1131,7 @@ def load_reference(path: Path) -> CharacterizationReference:
     if any(value < 0 for value in mass_fraction_sum_atols.values()):
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
     return CharacterizationReference(
+        case_name=case_name,
         expected_zones=expected_zones,
         final_steps=final_steps,
         fields=fields,
@@ -1123,6 +1146,11 @@ def validate_reference_for_case(
 ) -> None:
     """Require one reference to match its case and per-zone selection policy."""
 
+    if reference.case_name != case.name:
+        raise SetupFailure(
+            "reference case does not match the case definition: "
+            f"{reference.case_name!r} != {case.name!r}"
+        )
     if reference.expected_zones != case.expected_zones:
         raise SetupFailure(
             "reference expected_zones does not match the case definition: "

@@ -148,14 +148,6 @@ class CompositionNorms:
     linf_species: str | None
 
 
-@dataclass(frozen=True)
-class StepCountDiagnostic:
-    zone: int
-    actual: int
-    reference: int
-    difference: int
-
-
 def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
     case_directory = repository_root / "test" / "regression" / "cases" / "tnsn_alpha"
     return RegressionCase(
@@ -758,22 +750,6 @@ def calculate_composition_norms(
     return tuple(diagnostics)
 
 
-def calculate_step_count_diagnostics(
-    states: Sequence[FinalState], reference: CharacterizationReference
-) -> tuple[StepCountDiagnostic, ...]:
-    """Calculate diagnostic-only final step-count differences."""
-
-    return tuple(
-        StepCountDiagnostic(
-            zone=state.zone,
-            actual=state.step,
-            reference=reference.final_steps[state.zone],
-            difference=abs(state.step - reference.final_steps[state.zone]),
-        )
-        for state in states
-    )
-
-
 def _write_composition_diagnostics(
     work_directory: Path, diagnostics: Sequence[CompositionNorms]
 ) -> None:
@@ -797,30 +773,6 @@ def _write_composition_diagnostics(
     except OSError as error:
         raise ExecutionFailure(
             f"could not preserve composition diagnostics in {path}: {error}"
-        ) from error
-
-
-def _write_step_count_diagnostics(
-    work_directory: Path, diagnostics: Sequence[StepCountDiagnostic]
-) -> None:
-    document = {
-        "status": "diagnostic-only; step counts do not determine pass/fail",
-        "zones": [
-            {
-                "zone": item.zone,
-                "actual": item.actual,
-                "reference": item.reference,
-                "difference": item.difference,
-            }
-            for item in diagnostics
-        ],
-    }
-    path = work_directory / "step_count_diagnostics.json"
-    try:
-        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    except OSError as error:
-        raise ExecutionFailure(
-            f"could not preserve step-count diagnostics in {path}: {error}"
         ) from error
 
 
@@ -943,8 +895,6 @@ def run_and_compare(
                 )
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics)
-        step_diagnostics = calculate_step_count_diagnostics(states, reference)
-        _write_step_count_diagnostics(prepared, step_diagnostics)
         compare_final_states(states, reference)
     except (ParsingFailure, ComparisonFailure) as error:
         raise type(error)(f"{error}; artifacts: {prepared}") from None

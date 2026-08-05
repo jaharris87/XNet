@@ -18,11 +18,9 @@ from xnet_regression import (
     ParsingFailure,
     RegressionCase,
     SetupFailure,
-    StepCountDiagnostic,
     Tolerance,
     ToleranceBounds,
     calculate_composition_norms,
-    calculate_step_count_diagnostics,
     compare_final_states,
     heat_alpha_case,
     load_reference,
@@ -268,14 +266,10 @@ def test_value_outside_tolerance_fails() -> None:
 
 def test_final_step_is_diagnostic_only() -> None:
     state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
-    changed = replace(state, step=142)
-    reference = _matching_unit_reference()
 
-    diagnostics = calculate_step_count_diagnostics((changed,), reference)
-    assert diagnostics == (
-        StepCountDiagnostic(zone=1, actual=142, reference=42, difference=100),
+    compare_final_states(
+        (replace(state, step=142),), _matching_unit_reference()
     )
-    compare_final_states((changed,), reference)
 
 
 def test_achieved_time_must_reach_target_time() -> None:

@@ -45,12 +45,10 @@ rather than mutating `test/Data_alpha`. A nonempty work directory is a setup
 failure, so old diagnostics cannot satisfy a new run.
 
 Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`,
-`xnet.status.txt`, `composition_error_norms.json`, and
-`step_count_diagnostics.json` beside the XNet outputs. The step-count artifact
-records actual, reference, and absolute difference per zone without an
-acceptance threshold. Failure messages give the work directory path. pytest
-retains recent temporary directories. To choose a stable diagnostic location
-for a run, use its standard option, for example:
+`xnet.status.txt`, and `composition_error_norms.json` beside the XNet outputs.
+Failure messages give the work directory path. pytest retains recent temporary
+directories. To choose a stable diagnostic location for a run, use its
+standard option, for example:
 
 ```bash
 python3 -m pytest test/regression \

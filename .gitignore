@@ -56,3 +56,4 @@ test/th*
 
 # runtime controls
 control*
+!test/regression/cases/*/control

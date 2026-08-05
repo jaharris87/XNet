@@ -16,6 +16,7 @@ from xnet_regression import (
     CompositionNorms,
     ComparisonFailure,
     ExecutionFailure,
+    FinalState,
     ParsingFailure,
     RegressionCase,
     SetupFailure,
@@ -528,7 +529,10 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
         case.network_inputs
     )
     assert all((local_network / name).is_symlink() for name in case.network_inputs)
-    assert comparison_species_for(case.expected_species) == (
+    reference = load_reference(case.reference)
+    assert comparison_species_for(
+        case.expected_species, reference.mass_fractions
+    ) == (
         "si28",
         "s32",
         "ar36",
@@ -537,6 +541,8 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
         "cr48",
         "fe52",
         "ni56",
+        "s31",
+        "co55",
     )
     assert case.required_outputs == (
         "net_diag01",
@@ -574,18 +580,63 @@ def test_torch47_reference_rejects_wrong_species_order(tmp_path: Path) -> None:
         validate_reference_for_case(case, reference)
 
 
-def test_all_migrated_references_use_shared_comparison_species_policy() -> None:
+def test_all_migrated_references_use_comparison_species_policy() -> None:
     for case in (
         tnsn_alpha_case(REPOSITORY_ROOT),
         heat_alpha_case(REPOSITORY_ROOT),
         tnsn_torch47_case(REPOSITORY_ROOT),
     ):
         reference = load_reference(case.reference)
-        expected_selection = comparison_species_for(case.expected_species)
+        expected_selection = comparison_species_for(
+            case.expected_species, reference.mass_fractions
+        )
         assert all(
             tuple(reference.mass_fraction_tolerances[zone]) == expected_selection
             for zone in case.expected_zones
         )
+
+
+def test_material_species_policy_does_not_require_silicon_products() -> None:
+    cno_species = ("p", "he4", "c12", "n14", "o16", "ne20")
+    mass_fractions = {
+        1: {
+            "p": 1.0e-6,
+            "he4": 5.0e-5,
+            "c12": 0.2,
+            "n14": 0.3,
+            "o16": 0.4,
+            "ne20": 0.099949,
+        }
+    }
+
+    assert comparison_species_for(cno_species, mass_fractions) == (
+        "c12",
+        "n14",
+        "o16",
+        "ne20",
+    )
+
+
+def test_torch47_network_specific_products_gate_comparison() -> None:
+    case = tnsn_torch47_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    fields = reference.fields[1]
+    mass_fractions = dict(reference.mass_fractions[1])
+    mass_fractions["co55"] += 1.0e-4
+    mass_fractions["s31"] -= 1.0e-4
+    state = FinalState(
+        zone=1,
+        step=reference.final_steps[1],
+        target_time=fields["target_time"].value,
+        time=fields["target_time"].value,
+        temperature_gk=fields["temperature_gk"].value,
+        density=fields["density"].value,
+        electron_fraction=fields["electron_fraction"].value,
+        mass_fractions=mass_fractions,
+    )
+
+    with pytest.raises(ComparisonFailure, match="co55 mass fraction"):
+        compare_final_states((state,), reference)
 
 
 def test_duplicate_trajectory_basenames_are_a_setup_failure(tmp_path: Path) -> None:

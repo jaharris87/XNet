@@ -80,9 +80,8 @@ TORCH47_SPECIES = (
     "ni56",
 )
 
-# These established silicon-burning products determine composition pass/fail
-# in every migrated case where they occur. All other species remain required
-# in the ordered complete vector and visible in diagnostic norms.
+# These established products remain comparison anchors for continuity even
+# when one falls below the general material endpoint threshold.
 SILICON_BURNING_COMPARISON_SPECIES = (
     "si28",
     "s32",
@@ -93,16 +92,31 @@ SILICON_BURNING_COMPARISON_SPECIES = (
     "fe52",
     "ni56",
 )
+MATERIAL_MASS_FRACTION_THRESHOLD = 1.0e-4
 
 
-def comparison_species_for(expected_species: Sequence[str]) -> tuple[str, ...]:
-    """Apply the shared silicon-burning pass/fail selection policy."""
+def comparison_species_for(
+    expected_species: Sequence[str],
+    mass_fractions: Mapping[int, Mapping[str, float]],
+) -> tuple[str, ...]:
+    """Select retained anchors plus every material endpoint abundance."""
 
-    return tuple(
+    shared_anchors = tuple(
         species
         for species in SILICON_BURNING_COMPARISON_SPECIES
         if species in expected_species
     )
+    material_products = tuple(
+        species
+        for species in expected_species
+        if max(
+            zone_mass_fractions[species]
+            for zone_mass_fractions in mass_fractions.values()
+        )
+        >= MATERIAL_MASS_FRACTION_THRESHOLD
+        and species not in shared_anchors
+    )
+    return shared_anchors + material_products
 
 
 FLOAT_TOKEN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
@@ -824,7 +838,6 @@ def validate_reference_for_case(
             "reference expected_zones does not match the case definition: "
             f"{reference.expected_zones} != {case.expected_zones}"
         )
-    comparison_species = comparison_species_for(case.expected_species)
     for zone in case.expected_zones:
         if tuple(reference.mass_fractions[zone]) != case.expected_species:
             raise SetupFailure(
@@ -832,11 +845,15 @@ def validate_reference_for_case(
                 f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
                 f"!= {case.expected_species}"
             )
+    comparison_species = comparison_species_for(
+        case.expected_species, reference.mass_fractions
+    )
+    for zone in case.expected_zones:
         selected_species = tuple(reference.mass_fraction_tolerances[zone])
         if selected_species != comparison_species:
             raise SetupFailure(
                 "reference pass/fail species do not match the shared "
-                f"silicon-burning policy for zone {zone}: "
+                f"composition policy for zone {zone}: "
                 f"{selected_species} != {comparison_species}"
             )
 

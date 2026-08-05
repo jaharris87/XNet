@@ -182,16 +182,30 @@ tolerance. This makes completion explicit without maintaining two redundant
 comparisons to the same reference value.
 
 The comparison also checks temperature, density, electron fraction, and one
-case-independent composition selection: the established silicon-burning
-products `si28`, `s32`, `ar36`, `ca40`, `ti44`, `cr48`, `fe52`, and `ni56`
-that occur in the case network. The runner derives this ordered intersection
-for every case and requires each reference to select exactly it. This preserves
-the first two cases' policies and avoids selecting Torch47 trace species merely
-because the larger network reports them. Every field has an explicit absolute
-tolerance grounded in its printed resolution and a relative tolerance of
-`5e-8`, reflecting half a
-unit at the diagnostic's eight-significant-digit precision. The new
-`heat_alpha` absolute tolerances use half of each value's last printed place.
+case-independent composition selection. Every species whose characterized
+endpoint mass fraction reaches `1e-4` in any zone gates comparison, regardless
+of the reactions or products represented by the network. The threshold
+identifies species that carry at least 0.01% of the endpoint mass while leaving
+smaller trace and intermediate abundances diagnostic-only. The established
+silicon-burning anchors `si28`, `s32`, `ar36`, `ca40`, `ti44`, `cr48`, `fe52`,
+and `ni56` are retained when present so existing coverage is not lost if one
+falls below the threshold. They are not required: a CNO or nova network with no
+silicon-burning products selects its own material endpoint species by the same
+rule.
+
+For Torch47, the threshold adds the network-specific products `s31`
+(`1.9322400e-4`) and `co55` (`7.6324081e-4`); `p30` and `mn51` remain below the
+threshold. It also exposes five previously diagnostic-only material species in
+`heat_alpha`: `he4`, `c12`, `o16`, `mg24`, and `zn60`. This is a deliberate
+expansion of that case's policy following maintainer direction; its reference
+values and end-to-end result are unchanged. The `tnsn_alpha` selection remains
+unchanged.
+The runner derives the ordered selection from the complete reference and
+requires its tolerance mapping to match exactly. Every field has an explicit
+absolute tolerance grounded in its printed resolution and a relative tolerance
+of `5e-8`, reflecting half a unit at the diagnostic's eight-significant-digit
+precision. The new `heat_alpha` absolute tolerances use half of each value's
+last printed place.
 Where a quantity's printed scale differs among its zones, the JSON records the
 absolute tolerances by zone. Reference values, absolute tolerances, and
 relative tolerances may each be either one scalar applied to every zone or a
@@ -207,9 +221,10 @@ abs(actual - reference) <= atol + rtol * abs(reference)
 
 Each reference contains the final mass fraction for every case-network
 species and every zone. A separate `mass_fraction_tolerances` mapping
-identifies the eight species that currently have field-aware pass/fail
-policies. This keeps complete reference states for diagnostic norms without
-inventing strict tolerances for trace species.
+identifies the species that have field-aware pass/fail policies: eight in
+`tnsn_alpha`, thirteen in `heat_alpha`, and ten in Torch47. This keeps complete
+reference states for diagnostic norms without inventing strict tolerances for
+trace species.
 
 For diagnosis, `composition_error_norms.json` reports raw `L1`, `L2`, and
 `L-infinity` norms of the absolute mass-fraction error over all case species for
@@ -249,14 +264,14 @@ subsequent pytest runs each completed in 0.40 seconds including test overhead
 and produced identical parsed 47-species endpoints. This repeated result only
 characterizes one compiler, build, and machine. The required outputs totaled
 5,877,984 bytes: 5,176 for `net_diag01`, 586,000 for the ASCII history, and
-5,286,808 for the binary history. The committed JSON reference is 3,977 bytes.
+5,286,808 for the binary history. The committed JSON reference is 4,098 bytes.
 For comparison on the same configuration, the pytest case times were 0.52
 seconds for `tnsn_alpha` and 0.37 seconds for `heat_alpha`; their required
 outputs totaled 14,470,756 and 1,757,702 bytes respectively. Torch47 remains
 well inside the unchanged 30-second timeout and is suitable for the fast local
 suite on this configuration.
 
-The focused helper command passed 36 tests, and the complete suite passed 39:
+The focused helper command passed 38 tests, and the complete suite passed 41:
 
 ```bash
 python -m pytest -q test/regression/test_xnet_regression.py
@@ -264,10 +279,11 @@ python -m pytest -q test/regression \
     --xnet-executable="$PWD/source/xnet"
 ```
 
-A temporary copy of the Torch47 reference changed selected `si28` from
-`0.24050499` to `0.25`. The real end-to-end runner then failed with pytest
-status 1 and reported an absolute difference of `9.495e-3` against an allowed
-`1.750e-8`. Normal execution has no reference-writing path.
+A temporary copy of the Torch47 reference changed the network-specific
+selected product `co55` from `0.00076324081` to `0.001`. The real end-to-end
+runner then failed with pytest status 1 and reported an absolute difference of
+`2.368e-4` against an allowed `5.500e-11`. Normal execution has no
+reference-writing path.
 
 The third explicit Python registration remains a short `RegressionCase`
 declaration and shares the existing loader-free validation path. A TOML

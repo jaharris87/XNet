@@ -19,6 +19,7 @@ from xnet_regression import (
     FinalState,
     ParsingFailure,
     RegressionCase,
+    SN160_SPECIES,
     SetupFailure,
     Tolerance,
     ToleranceBounds,
@@ -27,6 +28,7 @@ from xnet_regression import (
     comparison_species_for_zone,
     compare_final_states,
     heat_alpha_case,
+    heat_sn160_case,
     load_reference,
     parse_diagnostic,
     prepare_work_directory,
@@ -661,6 +663,91 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
     )
 
 
+def test_sn160_definition_is_complete_and_stages_only_source_inputs(
+    tmp_path: Path,
+) -> None:
+    case = heat_sn160_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "work")
+    local_network = work_directory / "Data_SN160"
+    sunet_species = tuple(
+        line.strip().lower()
+        for line in (case.network_data / "sunet")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    )
+
+    assert len(case.expected_species) == 160
+    assert case.expected_species == SN160_SPECIES == sunet_species
+    assert len(set(case.expected_species)) == len(case.expected_species)
+    assert {path.name for path in local_network.iterdir()} == set(
+        case.network_inputs
+    )
+    assert all((local_network / name).is_symlink() for name in case.network_inputs)
+    assert case.required_outputs == (
+        "net_diag01",
+        "ev_heat_sn160_1",
+        "ts_heat_sn160_1",
+        "ev_heat_sn160_2",
+        "ts_heat_sn160_2",
+        "ev_heat_sn160_3",
+        "ts_heat_sn160_3",
+        "ev_heat_sn160_4",
+        "ts_heat_sn160_4",
+        "ev_heat_sn160_5",
+        "ts_heat_sn160_5",
+        "ev_heat_sn160_6",
+        "ts_heat_sn160_6",
+    )
+
+
+def test_case_rejects_sunet_species_mismatch(tmp_path: Path) -> None:
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    network_data = tmp_path / "Data_alpha"
+    network_data.mkdir()
+    for filename in case.network_inputs:
+        source = case.network_data / filename
+        destination = network_data / filename
+        if filename == "sunet":
+            destination.write_text("p\nhe4\n", encoding="utf-8")
+        else:
+            destination.symlink_to(source.resolve())
+
+    with pytest.raises(SetupFailure, match="network species input does not match"):
+        prepare_work_directory(
+            replace(case, network_data=network_data), tmp_path / "work"
+        )
+
+
+def test_case_rejects_duplicate_sunet_species(tmp_path: Path) -> None:
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    network_data = tmp_path / "Data_alpha"
+    network_data.mkdir()
+    for filename in case.network_inputs:
+        source = case.network_data / filename
+        destination = network_data / filename
+        if filename == "sunet":
+            destination.write_text("he4\nhe4\n", encoding="utf-8")
+        else:
+            destination.symlink_to(source.resolve())
+
+    with pytest.raises(SetupFailure, match="empty or contains duplicates"):
+        prepare_work_directory(
+            replace(case, network_data=network_data), tmp_path / "work"
+        )
+
+
+def test_sn160_parser_rejects_incomplete_and_duplicate_species() -> None:
+    incomplete = _fabricated_diagnostic_with_species(SN160_SPECIES[:-1])
+    with pytest.raises(ParsingFailure, match="incomplete abundance record"):
+        parse_diagnostic(incomplete, (1,), SN160_SPECIES)
+
+    duplicated_species = (SN160_SPECIES[0], *SN160_SPECIES[:-1])
+    duplicated = _fabricated_diagnostic_with_species(duplicated_species)
+    with pytest.raises(ParsingFailure, match="duplicate abundance"):
+        parse_diagnostic(duplicated, (1,), SN160_SPECIES)
+
+
 def test_torch47_parser_rejects_wrong_species_order() -> None:
     diagnostic = _fabricated_diagnostic_with_species(TORCH47_SPECIES)
     states = parse_diagnostic(diagnostic, (1,), TORCH47_SPECIES)
@@ -717,6 +804,7 @@ def test_all_migrated_references_use_per_zone_comparison_species_policy() -> Non
         tnsn_alpha_case(REPOSITORY_ROOT),
         heat_alpha_case(REPOSITORY_ROOT),
         tnsn_torch47_case(REPOSITORY_ROOT),
+        heat_sn160_case(REPOSITORY_ROOT),
     ):
         reference = load_reference(case.reference)
         for zone in case.expected_zones:

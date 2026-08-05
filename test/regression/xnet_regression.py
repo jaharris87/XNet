@@ -80,6 +80,169 @@ TORCH47_SPECIES = (
     "ni56",
 )
 
+SN160_SPECIES = (
+    "n",
+    "p",
+    "d",
+    "he3",
+    "he4",
+    "li6",
+    "li7",
+    "be7",
+    "be9",
+    "b8",
+    "b10",
+    "b11",
+    "c12",
+    "c13",
+    "c14",
+    "n13",
+    "n14",
+    "n15",
+    "o14",
+    "o15",
+    "o16",
+    "o17",
+    "o18",
+    "f17",
+    "f18",
+    "f19",
+    "ne18",
+    "ne19",
+    "ne20",
+    "ne21",
+    "ne22",
+    "na21",
+    "na22",
+    "na23",
+    "mg23",
+    "mg24",
+    "mg25",
+    "mg26",
+    "al25",
+    "al26",
+    "al27",
+    "si28",
+    "si29",
+    "si30",
+    "si31",
+    "si32",
+    "p29",
+    "p30",
+    "p31",
+    "p32",
+    "p33",
+    "s32",
+    "s33",
+    "s34",
+    "s35",
+    "s36",
+    "cl33",
+    "cl34",
+    "cl35",
+    "cl36",
+    "cl37",
+    "ar36",
+    "ar37",
+    "ar38",
+    "ar39",
+    "ar40",
+    "k37",
+    "k38",
+    "k39",
+    "k40",
+    "k41",
+    "ca40",
+    "ca41",
+    "ca42",
+    "ca43",
+    "ca44",
+    "ca45",
+    "ca46",
+    "ca47",
+    "ca48",
+    "sc43",
+    "sc44",
+    "sc45",
+    "sc46",
+    "sc47",
+    "sc48",
+    "sc49",
+    "ti44",
+    "ti45",
+    "ti46",
+    "ti47",
+    "ti48",
+    "ti49",
+    "ti50",
+    "ti51",
+    "v46",
+    "v47",
+    "v48",
+    "v49",
+    "v50",
+    "v51",
+    "v52",
+    "cr48",
+    "cr49",
+    "cr50",
+    "cr51",
+    "cr52",
+    "cr53",
+    "cr54",
+    "mn50",
+    "mn51",
+    "mn52",
+    "mn53",
+    "mn54",
+    "mn55",
+    "fe52",
+    "fe53",
+    "fe54",
+    "fe55",
+    "fe56",
+    "fe57",
+    "fe58",
+    "co53",
+    "co54",
+    "co55",
+    "co56",
+    "co57",
+    "co58",
+    "co59",
+    "ni56",
+    "ni57",
+    "ni58",
+    "ni59",
+    "ni60",
+    "ni61",
+    "ni62",
+    "ni63",
+    "ni64",
+    "cu57",
+    "cu58",
+    "cu59",
+    "cu60",
+    "cu61",
+    "cu62",
+    "cu63",
+    "cu64",
+    "cu65",
+    "zn59",
+    "zn60",
+    "zn61",
+    "zn62",
+    "zn63",
+    "zn64",
+    "zn65",
+    "zn66",
+    "ga62",
+    "ga63",
+    "ga64",
+    "ge63",
+    "ge64",
+)
+
 # These established products remain comparison anchors for continuity even
 # when one falls below the general material endpoint threshold.
 SILICON_BURNING_COMPARISON_SPECIES = (
@@ -289,6 +452,46 @@ def tnsn_torch47_case(repository_root: Path) -> RegressionCase:
     )
 
 
+def heat_sn160_case(repository_root: Path) -> RegressionCase:
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "heat_sn160"
+    )
+    return RegressionCase(
+        name="heat_sn160",
+        control=case_directory / "control",
+        network_data=repository_root / "test" / "Data_SN160",
+        trajectories=tuple(
+            repository_root / "test" / "Test_Problems" / f"th_co_burn_{zone}"
+            for zone in range(1, 7)
+        ),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=tuple(range(1, 7)),
+        expected_species=SN160_SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+    )
+
+
+def _read_sunet_species(path: Path) -> tuple[str, ...]:
+    try:
+        species = tuple(
+            line.strip().lower()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    except (OSError, UnicodeError) as error:
+        raise SetupFailure(
+            f"could not read network species input {path}: {error}"
+        ) from error
+    if not species or len(set(species)) != len(species):
+        raise SetupFailure(
+            f"network species input is empty or contains duplicates: {path}"
+        )
+    return species
+
+
 def validate_executable(executable: Path) -> Path:
     executable = executable.expanduser().resolve()
     if not executable.exists():
@@ -348,6 +551,12 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         raise SetupFailure(
             "required network source input is missing:\n  "
             + "\n  ".join(str(path) for path in missing_network_inputs)
+        )
+    sunet_species = _read_sunet_species(case.network_data / "sunet")
+    if sunet_species != case.expected_species:
+        raise SetupFailure(
+            f"network species input does not match the case definition for {case.name}: "
+            f"{sunet_species} != {case.expected_species}"
         )
 
 

@@ -117,13 +117,25 @@ class Tolerance:
 
 
 @dataclass(frozen=True)
+class ToleranceBounds:
+    """Absolute and relative bounds without a duplicated expected value."""
+
+    atol: float
+    rtol: float
+
+
+@dataclass(frozen=True)
 class CharacterizationReference:
+    """Complete expected final state plus selected pass/fail tolerances."""
+
     expected_zones: tuple[int, ...]
     final_step: int
     final_step_atol: int
     fields: Mapping[str, Tolerance]
+    # The complete vector supplies expected values and norm diagnostics.
     mass_fractions: Mapping[str, float]
-    mass_fraction_policies: Mapping[str, Tolerance]
+    # This subset selects species for field-aware pass/fail comparison.
+    mass_fraction_tolerances: Mapping[str, ToleranceBounds]
     mass_fraction_sum_atol: float
 
 
@@ -491,14 +503,20 @@ def _load_tolerance(item: object, context: str) -> Tolerance:
     return tolerance
 
 
-def _load_mass_fraction_policy(
-    item: object, value: float, context: str
-) -> Tolerance:
+def _load_tolerance_bounds(item: object, context: str) -> ToleranceBounds:
     if not isinstance(item, dict) or set(item) != {"atol", "rtol"}:
         raise SetupFailure(
             f"reference entry {context} must contain exactly atol and rtol"
         )
-    return _load_tolerance({"value": value, **item}, context)
+    values = (item["atol"], item["rtol"])
+    if not all(isinstance(value, (int, float)) for value in values):
+        raise SetupFailure(f"reference entry {context} contains a non-numeric value")
+    tolerance = ToleranceBounds(*(float(value) for value in values))
+    if not all(math.isfinite(value) for value in values):
+        raise SetupFailure(f"reference entry {context} contains a non-finite value")
+    if tolerance.atol < 0 or tolerance.rtol < 0:
+        raise SetupFailure(f"reference entry {context} contains a negative tolerance")
+    return tolerance
 
 
 def load_reference(path: Path) -> CharacterizationReference:
@@ -521,9 +539,9 @@ def load_reference(path: Path) -> CharacterizationReference:
             name: float(value)
             for name, value in document["mass_fractions"].items()
         }
-        mass_fraction_policies = {
-            name: _load_mass_fraction_policy(
-                item, mass_fractions[name], f"mass_fraction_tolerances.{name}"
+        mass_fraction_tolerances = {
+            name: _load_tolerance_bounds(
+                item, f"mass_fraction_tolerances.{name}"
             )
             for name, item in document["mass_fraction_tolerances"].items()
         }
@@ -559,7 +577,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         for species, value in mass_fractions.items()
     ):
         raise SetupFailure("reference composition is empty or invalid")
-    if not mass_fraction_policies:
+    if not mass_fraction_tolerances:
         raise SetupFailure("reference mass-fraction tolerance selection is empty")
     if not math.isfinite(mass_fraction_sum_atol) or mass_fraction_sum_atol < 0:
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
@@ -569,7 +587,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         final_step_atol=final_step_atol,
         fields=fields,
         mass_fractions=mass_fractions,
-        mass_fraction_policies=mass_fraction_policies,
+        mass_fraction_tolerances=mass_fraction_tolerances,
         mass_fraction_sum_atol=mass_fraction_sum_atol,
     )
 
@@ -671,8 +689,11 @@ def compare_final_states(
                     f"rtol={policy.rtol:.3e})"
                 )
 
-        for species, policy in reference.mass_fraction_policies.items():
+        for species, bounds in reference.mass_fraction_tolerances.items():
             actual = state.mass_fractions[species]
+            policy = Tolerance(
+                reference.mass_fractions[species], bounds.atol, bounds.rtol
+            )
             passed, difference, allowed = _difference(actual, policy)
             if not passed:
                 failures.append(
@@ -731,7 +752,7 @@ def run_and_compare(
                 "reference expected_zones does not match the case definition: "
                 f"{reference.expected_zones} != {case.expected_zones}"
             )
-        unknown_reference_species = set(reference.mass_fraction_policies).difference(
+        unknown_reference_species = set(reference.mass_fraction_tolerances).difference(
             case.expected_species
         )
         if unknown_reference_species:

@@ -18,6 +18,7 @@ from xnet_regression import (
     RegressionCase,
     SetupFailure,
     Tolerance,
+    ToleranceBounds,
     calculate_composition_norms,
     compare_final_states,
     parse_diagnostic,
@@ -32,11 +33,13 @@ from xnet_regression import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _synthetic_diagnostic(*, timer_total: str = "1.000E-02") -> str:
+def _fabricated_final_diagnostic(*, timer_total: str = "1.000E-02") -> str:
+    """Return invented parser input with no physical or tnsn_alpha meaning."""
+
     return f"""MyId    0    1
 End     1    42 2.0000000E+00 2.0000000E+00 2.0000000E+00 4.0000000E+06 5.0000000E-01
-  he4 0.0000000E+00   c12 5.0000000E-01   o16 5.0000000E-01  ne20 0.0000000E+00
- mg24 0.0000000E+00  si28 0.0000000E+00   s32 0.0000000E+00  ar36 0.0000000E+00
+  he4 1.0000000E-01   c12 2.0000000E-01   o16 3.0000000E-01  ne20 0.0000000E+00
+ mg24 0.0000000E+00  si28 1.5000000E-01   s32 2.5000000E-01  ar36 0.0000000E+00
  ca40 0.0000000E+00  ti44 0.0000000E+00  cr48 0.0000000E+00  fe52 0.0000000E+00
  ni56 0.0000000E+00  zn60 0.0000000E+00
 Counters:  Zone        TS        NR  Jacobian     Deriv CrossSect
@@ -47,7 +50,9 @@ Timers Summary:
 """
 
 
-def _synthetic_reference() -> CharacterizationReference:
+def _matching_unit_reference() -> CharacterizationReference:
+    """Return expectations independently matching the fabricated parser input."""
+
     fields = {
         name: Tolerance(value, atol=1e-6, rtol=1e-6)
         for name, value in {
@@ -63,7 +68,13 @@ def _synthetic_reference() -> CharacterizationReference:
         final_step_atol=2,
         fields=fields,
         mass_fractions={
-            species: 0.5 if species in {"c12", "o16"} else 0.0
+            species: {
+                "he4": 0.1,
+                "c12": 0.2,
+                "o16": 0.3,
+                "si28": 0.15,
+                "s32": 0.25,
+            }.get(species, 0.0)
             for species in (
                 "he4",
                 "c12",
@@ -81,9 +92,9 @@ def _synthetic_reference() -> CharacterizationReference:
                 "zn60",
             )
         },
-        mass_fraction_policies={
-            "si28": Tolerance(0.0, atol=1e-8, rtol=1e-8),
-            "s32": Tolerance(0.0, atol=1e-8, rtol=1e-8),
+        mass_fraction_tolerances={
+            "si28": ToleranceBounds(atol=1e-8, rtol=1e-8),
+            "s32": ToleranceBounds(atol=1e-8, rtol=1e-8),
         },
         mass_fraction_sum_atol=1e-8,
     )
@@ -111,13 +122,25 @@ def _make_executable(tmp_path: Path, body: str) -> Path:
 
 
 def test_known_good_comparison_passes() -> None:
-    states = parse_diagnostic(_synthetic_diagnostic(), (1,))
-    compare_final_states(states, _synthetic_reference())
+    states = parse_diagnostic(_fabricated_final_diagnostic(), (1,))
+    compare_final_states(states, _matching_unit_reference())
+
+
+def test_mass_fraction_expectation_comes_from_complete_reference() -> None:
+    states = parse_diagnostic(_fabricated_final_diagnostic(), (1,))
+    reference = _matching_unit_reference()
+    changed_composition = dict(reference.mass_fractions)
+    changed_composition["si28"] = 0.16
+
+    with pytest.raises(ComparisonFailure, match="si28 mass fraction"):
+        compare_final_states(
+            states, replace(reference, mass_fractions=changed_composition)
+        )
 
 
 def test_value_within_tolerance_passes() -> None:
-    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
-    reference = _synthetic_reference()
+    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    reference = _matching_unit_reference()
     policy = dict(reference.fields)
     policy["temperature_gk"] = Tolerance(2.0, atol=0.1, rtol=0.0)
     compare_final_states(
@@ -126,8 +149,8 @@ def test_value_within_tolerance_passes() -> None:
 
 
 def test_value_outside_tolerance_fails() -> None:
-    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
-    reference = _synthetic_reference()
+    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    reference = _matching_unit_reference()
     policy = dict(reference.fields)
     policy["temperature_gk"] = Tolerance(2.0, atol=0.1, rtol=0.0)
     with pytest.raises(ComparisonFailure, match="temperature_gk"):
@@ -137,29 +160,29 @@ def test_value_outside_tolerance_fails() -> None:
 
 
 def test_final_step_within_tolerance_passes() -> None:
-    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
-    compare_final_states((replace(state, step=44),), _synthetic_reference())
+    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    compare_final_states((replace(state, step=44),), _matching_unit_reference())
 
 
 def test_final_step_outside_tolerance_fails() -> None:
-    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
+    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
     with pytest.raises(ComparisonFailure, match="final step 45"):
-        compare_final_states((replace(state, step=45),), _synthetic_reference())
+        compare_final_states((replace(state, step=45),), _matching_unit_reference())
 
 
 def test_achieved_time_must_reach_target_time() -> None:
-    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
+    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
     with pytest.raises(ComparisonFailure, match="did not reach target time"):
-        compare_final_states((replace(state, time=1.9),), _synthetic_reference())
+        compare_final_states((replace(state, time=1.9),), _matching_unit_reference())
 
 
 def test_composition_norms_are_diagnostic_only() -> None:
-    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
+    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
     perturbed_mass_fractions = dict(state.mass_fractions)
     perturbed_mass_fractions["c12"] += 1e-4
     perturbed_mass_fractions["o16"] -= 1e-4
     perturbed = replace(state, mass_fractions=perturbed_mass_fractions)
-    reference = _synthetic_reference()
+    reference = _matching_unit_reference()
 
     diagnostics = calculate_composition_norms((perturbed,), reference)
     assert diagnostics == (
@@ -180,7 +203,7 @@ def test_missing_final_output_is_a_parsing_failure() -> None:
 
 
 def test_malformed_output_is_a_parsing_failure() -> None:
-    diagnostic = _synthetic_diagnostic().replace(
+    diagnostic = _fabricated_final_diagnostic().replace(
         "End     1    42", "End     1    malformed"
     )
     with pytest.raises(ParsingFailure, match="malformed End record"):
@@ -189,14 +212,18 @@ def test_malformed_output_is_a_parsing_failure() -> None:
 
 @pytest.mark.parametrize("token", ["NaN", "+Inf", "-Infinity"])
 def test_nonfinite_output_is_rejected(token: str) -> None:
-    diagnostic = _synthetic_diagnostic().replace("4.0000000E+06", token)
+    diagnostic = _fabricated_final_diagnostic().replace("4.0000000E+06", token)
     with pytest.raises(ParsingFailure, match="non-finite"):
         parse_diagnostic(diagnostic, (1,))
 
 
 def test_timer_only_variation_is_excluded() -> None:
-    first = parse_diagnostic(_synthetic_diagnostic(timer_total="1.000E-02"), (1,))
-    second = parse_diagnostic(_synthetic_diagnostic(timer_total="9.999E+02"), (1,))
+    first = parse_diagnostic(
+        _fabricated_final_diagnostic(timer_total="1.000E-02"), (1,)
+    )
+    second = parse_diagnostic(
+        _fabricated_final_diagnostic(timer_total="9.999E+02"), (1,)
+    )
     assert first == second
 
 

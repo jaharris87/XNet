@@ -85,6 +85,15 @@ For defect fixes or new behavioral checks:
 Identify assumptions, uncertain areas, consequential choices, or parts of the
 change that deserve particular attention.
 
+## Independent review record
+
+- Reviewed PR:
+- Candidate commit:
+- Review roles:
+- Finding links:
+- Disposition links:
+- Re-review commit and result, or why not required:
+
 ## Checks not run
 
 List meaningful checks that were not available, not practical, or outside the

@@ -137,12 +137,24 @@ Repository work intended for merge follows this compact flow:
    change.
 3. Implement on a feature branch with appropriate tests or other objective
    evidence.
-4. Review the complete diff against the issue, then open a PR to
-   `development` with exact verification results and remaining checks.
-5. Obtain independent, fresh-context review for the active review roles and
-   give every consequential finding a documented disposition.
-6. Hand the PR to the human maintainer after required checks pass and
+4. Self-review the complete local diff against the issue.
+5. Commit and push the review candidate.
+6. Open a draft PR to `development` with exact verification results and
+   remaining checks.
+7. Only after the draft PR exists and the review candidate is committed and
+   pushed, obtain independent, fresh-context review for the active review
+   roles. Identify the PR and exact candidate commit in the reviewer brief or
+   review record.
+8. Give every consequential finding a documented disposition. Push
+   substantive review fixes and identify the new commit in any required
+   re-review.
+9. Hand the PR to the human maintainer after required checks pass and
    merge-blocking findings are resolved.
+
+Successful implementation and local verification do not complete work
+intended for merge. Continue through the steps above unless the maintainer
+explicitly requested local-only work or a documented blocker prevents
+progress; report the blocker when handing off incomplete work.
 
 ## Communication
 

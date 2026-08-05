@@ -1,6 +1,7 @@
 """Focused tests for the XNet regression runner and comparator."""
 
 from dataclasses import replace
+import json
 import os
 from pathlib import Path
 import signal
@@ -21,6 +22,7 @@ from xnet_regression import (
     ToleranceBounds,
     calculate_composition_norms,
     compare_final_states,
+    load_reference,
     parse_diagnostic,
     prepare_work_directory,
     run_xnet,
@@ -136,6 +138,37 @@ def test_mass_fraction_expectation_comes_from_complete_reference() -> None:
         compare_final_states(
             states, replace(reference, mass_fractions=changed_composition)
         )
+
+
+def test_mass_fraction_tolerance_requires_composition_value(tmp_path: Path) -> None:
+    reference_path = tmp_path / "inconsistent-reference.json"
+    reference_path.write_text(
+        json.dumps(
+            {
+                "expected_zones": [1],
+                "final_step": 42,
+                "final_step_atol": 2,
+                "fields": {
+                    name: {"value": value, "atol": 1e-6, "rtol": 1e-6}
+                    for name, value in {
+                        "target_time": 2.0,
+                        "temperature_gk": 2.0,
+                        "density": 4.0e6,
+                        "electron_fraction": 0.5,
+                    }.items()
+                },
+                "mass_fractions": {"c12": 1.0},
+                "mass_fraction_tolerances": {
+                    "si28": {"atol": 1e-8, "rtol": 1e-8}
+                },
+                "mass_fraction_sum_atol": 1e-8,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SetupFailure, match="no matching composition value: si28"):
+        load_reference(reference_path)
 
 
 def test_value_within_tolerance_passes() -> None:

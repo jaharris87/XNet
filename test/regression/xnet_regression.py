@@ -579,6 +579,14 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure("reference composition is empty or invalid")
     if not mass_fraction_tolerances:
         raise SetupFailure("reference mass-fraction tolerance selection is empty")
+    missing_expected_species = set(mass_fraction_tolerances).difference(
+        mass_fractions
+    )
+    if missing_expected_species:
+        raise SetupFailure(
+            "reference mass-fraction tolerances have no matching composition value: "
+            + ", ".join(sorted(missing_expected_species))
+        )
     if not math.isfinite(mass_fraction_sum_atol) or mass_fraction_sum_atol < 0:
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
     return CharacterizationReference(

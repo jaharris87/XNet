@@ -960,6 +960,27 @@ def test_bdf_run_rejects_stale_input_hash_before_execution(tmp_path: Path) -> No
     assert not work_directory.exists()
 
 
+def test_bdf_run_rejects_negative_reference_abundance_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["mass_fractions"]["n"]["1"] = -1.0e-30
+    reference_path = tmp_path / "negative-reference-abundance.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="mass_fractions contains negative"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
 def test_bdf_run_rejects_missing_reference_schema_before_execution(
     tmp_path: Path,
 ) -> None:

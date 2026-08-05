@@ -1322,6 +1322,17 @@ def load_reference(path: Path) -> CharacterizationReference:
             )
             for name, value in document["mass_fractions"].items()
         }
+        negative_mass_fractions = [
+            f"{species} (zone {zone})"
+            for species, zone_values in mass_fractions_by_species.items()
+            for zone, value in zone_values.items()
+            if value < 0.0
+        ]
+        if negative_mass_fractions:
+            raise ValueError(
+                "mass_fractions contains negative values: "
+                + ", ".join(negative_mass_fractions)
+            )
         mass_fraction_selection = _load_composition_selection(
             document["mass_fraction_selection"], expected_zones
         )

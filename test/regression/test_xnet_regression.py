@@ -24,7 +24,7 @@ from xnet_regression import (
     ToleranceBounds,
     TORCH47_SPECIES,
     calculate_composition_norms,
-    comparison_species_for,
+    comparison_species_for_zone,
     compare_final_states,
     heat_alpha_case,
     load_reference,
@@ -131,6 +131,22 @@ def _matching_unit_reference() -> CharacterizationReference:
     )
 
 
+def _state_from_reference(
+    reference: CharacterizationReference, zone: int
+) -> FinalState:
+    fields = reference.fields[zone]
+    return FinalState(
+        zone=zone,
+        step=reference.final_steps[zone],
+        target_time=fields["target_time"].value,
+        time=fields["target_time"].value,
+        temperature_gk=fields["temperature_gk"].value,
+        density=fields["density"].value,
+        electron_fraction=fields["electron_fraction"].value,
+        mass_fractions=reference.mass_fractions[zone],
+    )
+
+
 def _fake_case(tmp_path: Path) -> RegressionCase:
     return RegressionCase(
         name="fake",
@@ -190,6 +206,7 @@ def test_mass_fraction_tolerance_requires_composition_value(tmp_path: Path) -> N
                     }.items()
                 },
                 "mass_fractions": {"c12": 1.0},
+                "mass_fraction_selection": {"1": ["si28"]},
                 "mass_fraction_tolerances": {
                     "si28": {"atol": 1e-8, "rtol": 1e-8}
                 },
@@ -227,6 +244,10 @@ def test_zone_specific_reference_values_are_expanded(tmp_path: Path) -> None:
                     "c12": {"1": 0.4, "2": 0.3},
                     "o16": {"1": 0.6, "2": 0.7},
                 },
+                "mass_fraction_selection": {
+                    "1": ["c12"],
+                    "2": ["c12"],
+                },
                 "mass_fraction_tolerances": {
                     "c12": {
                         "atol": {"1": 1e-8, "2": 2e-8},
@@ -256,6 +277,95 @@ def test_zone_specific_reference_requires_every_zone(tmp_path: Path) -> None:
     reference_path.write_text(json.dumps(document), encoding="utf-8")
 
     with pytest.raises(SetupFailure, match="must define zones"):
+        load_reference(reference_path)
+
+
+def test_composition_selection_rejects_missing_zone(tmp_path: Path) -> None:
+    source = REPOSITORY_ROOT / "test/regression/cases/heat_alpha/reference/final_state.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    document["mass_fraction_selection"].pop("6")
+    reference_path = tmp_path / "missing-selection-zone.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="missing \\[6\\]"):
+        load_reference(reference_path)
+
+
+def test_composition_selection_rejects_unknown_zone(tmp_path: Path) -> None:
+    source = REPOSITORY_ROOT / "test/regression/cases/heat_alpha/reference/final_state.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    document["mass_fraction_selection"]["7"] = document[
+        "mass_fraction_selection"
+    ]["6"]
+    reference_path = tmp_path / "unknown-selection-zone.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="unknown \\[7\\]"):
+        load_reference(reference_path)
+
+
+def test_composition_selection_rejects_duplicate_zone_key(tmp_path: Path) -> None:
+    reference_path = tmp_path / "duplicate-selection-zone.json"
+    reference_path.write_text(
+        """{
+  "expected_zones": [1],
+  "mass_fraction_selection": {
+    "1": ["c12"],
+    "1": ["c12"]
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SetupFailure, match="duplicate JSON object key: 1"):
+        load_reference(reference_path)
+
+
+def test_composition_selection_rejects_duplicate_species(tmp_path: Path) -> None:
+    case = heat_alpha_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["mass_fraction_selection"]["4"].append("o16")
+    reference_path = tmp_path / "duplicate-selection-species.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="duplicate species: o16"):
+        load_reference(reference_path)
+
+
+def test_composition_selection_rejects_unknown_species(tmp_path: Path) -> None:
+    case = heat_alpha_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["mass_fraction_selection"]["1"].append("xe999")
+    reference_path = tmp_path / "unknown-selection-species.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="no matching composition value: xe999"):
+        load_reference(reference_path)
+
+
+def test_composition_selection_rejects_missing_policy_species(tmp_path: Path) -> None:
+    case = heat_alpha_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["mass_fraction_selection"]["4"].remove("o16")
+    reference_path = tmp_path / "missing-selection-species.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    reference = load_reference(reference_path)
+
+    with pytest.raises(SetupFailure, match="per-zone composition policy for zone 4"):
+        validate_reference_for_case(case, reference)
+
+
+def test_composition_selection_requires_selected_species_tolerance(
+    tmp_path: Path,
+) -> None:
+    case = heat_alpha_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["mass_fraction_tolerances"].pop("o16")
+    reference_path = tmp_path / "missing-selection-tolerance.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="no matching tolerance: o16"):
         load_reference(reference_path)
 
 
@@ -530,8 +640,8 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
     )
     assert all((local_network / name).is_symlink() for name in case.network_inputs)
     reference = load_reference(case.reference)
-    assert comparison_species_for(
-        case.expected_species, reference.mass_fractions
+    assert comparison_species_for_zone(
+        case.expected_species, reference.mass_fractions[1]
     ) == (
         "si28",
         "s32",
@@ -602,41 +712,119 @@ def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:
         load_reference(reference_path)
 
 
-def test_all_migrated_references_use_comparison_species_policy() -> None:
+def test_all_migrated_references_use_per_zone_comparison_species_policy() -> None:
     for case in (
         tnsn_alpha_case(REPOSITORY_ROOT),
         heat_alpha_case(REPOSITORY_ROOT),
         tnsn_torch47_case(REPOSITORY_ROOT),
     ):
         reference = load_reference(case.reference)
-        expected_selection = comparison_species_for(
-            case.expected_species, reference.mass_fractions
-        )
-        assert all(
-            tuple(reference.mass_fraction_tolerances[zone]) == expected_selection
-            for zone in case.expected_zones
-        )
+        for zone in case.expected_zones:
+            expected_selection = comparison_species_for_zone(
+                case.expected_species, reference.mass_fractions[zone]
+            )
+            assert (
+                tuple(reference.mass_fraction_tolerances[zone])
+                == expected_selection
+            )
 
 
 def test_material_species_policy_does_not_require_silicon_products() -> None:
     cno_species = ("p", "he4", "c12", "n14", "o16", "ne20")
     mass_fractions = {
-        1: {
-            "p": 1.0e-6,
-            "he4": 5.0e-5,
-            "c12": 0.2,
-            "n14": 0.3,
-            "o16": 0.4,
-            "ne20": 0.099949,
-        }
+        "p": 1.0e-6,
+        "he4": 5.0e-5,
+        "c12": 0.2,
+        "n14": 0.3,
+        "o16": 0.4,
+        "ne20": 0.099949,
     }
 
-    assert comparison_species_for(cno_species, mass_fractions) == (
+    assert comparison_species_for_zone(cno_species, mass_fractions) == (
         "c12",
         "n14",
         "o16",
         "ne20",
     )
+
+
+def test_per_zone_material_threshold_is_inclusive_and_ordered() -> None:
+    species = ("p", "c12", "o16")
+
+    assert comparison_species_for_zone(
+        species,
+        {"p": 9.999e-5, "c12": 1.0e-4, "o16": 0.99980001},
+    ) == ("c12", "o16")
+
+
+def test_comparison_anchors_are_retained_per_zone_when_present() -> None:
+    assert comparison_species_for_zone(
+        ("p", "si28"), {"p": 9.0e-5, "si28": 0.0}
+    ) == ("si28",)
+
+
+def test_heat_alpha_selected_zone_species_perturbation_fails() -> None:
+    case = heat_alpha_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    state = _state_from_reference(reference, 4)
+    mass_fractions = dict(state.mass_fractions)
+    mass_fractions["o16"] += 1.0e-6
+    mass_fractions["c12"] -= 1.0e-6
+
+    zone_reference = replace(reference, expected_zones=(4,))
+    with pytest.raises(ComparisonFailure, match="zone 4 o16 mass fraction"):
+        compare_final_states(
+            (replace(state, mass_fractions=mass_fractions),), zone_reference
+        )
+
+
+def test_heat_alpha_same_perturbation_is_diagnostic_only_in_unselected_zone() -> None:
+    case = heat_alpha_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    state = _state_from_reference(reference, 3)
+    mass_fractions = dict(state.mass_fractions)
+    mass_fractions["o16"] += 1.0e-6
+    mass_fractions["c12"] -= 1.0e-6
+    perturbed = replace(state, mass_fractions=mass_fractions)
+
+    assert "o16" not in reference.mass_fraction_tolerances[3]
+    assert "o16" in reference.mass_fraction_tolerances[4]
+    assert min(mass_fractions.values()) >= 0.0
+    assert sum(mass_fractions.values()) == pytest.approx(
+        sum(state.mass_fractions.values()), abs=1.0e-15
+    )
+    assert calculate_composition_norms((perturbed,), reference)[0].linf == pytest.approx(
+        1.0e-6
+    )
+    compare_final_states((perturbed,), replace(reference, expected_zones=(3,)))
+
+
+def test_diagnostic_only_species_still_receive_negative_fraction_check() -> None:
+    reference = load_reference(heat_alpha_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 3)
+    mass_fractions = dict(state.mass_fractions)
+    transfer = mass_fractions["c12"] + 1.0e-6
+    mass_fractions["c12"] -= transfer
+    mass_fractions["o16"] += transfer
+
+    zone_reference = replace(reference, expected_zones=(3,))
+    with pytest.raises(ComparisonFailure, match="negative mass fractions: c12"):
+        compare_final_states(
+            (replace(state, mass_fractions=mass_fractions),), zone_reference
+        )
+
+
+def test_diagnostic_only_species_still_receive_composition_sum_check() -> None:
+    reference = load_reference(heat_alpha_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 3)
+    mass_fractions = dict(state.mass_fractions)
+    mass_fractions["c12"] += 1.0e-6
+
+    zone_reference = replace(reference, expected_zones=(3,))
+    with pytest.raises(ComparisonFailure, match="mass-fraction sum"):
+        compare_final_states(
+            (replace(state, mass_fractions=mass_fractions),), zone_reference
+        )
 
 
 def test_torch47_network_specific_products_gate_comparison() -> None:

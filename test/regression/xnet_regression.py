@@ -95,11 +95,11 @@ SILICON_BURNING_COMPARISON_SPECIES = (
 MATERIAL_MASS_FRACTION_THRESHOLD = 1.0e-4
 
 
-def comparison_species_for(
+def comparison_species_for_zone(
     expected_species: Sequence[str],
-    mass_fractions: Mapping[int, Mapping[str, float]],
+    mass_fractions: Mapping[str, float],
 ) -> tuple[str, ...]:
-    """Select retained anchors plus every material endpoint abundance."""
+    """Select retained anchors plus this zone's material endpoint abundances."""
 
     shared_anchors = tuple(
         species
@@ -109,11 +109,7 @@ def comparison_species_for(
     material_products = tuple(
         species
         for species in expected_species
-        if max(
-            zone_mass_fractions[species]
-            for zone_mass_fractions in mass_fractions.values()
-        )
-        >= MATERIAL_MASS_FRACTION_THRESHOLD
+        if mass_fractions[species] >= MATERIAL_MASS_FRACTION_THRESHOLD
         and species not in shared_anchors
     )
     return shared_anchors + material_products
@@ -726,6 +722,55 @@ def _load_tolerance_bounds(
     }
 
 
+def _load_composition_selection(
+    item: object, expected_zones: Sequence[int]
+) -> Mapping[int, tuple[str, ...]]:
+    context = "mass_fraction_selection"
+    if not isinstance(item, dict):
+        raise SetupFailure(f"reference entry {context} must be a zone mapping")
+    zone_items: dict[int, object] = {}
+    for key, value in item.items():
+        if not isinstance(key, str) or not key.isdigit():
+            raise SetupFailure(
+                f"reference entry {context} has a non-zone key: {key!r}"
+            )
+        zone = int(key)
+        if str(zone) != key:
+            raise SetupFailure(
+                f"reference entry {context} has an invalid zone key: {key!r}"
+            )
+        zone_items[zone] = value
+    expected = set(expected_zones)
+    actual = set(zone_items)
+    missing_zones = sorted(expected.difference(actual))
+    unknown_zones = sorted(actual.difference(expected))
+    if missing_zones or unknown_zones:
+        raise SetupFailure(
+            f"reference entry {context} must define exactly zones {sorted(expected)}; "
+            f"missing {missing_zones}; unknown {unknown_zones}"
+        )
+    selections: dict[int, tuple[str, ...]] = {}
+    for zone, value in zone_items.items():
+        if not isinstance(value, list) or not value:
+            raise SetupFailure(
+                f"reference entry {context}.{zone} must be a nonempty species list"
+            )
+        if not all(isinstance(species, str) and species for species in value):
+            raise SetupFailure(
+                f"reference entry {context}.{zone} contains an invalid species"
+            )
+        duplicates = sorted(
+            species for species in set(value) if value.count(species) > 1
+        )
+        if duplicates:
+            raise SetupFailure(
+                f"reference entry {context}.{zone} contains duplicate species: "
+                + ", ".join(duplicates)
+            )
+        selections[zone] = tuple(value)
+    return selections
+
+
 def _unique_json_object(pairs: Sequence[tuple[str, object]]) -> dict[str, object]:
     document: dict[str, object] = {}
     for key, value in pairs:
@@ -770,6 +815,9 @@ def load_reference(path: Path) -> CharacterizationReference:
             )
             for name, value in document["mass_fractions"].items()
         }
+        mass_fraction_selection = _load_composition_selection(
+            document["mass_fraction_selection"], expected_zones
+        )
         mass_fraction_tolerances_by_species = {
             name: _load_tolerance_bounds(
                 item, expected_zones, f"mass_fraction_tolerances.{name}"
@@ -795,14 +843,6 @@ def load_reference(path: Path) -> CharacterizationReference:
         }
         for zone in expected_zones
     }
-    mass_fraction_tolerances = {
-        zone: {
-            species: bounds[zone]
-            for species, bounds in mass_fraction_tolerances_by_species.items()
-        }
-        for zone in expected_zones
-    }
-
     required_fields = {
         "target_time",
         "temperature_gk",
@@ -821,14 +861,48 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure("reference composition is empty or invalid")
     if not mass_fraction_tolerances_by_species:
         raise SetupFailure("reference mass-fraction tolerance selection is empty")
-    missing_expected_species = set(mass_fraction_tolerances_by_species).difference(
+    unknown_tolerance_species = set(mass_fraction_tolerances_by_species).difference(
         mass_fractions_by_species
     )
-    if missing_expected_species:
+    if unknown_tolerance_species:
         raise SetupFailure(
             "reference mass-fraction tolerances have no matching composition value: "
-            + ", ".join(sorted(missing_expected_species))
+            + ", ".join(sorted(unknown_tolerance_species))
         )
+    selected_species = {
+        species
+        for zone_selection in mass_fraction_selection.values()
+        for species in zone_selection
+    }
+    unknown_selected_species = selected_species.difference(mass_fractions_by_species)
+    if unknown_selected_species:
+        raise SetupFailure(
+            "reference mass-fraction selection has no matching composition value: "
+            + ", ".join(sorted(unknown_selected_species))
+        )
+    missing_tolerances = selected_species.difference(
+        mass_fraction_tolerances_by_species
+    )
+    if missing_tolerances:
+        raise SetupFailure(
+            "reference mass-fraction selection has no matching tolerance: "
+            + ", ".join(sorted(missing_tolerances))
+        )
+    unused_tolerances = set(mass_fraction_tolerances_by_species).difference(
+        selected_species
+    )
+    if unused_tolerances:
+        raise SetupFailure(
+            "reference mass-fraction tolerances are not selected in any zone: "
+            + ", ".join(sorted(unused_tolerances))
+        )
+    mass_fraction_tolerances = {
+        zone: {
+            species: mass_fraction_tolerances_by_species[species][zone]
+            for species in mass_fraction_selection[zone]
+        }
+        for zone in expected_zones
+    }
     if any(value < 0 for value in mass_fraction_sum_atols.values()):
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
     return CharacterizationReference(
@@ -858,14 +932,14 @@ def validate_reference_for_case(
                 f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
                 f"!= {case.expected_species}"
             )
-    comparison_species = comparison_species_for(
-        case.expected_species, reference.mass_fractions
-    )
     for zone in case.expected_zones:
+        comparison_species = comparison_species_for_zone(
+            case.expected_species, reference.mass_fractions[zone]
+        )
         selected_species = tuple(reference.mass_fraction_tolerances[zone])
         if selected_species != comparison_species:
             raise SetupFailure(
-                "reference pass/fail species do not match the shared "
+                "reference pass/fail species do not match the per-zone "
                 f"composition policy for zone {zone}: "
                 f"{selected_species} != {comparison_species}"
             )

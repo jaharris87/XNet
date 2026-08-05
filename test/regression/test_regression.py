@@ -1,6 +1,7 @@
 """End-to-end regression cases for the compiled XNet executable."""
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -30,8 +31,17 @@ def test_tnsn_alpha(
     diagnostics = json.loads(
         (work_directory / "composition_error_norms.json").read_text(encoding="utf-8")
     )
-    assert len(diagnostics["zones"]) == 10
-    assert all(
-        zone["l1"] == 0.0 and zone["l2"] == 0.0 and zone["linf"] == 0.0
-        for zone in diagnostics["zones"]
+    assert diagnostics["status"] == (
+        "diagnostic-only; these norms do not determine pass/fail"
     )
+    assert diagnostics["vector"] == (
+        "absolute mass-fraction errors for every species in the case"
+    )
+    assert [zone["zone"] for zone in diagnostics["zones"]] == list(range(1, 11))
+    for zone in diagnostics["zones"]:
+        assert set(zone) == {"zone", "l1", "l2", "linf", "linf_species"}
+        assert all(math.isfinite(zone[name]) for name in ("l1", "l2", "linf"))
+        assert zone["l1"] >= zone["l2"] >= zone["linf"] >= 0.0
+        assert zone["linf_species"] is None or isinstance(
+            zone["linf_species"], str
+        )

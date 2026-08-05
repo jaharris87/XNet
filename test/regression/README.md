@@ -358,11 +358,22 @@ existing argument and rank mismatch warnings; the linked executable used
 `xnet_parallel_stubs.o`. MPI, OpenMP, accelerators, other matrix solvers,
 other libraries, other compilers, and other platforms were not validated.
 
-Three isolated optimized runs returned direct process status 0 and produced
-identical parsed endpoints, all 160 mass fractions, and step counts. Pytest
-call times were 1.85, 2.17, and 1.89 seconds, well inside the unchanged
-30-second timeout. Step is diagnostic-only and is not compared. Requested and
-achieved times were identical at printed precision in every zone:
+Three isolated optimized runs returned direct process status 0. The same
+focused command was run once with each retained pytest base directory:
+
+```bash
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue21-opt-repeat-1 --durations=1
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue21-opt-repeat-2 --durations=1
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue21-opt-repeat-3 --durations=1
+```
+
+The three retained `net_diag01` files were parsed independently with
+`parse_diagnostic`, and equality of the resulting `FinalState` sequences
+confirmed identical endpoints, all 160 mass fractions, `End` steps, and all
+five solver counters. Pytest call times were 2.04, 2.02, and 2.02 seconds,
+well inside the unchanged 30-second timeout. Step is diagnostic-only and is
+not compared. Requested and achieved times were identical at printed
+precision in every zone:
 
 | Zone | `End` step | Time (s) | Final T (GK) | Density (g/cm3) | Ye | Printed sum(X) | Sum bound | Compared species |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -410,17 +421,40 @@ histories. Isolated preprocessing created `ab_blank`, `match_data`,
 `nuc_data`, and `sparse_ind`, totaling 847,933 bytes. The committed complete
 JSON reference is 52,447 bytes. Hashes for the control, five network sources,
 six trajectories, and EOS table are recorded in the reference; the tracked
-inputs remained unchanged after the runs.
+inputs remained unchanged after the runs. The post-run ignored-artifact check
+was scoped to every repository input and case directory that the execution
+could mutate:
 
-An alternate clean GNU `CMODE=DEBUG` build was also exercised. It exceeded the
-normal timeout, then completed directly with status 0 in a 120-second pytest
-run whose case call took 37.19 seconds. It retained the optimized run's step
-counts but failed the narrow endpoint characterization; the largest complete
-composition difference was `6.33e-7` for zone 3 `ni56`. Its zone 3 L1, L2,
-and L-infinity differences were `3.733e-6`, `1.058e-6`, and `6.33e-7`.
-These observations do not establish a scientifically acceptable cross-mode
-tolerance, so the reference was not widened merely to make the debug build
-pass. Portability beyond the optimized configuration is not established.
+```bash
+git status --short --ignored -- test/Data_SN160 test/Test_Problems tools/starkiller-helmholtz test/regression/cases/heat_sn160
+# no entries
+```
+
+Thus neither tracked nor ignored runtime or preprocessing artifacts appeared
+in those source directories. Expected build products remained confined to
+the ignored `source/` build directory, and pytest artifacts remained under
+the explicitly external `/private/tmp` base directories.
+
+An alternate clean GNU `CMODE=DEBUG` build was also exercised with these
+commands before restoring the clean tracked-default optimized build:
+
+```bash
+make -C source clean
+make -C source -j CMODE=DEBUG
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --xnet-timeout=120 --durations=1
+make -C source clean
+make -C source -j
+```
+
+The debug case had first exceeded the normal 30-second timeout, then completed
+directly with status 0 in the explicit 120-second pytest run, whose case call
+took 37.19 seconds. It retained the optimized run's step counts but failed the
+narrow endpoint characterization; the largest complete-composition difference
+was `6.33e-7` for zone 3 `ni56`. Its zone 3 L1, L2, and L-infinity differences
+were `3.733e-6`, `1.058e-6`, and `6.33e-7`. These observations do not establish
+a scientifically acceptable cross-mode tolerance, so the reference was not
+widened merely to make the debug build pass. Portability beyond the optimized
+configuration is not established.
 
 As a controlled end-to-end effectiveness check, a temporary reference changed
 zone 3 `ni56` from `0.065404983` to `0.07`. The real pytest case returned

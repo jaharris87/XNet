@@ -325,6 +325,7 @@ class RegressionCase:
     expected_legacy_id: int | None = None
     expected_solver: str | None = None
     expected_effective_controls: Mapping[str, float] | None = None
+    expected_characterization_metadata: Mapping[str, object] | None = None
 
     @property
     def required_outputs(self) -> tuple[str, ...]:
@@ -406,6 +407,7 @@ class CharacterizationReference:
     metadata_inputs: Mapping[str, object] | None = None
     input_sha256: Mapping[str, str] | None = None
     legacy_provenance: Mapping[str, object] | None = None
+    characterization_metadata: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -526,6 +528,50 @@ def bdf_sn160_case(repository_root: Path) -> RegressionCase:
         expected_effective_controls={
             "maximum_abundance_change": 1.0e10,
             "maximum_temperature_change": 1.0e10,
+        },
+        expected_characterization_metadata={
+            "baseline_kind": "characterization",
+            "baseline_status": (
+                "characterization-only; not independently validated scientific truth"
+            ),
+            "generated_from_revision": (
+                "a8b64764a6d614f406da6c897e6b051fb3e1972d"
+            ),
+            "generated_on": "2026-08-05",
+            "platform": "macOS 26.6 arm64",
+            "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+            "python": "Python 3.13.0",
+            "pytest": "pytest 9.1.1",
+            "build": {
+                "executable": "source/xnet",
+                "CMODE": "OPT",
+                "PE_ENV": "GNU",
+                "MPI_MODE": "OFF",
+                "OPENMP_MODE": "OFF",
+                "GPU_MODE": "OFF",
+                "EOS": "STARKILLER",
+                "MATRIX_SOLVER": "dense",
+                "LAPACK_VER": "NETLIB",
+            },
+            "legacy_provenance": {
+                "legacy_id": 54,
+                "assembly": [
+                    "test/test_settings_bdf",
+                    "test/Test_Problems/setup_bdf_sn160",
+                ],
+                "maintained_solver": (
+                    "Backward Differentiation Formula (isolv = 3)"
+                ),
+                "normalized_changes": [
+                    "remove Test_Results/ from ASCII and binary output roots",
+                    "remove Test_Problems/ from six trajectory paths",
+                    "change zone block size from legacy 4 to regression 1",
+                ],
+                "effective_runtime_controls": {
+                    "maximum_abundance_change": 1.0e10,
+                    "maximum_temperature_change": 1.0e10,
+                },
+            },
         },
     )
 
@@ -1044,7 +1090,12 @@ def _unique_json_object(pairs: Sequence[tuple[str, object]]) -> dict[str, object
 
 def _load_reference_metadata(
     document: Mapping[str, object], reference_schema: str
-) -> tuple[Mapping[str, object], Mapping[str, str], Mapping[str, object]]:
+) -> tuple[
+    Mapping[str, object],
+    Mapping[str, str],
+    Mapping[str, object],
+    Mapping[str, object],
+]:
     if reference_schema != "xnet-characterization-v1":
         raise SetupFailure(f"unsupported reference_schema: {reference_schema!r}")
 
@@ -1201,7 +1252,12 @@ def _load_reference_metadata(
         )
     ):
         raise SetupFailure("reference input_sha256 metadata is invalid")
-    return inputs, input_sha256, legacy
+    characterization_metadata = {
+        name: document[name] for name in required_strings
+    }
+    characterization_metadata["build"] = build
+    characterization_metadata["legacy_provenance"] = legacy
+    return inputs, input_sha256, legacy, characterization_metadata
 
 
 def load_reference(path: Path) -> CharacterizationReference:
@@ -1225,10 +1281,16 @@ def load_reference(path: Path) -> CharacterizationReference:
     if reference_schema is None:
         metadata_inputs = None
         input_sha256 = None
+        characterization_metadata = None
     else:
         if not isinstance(reference_schema, str) or not reference_schema:
             raise SetupFailure("reference_schema must be a nonempty string")
-        metadata_inputs, input_sha256, legacy_provenance = (
+        (
+            metadata_inputs,
+            input_sha256,
+            legacy_provenance,
+            characterization_metadata,
+        ) = (
             _load_reference_metadata(document, reference_schema)
         )
     if reference_schema is None:
@@ -1404,6 +1466,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         metadata_inputs=metadata_inputs,
         input_sha256=input_sha256,
         legacy_provenance=legacy_provenance,
+        characterization_metadata=characterization_metadata,
     )
 
 
@@ -1439,6 +1502,7 @@ def validate_reference_for_case(
             reference.metadata_inputs is None
             or reference.input_sha256 is None
             or reference.legacy_provenance is None
+            or reference.characterization_metadata is None
         ):
             raise SetupFailure(
                 "reference schema requires complete provenance and input hashes"
@@ -1453,6 +1517,13 @@ def validate_reference_for_case(
         ):
             raise SetupFailure(
                 "reference solver provenance does not match the case definition"
+            )
+        if (
+            reference.characterization_metadata
+            != case.expected_characterization_metadata
+        ):
+            raise SetupFailure(
+                "reference characterization metadata does not match the case definition"
             )
         provenance_paths = (
             case.control,

@@ -1002,6 +1002,57 @@ def test_bdf_run_rejects_mismatched_solver_provenance_before_execution(
     assert not work_directory.exists()
 
 
+@pytest.mark.parametrize(
+    ("metadata_path", "replacement"),
+    [
+        (
+            ("baseline_status",),
+            "characterization-only; independently validated scientific truth",
+        ),
+        (("generated_from_revision",), "0" * 40),
+        (("generated_on",), "2026-08-04"),
+        (("platform",), "contradictory platform"),
+        (("compiler",), "contradictory compiler"),
+        (("python",), "Python 0.0.0"),
+        (("pytest",), "pytest 0.0.0"),
+        (("build", "CMODE"), "DEBUG"),
+        (
+            ("legacy_provenance", "assembly"),
+            ["test/test_settings_bdf", "test/Test_Problems/setup_heat_sn160"],
+        ),
+        (
+            ("legacy_provenance", "normalized_changes"),
+            ["contradictory normalization claim"],
+        ),
+    ],
+)
+def test_bdf_run_rejects_contradictory_characterization_metadata_before_execution(
+    tmp_path: Path, metadata_path: tuple[str, ...], replacement: object
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    target = document
+    for name in metadata_path[:-1]:
+        target = target[name]
+    target[metadata_path[-1]] = replacement
+    reference_path = tmp_path / "contradictory-metadata.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(
+        SetupFailure,
+        match="characterization metadata does not match the case definition",
+    ):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
 def test_case_rejects_sunet_species_mismatch(tmp_path: Path) -> None:
     case = tnsn_alpha_case(REPOSITORY_ROOT)
     network_data = tmp_path / "Data_alpha"

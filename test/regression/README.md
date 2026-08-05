@@ -224,9 +224,10 @@ generated from the tracked default serial build at its recorded revision.
 These are not independently validated scientific results. Each JSON file
 records the known compiler, platform, build selections, and input paths.
 Normal tests only read these files and never create or replace them. Cases
-that declare a reference schema validate characterization status, generating
-revision and date, toolchain and build metadata, legacy solver provenance,
-effective controls, the complete input inventory, and SHA-256 hashes before
+that declare a reference schema bind the exact characterization status,
+generating revision and date, toolchain and resolved build selection, legacy
+assembly and solver provenance, documented input normalization, effective
+controls, the complete input inventory, and SHA-256 hashes before
 creating the work directory or executing XNet. Case identity and reference
 schema association are also setup checks, so a swapped or incomplete reference
 cannot be masked by a later process failure.
@@ -246,13 +247,14 @@ baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
-For `heat_sn160` and `bdf_sn160`, the printed composition itself can differ
-from unity by more than its aggregate formatting uncertainty. Each
-zone-specific bound is therefore the absolute baseline printed-sum residual
+For `heat_sn160` and `bdf_sn160`, the printed mass fractions can sum to a value
+that differs from unity by more than their aggregate formatting uncertainty.
+Each zone-specific bound is therefore the absolute baseline printed-sum offset
 plus the sum of the half-last-place bounds of all 160 printed values. This
-accepts each recorded characterization and one complete-vector printing
-uncertainty without silently treating the `1e-6` per-step solver
-mass-conservation control as an endpoint comparison tolerance.
+accepts the characterized printed endpoint plus one complete-vector printing
+uncertainty. It is only a printed mass-fraction sum check. In particular, it
+is not the BDF `iconvc == 3` weighted RMS convergence norm and is not a check
+of `rtol`, `atol`, or `ymin`.
 
 Each reference records characterized final step counts for diagnosis:
 `tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,
@@ -566,11 +568,11 @@ selection is made independently per zone: all available silicon-burning
 anchors plus each species with characterized `X >= 1e-4`, retained in the
 complete-vector order. Each scalar and selected composition value uses half
 its baseline's last printed place as `atol` and `5e-8` as `rtol`. The printed
-sum bound is the absolute baseline residual shown above plus one summed
+sum bound is the absolute baseline printed-sum offset shown above plus one summed
 half-last-place bound for the complete 160-value vector. In particular, the
-zone 3 residual is recorded rather than hidden by a widened shared-integrator
-tolerance. These policies characterize the printed BDF endpoint; they do not
-establish mass conservation as a new scientific acceptance result.
+zone 3 printed-sum offset is recorded directly. The maintainer assessed the
+reported value as acceptable. This endpoint check is separate from the BDF
+`iconvc == 3` weighted RMS convergence norm.
 
 The reference records `End` and all solver counters for diagnosis. No counter
 has a pass/fail threshold:
@@ -603,8 +605,9 @@ from `0.064921366` to `0.07`. Both the focused BDF command and the complete
 pytest command returned status 1. They reported the zone, species, actual
 value `6.492136600e-02`, reference value `7.000000000e-02`, absolute
 difference `5.079e-03`, and allowance `4.000e-09`; the complete run otherwise
-passed 94 tests. The reference was restored, the focused case passed again,
-and normal test execution still has no reference creation or update path.
+passed all other tests. The reference was restored, the focused case passed
+again, and normal test execution still has no reference creation or update
+path.
 
 ### Backward Euler/BDF diagnostic comparison
 

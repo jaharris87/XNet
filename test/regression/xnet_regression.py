@@ -395,6 +395,7 @@ class CharacterizationReference:
     # This subset selects species for field-aware pass/fail comparison.
     mass_fraction_tolerances: Mapping[int, Mapping[str, ToleranceBounds]]
     mass_fraction_sum_atols: Mapping[int, float]
+    solver_counters: Mapping[int, SolverCounters] | None = None
 
 
 @dataclass(frozen=True)
@@ -474,6 +475,28 @@ def heat_sn160_case(repository_root: Path) -> RegressionCase:
     )
     return RegressionCase(
         name="heat_sn160",
+        control=case_directory / "control",
+        network_data=repository_root / "test" / "Data_SN160",
+        trajectories=tuple(
+            repository_root / "test" / "Test_Problems" / f"th_co_burn_{zone}"
+            for zone in range(1, 7)
+        ),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=tuple(range(1, 7)),
+        expected_species=SN160_SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+    )
+
+
+def bdf_sn160_case(repository_root: Path) -> RegressionCase:
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "bdf_sn160"
+    )
+    return RegressionCase(
+        name="bdf_sn160",
         control=case_directory / "control",
         network_data=repository_root / "test" / "Data_SN160",
         trajectories=tuple(
@@ -828,7 +851,7 @@ def parse_diagnostic(
             raise ParsingFailure(f"malformed counter values for zone {zone}: {lines[index]}")
         counter_zone, *counter_values = (int(token) for token in counters)
         solver_counters = SolverCounters(*counter_values)
-        if counter_zone != zone or solver_counters.ts != step:
+        if counter_zone != zone:
             raise ParsingFailure(
                 f"zone {zone} counter record does not match its End record: {lines[index]}"
             )
@@ -1054,6 +1077,37 @@ def load_reference(path: Path) -> CharacterizationReference:
             expected_zones,
             "mass_fraction_sum_atol",
         )
+        counter_items = document.get("solver_counters")
+        if counter_items is None:
+            solver_counters = {}
+        else:
+            if not isinstance(counter_items, dict) or set(counter_items) != {
+                "ts",
+                "nr",
+                "jacobian",
+                "derivative",
+                "cross_section",
+            }:
+                raise ValueError(
+                    "solver_counters must contain exactly ts, nr, jacobian, "
+                    "derivative, and cross_section"
+                )
+            counters_by_name = {
+                name: _load_zone_integers(
+                    values, expected_zones, f"solver_counters.{name}"
+                )
+                for name, values in counter_items.items()
+            }
+            solver_counters = {
+                zone: SolverCounters(
+                    ts=counters_by_name["ts"][zone],
+                    nr=counters_by_name["nr"][zone],
+                    jacobian=counters_by_name["jacobian"][zone],
+                    derivative=counters_by_name["derivative"][zone],
+                    cross_section=counters_by_name["cross_section"][zone],
+                )
+                for zone in expected_zones
+            }
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise SetupFailure(f"invalid characterization reference structure in {path}: {error}") from error
 
@@ -1138,6 +1192,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         mass_fractions=mass_fractions,
         mass_fraction_tolerances=mass_fraction_tolerances,
         mass_fraction_sum_atols=mass_fraction_sum_atols,
+        solver_counters=solver_counters,
     )
 
 

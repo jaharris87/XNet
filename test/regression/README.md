@@ -4,8 +4,8 @@ This directory is a bounded replacement path for XNet regression testing. It
 exercises the compiled XNet program as an external process; it is not a Python
 binding, a scientific-validation suite, or a replacement for all legacy cases.
 The migrated cases are the serial, CPU-only `tnsn_alpha` and `tnsn_torch47`
-trajectory calculations and the `heat_alpha` and `heat_sn160` self-heating
-calculations.
+trajectory calculations and the `heat_alpha`, `heat_sn160`, and `bdf_sn160`
+self-heating calculations.
 
 ## Prerequisites and command
 
@@ -114,14 +114,13 @@ trajectory paths in the isolated directory. XNet uses the number of digits in
 the largest zone number for output suffixes, so this six-zone case uses `_1`
 through `_6`, while the ten-zone `tnsn_alpha` case uses `_01` through `_10`.
 
-Issue #21 deliberately divides the paired SN160 study into two ordered PRs.
-This first increment migrates only Backward Euler legacy ID 53,
-`heat_sn160`; legacy ID 54, `bdf_sn160`, remains deferred until the Backward
-Euler increment is accepted on `development`. Both are members of aggregate
-self-heating ID 50. The split is retained because BDF needs its own reference
-and a general parser representation for the valid difference between its
-`End` step and TS attempt counter. That work can therefore be reviewed without
-conflating it with basic SN160 staging and complete-composition support.
+Issue #21 divided the paired SN160 study into two ordered increments. Backward
+Euler legacy ID 53, `heat_sn160`, was accepted first. Issue #24 adds the
+second increment for legacy ID 54, `bdf_sn160`. Both remain members of
+aggregate self-heating ID 50. The split gives each maintained integrator its
+own characterization reference and tolerance policy; the paired comparison is
+diagnostic and does not make one integrator's execution history a requirement
+for the other.
 
 Legacy ID 53 calls `do_test_heat`, which concatenates
 `test/test_settings_heat` and `test/Test_Problems/setup_heat_sn160`. It runs
@@ -143,27 +142,48 @@ unchanged. The case stages only `sunet`, `netsu`, `netweak`, `netwinv`, and
 never enter the tracked source directory. Screening and self-heating require
 the tracked `tools/starkiller-helmholtz/helm_table.dat`.
 
-For the ordered second increment, the complete legacy control differences are:
+The complete legacy control differences are:
 
-| Control | Backward Euler ID 53 | BDF ID 54 |
-| --- | ---: | ---: |
-| Integration choice | `1` | `3` |
-| Maximum iterations per step | `5` | `10` |
-| Convergence-condition flag | `0` | `3` |
-| Lower abundance cutoff | `1e-30` | `1e-99` |
-| Legacy zone block size | `1` | `4` |
-| ASCII/binary root | `heat_sn160` | `bdf_sn160` |
+| Control | Backward Euler ID 53 | BDF ID 54 | Classification |
+| --- | ---: | ---: | --- |
+| Integration choice | `1` | `3` | BDF-required numerical behavior |
+| Maximum iterations per step | `5` | `10` | BDF-required numerical behavior |
+| Convergence-condition flag | `0` | `3` | BDF-required numerical behavior |
+| Lower abundance cutoff | `1e-30` | `1e-99` | BDF-required numerical behavior |
+| Legacy zone block size | `1` | `4` | batching normalization to `1` below |
+| ASCII/binary root | `heat_sn160` | `bdf_sn160` | output naming |
 
-The BDF iteration, convergence, and abundance-floor values are solver-specific
-comparable controls, not unrelated physical changes. The second increment
-must intentionally change its legacy block size from 4 to 1 to hold shared
-blocking behavior equal; batching with `szbatch > 1` remains separate work.
-Current `xnet_evolve.F90` dispatches `isolv == 3` to `solve_bdf` and all other
-values, including 1, to `solve_be`. Current `xnet_controls.F90` also replaces
-both abundance- and temperature-change timestep limits with `1e10` for
-`isolv == 3`; the nearby input comment naming option 2 as Bader-Deufelhard is
-stale for legacy ID 54. These effective BDF semantics are not active in this
-first PR.
+Legacy ID 54 calls `do_test_bdf`, which concatenates
+`test/test_settings_bdf` and `test/Test_Problems/setup_bdf_sn160` once. The
+committed `cases/bdf_sn160/control` removes trailing whitespace, removes
+`Test_Results/` from both output roots, removes `Test_Problems/` from the six
+trajectory paths, and intentionally changes the zone block size from 4 to 1.
+The focused normalized-concatenation test permits exactly those path edits and
+the batching change. All six zones, their order, the five SN160 source inputs,
+`Data_SN160/ab_co`, the six trajectories, the EOS table, the 14 requested
+ASCII species, and all other physical and numerical controls are unchanged.
+The required fresh outputs are `net_diag01`, `ev_bdf_sn160_1` through `_6`,
+and `ts_bdf_sn160_1` through `_6`.
+
+The BDF iteration, convergence, and abundance-floor values are maintained
+solver behavior. Holding block size at 1 keeps batching out of the integrator
+comparison; no evidence from the isolated runs indicated a BDF semantic
+dependency on the legacy block size of 4. Testing `szbatch > 1` remains
+separate work. `source/xnet_evolve.F90` imports `solve_bdf` and dispatches
+`isolv == 3` to it, `source/net.F90` calls `bdf_init` for the same choice, and
+the normal `source/Makefile` production object set contains
+`xnet_integrate_bdf.o`. `source/xnet_controls.F90` replaces both input
+abundance- and temperature-change timestep limits with the effective value
+`1e10` for `isolv == 3`; the committed reference records that effective state.
+
+The maintained solver is Backward Differentiation Formula (BDF). The text
+`Choice of integration Scheme (1=Backward Euler, 2= Bader-Deufelhard)` in
+`test/test_settings_bdf` and the analogous input/output descriptions in
+`source/xnet_controls.F90` are stale historical wording. They do not control
+dispatch. The commented `Case (2)` in `source/xnet_evolve.F90` and the absent
+`xnet_integrate_bd.o` production object confirm that obsolete Bader-Deuflhard
+(BD) is not the solver exercised here. Issue #24 does not change those stale
+production or legacy comments.
 
 Legacy ID 2 names `tnsn_torch47` and calls `do_test`, which concatenates
 `test/test_settings` and `test/Test_Problems/setup_tnsn_torch47`. The settings
@@ -205,8 +225,9 @@ These are not independently validated scientific results. Each JSON file
 records the known compiler, platform, build selections, and input paths.
 Normal tests only read these files and never create or replace them.
 
-The parser requires ordered final records and matching counters for every case
-zone, the case-declared complete 14-, 47-, or 160-species structure, one
+The parser requires ordered final records and zone-associated counters for
+every case zone, the case-declared complete 14-, 47-, or 160-species
+structure, one
 delimited timer section per zone, and finite values. It has no default network
 species list. Case setup independently requires the same ordered species in
 `sunet`, so the network input, parsed diagnostic, and reference must agree. It
@@ -219,25 +240,28 @@ baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
-For `heat_sn160`, the printed composition itself differs from unity by more
-than its aggregate formatting uncertainty in zones 2-5. Its zone-specific
-bound is therefore the absolute baseline printed-sum residual plus the sum of
-the half-last-place bounds of all 160 printed values. This accepts the recorded
-characterization and one complete-vector printing uncertainty without
-silently treating the `1e-6` solver mass-conservation control as an endpoint
-comparison tolerance.
+For `heat_sn160` and `bdf_sn160`, the printed composition itself can differ
+from unity by more than its aggregate formatting uncertainty. Each
+zone-specific bound is therefore the absolute baseline printed-sum residual
+plus the sum of the half-last-place bounds of all 160 printed values. This
+accepts each recorded characterization and one complete-vector printing
+uncertainty without silently treating the `1e-6` per-step solver
+mass-conservation control as an endpoint comparison tolerance.
 
 Each reference records characterized final step counts for diagnosis:
 `tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,
-534, 532, and 540, and `tnsn_torch47` records 2928. Step count is
+534, 532, and 540, `tnsn_torch47` records 2928, and `bdf_sn160` records 266,
+274, 257, 231, 223, and 223. Step count is
 diagnostic-only for every case and has
 no cross-run pass/fail tolerance. Accepted-step count can vary when compiler,
 library, architecture, optimization, or floating-point rounding changes which
 tolerance-dependent convergence path is taken. Repeated results on one
 configuration cannot justify either exact equality or a portable nonzero
-bound. The parser still requires each zone's `End` and `Counters` records to
-agree on the actual step count, while completion and selected endpoint values
-remain required.
+bound. The parser retains the `End` step and all five source-labeled counters
+separately. It requires the counter row to name the same zone, but does not
+require TS to equal `End`: production writes `End` from `kstep`, while BDF TS
+counts attempted timesteps and legitimately exceeds the accepted-step count.
+Completion and selected endpoint values remain required.
 
 The first two values in an `End` record are distinct: the first is the
 requested target time (`tstop` in XNet), and the second is the achieved
@@ -464,6 +488,161 @@ creation or update path. After restoration and review fixes, the focused
 helpers passed 70 tests and the complete optimized suite passed 74 tests in
 4.94 seconds.
 
+## SN160 Backward Differentiation Formula characterization evidence
+
+No tracked `test/Test_Problems/Results/net_diag_bdf_sn160` exists. A
+path-scoped search of all repository history found no prior BDF SN160 endpoint
+reference with usable revision, compiler, platform, inputs, or scientific
+provenance. This reference is therefore a new characterization of current
+maintained BDF behavior, not a historical truth reference and not independent
+scientific validation.
+
+The reference was generated on 2026-08-05 from production and input revision
+`a8b64764a6d614f406da6c897e6b051fb3e1972d` on macOS 26.6 arm64 with GNU
+Fortran 16.1.0, Python 3.13.0, and pytest 9.1.1. The complete control is new in
+this increment and is bound by its SHA-256 hash in the reference. The clean
+tracked-default build commands were:
+
+```bash
+make -C source clean
+make -C source -j
+```
+
+Resolved selections were `EXE=xnet`, `CMODE=OPT`, `PE_ENV=GNU`,
+`MPI_MODE=OFF`, `OPENMP_MODE=OFF`, `GPU_MODE=OFF`, `EOS=STARKILLER`,
+`MATRIX_SOLVER=dense`, and `LAPACK_VER=NETLIB`. The exact executable was
+`source/xnet`. The known nominal-serial dependency also compiled
+`xnet_parallel.F90` with GNU `mpifort` 16.1.0 and emitted the existing MPI
+argument type and rank mismatch warnings; the executable linked
+`xnet_parallel_stubs.o`. MPI execution, OpenMP, accelerators, other matrix
+solvers and libraries, other compilers, other platforms, and DEBUG mode were
+not checked for this BDF characterization.
+
+The legacy provenance and normalized comparison are executable checks, not
+only prose. `test_bdf_control_is_the_normalized_legacy_id_54_concatenation`
+forms the same `test_settings_bdf + setup_bdf_sn160` concatenation as
+`do_test_bdf`, strips trailing whitespace, applies the two isolated path
+normalizations, changes only the block-size line from 4 to 1, and requires an
+exact match with the committed control. The reference records SHA-256 hashes
+for that control, the five network sources, abundance input, six trajectories,
+and EOS table. It also records integration choice 3, the maintained solver
+identity, and the effective `changemx = changemxt = 1e10` state imposed by
+XNet.
+
+Three isolated optimized pytest runs used the unchanged default 30-second
+timeout and distinct retained base directories:
+
+```bash
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_bdf_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue24-pytest-baseline --durations=1
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_bdf_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue24-pytest-repeat-2 --durations=1
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_bdf_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue24-pytest-repeat-3 --durations=1
+```
+
+Each XNet subprocess recorded direct return status 0. Pytest call times were
+0.76, 0.75, and 0.76 seconds, well inside 30 seconds. Independent parsing of
+the three retained `net_diag01` files produced identical targets, achieved
+times, scalar endpoints, all 160 mass fractions, `End` steps, and all five
+solver counters. Requested and achieved times were identical at printed
+precision in every zone:
+
+| Zone | `End` | Time (s) | Final T (GK) | Density (g/cm3) | Ye | Printed sum(X) | Sum bound | Compared species |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 266 | 10 | 4.5376972 | 1.0000000e7 | 0.49885684 | 1.000000279473 | 2.9702e-7 | 26 |
+| 2 | 274 | 1 | 5.4873128 | 3.1622777e7 | 0.49912074 | 1.000000414592 | 4.3527e-7 | 38 |
+| 3 | 257 | 0.1 | 6.3448519 | 1.0000000e8 | 0.49928049 | 1.000030101426 | 3.0124e-5 | 52 |
+| 4 | 231 | 0.001 | 7.1773063 | 3.1622777e8 | 0.49952960 | 1.000000560949 | 5.8010e-7 | 65 |
+| 5 | 223 | 0.0001 | 8.1101200 | 1.0000000e9 | 0.49953348 | 1.000001564188 | 1.5835e-6 | 76 |
+| 6 | 223 | 0.00001 | 9.2368042 | 3.1622777e9 | 0.49953675 | 1.000001415571 | 1.4355e-6 | 84 |
+
+Every zone stores all 160 values in exact `sunet` order. The pass/fail
+selection is made independently per zone: all available silicon-burning
+anchors plus each species with characterized `X >= 1e-4`, retained in the
+complete-vector order. Each scalar and selected composition value uses half
+its baseline's last printed place as `atol` and `5e-8` as `rtol`. The printed
+sum bound is the absolute baseline residual shown above plus one summed
+half-last-place bound for the complete 160-value vector. In particular, the
+zone 3 residual is recorded rather than hidden by a widened shared-integrator
+tolerance. These policies characterize the printed BDF endpoint; they do not
+establish mass conservation as a new scientific acceptance result.
+
+The reference records `End` and all solver counters for diagnosis. No counter
+has a pass/fail threshold:
+
+| Zone | `End` | TS | NR | Jacobian | Deriv | CrossSect |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 266 | 280 | 416 | 280 | 417 | 417 |
+| 2 | 274 | 289 | 423 | 289 | 424 | 424 |
+| 3 | 257 | 271 | 416 | 271 | 417 | 417 |
+| 4 | 231 | 245 | 359 | 245 | 360 | 360 |
+| 5 | 223 | 237 | 357 | 237 | 358 | 358 |
+| 6 | 223 | 237 | 351 | 237 | 352 | 352 |
+
+All six TS values exceed `End`, directly exercising the shared parser's
+solver-independent representation. The parser still requires the exact
+`Counters: Zone TS NR Jacobian Deriv CrossSect` heading, six nonnegative
+integer fields, correct zone association, completeness, and order.
+
+The required BDF outputs totaled 13,154,474 bytes: 47,890 bytes for
+`net_diag01`, 297,200 bytes for the six ASCII histories, and 12,809,384 bytes
+for the six binary histories. Isolated preprocessing created `ab_blank`,
+`match_data`, `match_read`, `matr_shape`, `net_desc`, `net_diag`, `nets3`,
+`nets4`, `nuc_data`, and `sparse_ind`, totaling 847,933 bytes. The committed
+JSON reference is 53,805 bytes. Binary histories are required fresh and
+nonempty but are not decoded, compared, or committed; issue #12 still owns
+that policy.
+
+A controlled end-to-end failure temporarily changed selected zone 3 `ni56`
+from `0.064921366` to `0.07`. Both the focused BDF command and the complete
+pytest command returned status 1. They reported the zone, species, actual
+value `6.492136600e-02`, reference value `7.000000000e-02`, absolute
+difference `5.079e-03`, and allowance `4.000e-09`; the complete run otherwise
+passed 84 tests. The reference was restored, the focused case passed again,
+and normal test execution still has no reference creation or update path.
+
+### Backward Euler/BDF diagnostic comparison
+
+The following same-platform comparison uses the accepted Backward Euler
+characterization and the BDF characterization above. Target and achieved times
+and densities agree at printed precision. The other differences are diagnostic
+only; no shared endpoint, step, counter, or history criterion has been
+established.
+
+| Zone | T BE / BDF (GK) | Ye BE / BDF | `End` BE / BDF | TS BE / BDF | NR BE / BDF | Jacobian BE / BDF | Deriv BE / BDF | CrossSect BE / BDF |
+| ---: | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 4.5362097 / 4.5376972 | 0.49886745 / 0.49885684 | 668 / 266 | 668 / 280 | 1238 / 416 | 1238 / 280 | 1239 / 417 | 1239 / 417 |
+| 2 | 5.4842926 / 5.4873128 | 0.49912204 / 0.49912074 | 602 / 274 | 602 / 289 | 1103 / 423 | 1103 / 289 | 1104 / 424 | 1104 / 424 |
+| 3 | 6.3425061 / 6.3448519 | 0.49928188 / 0.49928049 | 548 / 257 | 548 / 271 | 1050 / 416 | 1050 / 271 | 1051 / 417 | 1051 / 417 |
+| 4 | 7.1755363 / 7.1773063 | 0.49953200 / 0.49952960 | 531 / 231 | 531 / 245 | 1013 / 359 | 1013 / 245 | 1014 / 360 | 1014 / 360 |
+| 5 | 8.1086726 / 8.1101200 | 0.49953803 / 0.49953348 | 548 / 223 | 548 / 237 | 1048 / 357 | 1048 / 237 | 1049 / 358 | 1049 / 358 |
+| 6 | 9.2354937 / 9.2368042 | 0.49953848 / 0.49953675 | 564 / 223 | 564 / 237 | 1084 / 351 | 1084 / 237 | 1085 / 352 | 1085 / 352 |
+
+Representative selected abundant species and complete-vector differences are:
+
+| Zone | he4 BE / BDF | si28 BE / BDF | ni56 BE / BDF | L1 | L2 | Linf (species) |
+| ---: | --- | --- | --- | ---: | ---: | --- |
+| 1 | 6.5052911e-3 / 6.6237558e-3 | 2.3790347e-3 / 2.1938516e-3 | 5.8064083e-1 / 5.8052829e-1 | 3.2274e-3 | 1.0058e-3 | 5.6476e-4 (`ni58`) |
+| 2 | 4.6308135e-2 / 4.6664867e-2 | 5.1601149e-3 / 5.1783213e-3 | 2.0222165e-1 / 2.0068812e-1 | 3.9905e-3 | 1.7702e-3 | 1.5335e-3 (`ni56`) |
+| 3 | 1.0357065e-1 / 1.0402255e-1 | 8.2611060e-3 / 8.2685346e-3 | 6.5404983e-2 / 6.4921366e-2 | 2.6063e-3 | 8.2952e-4 | 4.8362e-4 (`ni56`) |
+| 4 | 1.4310443e-1 / 1.4347333e-1 | 9.3280462e-3 / 9.3293077e-3 | 3.1695134e-2 / 3.1519896e-2 | 1.8395e-3 | 5.4246e-4 | 3.6890e-4 (`he4`) |
+| 5 | 1.6456740e-1 / 1.6484535e-1 | 9.2537712e-3 / 9.2534273e-3 | 1.8892735e-2 / 1.8814958e-2 | 1.3423e-3 | 3.8126e-4 | 2.7795e-4 (`he4`) |
+| 6 | 1.7204490e-1 / 1.7226093e-1 | 8.2250493e-3 / 8.2247830e-3 | 1.3048592e-2 / 1.3005155e-2 | 1.0613e-3 | 2.9026e-4 | 2.1603e-4 (`he4`) |
+
+| Quantity | Backward Euler | BDF |
+| --- | ---: | ---: |
+| Repeated pytest call time | 2.04, 2.02, 2.02 s | 0.76, 0.75, 0.76 s |
+| Required output | 30,663,926 bytes | 13,154,474 bytes |
+| Generated preprocessing | 847,933 bytes | 847,933 bytes |
+| Committed reference | 52,447 bytes | 53,805 bytes |
+
+These runtime and size observations describe one optimized serial CPU
+configuration and are not performance benchmarks. Differing timestep,
+convergence, and abundance-floor policies make the different endpoints and
+execution histories expected characterization evidence, not evidence that
+either integrator is scientifically superior. Scientific interpretation of
+the endpoint differences remains a human-maintainer decision. Issue #21 must
+remain open until this increment is accepted and the maintainer accepts the
+paired diagnostic record.
+
 ## Torch47 characterization evidence
 
 The issue #16 reference was generated on 2026-08-05 from revision
@@ -518,8 +697,9 @@ issue #16 retains explicit Python registration for all three cases.
 These cases establish runtime and software-behavior checks plus narrow
 numerical characterization. They do not establish broad scientific validity,
 portability, performance benchmarking, CI suitability, or support for MPI,
-threading, accelerators, BDF, NSE, log-ft rates, batching, or networks larger
-than SN160.
+threading, accelerators, NSE, log-ft rates, batching, or networks larger than
+SN160. BDF coverage is limited to the characterized `bdf_sn160` endpoint on
+the recorded optimized configuration.
 
 The self-heating comparisons cover final `net_diag01` endpoints only. They do
 not inspect the evolution history in `ev_*` or binary `ts_*` output. Issue #12

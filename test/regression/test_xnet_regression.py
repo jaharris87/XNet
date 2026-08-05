@@ -12,6 +12,7 @@ import pytest
 
 from xnet_regression import (
     ALPHA_SPECIES,
+    bdf_sn160_case,
     CharacterizationReference,
     CompositionNorms,
     ComparisonFailure,
@@ -471,13 +472,24 @@ def test_malformed_output_is_a_parsing_failure() -> None:
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
-def test_end_and_counter_steps_must_agree() -> None:
+def test_counter_zone_must_agree_with_end_zone() -> None:
     diagnostic = _fabricated_final_diagnostic().replace(
-        "1        42        42", "1        43        42"
+        "1        42        42", "2        42        42"
     )
 
     with pytest.raises(ParsingFailure, match="does not match its End record"):
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
+
+
+def test_parser_accepts_distinct_end_step_and_ts_counter() -> None:
+    diagnostic = _fabricated_final_diagnostic().replace(
+        "1        42        42", "1        43        42"
+    )
+
+    state = parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)[0]
+
+    assert state.step == 42
+    assert state.counters.ts == 43
 
 
 def test_parser_preserves_source_labeled_solver_counters() -> None:
@@ -497,6 +509,24 @@ def test_parser_preserves_source_labeled_solver_counters() -> None:
 def test_parser_requires_exact_counter_heading() -> None:
     diagnostic = _fabricated_final_diagnostic().replace("CrossSect", "Rates")
     with pytest.raises(ParsingFailure, match="missing Counters record"):
+        parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "              1        42        42        42        43",
+        "              1        42        42        42        43 malformed",
+        "              1        42        42        42        -1        43",
+    ],
+)
+def test_parser_rejects_malformed_counter_rows(replacement: str) -> None:
+    diagnostic = _fabricated_final_diagnostic().replace(
+        "              1        42        42        42        43        43",
+        replacement,
+    )
+
+    with pytest.raises(ParsingFailure, match="malformed counter values"):
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
@@ -701,6 +731,7 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
         .splitlines()
         if line.strip()
     )
+
     assert len(case.expected_species) == 47
     assert case.expected_species == TORCH47_SPECIES == sunet_species
     assert len(set(case.expected_species)) == len(case.expected_species)
@@ -766,6 +797,81 @@ def test_sn160_definition_is_complete_and_stages_only_source_inputs(
         "ev_heat_sn160_6",
         "ts_heat_sn160_6",
     )
+
+
+def test_bdf_sn160_definition_reuses_isolated_sn160_staging(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "work")
+    local_network = work_directory / "Data_SN160"
+
+    assert case.expected_species == SN160_SPECIES
+    assert {path.name for path in local_network.iterdir()} == set(
+        case.network_inputs
+    )
+    assert all((local_network / name).is_symlink() for name in case.network_inputs)
+    assert case.required_outputs == (
+        "net_diag01",
+        "ev_bdf_sn160_1",
+        "ts_bdf_sn160_1",
+        "ev_bdf_sn160_2",
+        "ts_bdf_sn160_2",
+        "ev_bdf_sn160_3",
+        "ts_bdf_sn160_3",
+        "ev_bdf_sn160_4",
+        "ts_bdf_sn160_4",
+        "ev_bdf_sn160_5",
+        "ts_bdf_sn160_5",
+        "ev_bdf_sn160_6",
+        "ts_bdf_sn160_6",
+    )
+
+
+def test_bdf_control_is_the_normalized_legacy_id_54_concatenation() -> None:
+    settings = (REPOSITORY_ROOT / "test/test_settings_bdf").read_text(
+        encoding="utf-8"
+    )
+    setup = (REPOSITORY_ROOT / "test/Test_Problems/setup_bdf_sn160").read_text(
+        encoding="utf-8"
+    )
+    normalized = "\n".join(
+        line.rstrip() for line in (settings + setup).splitlines()
+    ) + "\n"
+    normalized = normalized.replace("Test_Results/", "")
+    normalized = normalized.replace("Test_Problems/", "")
+    normalized = normalized.replace(
+        "4         Blocking size for zone loop",
+        "1         Blocking size for zone loop",
+    )
+
+    assert bdf_sn160_case(REPOSITORY_ROOT).control.read_text(
+        encoding="utf-8"
+    ) == normalized
+
+
+def test_bdf_reference_records_end_steps_and_all_solver_counter_fields() -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+
+    assert tuple(reference.final_steps) == case.expected_zones
+    assert reference.solver_counters is not None
+    assert tuple(reference.solver_counters) == case.expected_zones
+    assert any(
+        reference.solver_counters[zone].ts != reference.final_steps[zone]
+        for zone in case.expected_zones
+    )
+
+
+def test_bdf_reference_rejects_incomplete_solver_counters(tmp_path: Path) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["solver_counters"].pop("cross_section")
+    reference_path = tmp_path / "incomplete-bdf-counters.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="solver_counters must contain exactly"):
+        load_reference(reference_path)
 
 
 def test_case_rejects_sunet_species_mismatch(tmp_path: Path) -> None:
@@ -856,6 +962,26 @@ def test_reference_rejects_wrong_case_association(tmp_path: Path) -> None:
         validate_reference_for_case(case, reference)
 
 
+@pytest.mark.parametrize(
+    ("case_factory", "wrong_reference_factory"),
+    [
+        (heat_sn160_case, bdf_sn160_case),
+        (bdf_sn160_case, heat_sn160_case),
+    ],
+)
+def test_sn160_references_cannot_be_swapped(
+    tmp_path: Path, case_factory, wrong_reference_factory
+) -> None:
+    case = replace(
+        case_factory(REPOSITORY_ROOT),
+        reference=wrong_reference_factory(REPOSITORY_ROOT).reference,
+    )
+    reference = load_reference(case.reference)
+
+    with pytest.raises(SetupFailure, match="reference case does not match"):
+        validate_reference_for_case(case, reference)
+
+
 def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:
     case = tnsn_torch47_case(REPOSITORY_ROOT)
     source = case.reference.read_text(encoding="utf-8")
@@ -884,6 +1010,7 @@ def test_all_migrated_references_use_per_zone_comparison_species_policy() -> Non
         heat_alpha_case(REPOSITORY_ROOT),
         tnsn_torch47_case(REPOSITORY_ROOT),
         heat_sn160_case(REPOSITORY_ROOT),
+        bdf_sn160_case(REPOSITORY_ROOT),
     ):
         reference = load_reference(case.reference)
         for zone in case.expected_zones:

@@ -1,0 +1,98 @@
+{
+  "baseline_kind": "characterization",
+  "case": "tnsn_alpha",
+  "generated_from_revision": "e650a076654e1253d7cf3769249ccb841f371c71",
+  "generated_on": "2026-08-04",
+  "platform": "macOS arm64",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "build": {
+    "executable": "source/xnet",
+    "CMODE": "OPT",
+    "PE_ENV": "GNU",
+    "MPI_MODE": "OFF",
+    "OPENMP_MODE": "OFF",
+    "GPU_MODE": "OFF",
+    "EOS": "STARKILLER",
+    "MATRIX_SOLVER": "dense",
+    "LAPACK_VER": "NETLIB"
+  },
+  "inputs": {
+    "control": "test/regression/cases/tnsn_alpha/control",
+    "network_data": "test/Data_alpha",
+    "initial_abundance": "test/Data_alpha/ab_co",
+    "trajectory": "test/Test_Problems/th_sn1aflame",
+    "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
+  },
+  "expected_zones": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "final_step": 2841,
+  "fields": {
+    "stop_time": {
+      "value": 2.0,
+      "atol": 5e-8,
+      "rtol": 5e-8
+    },
+    "time": {
+      "value": 2.0,
+      "atol": 5e-8,
+      "rtol": 5e-8
+    },
+    "temperature_gk": {
+      "value": 2.1289538,
+      "atol": 5e-8,
+      "rtol": 5e-8
+    },
+    "density": {
+      "value": 4471732.7,
+      "atol": 0.05,
+      "rtol": 5e-8
+    },
+    "electron_fraction": {
+      "value": 0.5,
+      "atol": 5e-8,
+      "rtol": 5e-8
+    }
+  },
+  "mass_fractions": {
+    "si28": {
+      "value": 0.30212305,
+      "atol": 5e-9,
+      "rtol": 5e-8
+    },
+    "s32": {
+      "value": 0.34965091,
+      "atol": 5e-9,
+      "rtol": 5e-8
+    },
+    "ar36": {
+      "value": 0.13167765,
+      "atol": 5e-9,
+      "rtol": 5e-8
+    },
+    "ca40": {
+      "value": 0.19075684,
+      "atol": 5e-9,
+      "rtol": 5e-8
+    },
+    "ti44": {
+      "value": 0.00020973267,
+      "atol": 5e-12,
+      "rtol": 5e-8
+    },
+    "cr48": {
+      "value": 0.0081303739,
+      "atol": 5e-11,
+      "rtol": 5e-8
+    },
+    "fe52": {
+      "value": 0.010695266,
+      "atol": 5e-10,
+      "rtol": 5e-8
+    },
+    "ni56": {
+      "value": 0.0067485191,
+      "atol": 5e-11,
+      "rtol": 5e-8
+    }
+  },
+  "mass_fraction_sum_atol": 1e-6
+}

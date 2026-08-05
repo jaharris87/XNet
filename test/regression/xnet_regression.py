@@ -120,6 +120,7 @@ class Tolerance:
 class CharacterizationReference:
     expected_zones: tuple[int, ...]
     final_step: int
+    final_step_atol: int
     fields: Mapping[str, Tolerance]
     mass_fractions: Mapping[str, Tolerance]
     mass_fraction_sum_atol: float
@@ -490,7 +491,8 @@ def load_reference(path: Path) -> CharacterizationReference:
 
     try:
         expected_zones = tuple(int(zone) for zone in document["expected_zones"])
-        final_step = int(document["final_step"])
+        final_step = document["final_step"]
+        final_step_atol = document["final_step_atol"]
         fields = {
             name: _load_tolerance(item, f"fields.{name}")
             for name, item in document["fields"].items()
@@ -514,6 +516,17 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure(
             f"reference fields must be exactly {sorted(required_fields)}; found {sorted(fields)}"
         )
+    if (
+        not isinstance(final_step, int)
+        or isinstance(final_step, bool)
+        or not isinstance(final_step_atol, int)
+        or isinstance(final_step_atol, bool)
+        or final_step < 0
+        or final_step_atol < 0
+    ):
+        raise SetupFailure(
+            "reference final step and its tolerance must be nonnegative integers"
+        )
     if not mass_fractions or not all(
         isinstance(species, str) and species for species in mass_fractions
     ):
@@ -523,6 +536,7 @@ def load_reference(path: Path) -> CharacterizationReference:
     return CharacterizationReference(
         expected_zones=expected_zones,
         final_step=final_step,
+        final_step_atol=final_step_atol,
         fields=fields,
         mass_fractions=mass_fractions,
         mass_fraction_sum_atol=mass_fraction_sum_atol,
@@ -544,9 +558,12 @@ def compare_final_states(
         failures.append(f"zone records {zones} != expected {reference.expected_zones}")
 
     for state in states:
-        if state.step != reference.final_step:
+        step_difference = abs(state.step - reference.final_step)
+        if step_difference > reference.final_step_atol:
             failures.append(
-                f"zone {state.zone} final step {state.step} != {reference.final_step}"
+                f"zone {state.zone} final step {state.step}: "
+                f"reference={reference.final_step}, difference={step_difference}, "
+                f"allowed={reference.final_step_atol}"
             )
 
         for field, policy in reference.fields.items():

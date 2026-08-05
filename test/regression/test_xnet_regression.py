@@ -59,6 +59,7 @@ def _synthetic_reference() -> CharacterizationReference:
     return CharacterizationReference(
         expected_zones=(1,),
         final_step=42,
+        final_step_atol=2,
         fields=fields,
         mass_fractions={
             "c12": Tolerance(0.5, atol=1e-8, rtol=1e-8),
@@ -113,6 +114,17 @@ def test_value_outside_tolerance_fails() -> None:
         compare_final_states(
             (replace(state, temperature_gk=2.2),), replace(reference, fields=policy)
         )
+
+
+def test_final_step_within_tolerance_passes() -> None:
+    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
+    compare_final_states((replace(state, step=44),), _synthetic_reference())
+
+
+def test_final_step_outside_tolerance_fails() -> None:
+    state = parse_diagnostic(_synthetic_diagnostic(), (1,))[0]
+    with pytest.raises(ComparisonFailure, match="final step 45"):
+        compare_final_states((replace(state, step=45),), _synthetic_reference())
 
 
 def test_missing_final_output_is_a_parsing_failure() -> None:

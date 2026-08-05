@@ -108,14 +108,22 @@ is the sum of the half-last-place rounding bounds for the 14 printed baseline
 values. It is not derived from XNet's per-step Newton mass-convergence control
 and is not claimed as a scientific-validation threshold.
 
-The numerical comparison requires the exact final step and compares final
-time, trajectory time, temperature, density, electron fraction, and the eight
-non-trace final products `si28`, `s32`, `ar36`, `ca40`, `ti44`, `cr48`,
-`fe52`, and `ni56`. Every field has an explicit absolute tolerance reflecting
-half of its last printed decimal place and a relative tolerance of `5e-8`,
-reflecting half a unit at the diagnostic's eight-significant-digit precision.
-This is a deliberately narrow same-configuration characterization policy;
-cross-compiler evidence is not yet available. The criterion is
+The numerical comparison records the characterized final step count of 2841
+and permits a difference of up to two steps. Step count remains a useful
+solver diagnostic, but a one- or two-step shift does not fail the pilot when
+the required final time, structure, and numerical fields still agree. A
+larger shift fails and reports the actual, reference, difference, and allowed
+count. The parser independently requires each zone's `End` and `Counters`
+records to agree on the actual step count.
+
+The comparison also checks final time, trajectory time, temperature, density,
+electron fraction, and the eight non-trace final products `si28`, `s32`,
+`ar36`, `ca40`, `ti44`, `cr48`, `fe52`, and `ni56`. Every field has an
+explicit absolute tolerance reflecting half of its last printed decimal place
+and a relative tolerance of `5e-8`, reflecting half a unit at the diagnostic's
+eight-significant-digit precision. This is a deliberately narrow
+same-configuration characterization policy; cross-compiler evidence is not
+yet available. The numerical-field criterion is
 
 ```text
 abs(actual - reference) <= atol + rtol * abs(reference)

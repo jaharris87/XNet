@@ -99,20 +99,14 @@ def comparison_species_for_zone(
     expected_species: Sequence[str],
     mass_fractions: Mapping[str, float],
 ) -> tuple[str, ...]:
-    """Select retained anchors plus this zone's material endpoint abundances."""
+    """Select retained anchors and material abundances in complete-vector order."""
 
-    shared_anchors = tuple(
-        species
-        for species in SILICON_BURNING_COMPARISON_SPECIES
-        if species in expected_species
-    )
-    material_products = tuple(
+    return tuple(
         species
         for species in expected_species
-        if mass_fractions[species] >= MATERIAL_MASS_FRACTION_THRESHOLD
-        and species not in shared_anchors
+        if species in SILICON_BURNING_COMPARISON_SPECIES
+        or mass_fractions[species] >= MATERIAL_MASS_FRACTION_THRESHOLD
     )
-    return shared_anchors + material_products
 
 
 FLOAT_TOKEN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
@@ -918,7 +912,7 @@ def load_reference(path: Path) -> CharacterizationReference:
 def validate_reference_for_case(
     case: RegressionCase, reference: CharacterizationReference
 ) -> None:
-    """Require one reference to match its case and the shared selection policy."""
+    """Require one reference to match its case and per-zone selection policy."""
 
     if reference.expected_zones != case.expected_zones:
         raise SetupFailure(

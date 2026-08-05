@@ -65,7 +65,7 @@
     }
   },
   "mass_fraction_selection": {
-    "1": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "s31", "co55"]
+    "1": ["si28", "s31", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "co55", "ni56"]
   },
   "mass_fraction_tolerances": {
     "si28": {

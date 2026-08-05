@@ -193,10 +193,11 @@ trace and intermediate abundances diagnostic-only there. Anchors are not
 required: a CNO or nova network with none of them selects its own material
 endpoint species by the same threshold.
 
-Selection is deterministic. Retained anchors appear first in their established
-order, followed by other above-threshold species in the complete network-vector
-order reported by XNet. The reference's `mass_fraction_selection` object lists
-that exact ordered selection for every expected zone. The loader rejects
+Selection is deterministic. A single pass over the complete network vector
+reported by XNet retains each anchor or above-threshold species in that vector's
+order; anchor status changes membership, not position. The reference's
+`mass_fraction_selection` object lists that exact ordered selection for every
+expected zone. The loader rejects
 missing or unknown zones, empty selections, invalid or duplicate species,
 species absent from the complete composition vector, selected species without
 tolerances, and tolerance entries unused by every zone. Case validation then
@@ -205,18 +206,18 @@ complete reference vector. Duplicate JSON object keys are rejected before
 schema validation so a later zone, value, or tolerance cannot silently replace
 an earlier one.
 
-The per-zone change has the following effect. Here `anchors` means the exact
-ordered eight-species list `si28, s32, ar36, ca40, ti44, cr48, fe52, ni56`.
+The per-zone change has the following effect. The table spells out ordering as
+well as membership so reviewers can audit each list directly.
 
 | Case | Zone | Previous case-wide selection | Per-zone selection |
 | --- | --- | --- | --- |
-| `tnsn_alpha` | 1-10 | anchors | anchors |
-| `tnsn_torch47` | 1 | anchors + `s31, co55` | anchors + `s31, co55` |
-| `heat_alpha` | 1 | anchors + `he4, c12, o16, mg24, zn60` | anchors + `he4` |
-| `heat_alpha` | 2 | anchors + `he4, c12, o16, mg24, zn60` | anchors + `he4, zn60` |
-| `heat_alpha` | 3 | anchors + `he4, c12, o16, mg24, zn60` | anchors + `he4, mg24, zn60` |
-| `heat_alpha` | 4 | anchors + `he4, c12, o16, mg24, zn60` | anchors + `he4, o16, mg24, zn60` |
-| `heat_alpha` | 5-6 | anchors + `he4, c12, o16, mg24, zn60` | anchors + `he4, c12, o16, mg24, zn60` |
+| `tnsn_alpha` | 1-10 | `si28, s32, ar36, ca40, ti44, cr48, fe52, ni56` | unchanged |
+| `tnsn_torch47` | 1 | `si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, s31, co55` | `si28, s31, s32, ar36, ca40, ti44, cr48, fe52, co55, ni56` |
+| `heat_alpha` | 1 | `si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, he4, c12, o16, mg24, zn60` | `he4, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56` |
+| `heat_alpha` | 2 | same case-wide list | `he4, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
+| `heat_alpha` | 3 | same case-wide list | `he4, mg24, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
+| `heat_alpha` | 4 | same case-wide list | `he4, o16, mg24, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
+| `heat_alpha` | 5-6 | same case-wide list | `he4, c12, o16, mg24, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
 
 Thus the single-zone Torch47 case and all identical `tnsn_alpha` zones retain
 the same pass/fail coverage. In `heat_alpha`, for example, `o16` gates zones

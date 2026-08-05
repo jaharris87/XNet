@@ -644,15 +644,15 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
         case.expected_species, reference.mass_fractions[1]
     ) == (
         "si28",
+        "s31",
         "s32",
         "ar36",
         "ca40",
         "ti44",
         "cr48",
         "fe52",
-        "ni56",
-        "s31",
         "co55",
+        "ni56",
     )
     assert case.required_outputs == (
         "net_diag01",
@@ -749,12 +749,12 @@ def test_material_species_policy_does_not_require_silicon_products() -> None:
 
 
 def test_per_zone_material_threshold_is_inclusive_and_ordered() -> None:
-    species = ("p", "c12", "o16")
+    species = ("he4", "si28", "c12", "o16")
 
     assert comparison_species_for_zone(
         species,
-        {"p": 9.999e-5, "c12": 1.0e-4, "o16": 0.99980001},
-    ) == ("c12", "o16")
+        {"he4": 0.2, "si28": 0.0, "c12": 1.0e-4, "o16": 0.7999},
+    ) == ("he4", "si28", "c12", "o16")
 
 
 def test_comparison_anchors_are_retained_per_zone_when_present() -> None:

@@ -34,6 +34,7 @@ from xnet_regression import (
     load_reference,
     parse_diagnostic,
     prepare_work_directory,
+    run_and_compare,
     run_xnet,
     strip_timer_sections,
     tnsn_alpha_case,
@@ -426,12 +427,39 @@ def test_final_step_is_diagnostic_only() -> None:
     )
 
 
+def test_solver_counters_are_diagnostic_only() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+
+    compare_final_states(
+        (replace(state, counters=SolverCounters(142, 143, 144, 145, 146)),),
+        _matching_unit_reference(),
+    )
+
+
 def test_achieved_time_must_reach_target_time() -> None:
     state = parse_diagnostic(
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
     )[0]
     with pytest.raises(ComparisonFailure, match="did not reach target time"):
         compare_final_states((replace(state, time=1.9),), _matching_unit_reference())
+
+
+def test_characterized_achieved_time_does_not_compound_target_tolerance() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    fields = {1: dict(reference.fields[1])}
+    fields[1]["target_time"] = Tolerance(2.0, atol=0.1, rtol=0.0)
+    fields[1]["achieved_time"] = Tolerance(2.0, atol=0.1, rtol=0.0)
+
+    with pytest.raises(ComparisonFailure, match="achieved_time"):
+        compare_final_states(
+            (replace(state, target_time=2.075, time=2.15),),
+            replace(reference, fields=fields),
+        )
 
 
 def test_composition_norms_are_diagnostic_only() -> None:
@@ -874,6 +902,106 @@ def test_bdf_reference_rejects_incomplete_solver_counters(tmp_path: Path) -> Non
         load_reference(reference_path)
 
 
+def test_bdf_run_rejects_missing_solver_counters_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document.pop("solver_counters")
+    reference_path = tmp_path / "missing-bdf-counters.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="solver_counters is required"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+@pytest.mark.parametrize(
+    "metadata_name",
+    ["build", "legacy_provenance", "input_sha256", "python"],
+)
+def test_bdf_reference_rejects_missing_required_metadata(
+    tmp_path: Path, metadata_name: str
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document.pop(metadata_name)
+    reference_path = tmp_path / f"missing-{metadata_name}.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="reference"):
+        load_reference(reference_path)
+
+
+def test_bdf_run_rejects_stale_input_hash_before_execution(tmp_path: Path) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    control_label = "test/regression/cases/bdf_sn160/control"
+    document["input_sha256"][control_label] = "0" * 64
+    reference_path = tmp_path / "stale-input-hash.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="reference input hash does not match"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+def test_bdf_run_rejects_missing_reference_schema_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document.pop("reference_schema")
+    reference_path = tmp_path / "missing-reference-schema.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="reference schema does not match"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+def test_bdf_run_rejects_mismatched_solver_provenance_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["legacy_provenance"]["maintained_solver"] = "Bader-Deuflhard"
+    reference_path = tmp_path / "wrong-solver-provenance.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="solver provenance does not match"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
 def test_case_rejects_sunet_species_mismatch(tmp_path: Path) -> None:
     case = tnsn_alpha_case(REPOSITORY_ROOT)
     network_data = tmp_path / "Data_alpha"
@@ -976,10 +1104,20 @@ def test_sn160_references_cannot_be_swapped(
         case_factory(REPOSITORY_ROOT),
         reference=wrong_reference_factory(REPOSITORY_ROOT).reference,
     )
-    reference = load_reference(case.reference)
+    executable = _make_executable(
+        tmp_path,
+        "from pathlib import Path\nPath('executed').write_text('unexpected')",
+    )
+    work_directory = tmp_path / "work"
 
     with pytest.raises(SetupFailure, match="reference case does not match"):
-        validate_reference_for_case(case, reference)
+        run_and_compare(
+            executable,
+            case,
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
 
 
 def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:

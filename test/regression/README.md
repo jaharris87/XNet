@@ -223,7 +223,13 @@ Each case has a `reference/final_state.json` characterization baseline
 generated from the tracked default serial build at its recorded revision.
 These are not independently validated scientific results. Each JSON file
 records the known compiler, platform, build selections, and input paths.
-Normal tests only read these files and never create or replace them.
+Normal tests only read these files and never create or replace them. Cases
+that declare a reference schema validate characterization status, generating
+revision and date, toolchain and build metadata, legacy solver provenance,
+effective controls, the complete input inventory, and SHA-256 hashes before
+creating the work directory or executing XNet. Case identity and reference
+schema association are also setup checks, so a swapped or incomplete reference
+cannot be masked by a later process failure.
 
 The parser requires ordered final records and zone-associated counters for
 every case zone, the case-declared complete 14-, 47-, or 160-species
@@ -265,10 +271,11 @@ Completion and selected endpoint values remain required.
 
 The first two values in an `End` record are distinct: the first is the
 requested target time (`tstop` in XNet), and the second is the achieved
-integration time (`t`). The target time is compared with the reference, and
-the achieved time must reach that zone's target within the same printed-time
-tolerance. This makes completion explicit without maintaining two redundant
-comparisons to the same reference value.
+integration time (`t`). The BDF reference records and compares target and
+achieved time separately with their own printed-time policies, preserving a
+genuinely distinct relationship if one occurs and avoiding compounded target
+tolerance. Earlier references retain their established completion check
+against the run's requested target.
 
 The comparison also checks temperature, density, electron fraction, and an
 independent composition selection for every zone. The established
@@ -587,7 +594,7 @@ The required BDF outputs totaled 13,154,474 bytes: 47,890 bytes for
 for the six binary histories. Isolated preprocessing created `ab_blank`,
 `match_data`, `match_read`, `matr_shape`, `net_desc`, `net_diag`, `nets3`,
 `nets4`, `nuc_data`, and `sparse_ind`, totaling 847,933 bytes. The committed
-JSON reference is 53,805 bytes. Binary histories are required fresh and
+JSON reference is 54,190 bytes. Binary histories are required fresh and
 nonempty but are not decoded, compared, or committed; issue #12 still owns
 that policy.
 
@@ -596,7 +603,7 @@ from `0.064921366` to `0.07`. Both the focused BDF command and the complete
 pytest command returned status 1. They reported the zone, species, actual
 value `6.492136600e-02`, reference value `7.000000000e-02`, absolute
 difference `5.079e-03`, and allowance `4.000e-09`; the complete run otherwise
-passed 84 tests. The reference was restored, the focused case passed again,
+passed 94 tests. The reference was restored, the focused case passed again,
 and normal test execution still has no reference creation or update path.
 
 ### Backward Euler/BDF diagnostic comparison
@@ -632,7 +639,7 @@ Representative selected abundant species and complete-vector differences are:
 | Repeated pytest call time | 2.04, 2.02, 2.02 s | 0.76, 0.75, 0.76 s |
 | Required output | 30,663,926 bytes | 13,154,474 bytes |
 | Generated preprocessing | 847,933 bytes | 847,933 bytes |
-| Committed reference | 52,447 bytes | 53,805 bytes |
+| Committed reference | 52,447 bytes | 54,190 bytes |
 
 These runtime and size observations describe one optimized serial CPU
 configuration and are not performance benchmarks. Differing timestep,

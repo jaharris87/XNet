@@ -1,4 +1,5 @@
 {
+  "reference_schema": "xnet-characterization-v1",
   "baseline_kind": "characterization",
   "baseline_status": "characterization-only; not independently validated scientific truth",
   "case": "bdf_sn160",
@@ -132,6 +133,25 @@
   },
   "fields": {
     "target_time": {
+      "value": {
+        "1": 10.0,
+        "2": 1.0,
+        "3": 0.1,
+        "4": 0.001,
+        "5": 0.0001,
+        "6": 1e-05
+      },
+      "atol": {
+        "1": 5e-07,
+        "2": 5e-08,
+        "3": 5e-09,
+        "4": 5e-11,
+        "5": 5e-12,
+        "6": 5e-13
+      },
+      "rtol": 5e-08
+    },
+    "achieved_time": {
       "value": {
         "1": 10.0,
         "2": 1.0,

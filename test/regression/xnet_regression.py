@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
+import hashlib
 import json
 import math
 import os
@@ -319,6 +321,10 @@ class RegressionCase:
     expected_zones: tuple[int, ...]
     expected_species: tuple[str, ...]
     network_inputs: tuple[str, ...]
+    reference_schema: str | None = None
+    expected_legacy_id: int | None = None
+    expected_solver: str | None = None
+    expected_effective_controls: Mapping[str, float] | None = None
 
     @property
     def required_outputs(self) -> tuple[str, ...]:
@@ -396,6 +402,10 @@ class CharacterizationReference:
     mass_fraction_tolerances: Mapping[int, Mapping[str, ToleranceBounds]]
     mass_fraction_sum_atols: Mapping[int, float]
     solver_counters: Mapping[int, SolverCounters] | None = None
+    reference_schema: str | None = None
+    metadata_inputs: Mapping[str, object] | None = None
+    input_sha256: Mapping[str, str] | None = None
+    legacy_provenance: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -510,6 +520,13 @@ def bdf_sn160_case(repository_root: Path) -> RegressionCase:
         expected_zones=tuple(range(1, 7)),
         expected_species=SN160_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+        reference_schema="xnet-characterization-v1",
+        expected_legacy_id=54,
+        expected_solver="Backward Differentiation Formula (isolv = 3)",
+        expected_effective_controls={
+            "maximum_abundance_change": 1.0e10,
+            "maximum_temperature_change": 1.0e10,
+        },
     )
 
 
@@ -1025,6 +1042,168 @@ def _unique_json_object(pairs: Sequence[tuple[str, object]]) -> dict[str, object
     return document
 
 
+def _load_reference_metadata(
+    document: Mapping[str, object], reference_schema: str
+) -> tuple[Mapping[str, object], Mapping[str, str], Mapping[str, object]]:
+    if reference_schema != "xnet-characterization-v1":
+        raise SetupFailure(f"unsupported reference_schema: {reference_schema!r}")
+
+    required_strings = (
+        "baseline_kind",
+        "baseline_status",
+        "generated_from_revision",
+        "generated_on",
+        "platform",
+        "compiler",
+        "python",
+        "pytest",
+    )
+    for name in required_strings:
+        value = document.get(name)
+        if not isinstance(value, str) or not value:
+            raise SetupFailure(
+                f"reference metadata {name} must be a nonempty string"
+            )
+    if document["baseline_kind"] != "characterization":
+        raise SetupFailure("reference baseline_kind must be 'characterization'")
+    if "characterization-only" not in str(document["baseline_status"]):
+        raise SetupFailure(
+            "reference baseline_status must identify characterization-only status"
+        )
+    if (
+        re.fullmatch(
+            r"[0-9a-f]{40}", str(document["generated_from_revision"])
+        )
+        is None
+    ):
+        raise SetupFailure(
+            "reference generated_from_revision must be a 40-character SHA"
+        )
+    try:
+        date.fromisoformat(str(document["generated_on"]))
+    except ValueError as error:
+        raise SetupFailure(
+            "reference generated_on must be an ISO calendar date"
+        ) from error
+
+    build = document.get("build")
+    required_build = {
+        "executable",
+        "CMODE",
+        "PE_ENV",
+        "MPI_MODE",
+        "OPENMP_MODE",
+        "GPU_MODE",
+        "EOS",
+        "MATRIX_SOLVER",
+        "LAPACK_VER",
+    }
+    if (
+        not isinstance(build, dict)
+        or set(build) != required_build
+        or not all(isinstance(value, str) and value for value in build.values())
+    ):
+        raise SetupFailure(
+            "reference build metadata must contain the complete resolved selection"
+        )
+
+    inputs = document.get("inputs")
+    required_inputs = {
+        "control",
+        "network_data",
+        "network_source_inputs",
+        "initial_abundance",
+        "trajectories",
+        "eos_table",
+    }
+    if not isinstance(inputs, dict) or set(inputs) != required_inputs:
+        raise SetupFailure(
+            "reference inputs metadata must contain the complete input provenance"
+        )
+    scalar_input_names = (
+        "control",
+        "network_data",
+        "initial_abundance",
+        "eos_table",
+    )
+    if not all(
+        isinstance(inputs[name], str) and inputs[name]
+        for name in scalar_input_names
+    ):
+        raise SetupFailure("reference inputs metadata contains an invalid path")
+    for name in ("network_source_inputs", "trajectories"):
+        values = inputs[name]
+        if (
+            not isinstance(values, list)
+            or not values
+            or not all(isinstance(value, str) and value for value in values)
+        ):
+            raise SetupFailure(
+                f"reference inputs metadata {name} must be a nonempty string list"
+            )
+
+    legacy = document.get("legacy_provenance")
+    required_legacy = {
+        "legacy_id",
+        "assembly",
+        "maintained_solver",
+        "normalized_changes",
+        "effective_runtime_controls",
+    }
+    if not isinstance(legacy, dict) or set(legacy) != required_legacy:
+        raise SetupFailure(
+            "reference legacy_provenance must contain the complete control provenance"
+        )
+    if (
+        not isinstance(legacy["legacy_id"], int)
+        or isinstance(legacy["legacy_id"], bool)
+        or legacy["legacy_id"] < 0
+        or not isinstance(legacy["maintained_solver"], str)
+        or not legacy["maintained_solver"]
+    ):
+        raise SetupFailure("reference legacy_provenance identity is invalid")
+    for name in ("assembly", "normalized_changes"):
+        values = legacy[name]
+        if (
+            not isinstance(values, list)
+            or not values
+            or not all(isinstance(value, str) and value for value in values)
+        ):
+            raise SetupFailure(
+                f"reference legacy_provenance {name} must be a nonempty string list"
+            )
+    effective_controls = legacy["effective_runtime_controls"]
+    if (
+        not isinstance(effective_controls, dict)
+        or set(effective_controls)
+        != {"maximum_abundance_change", "maximum_temperature_change"}
+        or not all(
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+            for value in effective_controls.values()
+        )
+    ):
+        raise SetupFailure(
+            "reference effective_runtime_controls metadata is invalid"
+        )
+
+    input_sha256 = document.get("input_sha256")
+    if (
+        not isinstance(input_sha256, dict)
+        or not input_sha256
+        or not all(
+            isinstance(path, str)
+            and path
+            and isinstance(digest, str)
+            and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+            for path, digest in input_sha256.items()
+        )
+    ):
+        raise SetupFailure("reference input_sha256 metadata is invalid")
+    return inputs, input_sha256, legacy
+
+
 def load_reference(path: Path) -> CharacterizationReference:
     try:
         document = json.loads(
@@ -1036,6 +1215,24 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure(f"malformed characterization reference {path}: {error}") from error
     except ValueError as error:
         raise SetupFailure(f"invalid characterization reference {path}: {error}") from error
+
+    if not isinstance(document, dict):
+        raise SetupFailure(
+            f"invalid characterization reference structure in {path}: "
+            "top level must be an object"
+        )
+    reference_schema = document.get("reference_schema")
+    if reference_schema is None:
+        metadata_inputs = None
+        input_sha256 = None
+    else:
+        if not isinstance(reference_schema, str) or not reference_schema:
+            raise SetupFailure("reference_schema must be a nonempty string")
+        metadata_inputs, input_sha256, legacy_provenance = (
+            _load_reference_metadata(document, reference_schema)
+        )
+    if reference_schema is None:
+        legacy_provenance = None
 
     try:
         case_name = document["case"]
@@ -1079,7 +1276,11 @@ def load_reference(path: Path) -> CharacterizationReference:
         )
         counter_items = document.get("solver_counters")
         if counter_items is None:
-            solver_counters = {}
+            if reference_schema is not None:
+                raise ValueError(
+                    "solver_counters is required by the reference schema"
+                )
+            solver_counters = None
         else:
             if not isinstance(counter_items, dict) or set(counter_items) != {
                 "ts",
@@ -1128,10 +1329,16 @@ def load_reference(path: Path) -> CharacterizationReference:
         "density",
         "electron_fraction",
     }
-    if set(fields_by_name) != required_fields:
+    fields_with_achieved_time = required_fields | {"achieved_time"}
+    if set(fields_by_name) not in (required_fields, fields_with_achieved_time):
         raise SetupFailure(
-            "reference fields must be exactly "
-            f"{sorted(required_fields)}; found {sorted(fields_by_name)}"
+            "reference fields must contain the established scalar fields, "
+            "optionally including achieved_time; "
+            f"found {sorted(fields_by_name)}"
+        )
+    if reference_schema is not None and "achieved_time" not in fields_by_name:
+        raise SetupFailure(
+            "reference field achieved_time is required by the reference schema"
         )
     if not mass_fractions_by_species or not all(
         isinstance(species, str) and species
@@ -1193,6 +1400,10 @@ def load_reference(path: Path) -> CharacterizationReference:
         mass_fraction_tolerances=mass_fraction_tolerances,
         mass_fraction_sum_atols=mass_fraction_sum_atols,
         solver_counters=solver_counters,
+        reference_schema=reference_schema,
+        metadata_inputs=metadata_inputs,
+        input_sha256=input_sha256,
+        legacy_provenance=legacy_provenance,
     )
 
 
@@ -1206,6 +1417,11 @@ def validate_reference_for_case(
             "reference case does not match the case definition: "
             f"{reference.case_name!r} != {case.name!r}"
         )
+    if reference.reference_schema != case.reference_schema:
+        raise SetupFailure(
+            "reference schema does not match the case definition: "
+            f"{reference.reference_schema!r} != {case.reference_schema!r}"
+        )
     if reference.expected_zones != case.expected_zones:
         raise SetupFailure(
             "reference expected_zones does not match the case definition: "
@@ -1218,6 +1434,73 @@ def validate_reference_for_case(
                 f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
                 f"!= {case.expected_species}"
             )
+    if case.reference_schema is not None:
+        if (
+            reference.metadata_inputs is None
+            or reference.input_sha256 is None
+            or reference.legacy_provenance is None
+        ):
+            raise SetupFailure(
+                "reference schema requires complete provenance and input hashes"
+            )
+        if (
+            reference.legacy_provenance["legacy_id"]
+            != case.expected_legacy_id
+            or reference.legacy_provenance["maintained_solver"]
+            != case.expected_solver
+            or reference.legacy_provenance["effective_runtime_controls"]
+            != case.expected_effective_controls
+        ):
+            raise SetupFailure(
+                "reference solver provenance does not match the case definition"
+            )
+        provenance_paths = (
+            case.control,
+            *(case.network_data / filename for filename in case.network_inputs),
+            *case.trajectories,
+            case.helm_table,
+        )
+        repository_root = Path(
+            os.path.commonpath(str(path.resolve()) for path in provenance_paths)
+        )
+
+        def input_label(path: Path) -> str:
+            return path.resolve().relative_to(repository_root).as_posix()
+
+        path_labels = {
+            input_label(path): path for path in provenance_paths
+        }
+        expected_inputs = {
+            "control": input_label(case.control),
+            "network_data": input_label(case.network_data),
+            "network_source_inputs": list(case.network_inputs),
+            "initial_abundance": input_label(case.network_data / "ab_co"),
+            "trajectories": [
+                input_label(path) for path in case.trajectories
+            ],
+            "eos_table": input_label(case.helm_table),
+        }
+        if dict(reference.metadata_inputs) != expected_inputs:
+            raise SetupFailure(
+                "reference input provenance does not match the case definition"
+            )
+        if set(reference.input_sha256) != set(path_labels):
+            raise SetupFailure(
+                "reference input hashes do not match the complete case input set"
+            )
+        for label, source in path_labels.items():
+            try:
+                actual_digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            except OSError as error:
+                raise SetupFailure(
+                    f"could not hash reference input {source}: {error}"
+                ) from error
+            expected_digest = reference.input_sha256[label]
+            if actual_digest != expected_digest:
+                raise SetupFailure(
+                    f"reference input hash does not match {label}: "
+                    f"{actual_digest} != {expected_digest}"
+                )
     for zone in case.expected_zones:
         comparison_species = comparison_species_for_zone(
             case.expected_species, reference.mass_fractions[zone]
@@ -1304,19 +1587,24 @@ def compare_final_states(
 
         field_policies = reference.fields[state.zone]
         target_policy = field_policies["target_time"]
-        completion_policy = Tolerance(
-            state.target_time, target_policy.atol, target_policy.rtol
-        )
-        completed, difference, allowed = _difference(state.time, completion_policy)
-        if not completed:
-            failures.append(
-                f"zone {state.zone} achieved time {state.time:.9e} did not reach "
-                f"target time {state.target_time:.9e}: |difference|={difference:.3e}, "
-                f"allowed={allowed:.3e}"
+        if "achieved_time" not in field_policies:
+            completion_policy = Tolerance(
+                state.target_time, target_policy.atol, target_policy.rtol
             )
+            completed, difference, allowed = _difference(
+                state.time, completion_policy
+            )
+            if not completed:
+                failures.append(
+                    f"zone {state.zone} achieved time {state.time:.9e} did not reach "
+                    f"target time {state.target_time:.9e}: "
+                    f"|difference|={difference:.3e}, allowed={allowed:.3e}"
+                )
 
         for field, policy in field_policies.items():
-            actual = getattr(state, field)
+            actual = (
+                state.time if field == "achieved_time" else getattr(state, field)
+            )
             passed, difference, allowed = _difference(actual, policy)
             if not passed:
                 failures.append(
@@ -1367,6 +1655,8 @@ def run_and_compare(
     *,
     timeout_seconds: float,
 ) -> ProcessResult:
+    reference = load_reference(case.reference)
+    validate_reference_for_case(case, reference)
     prepared = prepare_work_directory(case, work_directory)
     result = run_xnet(
         executable,
@@ -1385,8 +1675,6 @@ def run_and_compare(
         states = parse_diagnostic(
             diagnostic, case.expected_zones, case.expected_species
         )
-        reference = load_reference(case.reference)
-        validate_reference_for_case(case, reference)
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics)
         compare_final_states(states, reference)

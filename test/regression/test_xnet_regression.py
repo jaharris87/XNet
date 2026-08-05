@@ -580,6 +580,25 @@ def test_torch47_reference_rejects_wrong_species_order(tmp_path: Path) -> None:
         validate_reference_for_case(case, reference)
 
 
+def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:
+    case = tnsn_torch47_case(REPOSITORY_ROOT)
+    source = case.reference.read_text(encoding="utf-8")
+    co55_policy = """    "co55": {
+      "atol": 5e-12,
+      "rtol": 5e-8
+    }
+"""
+    duplicate = '    "co55": {"atol": 1.0, "rtol": 1.0},\n' + co55_policy
+    assert source.count(co55_policy) == 1
+    reference_path = tmp_path / "duplicate-tolerance-reference.json"
+    reference_path.write_text(
+        source.replace(co55_policy, duplicate), encoding="utf-8"
+    )
+
+    with pytest.raises(SetupFailure, match="duplicate JSON object key: co55"):
+        load_reference(reference_path)
+
+
 def test_all_migrated_references_use_comparison_species_policy() -> None:
     for case in (
         tnsn_alpha_case(REPOSITORY_ROOT),

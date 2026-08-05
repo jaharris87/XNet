@@ -201,11 +201,14 @@ expansion of that case's policy following maintainer direction; its reference
 values and end-to-end result are unchanged. The `tnsn_alpha` selection remains
 unchanged.
 The runner derives the ordered selection from the complete reference and
-requires its tolerance mapping to match exactly. Every field has an explicit
-absolute tolerance grounded in its printed resolution and a relative tolerance
-of `5e-8`, reflecting half a unit at the diagnostic's eight-significant-digit
-precision. The new `heat_alpha` absolute tolerances use half of each value's
-last printed place.
+requires its tolerance mapping to match exactly. Retained anchors appear first
+in their established order, followed by other above-threshold species in
+network order. Reference loading rejects duplicate JSON keys so a later entry
+cannot silently replace an intended value or tolerance. Every field has an
+explicit absolute tolerance grounded in its printed resolution and a relative
+tolerance of `5e-8`, reflecting half a unit at the diagnostic's
+eight-significant-digit precision. The new `heat_alpha` absolute tolerances use
+half of each value's last printed place.
 Where a quantity's printed scale differs among its zones, the JSON records the
 absolute tolerances by zone. Reference values, absolute tolerances, and
 relative tolerances may each be either one scalar applied to every zone or a
@@ -271,7 +274,7 @@ outputs totaled 14,470,756 and 1,757,702 bytes respectively. Torch47 remains
 well inside the unchanged 30-second timeout and is suitable for the fast local
 suite on this configuration.
 
-The focused helper command passed 38 tests, and the complete suite passed 41:
+The focused helper command passed 39 tests, and the complete suite passed 42:
 
 ```bash
 python -m pytest -q test/regression/test_xnet_regression.py
@@ -303,3 +306,8 @@ owns the investigation needed before binary time-series data can affect
 regression pass/fail. The Torch47 migration changes endpoint coverage only;
 the larger `ev_*` and `ts_*` artifacts remain required for freshness but are
 not parsed or compared.
+
+Importance selection is currently case-wide: a species that reaches `1e-4` in
+any zone is compared in every zone. A follow-up should introduce per-zone
+selection so a materially important species remains gated where relevant
+without imposing printed-precision trace checks in other zones.

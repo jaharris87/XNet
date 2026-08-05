@@ -726,13 +726,26 @@ def _load_tolerance_bounds(
     }
 
 
+def _unique_json_object(pairs: Sequence[tuple[str, object]]) -> dict[str, object]:
+    document: dict[str, object] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        document[key] = value
+    return document
+
+
 def load_reference(path: Path) -> CharacterizationReference:
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = json.loads(
+            path.read_text(encoding="utf-8"), object_pairs_hook=_unique_json_object
+        )
     except OSError as error:
         raise SetupFailure(f"could not read characterization reference {path}: {error}") from error
     except json.JSONDecodeError as error:
         raise SetupFailure(f"malformed characterization reference {path}: {error}") from error
+    except ValueError as error:
+        raise SetupFailure(f"invalid characterization reference {path}: {error}") from error
 
     try:
         zone_items = document["expected_zones"]

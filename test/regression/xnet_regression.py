@@ -131,8 +131,6 @@ class CharacterizationReference:
 
     expected_zones: tuple[int, ...]
     final_steps: Mapping[int, int]
-    # None records step count as diagnostic-only for that zone.
-    final_step_atols: Mapping[int, int | None]
     fields: Mapping[int, Mapping[str, Tolerance]]
     # The complete vector supplies expected values and norm diagnostics.
     mass_fractions: Mapping[int, Mapping[str, float]]
@@ -148,6 +146,14 @@ class CompositionNorms:
     l2: float
     linf: float
     linf_species: str | None
+
+
+@dataclass(frozen=True)
+class StepCountDiagnostic:
+    zone: int
+    actual: int
+    reference: int
+    difference: int
 
 
 def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
@@ -583,29 +589,6 @@ def _load_zone_integers(
     return {zone: int(value) for zone, value in values.items()}
 
 
-def _load_final_step_atols(
-    item: object, expected_zones: Sequence[int]
-) -> Mapping[int, int | None]:
-    values = _expand_zone_items(item, expected_zones, "final_step_atol")
-    if not all(
-        value is None
-        or (
-            isinstance(value, int)
-            and not isinstance(value, bool)
-            and value >= 0
-        )
-        for value in values.values()
-    ):
-        raise SetupFailure(
-            "reference entry final_step_atol must contain nonnegative integers "
-            "or null for diagnostic-only step counts"
-        )
-    return {
-        zone: None if value is None else int(value)
-        for zone, value in values.items()
-    }
-
-
 def _load_tolerance(
     item: object, expected_zones: Sequence[int], context: str
 ) -> Mapping[int, Tolerance]:
@@ -661,9 +644,6 @@ def load_reference(path: Path) -> CharacterizationReference:
             raise ValueError("expected_zones is empty or contains duplicates")
         final_steps = _load_zone_integers(
             document["final_step"], expected_zones, "final_step"
-        )
-        final_step_atols = _load_final_step_atols(
-            document["final_step_atol"], expected_zones
         )
         fields_by_name = {
             name: _load_tolerance(item, expected_zones, f"fields.{name}")
@@ -739,7 +719,6 @@ def load_reference(path: Path) -> CharacterizationReference:
     return CharacterizationReference(
         expected_zones=expected_zones,
         final_steps=final_steps,
-        final_step_atols=final_step_atols,
         fields=fields,
         mass_fractions=mass_fractions,
         mass_fraction_tolerances=mass_fraction_tolerances,
@@ -779,6 +758,22 @@ def calculate_composition_norms(
     return tuple(diagnostics)
 
 
+def calculate_step_count_diagnostics(
+    states: Sequence[FinalState], reference: CharacterizationReference
+) -> tuple[StepCountDiagnostic, ...]:
+    """Calculate diagnostic-only final step-count differences."""
+
+    return tuple(
+        StepCountDiagnostic(
+            zone=state.zone,
+            actual=state.step,
+            reference=reference.final_steps[state.zone],
+            difference=abs(state.step - reference.final_steps[state.zone]),
+        )
+        for state in states
+    )
+
+
 def _write_composition_diagnostics(
     work_directory: Path, diagnostics: Sequence[CompositionNorms]
 ) -> None:
@@ -805,6 +800,30 @@ def _write_composition_diagnostics(
         ) from error
 
 
+def _write_step_count_diagnostics(
+    work_directory: Path, diagnostics: Sequence[StepCountDiagnostic]
+) -> None:
+    document = {
+        "status": "diagnostic-only; step counts do not determine pass/fail",
+        "zones": [
+            {
+                "zone": item.zone,
+                "actual": item.actual,
+                "reference": item.reference,
+                "difference": item.difference,
+            }
+            for item in diagnostics
+        ],
+    }
+    path = work_directory / "step_count_diagnostics.json"
+    try:
+        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    except OSError as error:
+        raise ExecutionFailure(
+            f"could not preserve step-count diagnostics in {path}: {error}"
+        ) from error
+
+
 def compare_final_states(
     states: Sequence[FinalState], reference: CharacterizationReference
 ) -> None:
@@ -814,19 +833,9 @@ def compare_final_states(
         failures.append(f"zone records {zones} != expected {reference.expected_zones}")
 
     for state in states:
-        if state.zone not in reference.final_steps:
+        if state.zone not in reference.fields:
             failures.append(f"zone {state.zone} has no characterization reference")
             continue
-        expected_step = reference.final_steps[state.zone]
-        step_atol = reference.final_step_atols[state.zone]
-        if step_atol is not None:
-            step_difference = abs(state.step - expected_step)
-            if step_difference > step_atol:
-                failures.append(
-                    f"zone {state.zone} final step {state.step}: "
-                    f"reference={expected_step}, difference={step_difference}, "
-                    f"allowed={step_atol}"
-                )
 
         field_policies = reference.fields[state.zone]
         target_policy = field_policies["target_time"]
@@ -934,6 +943,8 @@ def run_and_compare(
                 )
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics)
+        step_diagnostics = calculate_step_count_diagnostics(states, reference)
+        _write_step_count_diagnostics(prepared, step_diagnostics)
         compare_final_states(states, reference)
     except (ParsingFailure, ComparisonFailure) as error:
         raise type(error)(f"{error}; artifacts: {prepared}") from None

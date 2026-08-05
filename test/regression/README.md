@@ -45,10 +45,12 @@ rather than mutating `test/Data_alpha`. A nonempty work directory is a setup
 failure, so old diagnostics cannot satisfy a new run.
 
 Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`,
-`xnet.status.txt`, and `composition_error_norms.json` beside the XNet outputs.
-Failure messages give the work directory path. pytest retains recent temporary
-directories. To choose a stable diagnostic location for a run, use its
-standard option, for example:
+`xnet.status.txt`, `composition_error_norms.json`, and
+`step_count_diagnostics.json` beside the XNet outputs. The step-count artifact
+records actual, reference, and absolute difference per zone without an
+acceptance threshold. Failure messages give the work directory path. pytest
+retains recent temporary directories. To choose a stable diagnostic location
+for a run, use its standard option, for example:
 
 ```bash
 python3 -m pytest test/regression \
@@ -134,17 +136,16 @@ that zone's 14 printed baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
-Each reference records the characterized final step count. `tnsn_alpha`
-records 2841 for every zone and preserves its allowed difference of two steps
-from PR #11. `heat_alpha` records zone-specific counts of 654, 600, 553, 534,
-532, and 540 as diagnostic-only values: its JSON `final_step_atol` is `null`,
-so a difference from those reference counts does not affect pass/fail.
-Accepted-step count can vary when compiler, library, architecture,
-optimization, or floating-point rounding changes which tolerance-dependent
-convergence path is taken. Four identical same-configuration runs do not
-justify either exact equality or a portable nonzero bound. The parser still
-requires each zone's `End` and `Counters` records to agree on the actual step
-count, while completion and selected endpoint values remain required.
+Each reference records characterized final step counts for diagnosis:
+`tnsn_alpha` records 2841 for every zone, and `heat_alpha` records 654, 600,
+553, 534, 532, and 540. Step count is diagnostic-only for every case and has
+no cross-run pass/fail tolerance. Accepted-step count can vary when compiler,
+library, architecture, optimization, or floating-point rounding changes which
+tolerance-dependent convergence path is taken. Repeated results on one
+configuration cannot justify either exact equality or a portable nonzero
+bound. The parser still requires each zone's `End` and `Counters` records to
+agree on the actual step count, while completion and selected endpoint values
+remain required.
 
 The first two values in an `End` record are distinct: the first is the
 requested target time (`tstop` in XNet), and the second is the achieved

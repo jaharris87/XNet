@@ -18,9 +18,11 @@ from xnet_regression import (
     ParsingFailure,
     RegressionCase,
     SetupFailure,
+    StepCountDiagnostic,
     Tolerance,
     ToleranceBounds,
     calculate_composition_norms,
+    calculate_step_count_diagnostics,
     compare_final_states,
     heat_alpha_case,
     load_reference,
@@ -93,7 +95,6 @@ def _matching_unit_reference() -> CharacterizationReference:
     return CharacterizationReference(
         expected_zones=(1,),
         final_steps={1: 42},
-        final_step_atols={1: 2},
         fields={1: fields},
         mass_fractions={1: mass_fractions},
         mass_fraction_tolerances={
@@ -151,7 +152,6 @@ def test_mass_fraction_tolerance_requires_composition_value(tmp_path: Path) -> N
             {
                 "expected_zones": [1],
                 "final_step": 42,
-                "final_step_atol": 2,
                 "fields": {
                     name: {"value": value, "atol": 1e-6, "rtol": 1e-6}
                     for name, value in {
@@ -182,7 +182,6 @@ def test_zone_specific_reference_values_are_expanded(tmp_path: Path) -> None:
             {
                 "expected_zones": [1, 2],
                 "final_step": {"1": 42, "2": 43},
-                "final_step_atol": 2,
                 "fields": {
                     name: {
                         "value": {"1": first, "2": second},
@@ -215,7 +214,6 @@ def test_zone_specific_reference_values_are_expanded(tmp_path: Path) -> None:
     reference = load_reference(reference_path)
 
     assert reference.final_steps == {1: 42, 2: 43}
-    assert reference.final_step_atols == {1: 2, 2: 2}
     assert reference.fields[2]["temperature_gk"].value == 3.0
     assert reference.mass_fractions[2]["o16"] == 0.7
     assert reference.mass_fraction_tolerances[2]["c12"].atol == 2e-8
@@ -268,24 +266,16 @@ def test_value_outside_tolerance_fails() -> None:
         )
 
 
-def test_final_step_within_tolerance_passes() -> None:
+def test_final_step_is_diagnostic_only() -> None:
     state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
-    compare_final_states((replace(state, step=44),), _matching_unit_reference())
+    changed = replace(state, step=142)
+    reference = _matching_unit_reference()
 
-
-def test_final_step_outside_tolerance_fails() -> None:
-    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
-    with pytest.raises(ComparisonFailure, match="final step 45"):
-        compare_final_states((replace(state, step=45),), _matching_unit_reference())
-
-
-def test_diagnostic_only_final_step_does_not_fail() -> None:
-    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
-    reference = replace(
-        _matching_unit_reference(), final_step_atols={1: None}
+    diagnostics = calculate_step_count_diagnostics((changed,), reference)
+    assert diagnostics == (
+        StepCountDiagnostic(zone=1, actual=142, reference=42, difference=100),
     )
-
-    compare_final_states((replace(state, step=142),), reference)
+    compare_final_states((changed,), reference)
 
 
 def test_achieved_time_must_reach_target_time() -> None:
@@ -325,6 +315,15 @@ def test_malformed_output_is_a_parsing_failure() -> None:
         "End     1    42", "End     1    malformed"
     )
     with pytest.raises(ParsingFailure, match="malformed End record"):
+        parse_diagnostic(diagnostic, (1,))
+
+
+def test_end_and_counter_steps_must_agree() -> None:
+    diagnostic = _fabricated_final_diagnostic().replace(
+        "1        42        42", "1        43        42"
+    )
+
+    with pytest.raises(ParsingFailure, match="does not match its End record"):
         parse_diagnostic(diagnostic, (1,))
 
 

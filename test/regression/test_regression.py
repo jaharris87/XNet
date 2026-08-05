@@ -56,6 +56,21 @@ def _run_case(
             zone["linf_species"], str
         )
 
+    step_diagnostics = json.loads(
+        (work_directory / "step_count_diagnostics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert step_diagnostics["status"] == (
+        "diagnostic-only; step counts do not determine pass/fail"
+    )
+    assert [zone["zone"] for zone in step_diagnostics["zones"]] == list(
+        case.expected_zones
+    )
+    for zone in step_diagnostics["zones"]:
+        assert set(zone) == {"zone", "actual", "reference", "difference"}
+        assert zone["difference"] == abs(zone["actual"] - zone["reference"])
+
 
 def test_tnsn_alpha(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path

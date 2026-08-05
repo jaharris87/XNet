@@ -19,6 +19,8 @@ from xnet_regression import (
     FinalState,
     ParsingFailure,
     RegressionCase,
+    SN160_SPECIES,
+    SolverCounters,
     SetupFailure,
     Tolerance,
     ToleranceBounds,
@@ -27,6 +29,7 @@ from xnet_regression import (
     comparison_species_for_zone,
     compare_final_states,
     heat_alpha_case,
+    heat_sn160_case,
     load_reference,
     parse_diagnostic,
     prepare_work_directory,
@@ -117,6 +120,7 @@ def _matching_unit_reference() -> CharacterizationReference:
         )
     }
     return CharacterizationReference(
+        case_name="fake",
         expected_zones=(1,),
         final_steps={1: 42},
         fields={1: fields},
@@ -144,6 +148,7 @@ def _state_from_reference(
         density=fields["density"].value,
         electron_fraction=fields["electron_fraction"].value,
         mass_fractions=reference.mass_fractions[zone],
+        counters=SolverCounters(reference.final_steps[zone], 0, 0, 0, 0),
     )
 
 
@@ -194,6 +199,7 @@ def test_mass_fraction_tolerance_requires_composition_value(tmp_path: Path) -> N
     reference_path.write_text(
         json.dumps(
             {
+                "case": "fake",
                 "expected_zones": [1],
                 "final_step": 42,
                 "fields": {
@@ -225,6 +231,7 @@ def test_zone_specific_reference_values_are_expanded(tmp_path: Path) -> None:
     reference_path.write_text(
         json.dumps(
             {
+                "case": "fake",
                 "expected_zones": [1, 2],
                 "final_step": {"1": 42, "2": 43},
                 "fields": {
@@ -473,6 +480,26 @@ def test_end_and_counter_steps_must_agree() -> None:
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
+def test_parser_preserves_source_labeled_solver_counters() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+
+    assert state.counters == SolverCounters(
+        ts=42,
+        nr=42,
+        jacobian=42,
+        derivative=43,
+        cross_section=43,
+    )
+
+
+def test_parser_requires_exact_counter_heading() -> None:
+    diagnostic = _fabricated_final_diagnostic().replace("CrossSect", "Rates")
+    with pytest.raises(ParsingFailure, match="missing Counters record"):
+        parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
+
+
 @pytest.mark.parametrize("token", ["NaN", "+Inf", "-Infinity"])
 def test_nonfinite_output_is_rejected(token: str) -> None:
     diagnostic = _fabricated_final_diagnostic().replace("4.0000000E+06", token)
@@ -501,6 +528,14 @@ def test_timer_exclusion_stops_before_unrecognized_content() -> None:
 def test_missing_executable_is_a_setup_failure(tmp_path: Path) -> None:
     with pytest.raises(SetupFailure, match="does not exist"):
         validate_executable(tmp_path / "missing-xnet")
+
+
+def test_nonexecutable_file_is_a_setup_failure(tmp_path: Path) -> None:
+    executable = tmp_path / "xnet"
+    executable.write_text("not executable\n", encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="not executable"):
+        validate_executable(executable)
 
 
 def test_nonzero_process_exit_is_an_execution_failure(tmp_path: Path) -> None:
@@ -560,6 +595,40 @@ def test_zero_exit_without_required_output_is_an_execution_failure(
     work_directory = tmp_path / "work"
     work_directory.mkdir()
     with pytest.raises(ExecutionFailure, match="required fresh output"):
+        run_xnet(
+            executable,
+            _fake_case(tmp_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("target", "empty"),
+    [
+        ("net_diag01", False),
+        ("ev_fake_1", False),
+        ("ts_fake_1", False),
+        ("net_diag01", True),
+        ("ev_fake_1", True),
+        ("ts_fake_1", True),
+    ],
+)
+def test_each_required_output_must_be_present_and_nonempty(
+    tmp_path: Path, target: str, empty: bool
+) -> None:
+    required_outputs = ("net_diag01", "ev_fake_1", "ts_fake_1")
+    writes = ["from pathlib import Path"]
+    for filename in required_outputs:
+        if filename == target and not empty:
+            continue
+        content = "b''" if filename == target else "b'fresh'"
+        writes.append(f"Path({filename!r}).write_bytes({content})")
+    executable = _make_executable(tmp_path, "\n".join(writes))
+    work_directory = tmp_path / "work"
+    work_directory.mkdir()
+
+    with pytest.raises(ExecutionFailure, match=target):
         run_xnet(
             executable,
             _fake_case(tmp_path),
@@ -661,6 +730,91 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
     )
 
 
+def test_sn160_definition_is_complete_and_stages_only_source_inputs(
+    tmp_path: Path,
+) -> None:
+    case = heat_sn160_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "work")
+    local_network = work_directory / "Data_SN160"
+    sunet_species = tuple(
+        line.strip().lower()
+        for line in (case.network_data / "sunet")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    )
+
+    assert len(case.expected_species) == 160
+    assert case.expected_species == SN160_SPECIES == sunet_species
+    assert len(set(case.expected_species)) == len(case.expected_species)
+    assert {path.name for path in local_network.iterdir()} == set(
+        case.network_inputs
+    )
+    assert all((local_network / name).is_symlink() for name in case.network_inputs)
+    assert case.required_outputs == (
+        "net_diag01",
+        "ev_heat_sn160_1",
+        "ts_heat_sn160_1",
+        "ev_heat_sn160_2",
+        "ts_heat_sn160_2",
+        "ev_heat_sn160_3",
+        "ts_heat_sn160_3",
+        "ev_heat_sn160_4",
+        "ts_heat_sn160_4",
+        "ev_heat_sn160_5",
+        "ts_heat_sn160_5",
+        "ev_heat_sn160_6",
+        "ts_heat_sn160_6",
+    )
+
+
+def test_case_rejects_sunet_species_mismatch(tmp_path: Path) -> None:
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    network_data = tmp_path / "Data_alpha"
+    network_data.mkdir()
+    for filename in case.network_inputs:
+        source = case.network_data / filename
+        destination = network_data / filename
+        if filename == "sunet":
+            destination.write_text("p\nhe4\n", encoding="utf-8")
+        else:
+            destination.symlink_to(source.resolve())
+
+    with pytest.raises(SetupFailure, match="network species input does not match"):
+        prepare_work_directory(
+            replace(case, network_data=network_data), tmp_path / "work"
+        )
+
+
+def test_case_rejects_duplicate_sunet_species(tmp_path: Path) -> None:
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    network_data = tmp_path / "Data_alpha"
+    network_data.mkdir()
+    for filename in case.network_inputs:
+        source = case.network_data / filename
+        destination = network_data / filename
+        if filename == "sunet":
+            destination.write_text("he4\nhe4\n", encoding="utf-8")
+        else:
+            destination.symlink_to(source.resolve())
+
+    with pytest.raises(SetupFailure, match="empty or contains duplicates"):
+        prepare_work_directory(
+            replace(case, network_data=network_data), tmp_path / "work"
+        )
+
+
+def test_sn160_parser_rejects_incomplete_and_duplicate_species() -> None:
+    incomplete = _fabricated_diagnostic_with_species(SN160_SPECIES[:-1])
+    with pytest.raises(ParsingFailure, match="incomplete abundance record"):
+        parse_diagnostic(incomplete, (1,), SN160_SPECIES)
+
+    duplicated_species = (SN160_SPECIES[0], *SN160_SPECIES[:-1])
+    duplicated = _fabricated_diagnostic_with_species(duplicated_species)
+    with pytest.raises(ParsingFailure, match="duplicate abundance"):
+        parse_diagnostic(duplicated, (1,), SN160_SPECIES)
+
+
 def test_torch47_parser_rejects_wrong_species_order() -> None:
     diagnostic = _fabricated_diagnostic_with_species(TORCH47_SPECIES)
     states = parse_diagnostic(diagnostic, (1,), TORCH47_SPECIES)
@@ -687,6 +841,18 @@ def test_torch47_reference_rejects_wrong_species_order(tmp_path: Path) -> None:
 
     reference = load_reference(reference_path)
     with pytest.raises(SetupFailure, match="composition reference does not match"):
+        validate_reference_for_case(case, reference)
+
+
+def test_reference_rejects_wrong_case_association(tmp_path: Path) -> None:
+    case = heat_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["case"] = "bdf_sn160"
+    reference_path = tmp_path / "wrong-case-reference.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    reference = load_reference(reference_path)
+    with pytest.raises(SetupFailure, match="reference case does not match"):
         validate_reference_for_case(case, reference)
 
 
@@ -717,6 +883,7 @@ def test_all_migrated_references_use_per_zone_comparison_species_policy() -> Non
         tnsn_alpha_case(REPOSITORY_ROOT),
         heat_alpha_case(REPOSITORY_ROOT),
         tnsn_torch47_case(REPOSITORY_ROOT),
+        heat_sn160_case(REPOSITORY_ROOT),
     ):
         reference = load_reference(case.reference)
         for zone in case.expected_zones:
@@ -843,6 +1010,7 @@ def test_torch47_network_specific_products_gate_comparison() -> None:
         density=fields["density"].value,
         electron_fraction=fields["electron_fraction"].value,
         mass_fractions=mass_fractions,
+        counters=SolverCounters(reference.final_steps[1], 0, 0, 0, 0),
     )
 
     with pytest.raises(ComparisonFailure, match="co55 mass fraction"):
@@ -860,6 +1028,50 @@ def test_duplicate_trajectory_basenames_are_a_setup_failure(tmp_path: Path) -> N
 def test_missing_case_input_is_a_setup_failure(tmp_path: Path) -> None:
     case = replace(tnsn_alpha_case(REPOSITORY_ROOT), control=tmp_path / "missing-control")
     with pytest.raises(SetupFailure, match="complete control input"):
+        prepare_work_directory(case, tmp_path / "work")
+
+
+def test_missing_sn160_network_directory_is_a_setup_failure(tmp_path: Path) -> None:
+    case = replace(
+        heat_sn160_case(REPOSITORY_ROOT),
+        network_data=tmp_path / "missing-Data_SN160",
+    )
+    with pytest.raises(SetupFailure, match="network data directory"):
+        prepare_work_directory(case, tmp_path / "work")
+
+
+def test_missing_sn160_abundance_is_a_setup_failure(tmp_path: Path) -> None:
+    case = heat_sn160_case(REPOSITORY_ROOT)
+    network_data = tmp_path / "Data_SN160"
+    network_data.mkdir()
+    for filename in case.network_inputs:
+        if filename != "ab_co":
+            (network_data / filename).symlink_to(
+                (case.network_data / filename).resolve()
+            )
+
+    with pytest.raises(SetupFailure, match="required network source input"):
+        prepare_work_directory(
+            replace(case, network_data=network_data), tmp_path / "work"
+        )
+
+
+def test_missing_sn160_trajectory_is_a_setup_failure(tmp_path: Path) -> None:
+    case = heat_sn160_case(REPOSITORY_ROOT)
+    trajectories = (tmp_path / "missing-trajectory", *case.trajectories[1:])
+
+    with pytest.raises(SetupFailure, match="thermodynamic trajectory 1"):
+        prepare_work_directory(
+            replace(case, trajectories=trajectories), tmp_path / "work"
+        )
+
+
+def test_missing_sn160_eos_table_is_a_setup_failure(tmp_path: Path) -> None:
+    case = replace(
+        heat_sn160_case(REPOSITORY_ROOT),
+        helm_table=tmp_path / "missing-helm_table.dat",
+    )
+    with pytest.raises(SetupFailure, match="Helmholtz EOS table"):
         prepare_work_directory(case, tmp_path / "work")
 
 

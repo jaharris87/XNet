@@ -80,6 +80,169 @@ TORCH47_SPECIES = (
     "ni56",
 )
 
+SN160_SPECIES = (
+    "n",
+    "p",
+    "d",
+    "he3",
+    "he4",
+    "li6",
+    "li7",
+    "be7",
+    "be9",
+    "b8",
+    "b10",
+    "b11",
+    "c12",
+    "c13",
+    "c14",
+    "n13",
+    "n14",
+    "n15",
+    "o14",
+    "o15",
+    "o16",
+    "o17",
+    "o18",
+    "f17",
+    "f18",
+    "f19",
+    "ne18",
+    "ne19",
+    "ne20",
+    "ne21",
+    "ne22",
+    "na21",
+    "na22",
+    "na23",
+    "mg23",
+    "mg24",
+    "mg25",
+    "mg26",
+    "al25",
+    "al26",
+    "al27",
+    "si28",
+    "si29",
+    "si30",
+    "si31",
+    "si32",
+    "p29",
+    "p30",
+    "p31",
+    "p32",
+    "p33",
+    "s32",
+    "s33",
+    "s34",
+    "s35",
+    "s36",
+    "cl33",
+    "cl34",
+    "cl35",
+    "cl36",
+    "cl37",
+    "ar36",
+    "ar37",
+    "ar38",
+    "ar39",
+    "ar40",
+    "k37",
+    "k38",
+    "k39",
+    "k40",
+    "k41",
+    "ca40",
+    "ca41",
+    "ca42",
+    "ca43",
+    "ca44",
+    "ca45",
+    "ca46",
+    "ca47",
+    "ca48",
+    "sc43",
+    "sc44",
+    "sc45",
+    "sc46",
+    "sc47",
+    "sc48",
+    "sc49",
+    "ti44",
+    "ti45",
+    "ti46",
+    "ti47",
+    "ti48",
+    "ti49",
+    "ti50",
+    "ti51",
+    "v46",
+    "v47",
+    "v48",
+    "v49",
+    "v50",
+    "v51",
+    "v52",
+    "cr48",
+    "cr49",
+    "cr50",
+    "cr51",
+    "cr52",
+    "cr53",
+    "cr54",
+    "mn50",
+    "mn51",
+    "mn52",
+    "mn53",
+    "mn54",
+    "mn55",
+    "fe52",
+    "fe53",
+    "fe54",
+    "fe55",
+    "fe56",
+    "fe57",
+    "fe58",
+    "co53",
+    "co54",
+    "co55",
+    "co56",
+    "co57",
+    "co58",
+    "co59",
+    "ni56",
+    "ni57",
+    "ni58",
+    "ni59",
+    "ni60",
+    "ni61",
+    "ni62",
+    "ni63",
+    "ni64",
+    "cu57",
+    "cu58",
+    "cu59",
+    "cu60",
+    "cu61",
+    "cu62",
+    "cu63",
+    "cu64",
+    "cu65",
+    "zn59",
+    "zn60",
+    "zn61",
+    "zn62",
+    "zn63",
+    "zn64",
+    "zn65",
+    "zn66",
+    "ga62",
+    "ga63",
+    "ga64",
+    "ge63",
+    "ge64",
+)
+
 # These established products remain comparison anchors for continuity even
 # when one falls below the general material endpoint threshold.
 SILICON_BURNING_COMPARISON_SPECIES = (
@@ -117,6 +280,9 @@ END_RECORD = re.compile(
 ABUNDANCE_PAIR = re.compile(rf"([A-Za-z][A-Za-z0-9]*)\s+({FLOAT_TOKEN})")
 TIMER_HEADING = re.compile(r"^Timers Summary:\s*$")
 TIMER_ROW = re.compile(rf"^\s+[A-Za-z][A-Za-z0-9_/-]*\s+{FLOAT_TOKEN}\s*$")
+COUNTER_HEADING = re.compile(
+    r"^Counters:\s+Zone\s+TS\s+NR\s+Jacobian\s+Deriv\s+CrossSect\s*$"
+)
 NONFINITE_TOKEN = re.compile(
     r"(?i)(?<![A-Za-z0-9_])[+-]?(?:nan|inf(?:inity)?)(?![A-Za-z0-9_])"
 )
@@ -187,6 +353,18 @@ class FinalState:
     density: float
     electron_fraction: float
     mass_fractions: Mapping[str, float]
+    counters: SolverCounters
+
+
+@dataclass(frozen=True)
+class SolverCounters:
+    """Source-labeled values from one XNet Counters record."""
+
+    ts: int
+    nr: int
+    jacobian: int
+    derivative: int
+    cross_section: int
 
 
 @dataclass(frozen=True)
@@ -208,6 +386,7 @@ class ToleranceBounds:
 class CharacterizationReference:
     """Complete expected final state plus selected pass/fail tolerances."""
 
+    case_name: str
     expected_zones: tuple[int, ...]
     final_steps: Mapping[int, int]
     fields: Mapping[int, Mapping[str, Tolerance]]
@@ -289,6 +468,46 @@ def tnsn_torch47_case(repository_root: Path) -> RegressionCase:
     )
 
 
+def heat_sn160_case(repository_root: Path) -> RegressionCase:
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "heat_sn160"
+    )
+    return RegressionCase(
+        name="heat_sn160",
+        control=case_directory / "control",
+        network_data=repository_root / "test" / "Data_SN160",
+        trajectories=tuple(
+            repository_root / "test" / "Test_Problems" / f"th_co_burn_{zone}"
+            for zone in range(1, 7)
+        ),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=tuple(range(1, 7)),
+        expected_species=SN160_SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+    )
+
+
+def _read_sunet_species(path: Path) -> tuple[str, ...]:
+    try:
+        species = tuple(
+            line.strip().lower()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    except (OSError, UnicodeError) as error:
+        raise SetupFailure(
+            f"could not read network species input {path}: {error}"
+        ) from error
+    if not species or len(set(species)) != len(species):
+        raise SetupFailure(
+            f"network species input is empty or contains duplicates: {path}"
+        )
+    return species
+
+
 def validate_executable(executable: Path) -> Path:
     executable = executable.expanduser().resolve()
     if not executable.exists():
@@ -348,6 +567,12 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         raise SetupFailure(
             "required network source input is missing:\n  "
             + "\n  ".join(str(path) for path in missing_network_inputs)
+        )
+    sunet_species = _read_sunet_species(case.network_data / "sunet")
+    if sunet_species != case.expected_species:
+        raise SetupFailure(
+            f"network species input does not match the case definition for {case.name}: "
+            f"{sunet_species} != {case.expected_species}"
         )
 
 
@@ -593,7 +818,7 @@ def parse_diagnostic(
                 f"unexpected species structure for zone {zone}: "
                 f"{', '.join(mass_fractions)}"
             )
-        if index >= len(lines) or not lines[index].startswith("Counters:"):
+        if index >= len(lines) or not COUNTER_HEADING.match(lines[index]):
             raise ParsingFailure(f"missing Counters record after zone {zone} final state")
         index += 1
         if index >= len(lines):
@@ -601,7 +826,9 @@ def parse_diagnostic(
         counters = lines[index].split()
         if len(counters) != 6 or not all(token.isdigit() for token in counters):
             raise ParsingFailure(f"malformed counter values for zone {zone}: {lines[index]}")
-        if int(counters[0]) != zone or int(counters[1]) != step:
+        counter_zone, *counter_values = (int(token) for token in counters)
+        solver_counters = SolverCounters(*counter_values)
+        if counter_zone != zone or solver_counters.ts != step:
             raise ParsingFailure(
                 f"zone {zone} counter record does not match its End record: {lines[index]}"
             )
@@ -615,6 +842,7 @@ def parse_diagnostic(
             density=values[3],
             electron_fraction=values[4],
             mass_fractions=mass_fractions,
+            counters=solver_counters,
         )
         index += 1
 
@@ -787,6 +1015,9 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure(f"invalid characterization reference {path}: {error}") from error
 
     try:
+        case_name = document["case"]
+        if not isinstance(case_name, str) or not case_name:
+            raise ValueError("case must be a nonempty string")
         zone_items = document["expected_zones"]
         if not isinstance(zone_items, list) or not all(
             isinstance(zone, int) and not isinstance(zone, bool)
@@ -900,6 +1131,7 @@ def load_reference(path: Path) -> CharacterizationReference:
     if any(value < 0 for value in mass_fraction_sum_atols.values()):
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
     return CharacterizationReference(
+        case_name=case_name,
         expected_zones=expected_zones,
         final_steps=final_steps,
         fields=fields,
@@ -914,6 +1146,11 @@ def validate_reference_for_case(
 ) -> None:
     """Require one reference to match its case and per-zone selection policy."""
 
+    if reference.case_name != case.name:
+        raise SetupFailure(
+            "reference case does not match the case definition: "
+            f"{reference.case_name!r} != {case.name!r}"
+        )
     if reference.expected_zones != case.expected_zones:
         raise SetupFailure(
             "reference expected_zones does not match the case definition: "

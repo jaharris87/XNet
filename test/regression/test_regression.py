@@ -10,6 +10,7 @@ from xnet_regression import (
     RegressionCase,
     RegressionFailure,
     heat_alpha_case,
+    heat_sn160_case,
     run_and_compare,
     tnsn_alpha_case,
     tnsn_torch47_case,
@@ -76,6 +77,17 @@ def test_heat_alpha(
         xnet_timeout,
         tmp_path,
         heat_alpha_case(REPOSITORY_ROOT),
+    )
+
+
+def test_heat_sn160(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    _run_case(
+        xnet_executable,
+        xnet_timeout,
+        tmp_path,
+        heat_sn160_case(REPOSITORY_ROOT),
     )
 
 

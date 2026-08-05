@@ -39,7 +39,7 @@
     "5": 532,
     "6": 540
   },
-  "final_step_atol": 2,
+  "final_step_atol": 0,
   "fields": {
     "target_time": {
       "value": {

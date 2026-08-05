@@ -626,7 +626,13 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure(f"malformed characterization reference {path}: {error}") from error
 
     try:
-        expected_zones = tuple(int(zone) for zone in document["expected_zones"])
+        zone_items = document["expected_zones"]
+        if not isinstance(zone_items, list) or not all(
+            isinstance(zone, int) and not isinstance(zone, bool)
+            for zone in zone_items
+        ):
+            raise ValueError("expected_zones must be a list of integers")
+        expected_zones = tuple(zone_items)
         if not expected_zones or len(set(expected_zones)) != len(expected_zones):
             raise ValueError("expected_zones is empty or contains duplicates")
         final_steps = _load_zone_integers(

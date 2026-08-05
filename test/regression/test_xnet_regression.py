@@ -233,6 +233,20 @@ def test_zone_specific_reference_requires_every_zone(tmp_path: Path) -> None:
         load_reference(reference_path)
 
 
+@pytest.mark.parametrize("zone", [6.9, "6", True])
+def test_reference_rejects_noninteger_zone_identifiers(
+    tmp_path: Path, zone: object
+) -> None:
+    source = REPOSITORY_ROOT / "test/regression/cases/heat_alpha/reference/final_state.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    document["expected_zones"][-1] = zone
+    reference_path = tmp_path / "malformed-zone-reference.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="must be a list of integers"):
+        load_reference(reference_path)
+
+
 def test_value_within_tolerance_passes() -> None:
     state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
     reference = _matching_unit_reference()

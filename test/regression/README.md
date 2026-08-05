@@ -181,34 +181,54 @@ the achieved time must reach that zone's target within the same printed-time
 tolerance. This makes completion explicit without maintaining two redundant
 comparisons to the same reference value.
 
-The comparison also checks temperature, density, electron fraction, and one
-case-independent composition selection. Every species whose characterized
-endpoint mass fraction reaches `1e-4` in any zone gates comparison, regardless
-of the reactions or products represented by the network. The threshold
-identifies species that carry at least 0.01% of the endpoint mass while leaving
-smaller trace and intermediate abundances diagnostic-only. The established
+The comparison also checks temperature, density, electron fraction, and an
+independent composition selection for every zone. The established
 silicon-burning anchors `si28`, `s32`, `ar36`, `ca40`, `ti44`, `cr48`, `fe52`,
-and `ni56` are retained when present so existing coverage is not lost if one
-falls below the threshold. They are not required: a CNO or nova network with no
-silicon-burning products selects its own material endpoint species by the same
-rule.
+and `ni56` are retained in each zone when they exist in the case network, even
+when an anchor is below the general importance threshold. Every other species
+gates comparison in a zone exactly when that zone's characterized endpoint
+mass fraction satisfies `X >= 1e-4`. The inclusive boundary identifies species
+that carry at least 0.01% of that zone's endpoint mass while leaving smaller
+trace and intermediate abundances diagnostic-only there. Anchors are not
+required: a CNO or nova network with none of them selects its own material
+endpoint species by the same threshold.
 
-For Torch47, the threshold adds the network-specific products `s31`
-(`1.9322400e-4`) and `co55` (`7.6324081e-4`); `p30` and `mn51` remain below the
-threshold. It also exposes five previously diagnostic-only material species in
-`heat_alpha`: `he4`, `c12`, `o16`, `mg24`, and `zn60`. This is a deliberate
-expansion of that case's policy following maintainer direction; its reference
-values and end-to-end result are unchanged. The `tnsn_alpha` selection remains
-unchanged.
-The runner derives the ordered selection from the complete reference and
-requires its tolerance mapping to match exactly. Retained anchors appear first
-in their established order, followed by other above-threshold species in
-network order. Reference loading rejects duplicate JSON keys so a later entry
-cannot silently replace an intended value or tolerance. Every field has an
-explicit absolute tolerance grounded in its printed resolution and a relative
-tolerance of `5e-8`, reflecting half a unit at the diagnostic's
-eight-significant-digit precision. The new `heat_alpha` absolute tolerances use
-half of each value's last printed place.
+Selection is deterministic. A single pass over the complete network vector
+reported by XNet retains each anchor or above-threshold species in that vector's
+order; anchor status changes membership, not position. The reference's
+`mass_fraction_selection` object lists that exact ordered selection for every
+expected zone. The loader rejects
+missing or unknown zones, empty selections, invalid or duplicate species,
+species absent from the complete composition vector, selected species without
+tolerances, and tolerance entries unused by every zone. Case validation then
+requires each committed list to equal the selection derived from that zone's
+complete reference vector. Duplicate JSON object keys are rejected before
+schema validation so a later zone, value, or tolerance cannot silently replace
+an earlier one.
+
+The per-zone change has the following effect. The table spells out ordering as
+well as membership so reviewers can audit each list directly.
+
+| Case | Zone | Previous case-wide selection | Per-zone selection |
+| --- | --- | --- | --- |
+| `tnsn_alpha` | 1-10 | `si28, s32, ar36, ca40, ti44, cr48, fe52, ni56` | unchanged |
+| `tnsn_torch47` | 1 | `si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, s31, co55` | `si28, s31, s32, ar36, ca40, ti44, cr48, fe52, co55, ni56` |
+| `heat_alpha` | 1 | `si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, he4, c12, o16, mg24, zn60` | `he4, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56` |
+| `heat_alpha` | 2 | same case-wide list | `he4, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
+| `heat_alpha` | 3 | same case-wide list | `he4, mg24, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
+| `heat_alpha` | 4 | same case-wide list | `he4, o16, mg24, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
+| `heat_alpha` | 5-6 | same case-wide list | `he4, c12, o16, mg24, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
+
+Thus the single-zone Torch47 case and all identical `tnsn_alpha` zones retain
+the same pass/fail coverage. In `heat_alpha`, for example, `o16` gates zones
+4-6 but remains diagnostic-only in zones 1-3. The focused tests apply the same
+sum-preserving `o16`/`c12` perturbation to zones 4 and 3 to check both outcomes;
+negative-fraction and composition-sum checks still cover the full vector.
+
+Every field has an explicit absolute tolerance grounded in its printed
+resolution and a relative tolerance of `5e-8`, reflecting half a unit at the
+diagnostic's eight-significant-digit precision. The `heat_alpha` absolute
+tolerances use half of each value's last printed place.
 Where a quantity's printed scale differs among its zones, the JSON records the
 absolute tolerances by zone. Reference values, absolute tolerances, and
 relative tolerances may each be either one scalar applied to every zone or a
@@ -222,12 +242,14 @@ available. The numerical-field criterion is
 abs(actual - reference) <= atol + rtol * abs(reference)
 ```
 
-Each reference contains the final mass fraction for every case-network
-species and every zone. A separate `mass_fraction_tolerances` mapping
-identifies the species that have field-aware pass/fail policies: eight in
-`tnsn_alpha`, thirteen in `heat_alpha`, and ten in Torch47. This keeps complete
-reference states for diagnostic norms without inventing strict tolerances for
-trace species.
+Each reference contains the final mass fraction for every case-network species
+and every zone. The separate `mass_fraction_selection` and
+`mass_fraction_tolerances` mappings identify which species have field-aware
+pass/fail policies in each zone without repeating any composition value. A
+tolerance scalar applies wherever that species is selected; a zone mapping can
+provide distinct bounds and must define every expected zone. This keeps
+complete reference states for structural checks and diagnostic norms without
+inventing pass/fail tolerances for trace species.
 
 For diagnosis, `composition_error_norms.json` reports raw `L1`, `L2`, and
 `L-infinity` norms of the absolute mass-fraction error over all case species for
@@ -307,7 +329,6 @@ regression pass/fail. The Torch47 migration changes endpoint coverage only;
 the larger `ev_*` and `ts_*` artifacts remain required for freshness but are
 not parsed or compared.
 
-Importance selection is currently case-wide: a species that reaches `1e-4` in
-any zone is compared in every zone. A follow-up should introduce per-zone
-selection so a materially important species remains gated where relevant
-without imposing printed-precision trace checks in other zones.
+Per-zone importance selection changes only regression classification. It does
+not change XNet calculations, establish scientific validity, or extend the
+single-compiler and single-platform characterization evidence described above.

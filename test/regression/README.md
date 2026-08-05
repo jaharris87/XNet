@@ -3,8 +3,8 @@
 This directory is a bounded replacement path for XNet regression testing. It
 exercises the compiled XNet program as an external process; it is not a Python
 binding, a scientific-validation suite, or a replacement for all legacy cases.
-The migrated cases are the serial, CPU-only `tnsn_alpha` trajectory calculation
-and the `heat_alpha` self-heating calculation.
+The migrated cases are the serial, CPU-only `tnsn_alpha` and `tnsn_torch47`
+trajectory calculations and the `heat_alpha` self-heating calculation.
 
 ## Prerequisites and command
 
@@ -34,15 +34,15 @@ The suite enforces a 30-second per-case process timeout. Use
 ## Isolated execution and artifacts
 
 pytest supplies a new empty temporary directory for each case. The runner
-copies the complete `control` input into it, creates a local writable
-`Data_alpha` directory containing absolute symlinks to only the five tracked
-source inputs (`sunet`, `netsu`, `netweak`, `netwinv`, and `ab_co`), and
+copies the complete `control` input into it, creates a local writable network
+directory containing absolute symlinks to only the case's five tracked source
+inputs (`sunet`, `netsu`, `netweak`, `netwinv`, and `ab_co`), and
 symlinks every trajectory required by the case plus the Helmholtz EOS table.
 Trajectory basenames must be unique so staging cannot silently replace an
 input. XNet runs with that directory as its current directory.
 Network-preprocessing products therefore stay inside the temporary directory
-rather than mutating `test/Data_alpha`. A nonempty work directory is a setup
-failure, so old diagnostics cannot satisfy a new run.
+rather than mutating `test/Data_alpha` or `test/Data_torch47`. A nonempty work
+directory is a setup failure, so old diagnostics cannot satisfy a new run.
 
 Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`,
 `xnet.status.txt`, and `composition_error_norms.json` beside the XNet outputs.
@@ -110,13 +110,39 @@ trajectory paths in the isolated directory. XNet uses the number of digits in
 the largest zone number for output suffixes, so this six-zone case uses `_1`
 through `_6`, while the ten-zone `tnsn_alpha` case uses `_01` through `_10`.
 
+Legacy ID 2 names `tnsn_torch47` and calls `do_test`, which concatenates
+`test/test_settings` and `test/Test_Problems/setup_tnsn_torch47`. The settings
+activate only zone 1, serial runtime network processing, Backward Euler, no
+screening, and no self-heating. The setup nevertheless retains ten identical
+`Data_torch47/ab_co` and `Test_Problems/th_sn1aflame` input pairs; the complete
+standalone control preserves all ten records while XNet consumes the first
+pair for the one active zone. Its ASCII history requests 14 selected species,
+but `net_diag01` records the complete ordered 47-species network from
+`test/Data_torch47/sunet`.
+
+The committed `cases/tnsn_torch47/control` changes only the two output roots
+by removing `Test_Results/` and the ten trajectory records by removing
+`Test_Problems/`. Numerical and physical controls, `Data_torch47`, abundance
+paths, repeated records, and the 14-species ASCII-history selection are
+unchanged. The case stages `sunet`, `netsu`, `netweak`, `netwinv`, and `ab_co`
+in a writable temporary `Data_torch47`. Runtime preprocessing generated
+`ab_blank`, `match_data`, `match_read`, `matr_shape`, `net_desc`, `net_diag`,
+`nets3`, `nets4`, `nuc_data`, and `sparse_ind` there without changing the
+tracked inputs. The required fresh outputs are `net_diag01`,
+`ev_tnsn_torch47_1`, and `ts_tnsn_torch47_1`.
+
+No tracked `test/Test_Problems/Results/net_diag_tnsn_torch47` exists in a
+clean checkout. The committed endpoint is therefore a characterization of the
+recorded build and inputs, not historical or independent scientific truth.
+
 ## Comparison policy and reference status
 
 The historical script deletes the `Timers Summary:` heading plus the next 14
 lines, performs an exact whole-file diff, warns on differences, and normally
 returns success. A clean checkout has no tracked
 `test/Test_Problems/Results/net_diag_tnsn_alpha`, so no historical numerical
-reference with compiler or platform provenance is available here.
+reference with compiler or platform provenance is available for either
+trajectory case here.
 
 Each case has a `reference/final_state.json` characterization baseline
 generated from the tracked default serial build at its recorded revision.
@@ -125,18 +151,21 @@ records the known compiler, platform, build selections, and input paths.
 Normal tests only read these files and never create or replace them.
 
 The parser requires ordered final records and matching counters for every case
-zone, the complete 14-species structure, one delimited timer section per zone,
-and finite values. It rejects negative mass fractions and applies a coarse
+zone, the case-declared complete 14- or 47-species structure, one delimited
+timer section per zone, and finite values. It has no default network species
+list. It rejects negative mass fractions and applies a coarse
 structural `|sum(X)-1|` check. The `tnsn_alpha` bound is `2.1e-8`.
 `heat_alpha` records a zone-specific bound from `7.60556005e-9` through
-`1.81105e-8`. Each bound is the sum of the half-last-place rounding bounds for
-that zone's 14 printed baseline values. These bounds are not derived from
+`1.81105e-8`, and `tnsn_torch47` uses `1.656158052105501e-8`. Each bound is
+the sum of the half-last-place rounding bounds for that zone's printed
+baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
 Each reference records characterized final step counts for diagnosis:
-`tnsn_alpha` records 2841 for every zone, and `heat_alpha` records 654, 600,
-553, 534, 532, and 540. Step count is diagnostic-only for every case and has
+`tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,
+534, 532, and 540, and `tnsn_torch47` records 2928. Step count is
+diagnostic-only for every case and has
 no cross-run pass/fail tolerance. Accepted-step count can vary when compiler,
 library, architecture, optimization, or floating-point rounding changes which
 tolerance-dependent convergence path is taken. Repeated results on one
@@ -152,12 +181,34 @@ the achieved time must reach that zone's target within the same printed-time
 tolerance. This makes completion explicit without maintaining two redundant
 comparisons to the same reference value.
 
-The comparison also checks temperature, density, electron fraction, and the
-eight non-trace final products `si28`, `s32`, `ar36`, `ca40`, `ti44`, `cr48`,
-`fe52`, and `ni56`. Every field has an explicit absolute tolerance grounded in
-its printed resolution and a relative tolerance of `5e-8`, reflecting half a
-unit at the diagnostic's eight-significant-digit precision. The new
-`heat_alpha` absolute tolerances use half of each value's last printed place.
+The comparison also checks temperature, density, electron fraction, and one
+case-independent composition selection. Every species whose characterized
+endpoint mass fraction reaches `1e-4` in any zone gates comparison, regardless
+of the reactions or products represented by the network. The threshold
+identifies species that carry at least 0.01% of the endpoint mass while leaving
+smaller trace and intermediate abundances diagnostic-only. The established
+silicon-burning anchors `si28`, `s32`, `ar36`, `ca40`, `ti44`, `cr48`, `fe52`,
+and `ni56` are retained when present so existing coverage is not lost if one
+falls below the threshold. They are not required: a CNO or nova network with no
+silicon-burning products selects its own material endpoint species by the same
+rule.
+
+For Torch47, the threshold adds the network-specific products `s31`
+(`1.9322400e-4`) and `co55` (`7.6324081e-4`); `p30` and `mn51` remain below the
+threshold. It also exposes five previously diagnostic-only material species in
+`heat_alpha`: `he4`, `c12`, `o16`, `mg24`, and `zn60`. This is a deliberate
+expansion of that case's policy following maintainer direction; its reference
+values and end-to-end result are unchanged. The `tnsn_alpha` selection remains
+unchanged.
+The runner derives the ordered selection from the complete reference and
+requires its tolerance mapping to match exactly. Retained anchors appear first
+in their established order, followed by other above-threshold species in
+network order. Reference loading rejects duplicate JSON keys so a later entry
+cannot silently replace an intended value or tolerance. Every field has an
+explicit absolute tolerance grounded in its printed resolution and a relative
+tolerance of `5e-8`, reflecting half a unit at the diagnostic's
+eight-significant-digit precision. The new `heat_alpha` absolute tolerances use
+half of each value's last printed place.
 Where a quantity's printed scale differs among its zones, the JSON records the
 absolute tolerances by zone. Reference values, absolute tolerances, and
 relative tolerances may each be either one scalar applied to every zone or a
@@ -171,14 +222,15 @@ available. The numerical-field criterion is
 abs(actual - reference) <= atol + rtol * abs(reference)
 ```
 
-Each reference contains the final mass fraction for every alpha-network
+Each reference contains the final mass fraction for every case-network
 species and every zone. A separate `mass_fraction_tolerances` mapping
-identifies the eight species that currently have field-aware pass/fail
-policies. This keeps complete reference states for diagnostic norms without
-inventing strict tolerances for trace species.
+identifies the species that have field-aware pass/fail policies: eight in
+`tnsn_alpha`, thirteen in `heat_alpha`, and ten in Torch47. This keeps complete
+reference states for diagnostic norms without inventing strict tolerances for
+trace species.
 
 For diagnosis, `composition_error_norms.json` reports raw `L1`, `L2`, and
-`L-infinity` norms of the absolute mass-fraction error over all 14 species for
+`L-infinity` norms of the absolute mass-fraction error over all case species for
 each zone, plus the species responsible for `L-infinity`. The complete
 composition reference and selected tolerance mapping are stored separately in
 `final_state.json`, so each species value has a single source. These norms have
@@ -192,16 +244,70 @@ Timer exclusion is structural rather than line-count based: only a
 rows are removed. The first non-timer row ends the exclusion, so unrelated
 diagnostic content is not hidden.
 
+## Torch47 characterization evidence
+
+The issue #16 reference was generated on 2026-08-05 from revision
+`5e7e1543d432f3c2792e40e271816ecaf8184fad` on macOS 26.6 arm64 with GNU
+Fortran 16.1.0. The clean build commands were:
+
+```bash
+make -C source clean
+make -C source -j
+```
+
+Resolved selections were `CMODE=OPT`, `PE_ENV=GNU`, `MPI_MODE=OFF`,
+`OPENMP_MODE=OFF`, `GPU_MODE=OFF`, `EOS=STARKILLER`,
+`MATRIX_SOLVER=dense`, and `LAPACK_VER=NETLIB`. The known Make dependency
+limitation also compiled `xnet_parallel.F90` with `mpifort` and emitted its
+existing argument-mismatch warnings; the linked executable used
+`xnet_parallel_stubs.o`.
+
+An isolated direct Torch47 process returned status 0 in 0.37 seconds. Three
+subsequent pytest runs each completed in 0.40 seconds including test overhead
+and produced identical parsed 47-species endpoints. This repeated result only
+characterizes one compiler, build, and machine. The required outputs totaled
+5,877,984 bytes: 5,176 for `net_diag01`, 586,000 for the ASCII history, and
+5,286,808 for the binary history. The committed JSON reference is 4,098 bytes.
+For comparison on the same configuration, the pytest case times were 0.52
+seconds for `tnsn_alpha` and 0.37 seconds for `heat_alpha`; their required
+outputs totaled 14,470,756 and 1,757,702 bytes respectively. Torch47 remains
+well inside the unchanged 30-second timeout and is suitable for the fast local
+suite on this configuration.
+
+The focused helper command passed 39 tests, and the complete suite passed 42:
+
+```bash
+python -m pytest -q test/regression/test_xnet_regression.py
+python -m pytest -q test/regression \
+    --xnet-executable="$PWD/source/xnet"
+```
+
+A temporary copy of the Torch47 reference changed the network-specific
+selected product `co55` from `0.00076324081` to `0.001`. The real end-to-end
+runner then failed with pytest status 1 and reported an absolute difference of
+`2.368e-4` against an allowed `5.500e-11`. Normal execution has no
+reference-writing path.
+
+The third explicit Python registration remains a short `RegressionCase`
+declaration and shares the existing loader-free validation path. A TOML
+manifest would duplicate these values while adding schema and loading code, so
+issue #16 retains explicit Python registration for all three cases.
+
 ## Current limits and next cases
 
 These cases establish runtime and software-behavior checks plus narrow
-numerical characterization. It does not establish broad scientific validity,
-portability, performance, CI suitability, or support for MPI, threading,
-accelerators, BDF, NSE, log-ft rates, batching, or large networks.
+numerical characterization. They do not establish broad scientific validity,
+portability, performance benchmarking, CI suitability, or support for MPI,
+threading, accelerators, BDF, NSE, log-ft rates, batching, or large networks.
 
 The `heat_alpha` comparison covers final `net_diag01` endpoints only. It does
 not inspect the evolution history in `ev_*` or binary `ts_*` output. Issue #12
 owns the investigation needed before binary time-series data can affect
-regression pass/fail. `tnsn_torch47` remains the next useful generality check
-because it preserves the trajectory model while adding a small non-alpha
-network.
+regression pass/fail. The Torch47 migration changes endpoint coverage only;
+the larger `ev_*` and `ts_*` artifacts remain required for freshness but are
+not parsed or compared.
+
+Importance selection is currently case-wide: a species that reaches `1e-4` in
+any zone is compared in every zone. A follow-up should introduce per-zone
+selection so a materially important species remains gated where relevant
+without imposing printed-precision trace checks in other zones.

@@ -11,16 +11,20 @@ import sys
 import pytest
 
 from xnet_regression import (
+    ALPHA_SPECIES,
     CharacterizationReference,
     CompositionNorms,
     ComparisonFailure,
     ExecutionFailure,
+    FinalState,
     ParsingFailure,
     RegressionCase,
     SetupFailure,
     Tolerance,
     ToleranceBounds,
+    TORCH47_SPECIES,
     calculate_composition_norms,
+    comparison_species_for,
     compare_final_states,
     heat_alpha_case,
     load_reference,
@@ -29,6 +33,8 @@ from xnet_regression import (
     run_xnet,
     strip_timer_sections,
     tnsn_alpha_case,
+    tnsn_torch47_case,
+    validate_reference_for_case,
     validate_executable,
 )
 
@@ -51,6 +57,26 @@ Timers Summary:
         Total      {timer_total}
         Solver     2.000E-03
 """
+
+
+def _fabricated_diagnostic_with_species(species: tuple[str, ...]) -> str:
+    lines = _fabricated_final_diagnostic().splitlines()
+    abundance_start = next(
+        index for index, line in enumerate(lines) if line.startswith("End")
+    ) + 1
+    abundance_end = next(
+        index for index, line in enumerate(lines) if line.startswith("Counters:")
+    )
+    abundance_rows = [
+        " ".join(
+            f"{name:>5} {1.0 / len(species):.7E}"
+            for name in species[index : index + 4]
+        )
+        for index in range(0, len(species), 4)
+    ]
+    return "\n".join(
+        lines[:abundance_start] + abundance_rows + lines[abundance_end:]
+    )
 
 
 def _matching_unit_reference() -> CharacterizationReference:
@@ -127,12 +153,16 @@ def _make_executable(tmp_path: Path, body: str) -> Path:
 
 
 def test_known_good_comparison_passes() -> None:
-    states = parse_diagnostic(_fabricated_final_diagnostic(), (1,))
+    states = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )
     compare_final_states(states, _matching_unit_reference())
 
 
 def test_mass_fraction_expectation_comes_from_complete_reference() -> None:
-    states = parse_diagnostic(_fabricated_final_diagnostic(), (1,))
+    states = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )
     reference = _matching_unit_reference()
     changed_composition = {1: dict(reference.mass_fractions[1])}
     changed_composition[1]["si28"] = 0.16
@@ -244,7 +274,9 @@ def test_reference_rejects_noninteger_zone_identifiers(
 
 
 def test_value_within_tolerance_passes() -> None:
-    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
     reference = _matching_unit_reference()
     policy = {1: dict(reference.fields[1])}
     policy[1]["temperature_gk"] = Tolerance(2.0, atol=0.1, rtol=0.0)
@@ -254,7 +286,9 @@ def test_value_within_tolerance_passes() -> None:
 
 
 def test_value_outside_tolerance_fails() -> None:
-    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
     reference = _matching_unit_reference()
     policy = {1: dict(reference.fields[1])}
     policy[1]["temperature_gk"] = Tolerance(2.0, atol=0.1, rtol=0.0)
@@ -265,7 +299,9 @@ def test_value_outside_tolerance_fails() -> None:
 
 
 def test_final_step_is_diagnostic_only() -> None:
-    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
 
     compare_final_states(
         (replace(state, step=142),), _matching_unit_reference()
@@ -273,13 +309,17 @@ def test_final_step_is_diagnostic_only() -> None:
 
 
 def test_achieved_time_must_reach_target_time() -> None:
-    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
     with pytest.raises(ComparisonFailure, match="did not reach target time"):
         compare_final_states((replace(state, time=1.9),), _matching_unit_reference())
 
 
 def test_composition_norms_are_diagnostic_only() -> None:
-    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
     perturbed_mass_fractions = dict(state.mass_fractions)
     perturbed_mass_fractions["c12"] += 1e-4
     perturbed_mass_fractions["o16"] -= 1e-4
@@ -301,7 +341,9 @@ def test_composition_norms_are_diagnostic_only() -> None:
 
 def test_missing_final_output_is_a_parsing_failure() -> None:
     with pytest.raises(ParsingFailure, match="final records"):
-        parse_diagnostic("Timers Summary:\n        Total 1.0E-02\n", (1,))
+        parse_diagnostic(
+            "Timers Summary:\n        Total 1.0E-02\n", (1,), ALPHA_SPECIES
+        )
 
 
 def test_malformed_output_is_a_parsing_failure() -> None:
@@ -309,7 +351,7 @@ def test_malformed_output_is_a_parsing_failure() -> None:
         "End     1    42", "End     1    malformed"
     )
     with pytest.raises(ParsingFailure, match="malformed End record"):
-        parse_diagnostic(diagnostic, (1,))
+        parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
 def test_end_and_counter_steps_must_agree() -> None:
@@ -318,22 +360,22 @@ def test_end_and_counter_steps_must_agree() -> None:
     )
 
     with pytest.raises(ParsingFailure, match="does not match its End record"):
-        parse_diagnostic(diagnostic, (1,))
+        parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
 @pytest.mark.parametrize("token", ["NaN", "+Inf", "-Infinity"])
 def test_nonfinite_output_is_rejected(token: str) -> None:
     diagnostic = _fabricated_final_diagnostic().replace("4.0000000E+06", token)
     with pytest.raises(ParsingFailure, match="non-finite"):
-        parse_diagnostic(diagnostic, (1,))
+        parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
 def test_timer_only_variation_is_excluded() -> None:
     first = parse_diagnostic(
-        _fabricated_final_diagnostic(timer_total="1.000E-02"), (1,)
+        _fabricated_final_diagnostic(timer_total="1.000E-02"), (1,), ALPHA_SPECIES
     )
     second = parse_diagnostic(
-        _fabricated_final_diagnostic(timer_total="9.999E+02"), (1,)
+        _fabricated_final_diagnostic(timer_total="9.999E+02"), (1,), ALPHA_SPECIES
     )
     assert first == second
 
@@ -464,6 +506,159 @@ def test_heat_alpha_stages_all_trajectories_and_expected_outputs(
         "ev_heat_alpha_6",
         "ts_heat_alpha_6",
     )
+
+
+def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
+    tmp_path: Path,
+) -> None:
+    case = tnsn_torch47_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "work")
+    local_network = work_directory / "Data_torch47"
+
+    sunet_species = tuple(
+        line.strip().lower()
+        for line in (case.network_data / "sunet")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    )
+    assert len(case.expected_species) == 47
+    assert case.expected_species == TORCH47_SPECIES == sunet_species
+    assert len(set(case.expected_species)) == len(case.expected_species)
+    assert {path.name for path in local_network.iterdir()} == set(
+        case.network_inputs
+    )
+    assert all((local_network / name).is_symlink() for name in case.network_inputs)
+    reference = load_reference(case.reference)
+    assert comparison_species_for(
+        case.expected_species, reference.mass_fractions
+    ) == (
+        "si28",
+        "s32",
+        "ar36",
+        "ca40",
+        "ti44",
+        "cr48",
+        "fe52",
+        "ni56",
+        "s31",
+        "co55",
+    )
+    assert case.required_outputs == (
+        "net_diag01",
+        "ev_tnsn_torch47_1",
+        "ts_tnsn_torch47_1",
+    )
+
+
+def test_torch47_parser_rejects_wrong_species_order() -> None:
+    diagnostic = _fabricated_diagnostic_with_species(TORCH47_SPECIES)
+    states = parse_diagnostic(diagnostic, (1,), TORCH47_SPECIES)
+    assert tuple(states[0].mass_fractions) == TORCH47_SPECIES
+
+    swapped_species = list(TORCH47_SPECIES)
+    swapped_species[0], swapped_species[1] = swapped_species[1], swapped_species[0]
+    swapped_diagnostic = _fabricated_diagnostic_with_species(tuple(swapped_species))
+    with pytest.raises(ParsingFailure, match="unexpected species structure"):
+        parse_diagnostic(swapped_diagnostic, (1,), TORCH47_SPECIES)
+
+
+def test_torch47_reference_rejects_wrong_species_order(tmp_path: Path) -> None:
+    case = tnsn_torch47_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    composition_items = list(document["mass_fractions"].items())
+    composition_items[0], composition_items[1] = (
+        composition_items[1],
+        composition_items[0],
+    )
+    document["mass_fractions"] = dict(composition_items)
+    reference_path = tmp_path / "reordered-reference.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    reference = load_reference(reference_path)
+    with pytest.raises(SetupFailure, match="composition reference does not match"):
+        validate_reference_for_case(case, reference)
+
+
+def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:
+    case = tnsn_torch47_case(REPOSITORY_ROOT)
+    source = case.reference.read_text(encoding="utf-8")
+    co55_policy = """    "co55": {
+      "atol": 5e-12,
+      "rtol": 5e-8
+    }
+"""
+    duplicate = (
+        co55_policy.rstrip()
+        + ',\n    "co55": {"atol": 1.0, "rtol": 1.0}\n'
+    )
+    assert source.count(co55_policy) == 1
+    reference_path = tmp_path / "duplicate-tolerance-reference.json"
+    reference_path.write_text(
+        source.replace(co55_policy, duplicate), encoding="utf-8"
+    )
+
+    with pytest.raises(SetupFailure, match="duplicate JSON object key: co55"):
+        load_reference(reference_path)
+
+
+def test_all_migrated_references_use_comparison_species_policy() -> None:
+    for case in (
+        tnsn_alpha_case(REPOSITORY_ROOT),
+        heat_alpha_case(REPOSITORY_ROOT),
+        tnsn_torch47_case(REPOSITORY_ROOT),
+    ):
+        reference = load_reference(case.reference)
+        expected_selection = comparison_species_for(
+            case.expected_species, reference.mass_fractions
+        )
+        assert all(
+            tuple(reference.mass_fraction_tolerances[zone]) == expected_selection
+            for zone in case.expected_zones
+        )
+
+
+def test_material_species_policy_does_not_require_silicon_products() -> None:
+    cno_species = ("p", "he4", "c12", "n14", "o16", "ne20")
+    mass_fractions = {
+        1: {
+            "p": 1.0e-6,
+            "he4": 5.0e-5,
+            "c12": 0.2,
+            "n14": 0.3,
+            "o16": 0.4,
+            "ne20": 0.099949,
+        }
+    }
+
+    assert comparison_species_for(cno_species, mass_fractions) == (
+        "c12",
+        "n14",
+        "o16",
+        "ne20",
+    )
+
+
+def test_torch47_network_specific_products_gate_comparison() -> None:
+    case = tnsn_torch47_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    fields = reference.fields[1]
+    mass_fractions = dict(reference.mass_fractions[1])
+    mass_fractions["co55"] += 1.0e-4
+    mass_fractions["s31"] -= 1.0e-4
+    state = FinalState(
+        zone=1,
+        step=reference.final_steps[1],
+        target_time=fields["target_time"].value,
+        time=fields["target_time"].value,
+        temperature_gk=fields["temperature_gk"].value,
+        density=fields["density"].value,
+        electron_fraction=fields["electron_fraction"].value,
+        mass_fractions=mass_fractions,
+    )
+
+    with pytest.raises(ComparisonFailure, match="co55 mass fraction"):
+        compare_final_states((state,), reference)
 
 
 def test_duplicate_trajectory_basenames_are_a_setup_failure(tmp_path: Path) -> None:

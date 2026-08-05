@@ -13,7 +13,7 @@ import subprocess
 from typing import Mapping, Sequence
 
 
-SPECIES = (
+ALPHA_SPECIES = (
     "he4",
     "c12",
     "o16",
@@ -29,6 +29,95 @@ SPECIES = (
     "ni56",
     "zn60",
 )
+
+TORCH47_SPECIES = (
+    "n",
+    "p",
+    "d",
+    "t",
+    "he3",
+    "he4",
+    "li7",
+    "be7",
+    "b8",
+    "c12",
+    "c13",
+    "n13",
+    "n14",
+    "n15",
+    "o14",
+    "o15",
+    "o16",
+    "o17",
+    "o18",
+    "f17",
+    "f18",
+    "f19",
+    "ne18",
+    "ne19",
+    "ne20",
+    "na23",
+    "mg23",
+    "mg24",
+    "al27",
+    "si27",
+    "si28",
+    "p30",
+    "p31",
+    "s31",
+    "s32",
+    "cl35",
+    "ar36",
+    "k39",
+    "ca40",
+    "sc43",
+    "ti44",
+    "v47",
+    "cr48",
+    "mn51",
+    "fe52",
+    "co55",
+    "ni56",
+)
+
+# These established products remain comparison anchors for continuity even
+# when one falls below the general material endpoint threshold.
+SILICON_BURNING_COMPARISON_SPECIES = (
+    "si28",
+    "s32",
+    "ar36",
+    "ca40",
+    "ti44",
+    "cr48",
+    "fe52",
+    "ni56",
+)
+MATERIAL_MASS_FRACTION_THRESHOLD = 1.0e-4
+
+
+def comparison_species_for(
+    expected_species: Sequence[str],
+    mass_fractions: Mapping[int, Mapping[str, float]],
+) -> tuple[str, ...]:
+    """Select retained anchors plus every material endpoint abundance."""
+
+    shared_anchors = tuple(
+        species
+        for species in SILICON_BURNING_COMPARISON_SPECIES
+        if species in expected_species
+    )
+    material_products = tuple(
+        species
+        for species in expected_species
+        if max(
+            zone_mass_fractions[species]
+            for zone_mass_fractions in mass_fractions.values()
+        )
+        >= MATERIAL_MASS_FRACTION_THRESHOLD
+        and species not in shared_anchors
+    )
+    return shared_anchors + material_products
+
 
 FLOAT_TOKEN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
 END_RECORD = re.compile(
@@ -162,7 +251,7 @@ def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
         ),
         reference=case_directory / "reference" / "final_state.json",
         expected_zones=tuple(range(1, 11)),
-        expected_species=SPECIES,
+        expected_species=ALPHA_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
     )
 
@@ -184,7 +273,28 @@ def heat_alpha_case(repository_root: Path) -> RegressionCase:
         ),
         reference=case_directory / "reference" / "final_state.json",
         expected_zones=tuple(range(1, 7)),
-        expected_species=SPECIES,
+        expected_species=ALPHA_SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+    )
+
+
+def tnsn_torch47_case(repository_root: Path) -> RegressionCase:
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "tnsn_torch47"
+    )
+    return RegressionCase(
+        name="tnsn_torch47",
+        control=case_directory / "control",
+        network_data=repository_root / "test" / "Data_torch47",
+        trajectories=(
+            repository_root / "test" / "Test_Problems" / "th_sn1aflame",
+        ),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=(1,),
+        expected_species=TORCH47_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
     )
 
@@ -421,7 +531,7 @@ def _as_finite_float(token: str, context: str) -> float:
 def parse_diagnostic(
     text: str,
     expected_zones: Sequence[int],
-    expected_species: Sequence[str] = SPECIES,
+    expected_species: Sequence[str],
 ) -> tuple[FinalState, ...]:
     """Parse complete final-state records while deliberately excluding timers."""
 
@@ -616,13 +726,26 @@ def _load_tolerance_bounds(
     }
 
 
+def _unique_json_object(pairs: Sequence[tuple[str, object]]) -> dict[str, object]:
+    document: dict[str, object] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        document[key] = value
+    return document
+
+
 def load_reference(path: Path) -> CharacterizationReference:
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = json.loads(
+            path.read_text(encoding="utf-8"), object_pairs_hook=_unique_json_object
+        )
     except OSError as error:
         raise SetupFailure(f"could not read characterization reference {path}: {error}") from error
     except json.JSONDecodeError as error:
         raise SetupFailure(f"malformed characterization reference {path}: {error}") from error
+    except ValueError as error:
+        raise SetupFailure(f"invalid characterization reference {path}: {error}") from error
 
     try:
         zone_items = document["expected_zones"]
@@ -716,6 +839,36 @@ def load_reference(path: Path) -> CharacterizationReference:
         mass_fraction_tolerances=mass_fraction_tolerances,
         mass_fraction_sum_atols=mass_fraction_sum_atols,
     )
+
+
+def validate_reference_for_case(
+    case: RegressionCase, reference: CharacterizationReference
+) -> None:
+    """Require one reference to match its case and the shared selection policy."""
+
+    if reference.expected_zones != case.expected_zones:
+        raise SetupFailure(
+            "reference expected_zones does not match the case definition: "
+            f"{reference.expected_zones} != {case.expected_zones}"
+        )
+    for zone in case.expected_zones:
+        if tuple(reference.mass_fractions[zone]) != case.expected_species:
+            raise SetupFailure(
+                "composition reference does not match the case species for "
+                f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
+                f"!= {case.expected_species}"
+            )
+    comparison_species = comparison_species_for(
+        case.expected_species, reference.mass_fractions
+    )
+    for zone in case.expected_zones:
+        selected_species = tuple(reference.mass_fraction_tolerances[zone])
+        if selected_species != comparison_species:
+            raise SetupFailure(
+                "reference pass/fail species do not match the shared "
+                f"composition policy for zone {zone}: "
+                f"{selected_species} != {comparison_species}"
+            )
 
 
 def _difference(actual: float, reference: Tolerance) -> tuple[bool, float, float]:
@@ -873,26 +1026,7 @@ def run_and_compare(
             diagnostic, case.expected_zones, case.expected_species
         )
         reference = load_reference(case.reference)
-        if reference.expected_zones != case.expected_zones:
-            raise SetupFailure(
-                "reference expected_zones does not match the case definition: "
-                f"{reference.expected_zones} != {case.expected_zones}"
-            )
-        unknown_reference_species = set(
-            reference.mass_fraction_tolerances[case.expected_zones[0]]
-        ).difference(case.expected_species)
-        if unknown_reference_species:
-            raise SetupFailure(
-                "reference selects species absent from the case definition: "
-                + ", ".join(sorted(unknown_reference_species))
-            )
-        for zone in case.expected_zones:
-            if tuple(reference.mass_fractions[zone]) != case.expected_species:
-                raise SetupFailure(
-                    "composition reference does not match the case species for "
-                    f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
-                    f"!= {case.expected_species}"
-                )
+        validate_reference_for_case(case, reference)
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics)
         compare_final_states(states, reference)

@@ -6,16 +6,24 @@ from pathlib import Path
 
 import pytest
 
-from xnet_regression import RegressionFailure, run_and_compare, tnsn_alpha_case
+from xnet_regression import (
+    RegressionCase,
+    RegressionFailure,
+    heat_alpha_case,
+    run_and_compare,
+    tnsn_alpha_case,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_tnsn_alpha(
-    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+def _run_case(
+    xnet_executable: Path,
+    xnet_timeout: float,
+    tmp_path: Path,
+    case: RegressionCase,
 ) -> None:
-    case = tnsn_alpha_case(REPOSITORY_ROOT)
     work_directory = tmp_path / case.name
     try:
         run_and_compare(
@@ -37,7 +45,9 @@ def test_tnsn_alpha(
     assert diagnostics["vector"] == (
         "absolute mass-fraction errors for every species in the case"
     )
-    assert [zone["zone"] for zone in diagnostics["zones"]] == list(range(1, 11))
+    assert [zone["zone"] for zone in diagnostics["zones"]] == list(
+        case.expected_zones
+    )
     for zone in diagnostics["zones"]:
         assert set(zone) == {"zone", "l1", "l2", "linf", "linf_species"}
         assert all(math.isfinite(zone[name]) for name in ("l1", "l2", "linf"))
@@ -45,3 +55,24 @@ def test_tnsn_alpha(
         assert zone["linf_species"] is None or isinstance(
             zone["linf_species"], str
         )
+
+def test_tnsn_alpha(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    _run_case(
+        xnet_executable,
+        xnet_timeout,
+        tmp_path,
+        tnsn_alpha_case(REPOSITORY_ROOT),
+    )
+
+
+def test_heat_alpha(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    _run_case(
+        xnet_executable,
+        xnet_timeout,
+        tmp_path,
+        heat_alpha_case(REPOSITORY_ROOT),
+    )

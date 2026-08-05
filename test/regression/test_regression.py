@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from xnet_regression import (
+    bdf_sn160_case,
     RegressionCase,
     RegressionFailure,
     heat_alpha_case,
@@ -88,6 +89,17 @@ def test_heat_sn160(
         xnet_timeout,
         tmp_path,
         heat_sn160_case(REPOSITORY_ROOT),
+    )
+
+
+def test_bdf_sn160(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    _run_case(
+        xnet_executable,
+        xnet_timeout,
+        tmp_path,
+        bdf_sn160_case(REPOSITORY_ROOT),
     )
 
 

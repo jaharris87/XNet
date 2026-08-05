@@ -12,6 +12,7 @@ import pytest
 
 from xnet_regression import (
     ALPHA_SPECIES,
+    bdf_sn160_case,
     CharacterizationReference,
     CompositionNorms,
     ComparisonFailure,
@@ -33,6 +34,7 @@ from xnet_regression import (
     load_reference,
     parse_diagnostic,
     prepare_work_directory,
+    run_and_compare,
     run_xnet,
     strip_timer_sections,
     tnsn_alpha_case,
@@ -425,12 +427,39 @@ def test_final_step_is_diagnostic_only() -> None:
     )
 
 
+def test_solver_counters_are_diagnostic_only() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+
+    compare_final_states(
+        (replace(state, counters=SolverCounters(142, 143, 144, 145, 146)),),
+        _matching_unit_reference(),
+    )
+
+
 def test_achieved_time_must_reach_target_time() -> None:
     state = parse_diagnostic(
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
     )[0]
     with pytest.raises(ComparisonFailure, match="did not reach target time"):
         compare_final_states((replace(state, time=1.9),), _matching_unit_reference())
+
+
+def test_characterized_achieved_time_does_not_compound_target_tolerance() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    fields = {1: dict(reference.fields[1])}
+    fields[1]["target_time"] = Tolerance(2.0, atol=0.1, rtol=0.0)
+    fields[1]["achieved_time"] = Tolerance(2.0, atol=0.1, rtol=0.0)
+
+    with pytest.raises(ComparisonFailure, match="achieved_time"):
+        compare_final_states(
+            (replace(state, target_time=2.075, time=2.15),),
+            replace(reference, fields=fields),
+        )
 
 
 def test_composition_norms_are_diagnostic_only() -> None:
@@ -471,13 +500,24 @@ def test_malformed_output_is_a_parsing_failure() -> None:
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
-def test_end_and_counter_steps_must_agree() -> None:
+def test_counter_zone_must_agree_with_end_zone() -> None:
     diagnostic = _fabricated_final_diagnostic().replace(
-        "1        42        42", "1        43        42"
+        "1        42        42", "2        42        42"
     )
 
     with pytest.raises(ParsingFailure, match="does not match its End record"):
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
+
+
+def test_parser_accepts_distinct_end_step_and_ts_counter() -> None:
+    diagnostic = _fabricated_final_diagnostic().replace(
+        "1        42        42", "1        43        42"
+    )
+
+    state = parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)[0]
+
+    assert state.step == 42
+    assert state.counters.ts == 43
 
 
 def test_parser_preserves_source_labeled_solver_counters() -> None:
@@ -497,6 +537,24 @@ def test_parser_preserves_source_labeled_solver_counters() -> None:
 def test_parser_requires_exact_counter_heading() -> None:
     diagnostic = _fabricated_final_diagnostic().replace("CrossSect", "Rates")
     with pytest.raises(ParsingFailure, match="missing Counters record"):
+        parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "              1        42        42        42        43",
+        "              1        42        42        42        43 malformed",
+        "              1        42        42        42        -1        43",
+    ],
+)
+def test_parser_rejects_malformed_counter_rows(replacement: str) -> None:
+    diagnostic = _fabricated_final_diagnostic().replace(
+        "              1        42        42        42        43        43",
+        replacement,
+    )
+
+    with pytest.raises(ParsingFailure, match="malformed counter values"):
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
 
 
@@ -701,6 +759,7 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
         .splitlines()
         if line.strip()
     )
+
     assert len(case.expected_species) == 47
     assert case.expected_species == TORCH47_SPECIES == sunet_species
     assert len(set(case.expected_species)) == len(case.expected_species)
@@ -766,6 +825,253 @@ def test_sn160_definition_is_complete_and_stages_only_source_inputs(
         "ev_heat_sn160_6",
         "ts_heat_sn160_6",
     )
+
+
+def test_bdf_sn160_definition_reuses_isolated_sn160_staging(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "work")
+    local_network = work_directory / "Data_SN160"
+
+    assert case.expected_species == SN160_SPECIES
+    assert {path.name for path in local_network.iterdir()} == set(
+        case.network_inputs
+    )
+    assert all((local_network / name).is_symlink() for name in case.network_inputs)
+    assert case.required_outputs == (
+        "net_diag01",
+        "ev_bdf_sn160_1",
+        "ts_bdf_sn160_1",
+        "ev_bdf_sn160_2",
+        "ts_bdf_sn160_2",
+        "ev_bdf_sn160_3",
+        "ts_bdf_sn160_3",
+        "ev_bdf_sn160_4",
+        "ts_bdf_sn160_4",
+        "ev_bdf_sn160_5",
+        "ts_bdf_sn160_5",
+        "ev_bdf_sn160_6",
+        "ts_bdf_sn160_6",
+    )
+
+
+def test_bdf_control_is_the_normalized_legacy_id_54_concatenation() -> None:
+    settings = (REPOSITORY_ROOT / "test/test_settings_bdf").read_text(
+        encoding="utf-8"
+    )
+    setup = (REPOSITORY_ROOT / "test/Test_Problems/setup_bdf_sn160").read_text(
+        encoding="utf-8"
+    )
+    normalized = "\n".join(
+        line.rstrip() for line in (settings + setup).splitlines()
+    ) + "\n"
+    normalized = normalized.replace("Test_Results/", "")
+    normalized = normalized.replace("Test_Problems/", "")
+    normalized = normalized.replace(
+        "4         Blocking size for zone loop",
+        "1         Blocking size for zone loop",
+    )
+
+    assert bdf_sn160_case(REPOSITORY_ROOT).control.read_text(
+        encoding="utf-8"
+    ) == normalized
+
+
+def test_bdf_reference_records_end_steps_and_all_solver_counter_fields() -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+
+    assert tuple(reference.final_steps) == case.expected_zones
+    assert reference.solver_counters is not None
+    assert tuple(reference.solver_counters) == case.expected_zones
+    assert any(
+        reference.solver_counters[zone].ts != reference.final_steps[zone]
+        for zone in case.expected_zones
+    )
+
+
+def test_bdf_reference_rejects_incomplete_solver_counters(tmp_path: Path) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["solver_counters"].pop("cross_section")
+    reference_path = tmp_path / "incomplete-bdf-counters.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="solver_counters must contain exactly"):
+        load_reference(reference_path)
+
+
+def test_bdf_run_rejects_missing_solver_counters_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document.pop("solver_counters")
+    reference_path = tmp_path / "missing-bdf-counters.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="solver_counters is required"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+@pytest.mark.parametrize(
+    "metadata_name",
+    ["build", "legacy_provenance", "input_sha256", "python"],
+)
+def test_bdf_reference_rejects_missing_required_metadata(
+    tmp_path: Path, metadata_name: str
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document.pop(metadata_name)
+    reference_path = tmp_path / f"missing-{metadata_name}.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="reference"):
+        load_reference(reference_path)
+
+
+def test_bdf_run_rejects_stale_input_hash_before_execution(tmp_path: Path) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    control_label = "test/regression/cases/bdf_sn160/control"
+    document["input_sha256"][control_label] = "0" * 64
+    reference_path = tmp_path / "stale-input-hash.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="reference input hash does not match"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+def test_bdf_run_rejects_negative_reference_abundance_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["mass_fractions"]["n"]["1"] = -1.0e-30
+    reference_path = tmp_path / "negative-reference-abundance.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="mass_fractions contains negative"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+def test_bdf_run_rejects_missing_reference_schema_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document.pop("reference_schema")
+    reference_path = tmp_path / "missing-reference-schema.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="reference schema does not match"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+def test_bdf_run_rejects_mismatched_solver_provenance_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document["legacy_provenance"]["maintained_solver"] = "Bader-Deuflhard"
+    reference_path = tmp_path / "wrong-solver-provenance.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="solver provenance does not match"):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
+@pytest.mark.parametrize(
+    ("metadata_path", "replacement"),
+    [
+        (
+            ("baseline_status",),
+            "characterization-only; independently validated scientific truth",
+        ),
+        (("generated_from_revision",), "0" * 40),
+        (("generated_on",), "2026-08-04"),
+        (("platform",), "contradictory platform"),
+        (("compiler",), "contradictory compiler"),
+        (("python",), "Python 0.0.0"),
+        (("pytest",), "pytest 0.0.0"),
+        (("build", "CMODE"), "DEBUG"),
+        (
+            ("legacy_provenance", "assembly"),
+            ["test/test_settings_bdf", "test/Test_Problems/setup_heat_sn160"],
+        ),
+        (
+            ("legacy_provenance", "normalized_changes"),
+            ["contradictory normalization claim"],
+        ),
+    ],
+)
+def test_bdf_run_rejects_contradictory_characterization_metadata_before_execution(
+    tmp_path: Path, metadata_path: tuple[str, ...], replacement: object
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    target = document
+    for name in metadata_path[:-1]:
+        target = target[name]
+    target[metadata_path[-1]] = replacement
+    reference_path = tmp_path / "contradictory-metadata.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+    executable = _make_executable(tmp_path, "raise SystemExit(99)")
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(
+        SetupFailure,
+        match="characterization metadata does not match the case definition",
+    ):
+        run_and_compare(
+            executable,
+            replace(case, reference=reference_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
 
 
 def test_case_rejects_sunet_species_mismatch(tmp_path: Path) -> None:
@@ -856,6 +1162,36 @@ def test_reference_rejects_wrong_case_association(tmp_path: Path) -> None:
         validate_reference_for_case(case, reference)
 
 
+@pytest.mark.parametrize(
+    ("case_factory", "wrong_reference_factory"),
+    [
+        (heat_sn160_case, bdf_sn160_case),
+        (bdf_sn160_case, heat_sn160_case),
+    ],
+)
+def test_sn160_references_cannot_be_swapped(
+    tmp_path: Path, case_factory, wrong_reference_factory
+) -> None:
+    case = replace(
+        case_factory(REPOSITORY_ROOT),
+        reference=wrong_reference_factory(REPOSITORY_ROOT).reference,
+    )
+    executable = _make_executable(
+        tmp_path,
+        "from pathlib import Path\nPath('executed').write_text('unexpected')",
+    )
+    work_directory = tmp_path / "work"
+
+    with pytest.raises(SetupFailure, match="reference case does not match"):
+        run_and_compare(
+            executable,
+            case,
+            work_directory,
+            timeout_seconds=2.0,
+        )
+    assert not work_directory.exists()
+
+
 def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:
     case = tnsn_torch47_case(REPOSITORY_ROOT)
     source = case.reference.read_text(encoding="utf-8")
@@ -884,6 +1220,7 @@ def test_all_migrated_references_use_per_zone_comparison_species_policy() -> Non
         heat_alpha_case(REPOSITORY_ROOT),
         tnsn_torch47_case(REPOSITORY_ROOT),
         heat_sn160_case(REPOSITORY_ROOT),
+        bdf_sn160_case(REPOSITORY_ROOT),
     ):
         reference = load_reference(case.reference)
         for zone in case.expected_zones:

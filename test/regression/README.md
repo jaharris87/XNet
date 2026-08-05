@@ -256,7 +256,7 @@ outputs totaled 14,470,756 and 1,757,702 bytes respectively. Torch47 remains
 well inside the unchanged 30-second timeout and is suitable for the fast local
 suite on this configuration.
 
-The focused helper command passed 34 tests, and the complete suite passed 37:
+The focused helper command passed 36 tests, and the complete suite passed 39:
 
 ```bash
 python -m pytest -q test/regression/test_xnet_regression.py

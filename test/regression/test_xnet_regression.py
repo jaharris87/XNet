@@ -33,6 +33,7 @@ from xnet_regression import (
     strip_timer_sections,
     tnsn_alpha_case,
     tnsn_torch47_case,
+    validate_reference_for_case,
     validate_executable,
 )
 
@@ -55,6 +56,26 @@ Timers Summary:
         Total      {timer_total}
         Solver     2.000E-03
 """
+
+
+def _fabricated_diagnostic_with_species(species: tuple[str, ...]) -> str:
+    lines = _fabricated_final_diagnostic().splitlines()
+    abundance_start = next(
+        index for index, line in enumerate(lines) if line.startswith("End")
+    ) + 1
+    abundance_end = next(
+        index for index, line in enumerate(lines) if line.startswith("Counters:")
+    )
+    abundance_rows = [
+        " ".join(
+            f"{name:>5} {1.0 / len(species):.7E}"
+            for name in species[index : index + 4]
+        )
+        for index in range(0, len(species), 4)
+    ]
+    return "\n".join(
+        lines[:abundance_start] + abundance_rows + lines[abundance_end:]
+    )
 
 
 def _matching_unit_reference() -> CharacterizationReference:
@@ -522,6 +543,35 @@ def test_torch47_definition_is_case_driven_and_stages_only_source_inputs(
         "ev_tnsn_torch47_1",
         "ts_tnsn_torch47_1",
     )
+
+
+def test_torch47_parser_rejects_wrong_species_order() -> None:
+    diagnostic = _fabricated_diagnostic_with_species(TORCH47_SPECIES)
+    states = parse_diagnostic(diagnostic, (1,), TORCH47_SPECIES)
+    assert tuple(states[0].mass_fractions) == TORCH47_SPECIES
+
+    swapped_species = list(TORCH47_SPECIES)
+    swapped_species[0], swapped_species[1] = swapped_species[1], swapped_species[0]
+    swapped_diagnostic = _fabricated_diagnostic_with_species(tuple(swapped_species))
+    with pytest.raises(ParsingFailure, match="unexpected species structure"):
+        parse_diagnostic(swapped_diagnostic, (1,), TORCH47_SPECIES)
+
+
+def test_torch47_reference_rejects_wrong_species_order(tmp_path: Path) -> None:
+    case = tnsn_torch47_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    composition_items = list(document["mass_fractions"].items())
+    composition_items[0], composition_items[1] = (
+        composition_items[1],
+        composition_items[0],
+    )
+    document["mass_fractions"] = dict(composition_items)
+    reference_path = tmp_path / "reordered-reference.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    reference = load_reference(reference_path)
+    with pytest.raises(SetupFailure, match="composition reference does not match"):
+        validate_reference_for_case(case, reference)
 
 
 def test_all_migrated_references_use_shared_comparison_species_policy() -> None:

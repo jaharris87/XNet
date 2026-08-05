@@ -814,6 +814,33 @@ def load_reference(path: Path) -> CharacterizationReference:
     )
 
 
+def validate_reference_for_case(
+    case: RegressionCase, reference: CharacterizationReference
+) -> None:
+    """Require one reference to match its case and the shared selection policy."""
+
+    if reference.expected_zones != case.expected_zones:
+        raise SetupFailure(
+            "reference expected_zones does not match the case definition: "
+            f"{reference.expected_zones} != {case.expected_zones}"
+        )
+    comparison_species = comparison_species_for(case.expected_species)
+    for zone in case.expected_zones:
+        if tuple(reference.mass_fractions[zone]) != case.expected_species:
+            raise SetupFailure(
+                "composition reference does not match the case species for "
+                f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
+                f"!= {case.expected_species}"
+            )
+        selected_species = tuple(reference.mass_fraction_tolerances[zone])
+        if selected_species != comparison_species:
+            raise SetupFailure(
+                "reference pass/fail species do not match the shared "
+                f"silicon-burning policy for zone {zone}: "
+                f"{selected_species} != {comparison_species}"
+            )
+
+
 def _difference(actual: float, reference: Tolerance) -> tuple[bool, float, float]:
     absolute_difference = abs(actual - reference.value)
     allowed = reference.atol + reference.rtol * abs(reference.value)
@@ -969,26 +996,7 @@ def run_and_compare(
             diagnostic, case.expected_zones, case.expected_species
         )
         reference = load_reference(case.reference)
-        if reference.expected_zones != case.expected_zones:
-            raise SetupFailure(
-                "reference expected_zones does not match the case definition: "
-                f"{reference.expected_zones} != {case.expected_zones}"
-            )
-        comparison_species = comparison_species_for(case.expected_species)
-        for zone in case.expected_zones:
-            if tuple(reference.mass_fractions[zone]) != case.expected_species:
-                raise SetupFailure(
-                    "composition reference does not match the case species for "
-                    f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
-                    f"!= {case.expected_species}"
-                )
-            selected_species = tuple(reference.mass_fraction_tolerances[zone])
-            if selected_species != comparison_species:
-                raise SetupFailure(
-                    "reference pass/fail species do not match the shared "
-                    f"silicon-burning policy for zone {zone}: "
-                    f"{selected_species} != {comparison_species}"
-                )
+        validate_reference_for_case(case, reference)
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics)
         compare_final_states(states, reference)

@@ -588,7 +588,10 @@ def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:
       "rtol": 5e-8
     }
 """
-    duplicate = '    "co55": {"atol": 1.0, "rtol": 1.0},\n' + co55_policy
+    duplicate = (
+        co55_policy.rstrip()
+        + ',\n    "co55": {"atol": 1.0, "rtol": 1.0}\n'
+    )
     assert source.count(co55_policy) == 1
     reference_path = tmp_path / "duplicate-tolerance-reference.json"
     reference_path.write_text(

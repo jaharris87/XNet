@@ -34,10 +34,13 @@ The pilot enforces a 30-second process timeout. Use
 ## Isolated execution and artifacts
 
 pytest supplies a new empty temporary directory. The runner copies the
-complete `control` input into it and creates absolute symlinks to the tracked
-`test/Data_alpha` directory, trajectory, and Helmholtz EOS table. XNet runs
-with that directory as its current directory. A nonempty work directory is a
-setup failure, so old diagnostics cannot satisfy a new run.
+complete `control` input into it, creates a local writable `Data_alpha`
+directory containing absolute symlinks to only the five tracked source inputs
+(`sunet`, `netsu`, `netweak`, `netwinv`, and `ab_co`), and symlinks the
+trajectory and Helmholtz EOS table. XNet runs with that directory as its
+current directory. Network-preprocessing products therefore stay inside the
+temporary directory rather than mutating `test/Data_alpha`. A nonempty work
+directory is a setup failure, so old diagnostics cannot satisfy a new run.
 
 Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`, and
 `xnet.status.txt` beside the XNet outputs. Failure messages give the work
@@ -99,9 +102,11 @@ input paths. Normal tests only read this file and never create or replace it.
 
 The parser requires ordered final records and matching counters for zones
 1--10, the complete 14-species structure, one delimited timer section per
-zone, and finite values. It rejects negative mass fractions and requires the
-printed mass fractions to sum to one within `1e-6`, matching the control
-file's mass-conservation limit while allowing diagnostic rounding.
+zone, and finite values. It rejects negative mass fractions and uses
+`|sum(X)-1| <= 2.1e-8` as a coarse structural normalization check. That bound
+is the sum of the half-last-place rounding bounds for the 14 printed baseline
+values. It is not derived from XNet's per-step Newton mass-convergence control
+and is not claimed as a scientific-validation threshold.
 
 The numerical comparison requires the exact final step and compares final
 time, trajectory time, temperature, density, electron fraction, and the eight

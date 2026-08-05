@@ -73,6 +73,7 @@ class RegressionCase:
     reference: Path
     expected_zones: tuple[int, ...]
     expected_species: tuple[str, ...]
+    network_inputs: tuple[str, ...]
 
     @property
     def required_outputs(self) -> tuple[str, ...]:
@@ -137,6 +138,7 @@ def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
         reference=case_directory / "reference" / "final_state.json",
         expected_zones=tuple(range(1, 11)),
         expected_species=SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
     )
 
 
@@ -170,6 +172,22 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         case.expected_species
     ):
         raise SetupFailure(f"invalid expected species definition for {case.name}")
+    if (
+        not case.network_inputs
+        or len(set(case.network_inputs)) != len(case.network_inputs)
+        or any(Path(filename).name != filename for filename in case.network_inputs)
+    ):
+        raise SetupFailure(f"invalid network input definition for {case.name}")
+    missing_network_inputs = [
+        case.network_data / filename
+        for filename in case.network_inputs
+        if not (case.network_data / filename).is_file()
+    ]
+    if missing_network_inputs:
+        raise SetupFailure(
+            "required network source input is missing:\n  "
+            + "\n  ".join(str(path) for path in missing_network_inputs)
+        )
 
 
 def prepare_work_directory(case: RegressionCase, work_directory: Path) -> Path:
@@ -189,9 +207,12 @@ def prepare_work_directory(case: RegressionCase, work_directory: Path) -> Path:
             work_directory.mkdir(parents=True)
 
         shutil.copy2(case.control, work_directory / "control")
-        (work_directory / case.network_data.name).symlink_to(
-            case.network_data.resolve(), target_is_directory=True
-        )
+        local_network_data = work_directory / case.network_data.name
+        local_network_data.mkdir()
+        for filename in case.network_inputs:
+            (local_network_data / filename).symlink_to(
+                (case.network_data / filename).resolve()
+            )
         (work_directory / case.trajectory.name).symlink_to(case.trajectory.resolve())
         (work_directory / case.helm_table.name).symlink_to(case.helm_table.resolve())
     except RegressionFailure:

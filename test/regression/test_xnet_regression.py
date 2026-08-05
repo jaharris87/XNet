@@ -78,6 +78,7 @@ def _fake_case(tmp_path: Path) -> RegressionCase:
         reference=tmp_path / "unused-reference",
         expected_zones=(1,),
         expected_species=("he4",),
+        network_inputs=("sunet",),
     )
 
 
@@ -224,6 +225,20 @@ def test_nonempty_work_directory_is_a_setup_failure(tmp_path: Path) -> None:
     (work_directory / "net_diag01").write_text("stale", encoding="utf-8")
     with pytest.raises(SetupFailure, match="refusing stale artifacts"):
         prepare_work_directory(tnsn_alpha_case(REPOSITORY_ROOT), work_directory)
+
+
+def test_network_preprocessing_outputs_stay_in_work_directory(tmp_path: Path) -> None:
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "work")
+    local_network = work_directory / "Data_alpha"
+    assert local_network.is_dir()
+    assert not local_network.is_symlink()
+    assert {path.name for path in local_network.iterdir()} == set(case.network_inputs)
+    assert all((local_network / name).is_symlink() for name in case.network_inputs)
+
+    generated = local_network / "nets3"
+    generated.write_bytes(b"generated locally")
+    assert generated.is_file()
 
 
 def test_missing_case_input_is_a_setup_failure(tmp_path: Path) -> None:

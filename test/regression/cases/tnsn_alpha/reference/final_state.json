@@ -94,5 +94,5 @@
       "rtol": 5e-8
     }
   },
-  "mass_fraction_sum_atol": 1e-6
+  "mass_fraction_sum_atol": 2.1e-8
 }

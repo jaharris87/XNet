@@ -102,6 +102,12 @@ For a defect fix, identify or add evidence that distinguishes faulty behavior
 from corrected behavior. Prefer demonstrating the pre-fix failure when
 practical. See `scientific-validation.md` for numerical and physics changes.
 
+Successful implementation and local verification are not a terminal state for
+work intended for merge. Continue through self-review, commit, push, draft PR,
+independent review, findings disposition, and maintainer handoff unless the
+maintainer explicitly requested local-only work or a documented blocker
+prevents progress. Report any such blocker with the incomplete handoff.
+
 ## Self-review before the PR
 
 Review the complete diff against the governing issue:
@@ -116,13 +122,20 @@ Review the complete diff against the governing issue:
   and performance effects;
 - align the summary with the evidence actually collected.
 
-Self-review prepares the change for independent review.
+Local self-review may occur before a PR exists and prepares the change to be
+committed and pushed as the review candidate.
 
-## Opening the PR
+## Committing and pushing the review candidate
 
-Open the feature PR against `development` and reference the governing issue in
-the PR description. Use the issue number or URL so the PR record remains
-traceable. A **Development** sidebar link is optional. Record:
+After self-review, commit the complete review candidate and push the feature
+branch. The pushed commit provides the exact candidate for the draft PR and
+independent review.
+
+## Opening the draft PR
+
+Open a draft feature PR targeting `development` and reference the governing
+issue in the PR description. Use the issue number or URL so the PR record
+remains traceable. A **Development** sidebar link is optional. Record:
 
 - the problem and implemented change;
 - explicit non-goals and deferred work;
@@ -139,6 +152,12 @@ Keep claims proportional to the recorded evidence.
 
 ## Independent adversarial review
 
+Do not begin independent review until the draft PR exists, targets
+`development`, and the review candidate is committed and pushed. The reviewer
+brief or review record must identify the PR and exact candidate commit. The
+open PR state is the review source of record; a local diff may supplement it
+but does not replace it.
+
 Use a fresh-context reviewer agent for each review role activated by the issue
 or maintainer. Select roles from the actual risks of the change. The role set
 can evolve as recurring XNet work establishes useful specialties.
@@ -146,7 +165,8 @@ can evolve as recurring XNet work establishes useful specialties.
 Provide each reviewer with:
 
 - the governing issue and acceptance criteria;
-- the complete diff or PR state;
+- the draft PR and exact pushed candidate commit;
+- any supplementary local diff needed to clarify the open PR state;
 - relevant current documentation;
 - build, test, numerical, and performance evidence.
 
@@ -190,9 +210,10 @@ Post a disposition summary after each substantive review round. Include
 non-blocking findings in the summary when they affect future maintenance or
 scientific understanding.
 
-Repeat independent review after substantive fixes when the changes can
-introduce new defects or materially change the reviewed solution. Review is
-complete when:
+Commit and push substantive review fixes. When the changes can introduce new
+defects or materially change the reviewed solution, repeat independent review
+and identify the new pushed commit used for re-review. Review is complete
+when:
 
 - merge-blocking findings are resolved;
 - remaining findings have documented dispositions;

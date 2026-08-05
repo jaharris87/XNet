@@ -13,7 +13,7 @@ import subprocess
 from typing import Mapping, Sequence
 
 
-SPECIES = (
+ALPHA_SPECIES = (
     "he4",
     "c12",
     "o16",
@@ -29,6 +29,81 @@ SPECIES = (
     "ni56",
     "zn60",
 )
+
+TORCH47_SPECIES = (
+    "n",
+    "p",
+    "d",
+    "t",
+    "he3",
+    "he4",
+    "li7",
+    "be7",
+    "b8",
+    "c12",
+    "c13",
+    "n13",
+    "n14",
+    "n15",
+    "o14",
+    "o15",
+    "o16",
+    "o17",
+    "o18",
+    "f17",
+    "f18",
+    "f19",
+    "ne18",
+    "ne19",
+    "ne20",
+    "na23",
+    "mg23",
+    "mg24",
+    "al27",
+    "si27",
+    "si28",
+    "p30",
+    "p31",
+    "s31",
+    "s32",
+    "cl35",
+    "ar36",
+    "k39",
+    "ca40",
+    "sc43",
+    "ti44",
+    "v47",
+    "cr48",
+    "mn51",
+    "fe52",
+    "co55",
+    "ni56",
+)
+
+# These established silicon-burning products determine composition pass/fail
+# in every migrated case where they occur. All other species remain required
+# in the ordered complete vector and visible in diagnostic norms.
+SILICON_BURNING_COMPARISON_SPECIES = (
+    "si28",
+    "s32",
+    "ar36",
+    "ca40",
+    "ti44",
+    "cr48",
+    "fe52",
+    "ni56",
+)
+
+
+def comparison_species_for(expected_species: Sequence[str]) -> tuple[str, ...]:
+    """Apply the shared silicon-burning pass/fail selection policy."""
+
+    return tuple(
+        species
+        for species in SILICON_BURNING_COMPARISON_SPECIES
+        if species in expected_species
+    )
+
 
 FLOAT_TOKEN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
 END_RECORD = re.compile(
@@ -162,7 +237,7 @@ def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
         ),
         reference=case_directory / "reference" / "final_state.json",
         expected_zones=tuple(range(1, 11)),
-        expected_species=SPECIES,
+        expected_species=ALPHA_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
     )
 
@@ -184,7 +259,28 @@ def heat_alpha_case(repository_root: Path) -> RegressionCase:
         ),
         reference=case_directory / "reference" / "final_state.json",
         expected_zones=tuple(range(1, 7)),
-        expected_species=SPECIES,
+        expected_species=ALPHA_SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+    )
+
+
+def tnsn_torch47_case(repository_root: Path) -> RegressionCase:
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "tnsn_torch47"
+    )
+    return RegressionCase(
+        name="tnsn_torch47",
+        control=case_directory / "control",
+        network_data=repository_root / "test" / "Data_torch47",
+        trajectories=(
+            repository_root / "test" / "Test_Problems" / "th_sn1aflame",
+        ),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=(1,),
+        expected_species=TORCH47_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
     )
 
@@ -421,7 +517,7 @@ def _as_finite_float(token: str, context: str) -> float:
 def parse_diagnostic(
     text: str,
     expected_zones: Sequence[int],
-    expected_species: Sequence[str] = SPECIES,
+    expected_species: Sequence[str],
 ) -> tuple[FinalState, ...]:
     """Parse complete final-state records while deliberately excluding timers."""
 
@@ -878,20 +974,20 @@ def run_and_compare(
                 "reference expected_zones does not match the case definition: "
                 f"{reference.expected_zones} != {case.expected_zones}"
             )
-        unknown_reference_species = set(
-            reference.mass_fraction_tolerances[case.expected_zones[0]]
-        ).difference(case.expected_species)
-        if unknown_reference_species:
-            raise SetupFailure(
-                "reference selects species absent from the case definition: "
-                + ", ".join(sorted(unknown_reference_species))
-            )
+        comparison_species = comparison_species_for(case.expected_species)
         for zone in case.expected_zones:
             if tuple(reference.mass_fractions[zone]) != case.expected_species:
                 raise SetupFailure(
                     "composition reference does not match the case species for "
                     f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
                     f"!= {case.expected_species}"
+                )
+            selected_species = tuple(reference.mass_fraction_tolerances[zone])
+            if selected_species != comparison_species:
+                raise SetupFailure(
+                    "reference pass/fail species do not match the shared "
+                    f"silicon-burning policy for zone {zone}: "
+                    f"{selected_species} != {comparison_species}"
                 )
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics)

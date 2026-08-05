@@ -279,6 +279,15 @@ def test_final_step_outside_tolerance_fails() -> None:
         compare_final_states((replace(state, step=45),), _matching_unit_reference())
 
 
+def test_diagnostic_only_final_step_does_not_fail() -> None:
+    state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
+    reference = replace(
+        _matching_unit_reference(), final_step_atols={1: None}
+    )
+
+    compare_final_states((replace(state, step=142),), reference)
+
+
 def test_achieved_time_must_reach_target_time() -> None:
     state = parse_diagnostic(_fabricated_final_diagnostic(), (1,))[0]
     with pytest.raises(ComparisonFailure, match="did not reach target time"):

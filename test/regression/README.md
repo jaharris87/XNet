@@ -134,14 +134,17 @@ that zone's 14 printed baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
-The numerical comparison records the characterized final step count.
-`tnsn_alpha` records 2841 for every zone and preserves its allowed difference
-of two steps from PR #11. `heat_alpha` records zone-specific counts of 654,
-600, 553, 534, 532, and 540 and requires exact counts: four isolated
-same-configuration runs were identical, and no evidence supports a nonzero
-allowance for this case. A step mismatch reports the actual, reference,
-difference, and allowed count. The parser independently requires each zone's
-`End` and `Counters` records to agree on the actual step count.
+Each reference records the characterized final step count. `tnsn_alpha`
+records 2841 for every zone and preserves its allowed difference of two steps
+from PR #11. `heat_alpha` records zone-specific counts of 654, 600, 553, 534,
+532, and 540 as diagnostic-only values: its JSON `final_step_atol` is `null`,
+so a difference from those reference counts does not affect pass/fail.
+Accepted-step count can vary when compiler, library, architecture,
+optimization, or floating-point rounding changes which tolerance-dependent
+convergence path is taken. Four identical same-configuration runs do not
+justify either exact equality or a portable nonzero bound. The parser still
+requires each zone's `End` and `Counters` records to agree on the actual step
+count, while completion and selected endpoint values remain required.
 
 The first two values in an `End` record are distinct: the first is the
 requested target time (`tstop` in XNet), and the second is the achieved

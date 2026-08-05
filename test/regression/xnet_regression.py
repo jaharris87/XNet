@@ -131,7 +131,8 @@ class CharacterizationReference:
 
     expected_zones: tuple[int, ...]
     final_steps: Mapping[int, int]
-    final_step_atols: Mapping[int, int]
+    # None records step count as diagnostic-only for that zone.
+    final_step_atols: Mapping[int, int | None]
     fields: Mapping[int, Mapping[str, Tolerance]]
     # The complete vector supplies expected values and norm diagnostics.
     mass_fractions: Mapping[int, Mapping[str, float]]
@@ -582,6 +583,29 @@ def _load_zone_integers(
     return {zone: int(value) for zone, value in values.items()}
 
 
+def _load_final_step_atols(
+    item: object, expected_zones: Sequence[int]
+) -> Mapping[int, int | None]:
+    values = _expand_zone_items(item, expected_zones, "final_step_atol")
+    if not all(
+        value is None
+        or (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and value >= 0
+        )
+        for value in values.values()
+    ):
+        raise SetupFailure(
+            "reference entry final_step_atol must contain nonnegative integers "
+            "or null for diagnostic-only step counts"
+        )
+    return {
+        zone: None if value is None else int(value)
+        for zone, value in values.items()
+    }
+
+
 def _load_tolerance(
     item: object, expected_zones: Sequence[int], context: str
 ) -> Mapping[int, Tolerance]:
@@ -638,8 +662,8 @@ def load_reference(path: Path) -> CharacterizationReference:
         final_steps = _load_zone_integers(
             document["final_step"], expected_zones, "final_step"
         )
-        final_step_atols = _load_zone_integers(
-            document["final_step_atol"], expected_zones, "final_step_atol"
+        final_step_atols = _load_final_step_atols(
+            document["final_step_atol"], expected_zones
         )
         fields_by_name = {
             name: _load_tolerance(item, expected_zones, f"fields.{name}")
@@ -795,13 +819,14 @@ def compare_final_states(
             continue
         expected_step = reference.final_steps[state.zone]
         step_atol = reference.final_step_atols[state.zone]
-        step_difference = abs(state.step - expected_step)
-        if step_difference > step_atol:
-            failures.append(
-                f"zone {state.zone} final step {state.step}: "
-                f"reference={expected_step}, difference={step_difference}, "
-                f"allowed={step_atol}"
-            )
+        if step_atol is not None:
+            step_difference = abs(state.step - expected_step)
+            if step_difference > step_atol:
+                failures.append(
+                    f"zone {state.zone} final step {state.step}: "
+                    f"reference={expected_step}, difference={step_difference}, "
+                    f"allowed={step_atol}"
+                )
 
         field_policies = reference.fields[state.zone]
         target_policy = field_policies["target_time"]

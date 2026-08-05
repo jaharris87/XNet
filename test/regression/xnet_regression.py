@@ -68,7 +68,7 @@ class RegressionCase:
     name: str
     control: Path
     network_data: Path
-    trajectory: Path
+    trajectories: tuple[Path, ...]
     helm_table: Path
     reference: Path
     expected_zones: tuple[int, ...]
@@ -77,12 +77,13 @@ class RegressionCase:
 
     @property
     def required_outputs(self) -> tuple[str, ...]:
+        zone_width = len(str(max(self.expected_zones)))
         zone_outputs = tuple(
             filename
             for zone in self.expected_zones
             for filename in (
-                f"ev_{self.name}_{zone:02d}",
-                f"ts_{self.name}_{zone:02d}",
+                f"ev_{self.name}_{zone:0{zone_width}d}",
+                f"ts_{self.name}_{zone:0{zone_width}d}",
             )
         )
         return ("net_diag01", *zone_outputs)
@@ -129,14 +130,14 @@ class CharacterizationReference:
     """Complete expected final state plus selected pass/fail tolerances."""
 
     expected_zones: tuple[int, ...]
-    final_step: int
-    final_step_atol: int
-    fields: Mapping[str, Tolerance]
+    final_steps: Mapping[int, int]
+    final_step_atols: Mapping[int, int]
+    fields: Mapping[int, Mapping[str, Tolerance]]
     # The complete vector supplies expected values and norm diagnostics.
-    mass_fractions: Mapping[str, float]
+    mass_fractions: Mapping[int, Mapping[str, float]]
     # This subset selects species for field-aware pass/fail comparison.
-    mass_fraction_tolerances: Mapping[str, ToleranceBounds]
-    mass_fraction_sum_atol: float
+    mass_fraction_tolerances: Mapping[int, Mapping[str, ToleranceBounds]]
+    mass_fraction_sum_atols: Mapping[int, float]
 
 
 @dataclass(frozen=True)
@@ -154,12 +155,36 @@ def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
         name="tnsn_alpha",
         control=case_directory / "control",
         network_data=repository_root / "test" / "Data_alpha",
-        trajectory=repository_root / "test" / "Test_Problems" / "th_sn1aflame",
+        trajectories=(
+            repository_root / "test" / "Test_Problems" / "th_sn1aflame",
+        ),
         helm_table=(
             repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
         ),
         reference=case_directory / "reference" / "final_state.json",
         expected_zones=tuple(range(1, 11)),
+        expected_species=SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+    )
+
+
+def heat_alpha_case(repository_root: Path) -> RegressionCase:
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "heat_alpha"
+    )
+    return RegressionCase(
+        name="heat_alpha",
+        control=case_directory / "control",
+        network_data=repository_root / "test" / "Data_alpha",
+        trajectories=tuple(
+            repository_root / "test" / "Test_Problems" / f"th_co_burn_{zone}"
+            for zone in range(1, 7)
+        ),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=tuple(range(1, 7)),
         expected_species=SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
     )
@@ -180,11 +205,20 @@ def _validate_case_inputs(case: RegressionCase) -> None:
     required = {
         "complete control input": case.control,
         "network data directory": case.network_data,
-        "thermodynamic trajectory": case.trajectory,
         "Helmholtz EOS table": case.helm_table,
         "characterization reference": case.reference,
     }
-    missing = [f"{description}: {path}" for description, path in required.items() if not path.exists()]
+    required.update(
+        {
+            f"thermodynamic trajectory {index}": path
+            for index, path in enumerate(case.trajectories, start=1)
+        }
+    )
+    missing = [
+        f"{description}: {path}"
+        for description, path in required.items()
+        if not path.exists()
+    ]
     if missing:
         raise SetupFailure("required case input is missing:\n  " + "\n  ".join(missing))
     if not case.network_data.is_dir():
@@ -195,6 +229,11 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         case.expected_species
     ):
         raise SetupFailure(f"invalid expected species definition for {case.name}")
+    trajectory_names = tuple(path.name for path in case.trajectories)
+    if not case.trajectories or len(set(trajectory_names)) != len(trajectory_names):
+        raise SetupFailure(
+            f"invalid thermodynamic trajectory definition for {case.name}"
+        )
     if (
         not case.network_inputs
         or len(set(case.network_inputs)) != len(case.network_inputs)
@@ -236,7 +275,8 @@ def prepare_work_directory(case: RegressionCase, work_directory: Path) -> Path:
             (local_network_data / filename).symlink_to(
                 (case.network_data / filename).resolve()
             )
-        (work_directory / case.trajectory.name).symlink_to(case.trajectory.resolve())
+        for trajectory in case.trajectories:
+            (work_directory / trajectory.name).symlink_to(trajectory.resolve())
         (work_directory / case.helm_table.name).symlink_to(case.helm_table.resolve())
     except RegressionFailure:
         raise
@@ -487,36 +527,94 @@ def parse_diagnostic(
     return tuple(states[zone] for zone in expected_zones)
 
 
-def _load_tolerance(item: object, context: str) -> Tolerance:
+def _expand_zone_items(
+    item: object, expected_zones: Sequence[int], context: str
+) -> Mapping[int, object]:
+    if not isinstance(item, dict):
+        return {zone: item for zone in expected_zones}
+
+    values: dict[int, object] = {}
+    for key, value in item.items():
+        if not isinstance(key, str) or not key.isdigit():
+            raise SetupFailure(
+                f"reference entry {context} has a non-zone key: {key!r}"
+            )
+        zone = int(key)
+        if str(zone) != key or zone in values:
+            raise SetupFailure(
+                f"reference entry {context} has an invalid zone key: {key!r}"
+            )
+        values[zone] = value
+    expected = set(expected_zones)
+    if set(values) != expected:
+        raise SetupFailure(
+            f"reference entry {context} must define zones {sorted(expected)}; "
+            f"found {sorted(values)}"
+        )
+    return values
+
+
+def _load_zone_floats(
+    item: object, expected_zones: Sequence[int], context: str
+) -> Mapping[int, float]:
+    values = _expand_zone_items(item, expected_zones, context)
+    if not all(
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        for value in values.values()
+    ):
+        raise SetupFailure(f"reference entry {context} contains a non-finite value")
+    return {zone: float(value) for zone, value in values.items()}
+
+
+def _load_zone_integers(
+    item: object, expected_zones: Sequence[int], context: str
+) -> Mapping[int, int]:
+    values = _expand_zone_items(item, expected_zones, context)
+    if not all(
+        isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        for value in values.values()
+    ):
+        raise SetupFailure(
+            f"reference entry {context} must contain nonnegative integers"
+        )
+    return {zone: int(value) for zone, value in values.items()}
+
+
+def _load_tolerance(
+    item: object, expected_zones: Sequence[int], context: str
+) -> Mapping[int, Tolerance]:
     if not isinstance(item, dict) or set(item) != {"value", "atol", "rtol"}:
         raise SetupFailure(
             f"reference entry {context} must contain exactly value, atol, and rtol"
         )
-    values = (item["value"], item["atol"], item["rtol"])
-    if not all(isinstance(value, (int, float)) for value in values):
-        raise SetupFailure(f"reference entry {context} contains a non-numeric value")
-    tolerance = Tolerance(*(float(value) for value in values))
-    if not all(math.isfinite(value) for value in values):
-        raise SetupFailure(f"reference entry {context} contains a non-finite value")
-    if tolerance.atol < 0 or tolerance.rtol < 0:
+    values = _load_zone_floats(item["value"], expected_zones, f"{context}.value")
+    atols = _load_zone_floats(item["atol"], expected_zones, f"{context}.atol")
+    rtols = _load_zone_floats(item["rtol"], expected_zones, f"{context}.rtol")
+    if any(value < 0 for value in (*atols.values(), *rtols.values())):
         raise SetupFailure(f"reference entry {context} contains a negative tolerance")
-    return tolerance
+    return {
+        zone: Tolerance(values[zone], atols[zone], rtols[zone])
+        for zone in expected_zones
+    }
 
 
-def _load_tolerance_bounds(item: object, context: str) -> ToleranceBounds:
+def _load_tolerance_bounds(
+    item: object, expected_zones: Sequence[int], context: str
+) -> Mapping[int, ToleranceBounds]:
     if not isinstance(item, dict) or set(item) != {"atol", "rtol"}:
         raise SetupFailure(
             f"reference entry {context} must contain exactly atol and rtol"
         )
-    values = (item["atol"], item["rtol"])
-    if not all(isinstance(value, (int, float)) for value in values):
-        raise SetupFailure(f"reference entry {context} contains a non-numeric value")
-    tolerance = ToleranceBounds(*(float(value) for value in values))
-    if not all(math.isfinite(value) for value in values):
-        raise SetupFailure(f"reference entry {context} contains a non-finite value")
-    if tolerance.atol < 0 or tolerance.rtol < 0:
+    atols = _load_zone_floats(item["atol"], expected_zones, f"{context}.atol")
+    rtols = _load_zone_floats(item["rtol"], expected_zones, f"{context}.rtol")
+    if any(value < 0 for value in (*atols.values(), *rtols.values())):
         raise SetupFailure(f"reference entry {context} contains a negative tolerance")
-    return tolerance
+    return {
+        zone: ToleranceBounds(atols[zone], rtols[zone])
+        for zone in expected_zones
+    }
 
 
 def load_reference(path: Path) -> CharacterizationReference:
@@ -529,25 +627,56 @@ def load_reference(path: Path) -> CharacterizationReference:
 
     try:
         expected_zones = tuple(int(zone) for zone in document["expected_zones"])
-        final_step = document["final_step"]
-        final_step_atol = document["final_step_atol"]
-        fields = {
-            name: _load_tolerance(item, f"fields.{name}")
+        if not expected_zones or len(set(expected_zones)) != len(expected_zones):
+            raise ValueError("expected_zones is empty or contains duplicates")
+        final_steps = _load_zone_integers(
+            document["final_step"], expected_zones, "final_step"
+        )
+        final_step_atols = _load_zone_integers(
+            document["final_step_atol"], expected_zones, "final_step_atol"
+        )
+        fields_by_name = {
+            name: _load_tolerance(item, expected_zones, f"fields.{name}")
             for name, item in document["fields"].items()
         }
-        mass_fractions = {
-            name: float(value)
+        mass_fractions_by_species = {
+            name: _load_zone_floats(
+                value, expected_zones, f"mass_fractions.{name}"
+            )
             for name, value in document["mass_fractions"].items()
         }
-        mass_fraction_tolerances = {
+        mass_fraction_tolerances_by_species = {
             name: _load_tolerance_bounds(
-                item, f"mass_fraction_tolerances.{name}"
+                item, expected_zones, f"mass_fraction_tolerances.{name}"
             )
             for name, item in document["mass_fraction_tolerances"].items()
         }
-        mass_fraction_sum_atol = float(document["mass_fraction_sum_atol"])
+        mass_fraction_sum_atols = _load_zone_floats(
+            document["mass_fraction_sum_atol"],
+            expected_zones,
+            "mass_fraction_sum_atol",
+        )
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise SetupFailure(f"invalid characterization reference structure in {path}: {error}") from error
+
+    fields = {
+        zone: {name: policies[zone] for name, policies in fields_by_name.items()}
+        for zone in expected_zones
+    }
+    mass_fractions = {
+        zone: {
+            species: values[zone]
+            for species, values in mass_fractions_by_species.items()
+        }
+        for zone in expected_zones
+    }
+    mass_fraction_tolerances = {
+        zone: {
+            species: bounds[zone]
+            for species, bounds in mass_fraction_tolerances_by_species.items()
+        }
+        for zone in expected_zones
+    }
 
     required_fields = {
         "target_time",
@@ -555,48 +684,36 @@ def load_reference(path: Path) -> CharacterizationReference:
         "density",
         "electron_fraction",
     }
-    if set(fields) != required_fields:
+    if set(fields_by_name) != required_fields:
         raise SetupFailure(
-            f"reference fields must be exactly {sorted(required_fields)}; found {sorted(fields)}"
+            "reference fields must be exactly "
+            f"{sorted(required_fields)}; found {sorted(fields_by_name)}"
         )
-    if (
-        not isinstance(final_step, int)
-        or isinstance(final_step, bool)
-        or not isinstance(final_step_atol, int)
-        or isinstance(final_step_atol, bool)
-        or final_step < 0
-        or final_step_atol < 0
-    ):
-        raise SetupFailure(
-            "reference final step and its tolerance must be nonnegative integers"
-        )
-    if not mass_fractions or not all(
-        isinstance(species, str)
-        and species
-        and math.isfinite(value)
-        for species, value in mass_fractions.items()
+    if not mass_fractions_by_species or not all(
+        isinstance(species, str) and species
+        for species in mass_fractions_by_species
     ):
         raise SetupFailure("reference composition is empty or invalid")
-    if not mass_fraction_tolerances:
+    if not mass_fraction_tolerances_by_species:
         raise SetupFailure("reference mass-fraction tolerance selection is empty")
-    missing_expected_species = set(mass_fraction_tolerances).difference(
-        mass_fractions
+    missing_expected_species = set(mass_fraction_tolerances_by_species).difference(
+        mass_fractions_by_species
     )
     if missing_expected_species:
         raise SetupFailure(
             "reference mass-fraction tolerances have no matching composition value: "
             + ", ".join(sorted(missing_expected_species))
         )
-    if not math.isfinite(mass_fraction_sum_atol) or mass_fraction_sum_atol < 0:
+    if any(value < 0 for value in mass_fraction_sum_atols.values()):
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
     return CharacterizationReference(
         expected_zones=expected_zones,
-        final_step=final_step,
-        final_step_atol=final_step_atol,
+        final_steps=final_steps,
+        final_step_atols=final_step_atols,
         fields=fields,
         mass_fractions=mass_fractions,
         mass_fraction_tolerances=mass_fraction_tolerances,
-        mass_fraction_sum_atol=mass_fraction_sum_atol,
+        mass_fraction_sum_atols=mass_fraction_sum_atols,
     )
 
 
@@ -613,9 +730,10 @@ def calculate_composition_norms(
 
     diagnostics: list[CompositionNorms] = []
     for state in states:
+        expected_mass_fractions = reference.mass_fractions[state.zone]
         differences = {
             species: abs(state.mass_fractions[species] - expected)
-            for species, expected in reference.mass_fractions.items()
+            for species, expected in expected_mass_fractions.items()
         }
         maximum_species = max(differences, key=differences.__getitem__)
         linf = differences[maximum_species]
@@ -666,15 +784,21 @@ def compare_final_states(
         failures.append(f"zone records {zones} != expected {reference.expected_zones}")
 
     for state in states:
-        step_difference = abs(state.step - reference.final_step)
-        if step_difference > reference.final_step_atol:
+        if state.zone not in reference.final_steps:
+            failures.append(f"zone {state.zone} has no characterization reference")
+            continue
+        expected_step = reference.final_steps[state.zone]
+        step_atol = reference.final_step_atols[state.zone]
+        step_difference = abs(state.step - expected_step)
+        if step_difference > step_atol:
             failures.append(
                 f"zone {state.zone} final step {state.step}: "
-                f"reference={reference.final_step}, difference={step_difference}, "
-                f"allowed={reference.final_step_atol}"
+                f"reference={expected_step}, difference={step_difference}, "
+                f"allowed={step_atol}"
             )
 
-        target_policy = reference.fields["target_time"]
+        field_policies = reference.fields[state.zone]
+        target_policy = field_policies["target_time"]
         completion_policy = Tolerance(
             state.target_time, target_policy.atol, target_policy.rtol
         )
@@ -686,7 +810,7 @@ def compare_final_states(
                 f"allowed={allowed:.3e}"
             )
 
-        for field, policy in reference.fields.items():
+        for field, policy in field_policies.items():
             actual = getattr(state, field)
             passed, difference, allowed = _difference(actual, policy)
             if not passed:
@@ -697,10 +821,11 @@ def compare_final_states(
                     f"rtol={policy.rtol:.3e})"
                 )
 
-        for species, bounds in reference.mass_fraction_tolerances.items():
+        expected_mass_fractions = reference.mass_fractions[state.zone]
+        for species, bounds in reference.mass_fraction_tolerances[state.zone].items():
             actual = state.mass_fractions[species]
             policy = Tolerance(
-                reference.mass_fractions[species], bounds.atol, bounds.rtol
+                expected_mass_fractions[species], bounds.atol, bounds.rtol
             )
             passed, difference, allowed = _difference(actual, policy)
             if not passed:
@@ -719,10 +844,11 @@ def compare_final_states(
                 f"zone {state.zone} has negative mass fractions: {', '.join(negative_species)}"
             )
         mass_fraction_sum = sum(state.mass_fractions.values())
-        if abs(mass_fraction_sum - 1.0) > reference.mass_fraction_sum_atol:
+        sum_atol = reference.mass_fraction_sum_atols[state.zone]
+        if abs(mass_fraction_sum - 1.0) > sum_atol:
             failures.append(
                 f"zone {state.zone} mass-fraction sum={mass_fraction_sum:.12e}; "
-                f"allowed |sum - 1| <= {reference.mass_fraction_sum_atol:.3e}"
+                f"allowed |sum - 1| <= {sum_atol:.3e}"
             )
 
     if failures:
@@ -760,19 +886,21 @@ def run_and_compare(
                 "reference expected_zones does not match the case definition: "
                 f"{reference.expected_zones} != {case.expected_zones}"
             )
-        unknown_reference_species = set(reference.mass_fraction_tolerances).difference(
-            case.expected_species
-        )
+        unknown_reference_species = set(
+            reference.mass_fraction_tolerances[case.expected_zones[0]]
+        ).difference(case.expected_species)
         if unknown_reference_species:
             raise SetupFailure(
                 "reference selects species absent from the case definition: "
                 + ", ".join(sorted(unknown_reference_species))
             )
-        if tuple(reference.mass_fractions) != case.expected_species:
-            raise SetupFailure(
-                "composition reference does not match the case species: "
-                f"{tuple(reference.mass_fractions)} != {case.expected_species}"
-            )
+        for zone in case.expected_zones:
+            if tuple(reference.mass_fractions[zone]) != case.expected_species:
+                raise SetupFailure(
+                    "composition reference does not match the case species for "
+                    f"zone {zone}: {tuple(reference.mass_fractions[zone])} "
+                    f"!= {case.expected_species}"
+                )
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics)
         compare_final_states(states, reference)

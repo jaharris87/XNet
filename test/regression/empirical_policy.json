@@ -1,0 +1,4519 @@
+{
+  "canonical_configuration": "mac-gnu16",
+  "cases": {
+    "bdf_sn160": {
+      "case": "bdf_sn160",
+      "classification": "wider-empirical",
+      "zones": {
+        "1": {
+          "l1_limit": {
+            "allowed_difference": 5.213858421001675e-05,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 2.5069999999879768e-05,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 2.989596352406309e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 3.500000006747605e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 4.100000000026161e-05,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 1.021999999997056e-07,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 2.125999999989719e-07,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 2.0659999999920267e-08,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 5.269999999997355e-06,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 5.766500000001666e-07,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 1.3579999999992473e-07,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 1.3100000000547e-08,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 5.172500000004022e-08,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 2.604499999996765e-07,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 5.4275000000096636e-08,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 5.28499999992701e-07,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 9.079999999985137e-07,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 8.824999999999662e-06,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 1.841899999999353e-07,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 1.1907500000001103e-06,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 3.0784999999957717e-07,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 6.057500000004947e-08,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 7.083500000003538e-08,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 2.5069999999879768e-05,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 3.0785000000035777e-06,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 4.174999999998888e-06,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 5.53249999999668e-08,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 6.465499999992831e-07,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 1.71950000000072e-07,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 1.0535000000012925e-07,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 2.690000000004871e-09,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "2": {
+          "l1_limit": {
+            "allowed_difference": 6.97318236027011e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 1.8499999998852268e-07,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 2.3025650738717758e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 4.9999999976313985e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 9.499999998593466e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 8.450000000262365e-09,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 9.949999999472831e-09,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 2.599999999975098e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 1.2050000000839465e-09,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 4.9999999976313985e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 1.24999999988879e-08,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 5.749999998040605e-09,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 3.799999999977729e-09,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 2.6000000002190438e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 8.000000001256501e-09,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 8.299999999560692e-10,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 3.3500000002308525e-10,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 1.8500000001259197e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 6.499999998793429e-10,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 2.8999999999960847e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 1.6999999999121385e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 1.5500000002513004e-08,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 7.99999999605233e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 1.8499999998852268e-07,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 9.499999997864882e-09,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 1.8499999999632893e-09,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 1.1150000000402454e-07,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 4.549999999908223e-10,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 2.449999999761317e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 7.999999998654416e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 3.95000000002888e-09,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 5.299999999838717e-09,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 1.6999999999641802e-07,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 2.449999998736746e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 8.74999999958404e-08,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 2.6000000002190438e-09,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 4.100000000080031e-10,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 4.9999999999966236e-08,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 1.2350000000291245e-08,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 1.0999999999180366e-08,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 6.500000000247924e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 3.500000000038058e-10,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 6.500000000247924e-10,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "3": {
+          "l1_limit": {
+            "allowed_difference": 1.0097716095004466e-06,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 1.6549999999878662e-07,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 2.097747301129715e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 9.499999995262798e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 6.500000003503203e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 5.750000000642691e-09,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 2.1500000005534821e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 3.9500000002728257e-10,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 9.049999999165926e-09,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 1.6999999999121385e-10,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 3.8000000004656203e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 2.0000000000144402e-09,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 9.499999999426134e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 3.3499999993038596e-08,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 4.9999999999966236e-08,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 3.1550000000983865e-09,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 4.999999999736415e-09,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 1.6999999999121384e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 2.2999999998565335e-08,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 8.450000000262365e-09,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 6.349999999871512e-09,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 1.5499999998609876e-09,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 9.499999999816447e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 1.6399999999720755e-09,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 3.64999999966637e-08,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 2.0000000000144403e-08,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 1.2500000002010403e-07,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 7.24999999933274e-08,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 3.139999999963167e-08,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 9.499999999426134e-08,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 3.800000001278772e-10,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 3.2000000000170713e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 1.2500000001489985e-08,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 4.550000000233484e-08,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 3.334999999867033e-09,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 1.6099999999878662e-07,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 5.600000000201227e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 3.3500000003446937e-08,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 2.4500000000377887e-08,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 7.399999999904308e-09,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 1.3999999998098366e-08,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 2.449999999761317e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 6.649999999648553e-09,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 2.449999999964605e-10,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 3.95000000002888e-09,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 1.550000000104933e-10,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 6.350000000847294e-10,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 1.249999999270795e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 1.4149999998953492e-09,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 5.000000001534527e-10,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 8.750000001015187e-10,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 1.6250000000320126e-09,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 5.000000000314799e-11,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 1.849999999312768e-10,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "4": {
+          "l1_limit": {
+            "allowed_difference": 2.231196286523666e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 6.500000001005202e-08,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 2.319474897413187e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 1.999999999210466e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 1.9999999908837935e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 9.500000003069053e-10,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 2.3000000007672633e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 2.000000000339701e-10,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 4.999999995029314e-10,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 2.000000000339701e-10,
+              "comparison": "absolute"
+            },
+            "ca42": {
+              "allowed_difference": 1.0999999998701652e-10,
+              "comparison": "absolute"
+            },
+            "cl34": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 9.499999995262797e-09,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 1.0999999994473263e-08,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 1.3999999992894196e-08,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 1.8499999999632893e-09,
+              "comparison": "absolute"
+            },
+            "co59": {
+              "allowed_difference": 2.2999999999541117e-10,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 1.250000000409207e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 3.349999999824277e-09,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 2.6000000002190438e-09,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 5.000000001534527e-10,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 7.999999996052331e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 7.999999999304938e-10,
+              "comparison": "absolute"
+            },
+            "cu62": {
+              "allowed_difference": 1.7000000003187143e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 1.999999999210466e-08,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 1.8499999990525596e-08,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 9.500000000466967e-09,
+              "comparison": "absolute"
+            },
+            "fe57": {
+              "allowed_difference": 3.650000000251839e-10,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 6.500000001005202e-08,
+              "comparison": "absolute"
+            },
+            "k38": {
+              "allowed_difference": 5.000000000314799e-11,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 5.000000001534527e-10,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 7.999999994426027e-11,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 3.500000003625103e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 4.999999997631399e-09,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 1.250000000409207e-08,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 2.0000000000144402e-09,
+              "comparison": "absolute"
+            },
+            "mn55": {
+              "allowed_difference": 2.4500000001678927e-10,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 1.250000000409207e-08,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 7.99999999605233e-09,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 8.000000001256501e-09,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 2.4499999995173716e-09,
+              "comparison": "absolute"
+            },
+            "ni61": {
+              "allowed_difference": 1.8500000001259197e-10,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 8.000000001256501e-09,
+              "comparison": "absolute"
+            },
+            "p30": {
+              "allowed_difference": 6.499999996353974e-11,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 2.1500000005534821e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 1.6999999986110958e-09,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 2.8999999999960847e-10,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 1.5499999996983573e-10,
+              "comparison": "absolute"
+            },
+            "sc43": {
+              "allowed_difference": 9.500000000629598e-11,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 2.2999999988156994e-09,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 1.5499999996983573e-10,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 1.399999999484576e-10,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 2.1499999997403305e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "ti47": {
+              "allowed_difference": 2.000000000339701e-10,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 4.99999999828192e-10,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 9.499999999816447e-10,
+              "comparison": "absolute"
+            },
+            "v50": {
+              "allowed_difference": 1.399999999891152e-10,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 1.2500000000839465e-10,
+              "comparison": "absolute"
+            },
+            "zn63": {
+              "allowed_difference": 9.500000000629598e-11,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "5": {
+          "l1_limit": {
+            "allowed_difference": 8.341401475397446e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 1.5500000000431335e-07,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 3.147321528659319e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 8.000000007709672e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 3.6499999999265786e-09,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 6.349999999220991e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 9.500000001270943e-10,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 4.700000000935156e-09,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            },
+            "ca42": {
+              "allowed_difference": 5.74999999999217e-10,
+              "comparison": "absolute"
+            },
+            "cl34": {
+              "allowed_difference": 5.0000000064134365e-11,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 9.499999999816447e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 3.2000000000983866e-09,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 7.249999998291906e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 8.000000006460672e-09,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 4.850000000595994e-08,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 1.2949999999194806e-08,
+              "comparison": "absolute"
+            },
+            "co59": {
+              "allowed_difference": 2.329999999979687e-09,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 4.400000000182333e-09,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 2.7499999996196733e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 1.3999999998098366e-08,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 1.7299999998726618e-08,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 1.5199999999311548e-08,
+              "comparison": "absolute"
+            },
+            "cr53": {
+              "allowed_difference": 1.144999999998434e-09,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 8.749999999388884e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 4.100000000730552e-09,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 5.00000000803974e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 4.100000000080031e-09,
+              "comparison": "absolute"
+            },
+            "cu62": {
+              "allowed_difference": 1.5949999999892563e-09,
+              "comparison": "absolute"
+            },
+            "cu63": {
+              "allowed_difference": 4.39999999989773e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 2.1500000001956954e-08,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 2.5999999996986268e-08,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe55": {
+              "allowed_difference": 6.800000000610434e-08,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 4.850000000075577e-08,
+              "comparison": "absolute"
+            },
+            "fe57": {
+              "allowed_difference": 3.5599999999437593e-09,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 1.5500000000431335e-07,
+              "comparison": "absolute"
+            },
+            "k38": {
+              "allowed_difference": 7.999999998491786e-11,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "mg24": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 7.699999998705567e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 1.24999999988879e-08,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 1.3999999998098366e-08,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 5.150000000438087e-08,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 1.4299999999004643e-08,
+              "comparison": "absolute"
+            },
+            "mn55": {
+              "allowed_difference": 2.510000000073594e-09,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 4.5499999997130666e-08,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 4.850000000595994e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 1.700000001213181e-08,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 2.4500000002979972e-08,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 1.339999999999878e-08,
+              "comparison": "absolute"
+            },
+            "ni61": {
+              "allowed_difference": 1.9850000000571963e-09,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 3.500000003625103e-09,
+              "comparison": "absolute"
+            },
+            "p30": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 7.8499999997325e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 3.799999999327208e-09,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 1.1000000000327956e-09,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 8.300000000373844e-10,
+              "comparison": "absolute"
+            },
+            "sc43": {
+              "allowed_difference": 1.849999999312768e-10,
+              "comparison": "absolute"
+            },
+            "sc44": {
+              "allowed_difference": 2.1500000001469063e-10,
+              "comparison": "absolute"
+            },
+            "sc45": {
+              "allowed_difference": 2.8999999999960847e-10,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 2.0000000000144402e-09,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 6.649999999648553e-10,
+              "comparison": "absolute"
+            },
+            "si30": {
+              "allowed_difference": 2.599999999975098e-10,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 8.900000000415817e-10,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 2.2999999994662207e-09,
+              "comparison": "absolute"
+            },
+            "ti47": {
+              "allowed_difference": 1.3700000000751603e-09,
+              "comparison": "absolute"
+            },
+            "ti48": {
+              "allowed_difference": 7.549999999711513e-10,
+              "comparison": "absolute"
+            },
+            "v46": {
+              "allowed_difference": 9.500000000629598e-11,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 2.5999999995685224e-09,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 5.90000000004332e-09,
+              "comparison": "absolute"
+            },
+            "v50": {
+              "allowed_difference": 1.354999999972467e-09,
+              "comparison": "absolute"
+            },
+            "v51": {
+              "allowed_difference": 5.149999999950196e-10,
+              "comparison": "absolute"
+            },
+            "zn60": {
+              "allowed_difference": 2.599999999975098e-10,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 3.650000000251839e-10,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 6.499999992288215e-11,
+              "comparison": "absolute"
+            },
+            "zn63": {
+              "allowed_difference": 5.74999999999217e-10,
+              "comparison": "absolute"
+            },
+            "zn64": {
+              "allowed_difference": 4.100000000080031e-10,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "6": {
+          "l1_limit": {
+            "allowed_difference": 1.214406959862547e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 3.5000000025842686e-08,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 1.3161383802107735e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 1.999999999210466e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 1.399999999484576e-10,
+              "comparison": "absolute"
+            },
+            "c12": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 6.499999995540823e-10,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "ca42": {
+              "allowed_difference": 1.1000000006833168e-10,
+              "comparison": "absolute"
+            },
+            "cl33": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "cl34": {
+              "allowed_difference": 1.2500000000839465e-10,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "cl36": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 8.000000002557545e-10,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 9.499999995262797e-09,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 5.00000000803974e-09,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 2.450000000818414e-09,
+              "comparison": "absolute"
+            },
+            "co59": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 8.000000002557545e-10,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 1.1000000010085775e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 2.1500000007161124e-09,
+              "comparison": "absolute"
+            },
+            "cr53": {
+              "allowed_difference": 2.750000000595455e-10,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 2.599999999568522e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 7.999999996052331e-10,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 7.999999996052331e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 1.1000000010085775e-09,
+              "comparison": "absolute"
+            },
+            "cu62": {
+              "allowed_difference": 4.99999999828192e-10,
+              "comparison": "absolute"
+            },
+            "cu63": {
+              "allowed_difference": 1.7000000007252901e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 2.450000000818414e-09,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 5.00000000803974e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe55": {
+              "allowed_difference": 6.500000007250206e-09,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 6.500000002046036e-09,
+              "comparison": "absolute"
+            },
+            "fe57": {
+              "allowed_difference": 7.999999999304938e-10,
+              "comparison": "absolute"
+            },
+            "fe58": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 3.5000000025842686e-08,
+              "comparison": "absolute"
+            },
+            "k38": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "k40": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "mg24": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 2.450000000818414e-09,
+              "comparison": "absolute"
+            },
+            "mn55": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "n": {
+              "allowed_difference": 5.0000000023476783e-11,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 5.000000000233484e-09,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 6.500000007250206e-09,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 3.5000000088292732e-09,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 3.500000003625103e-09,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 2.2999999988156994e-09,
+              "comparison": "absolute"
+            },
+            "ni61": {
+              "allowed_difference": 6.499999998793429e-10,
+              "comparison": "absolute"
+            },
+            "o16": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 4.999999997631399e-09,
+              "comparison": "absolute"
+            },
+            "p29": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "p30": {
+              "allowed_difference": 9.49999999656384e-11,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 9.500000003069053e-10,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 1.399999999484576e-10,
+              "comparison": "absolute"
+            },
+            "sc43": {
+              "allowed_difference": 1.399999999484576e-10,
+              "comparison": "absolute"
+            },
+            "sc44": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "sc45": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 1.3999999998098367e-09,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 1.550000000511509e-10,
+              "comparison": "absolute"
+            },
+            "si30": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "ti47": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "ti48": {
+              "allowed_difference": 1.6999999999121385e-10,
+              "comparison": "absolute"
+            },
+            "v46": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 4.999999995029314e-10,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 1.099999999707535e-09,
+              "comparison": "absolute"
+            },
+            "v50": {
+              "allowed_difference": 3.049999999396714e-10,
+              "comparison": "absolute"
+            },
+            "v51": {
+              "allowed_difference": 1.2500000000839465e-10,
+              "comparison": "absolute"
+            },
+            "zn60": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 1.5499999988852057e-10,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "zn63": {
+              "allowed_difference": 2.1500000013666338e-10,
+              "comparison": "absolute"
+            },
+            "zn64": {
+              "allowed_difference": 1.399999999484576e-10,
+              "comparison": "absolute"
+            }
+          }
+        }
+      }
+    },
+    "heat_alpha": {
+      "case": "heat_alpha",
+      "classification": "configuration-stable",
+      "zones": {
+        "1": {
+          "l1_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "linf_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "he4": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "2": {
+          "l1_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "linf_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "he4": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "zn60": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "3": {
+          "l1_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "linf_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "he4": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "mg24": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "zn60": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "4": {
+          "l1_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "linf_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "he4": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "mg24": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "o16": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "zn60": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "5": {
+          "l1_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "linf_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "c12": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "he4": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "mg24": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "o16": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "zn60": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "6": {
+          "l1_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "linf_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 0.0,
+            "comparison": "exact"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "c12": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "he4": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "mg24": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "o16": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "zn60": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        }
+      }
+    },
+    "heat_sn160": {
+      "case": "heat_sn160",
+      "classification": "wider-empirical",
+      "zones": {
+        "1": {
+          "l1_limit": {
+            "allowed_difference": 2.942645309574078e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 1.400000000122087e-07,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 3.887239672081321e-08,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 9.500000004695356e-11,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 3.5000000005026005e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 2.300000000116742e-09,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 6.199999999820361e-10,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 1.6999999999121385e-10,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 1.400000000460358e-09,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 9.49999999656384e-11,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 3.5000000010230176e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 6.500000001005202e-08,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 8.749999999388884e-10,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 9.499999990058627e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 9.499999990058627e-10,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 2.2999999999541117e-10,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 1.400000000122087e-07,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 1.0999999994473263e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 2.150000000976321e-08,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 2.2999999999541117e-10,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 2.6000000002190438e-09,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 1.9999999980720538e-11,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "2": {
+          "l1_limit": {
+            "allowed_difference": 1.599777223791097e-06,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.749999999914107e-07,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 1.624913202588118e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 3.499999998420932e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 3.4999999950902634e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 6.3499999995462515e-09,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 1.2199999999589573e-08,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 1.399999999891152e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 2.2999999997914813e-09,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 8.000000000215668e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 3.95000000002888e-08,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 3.050000000062581e-08,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 6.500000000247924e-09,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 2.5999999999588353e-08,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 2.53999999995372e-09,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 1.3999999999959438e-09,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 3.6499999998452633e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 1.1000000000327956e-09,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 5.900000000205951e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 5.74999999999217e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 7.399999999774204e-08,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 9.499999995262797e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 3.800000000107834e-07,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 4.549999999973275e-08,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 1.0399999999951544e-08,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 2.5999999996986268e-08,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 2.449999999354741e-10,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 2.449999999761317e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 8.449999998961322e-09,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 2.1949999999661774e-08,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 5.749999999914107e-07,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 5.149999999397253e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 1.2800000001615637e-07,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 1.3249999999947629e-08,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 2.4200000000266405e-09,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 2.7500000001400905e-08,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 6.799999999049183e-09,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 3.799999999327208e-09,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 6.050000000419732e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 6.649999999648553e-10,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 1.849999999312768e-10,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "3": {
+          "l1_limit": {
+            "allowed_difference": 2.7352571519977646e-06,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 4.6850000000583425e-07,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 6.894329582493085e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 3.499999998420932e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 1.249999999368373e-06,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 1.7149999999325988e-08,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 5.74999999999217e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 1.0400000000114175e-09,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 2.4499999999880818e-08,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 3.7999999996524687e-10,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 1.0249999999900394e-09,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 6.04999999976921e-09,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 3.0499999998781e-07,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 7.700000000136714e-08,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 1.2949999999975432e-07,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 8.23999999994589e-09,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 1.4150000000254534e-08,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 7.850000000057761e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 6.049999999964367e-08,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 2.1949999999661774e-08,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 1.699999999992536e-08,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 1.0700000000135162e-09,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 5.90000000004332e-09,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 2.0000000000144402e-09,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 4.055000000080031e-09,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 1.0400000000276804e-07,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 6.800000000610434e-08,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 3.2000000000073137e-07,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 1.9249999999261476e-07,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 8.390000000062093e-08,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 2.1499999999354869e-07,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 9.800000000072202e-10,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 9.64999999985842e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 3.19999999990323e-08,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 3.350000000084485e-08,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 1.1900000000007688e-07,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 8.795000000005044e-09,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 4.6400000000583423e-07,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 1.730000000028787e-07,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 6.949999998449813e-08,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 5.9000000000433203e-08,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 1.940000000009325e-08,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 6.049999999964367e-08,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 6.350000000034143e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 2.240000000176679e-08,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 8.899999999602665e-10,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 6.800000000065623e-10,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 1.8649999998536454e-08,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 4.2499999998872365e-10,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 1.9399999999117468e-09,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 3.94999999986625e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 3.740000000037666e-09,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 1.8499999999632893e-09,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 2.2400000000140485e-09,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 4.310000000036883e-09,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 2.7499999999855914e-10,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "4": {
+          "l1_limit": {
+            "allowed_difference": 2.4838822934291033e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 3.5000000025842686e-08,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 1.239718951092705e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 2.0000000042064698e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 1.099999999707535e-09,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 1.4000000011108793e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 2.000000000339701e-10,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 1.5499999992104663e-09,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            },
+            "ca42": {
+              "allowed_difference": 1.0999999998701652e-10,
+              "comparison": "absolute"
+            },
+            "cl34": {
+              "allowed_difference": 1.9999999980720538e-11,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 2.1499999997403305e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 5.000000001534527e-10,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 2.2999999988156995e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 1.5500000002513004e-08,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 2.150000000065591e-09,
+              "comparison": "absolute"
+            },
+            "co59": {
+              "allowed_difference": 2.599999999975098e-10,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 1.099999999707535e-09,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 3.799999999327208e-09,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 3.049999999721975e-09,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 1.2500000000839465e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 8.000000002557545e-10,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 7.999999999304938e-10,
+              "comparison": "absolute"
+            },
+            "cu62": {
+              "allowed_difference": 1.6999999999121385e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 6.4999999994439505e-09,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 1.999999999210466e-08,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 2.149999999935487e-08,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 1.0999999999677434e-08,
+              "comparison": "absolute"
+            },
+            "fe57": {
+              "allowed_difference": 4.549999999908223e-10,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 3.5000000025842686e-08,
+              "comparison": "absolute"
+            },
+            "k38": {
+              "allowed_difference": 2.000000000104933e-11,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 1.9999999972589024e-10,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 1.0999999998701652e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 4.999999997631399e-09,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 1.5500000002513004e-08,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 2.300000000116742e-09,
+              "comparison": "absolute"
+            },
+            "mn55": {
+              "allowed_difference": 3.04999999980329e-10,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 2.149999999935487e-08,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 1.249999999368373e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 8.000000001256501e-09,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 2.9000000003213455e-09,
+              "comparison": "absolute"
+            },
+            "ni61": {
+              "allowed_difference": 2.1500000001469063e-10,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "p30": {
+              "allowed_difference": 2.000000002137812e-11,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 1.5499999996983573e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 1.0999999984064923e-09,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 2.000000000339701e-10,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 1.5499999996983573e-10,
+              "comparison": "absolute"
+            },
+            "sc43": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 1.0999999984064923e-09,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 1.0999999998701652e-10,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 1.6999999999121385e-10,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 6.499999998793429e-10,
+              "comparison": "absolute"
+            },
+            "ti47": {
+              "allowed_difference": 1.9999999995265493e-10,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 4.99999999828192e-10,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 1.1000000000327956e-09,
+              "comparison": "absolute"
+            },
+            "v50": {
+              "allowed_difference": 1.550000000104933e-10,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "zn63": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "5": {
+          "l1_limit": {
+            "allowed_difference": 2.564499944542833e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 3.499999998420932e-08,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 1.013391412715336e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 1.9999999908837935e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 1.5500000005115089e-09,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 1.1000000006833168e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 2.29999999914096e-10,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 1.6999999999121384e-09,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 6.499999992288215e-11,
+              "comparison": "absolute"
+            },
+            "ca42": {
+              "allowed_difference": 1.4000000002977277e-10,
+              "comparison": "absolute"
+            },
+            "cl34": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 1.1000000000327956e-09,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 2.3000000008973676e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 1.4000000003302536e-08,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 3.6499999999265786e-09,
+              "comparison": "absolute"
+            },
+            "co59": {
+              "allowed_difference": 6.499999998621621e-10,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 1.5499999998609876e-09,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 1.250000000409207e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 4.699999999634113e-09,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 4.250000000131182e-09,
+              "comparison": "absolute"
+            },
+            "cr53": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 2.8999999999960847e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 1.3999999998098367e-09,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 2.000000007016722e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 1.099999999707535e-09,
+              "comparison": "absolute"
+            },
+            "cu62": {
+              "allowed_difference": 4.4000000005075935e-10,
+              "comparison": "absolute"
+            },
+            "cu63": {
+              "allowed_difference": 1.4000000000944398e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 6.4999999994439505e-09,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 9.499999995262797e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 1.999999999210466e-08,
+              "comparison": "absolute"
+            },
+            "fe55": {
+              "allowed_difference": 1.8499999990525596e-08,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 1.3999999998098366e-08,
+              "comparison": "absolute"
+            },
+            "fe57": {
+              "allowed_difference": 1.0100000000499764e-09,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 3.499999998420932e-08,
+              "comparison": "absolute"
+            },
+            "k38": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "mg24": {
+              "allowed_difference": 1.9999999980720538e-11,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 2.750000000595455e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 4.999999997631399e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 3.500000003625103e-09,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 1.4000000003302536e-08,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 3.95000000002888e-09,
+              "comparison": "absolute"
+            },
+            "mn55": {
+              "allowed_difference": 7.099999999476745e-10,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 1.3999999998098366e-08,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 1.5500000002513004e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 4.999999997631399e-09,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 3.799999999327208e-09,
+              "comparison": "absolute"
+            },
+            "ni61": {
+              "allowed_difference": 5.599999998965237e-10,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "p30": {
+              "allowed_difference": 3.5000000042756244e-11,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 1.550000000511509e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 1.6999999999121384e-09,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 2.1499999997403305e-10,
+              "comparison": "absolute"
+            },
+            "sc43": {
+              "allowed_difference": 3.5000000042756244e-11,
+              "comparison": "absolute"
+            },
+            "sc44": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "sc45": {
+              "allowed_difference": 7.999999998491786e-11,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 1.250000000409207e-09,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 1.550000000511509e-10,
+              "comparison": "absolute"
+            },
+            "si30": {
+              "allowed_difference": 8.000000000524665e-11,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 3.3499999998242767e-10,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 5.000000001534527e-10,
+              "comparison": "absolute"
+            },
+            "ti47": {
+              "allowed_difference": 3.650000000251839e-10,
+              "comparison": "absolute"
+            },
+            "ti48": {
+              "allowed_difference": 2.1500000001469063e-10,
+              "comparison": "absolute"
+            },
+            "v46": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 6.500000002046036e-10,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 1.6999999999121384e-09,
+              "comparison": "absolute"
+            },
+            "v50": {
+              "allowed_difference": 3.7999999996524687e-10,
+              "comparison": "absolute"
+            },
+            "v51": {
+              "allowed_difference": 1.399999999891152e-10,
+              "comparison": "absolute"
+            },
+            "zn60": {
+              "allowed_difference": 9.49999999656384e-11,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 1.2500000000839465e-10,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 3.5000000042756244e-11,
+              "comparison": "absolute"
+            },
+            "zn63": {
+              "allowed_difference": 1.6999999999121385e-10,
+              "comparison": "absolute"
+            },
+            "zn64": {
+              "allowed_difference": 1.100000000276741e-10,
+              "comparison": "absolute"
+            }
+          }
+        },
+        "6": {
+          "l1_limit": {
+            "allowed_difference": 1.8681037546344754e-07,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 3.499999998420932e-08,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 1.0937258218402519e-07,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 1.999999999210466e-08,
+              "comparison": "absolute"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 1.9999999908837935e-07,
+              "comparison": "absolute"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 1.099999999707535e-09,
+              "comparison": "absolute"
+            },
+            "ar37": {
+              "allowed_difference": 1.9999999972589024e-10,
+              "comparison": "absolute"
+            },
+            "ar38": {
+              "allowed_difference": 2.3000000007672633e-10,
+              "comparison": "absolute"
+            },
+            "c12": {
+              "allowed_difference": 3.500000000209866e-11,
+              "comparison": "absolute"
+            },
+            "ca40": {
+              "allowed_difference": 9.49999999656384e-10,
+              "comparison": "absolute"
+            },
+            "ca41": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca42": {
+              "allowed_difference": 1.550000000511509e-10,
+              "comparison": "absolute"
+            },
+            "cl33": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "cl34": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            },
+            "cl35": {
+              "allowed_difference": 1.9999999972589024e-10,
+              "comparison": "absolute"
+            },
+            "cl36": {
+              "allowed_difference": 7.999999998491786e-11,
+              "comparison": "absolute"
+            },
+            "co54": {
+              "allowed_difference": 1.099999999707535e-09,
+              "comparison": "absolute"
+            },
+            "co55": {
+              "allowed_difference": 1.3999999992894196e-08,
+              "comparison": "absolute"
+            },
+            "co56": {
+              "allowed_difference": 4.999999997631399e-09,
+              "comparison": "absolute"
+            },
+            "co57": {
+              "allowed_difference": 9.499999995262797e-09,
+              "comparison": "absolute"
+            },
+            "co58": {
+              "allowed_difference": 3.95000000002888e-09,
+              "comparison": "absolute"
+            },
+            "co59": {
+              "allowed_difference": 9.499999999816447e-10,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 1.099999999707535e-09,
+              "comparison": "absolute"
+            },
+            "cr49": {
+              "allowed_difference": 1.3999999998098367e-09,
+              "comparison": "absolute"
+            },
+            "cr50": {
+              "allowed_difference": 1.999999999210466e-09,
+              "comparison": "absolute"
+            },
+            "cr51": {
+              "allowed_difference": 5.000000000233484e-09,
+              "comparison": "absolute"
+            },
+            "cr52": {
+              "allowed_difference": 3.6499999999265786e-09,
+              "comparison": "absolute"
+            },
+            "cr53": {
+              "allowed_difference": 4.549999999908223e-10,
+              "comparison": "absolute"
+            },
+            "cu58": {
+              "allowed_difference": 3.9500000006794015e-10,
+              "comparison": "absolute"
+            },
+            "cu59": {
+              "allowed_difference": 1.5500000005115089e-09,
+              "comparison": "absolute"
+            },
+            "cu60": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "cu61": {
+              "allowed_difference": 1.3999999998098367e-09,
+              "comparison": "absolute"
+            },
+            "cu62": {
+              "allowed_difference": 8.000000002557545e-10,
+              "comparison": "absolute"
+            },
+            "cu63": {
+              "allowed_difference": 2.4500000001678927e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 3.80000000062825e-09,
+              "comparison": "absolute"
+            },
+            "fe53": {
+              "allowed_difference": 7.99999999605233e-09,
+              "comparison": "absolute"
+            },
+            "fe54": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe55": {
+              "allowed_difference": 1.250000000409207e-08,
+              "comparison": "absolute"
+            },
+            "fe56": {
+              "allowed_difference": 9.500000000466967e-09,
+              "comparison": "absolute"
+            },
+            "fe57": {
+              "allowed_difference": 1.2499999997586858e-09,
+              "comparison": "absolute"
+            },
+            "fe58": {
+              "allowed_difference": 1.1000000000734531e-10,
+              "comparison": "absolute"
+            },
+            "he4": {
+              "allowed_difference": 3.499999998420932e-08,
+              "comparison": "absolute"
+            },
+            "k38": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            },
+            "k39": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "k40": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "mg24": {
+              "allowed_difference": 2.000000002137812e-11,
+              "comparison": "absolute"
+            },
+            "mn50": {
+              "allowed_difference": 4.99999999828192e-10,
+              "comparison": "absolute"
+            },
+            "mn51": {
+              "allowed_difference": 5.0000000028355695e-09,
+              "comparison": "absolute"
+            },
+            "mn52": {
+              "allowed_difference": 3.4999999984209324e-09,
+              "comparison": "absolute"
+            },
+            "mn53": {
+              "allowed_difference": 9.500000005671138e-09,
+              "comparison": "absolute"
+            },
+            "mn54": {
+              "allowed_difference": 4.0999999994295096e-09,
+              "comparison": "absolute"
+            },
+            "mn55": {
+              "allowed_difference": 9.499999999816447e-10,
+              "comparison": "absolute"
+            },
+            "n": {
+              "allowed_difference": 9.500000000629598e-11,
+              "comparison": "absolute"
+            },
+            "ni56": {
+              "allowed_difference": 6.500000002046036e-09,
+              "comparison": "absolute"
+            },
+            "ni57": {
+              "allowed_difference": 1.1000000004881604e-08,
+              "comparison": "absolute"
+            },
+            "ni58": {
+              "allowed_difference": 4.999999997631399e-09,
+              "comparison": "absolute"
+            },
+            "ni59": {
+              "allowed_difference": 6.499999996841865e-09,
+              "comparison": "absolute"
+            },
+            "ni60": {
+              "allowed_difference": 3.349999999824277e-09,
+              "comparison": "absolute"
+            },
+            "ni61": {
+              "allowed_difference": 7.999999999304938e-10,
+              "comparison": "absolute"
+            },
+            "o16": {
+              "allowed_difference": 2.000000002137812e-11,
+              "comparison": "absolute"
+            },
+            "p": {
+              "allowed_difference": 3.500000003625103e-09,
+              "comparison": "absolute"
+            },
+            "p29": {
+              "allowed_difference": 5.0000000023476783e-11,
+              "comparison": "absolute"
+            },
+            "p30": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "p31": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "s32": {
+              "allowed_difference": 1.250000000409207e-09,
+              "comparison": "absolute"
+            },
+            "s33": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "s34": {
+              "allowed_difference": 2.1499999997403305e-10,
+              "comparison": "absolute"
+            },
+            "sc43": {
+              "allowed_difference": 4.99999999828192e-11,
+              "comparison": "absolute"
+            },
+            "sc44": {
+              "allowed_difference": 8.000000002557544e-11,
+              "comparison": "absolute"
+            },
+            "sc45": {
+              "allowed_difference": 1.100000000276741e-10,
+              "comparison": "absolute"
+            },
+            "si28": {
+              "allowed_difference": 1.0999999984064923e-09,
+              "comparison": "absolute"
+            },
+            "si29": {
+              "allowed_difference": 1.8500000009390713e-10,
+              "comparison": "absolute"
+            },
+            "si30": {
+              "allowed_difference": 7.999999998491786e-11,
+              "comparison": "absolute"
+            },
+            "ti44": {
+              "allowed_difference": 3.5000000010230175e-10,
+              "comparison": "absolute"
+            },
+            "ti45": {
+              "allowed_difference": 2.000000000511509e-10,
+              "comparison": "absolute"
+            },
+            "ti46": {
+              "allowed_difference": 5.000000001534527e-10,
+              "comparison": "absolute"
+            },
+            "ti47": {
+              "allowed_difference": 4.99999999828192e-10,
+              "comparison": "absolute"
+            },
+            "ti48": {
+              "allowed_difference": 2.600000000381674e-10,
+              "comparison": "absolute"
+            },
+            "v46": {
+              "allowed_difference": 6.500000000419732e-11,
+              "comparison": "absolute"
+            },
+            "v47": {
+              "allowed_difference": 5.00000000803974e-10,
+              "comparison": "absolute"
+            },
+            "v48": {
+              "allowed_difference": 8.000000002557545e-10,
+              "comparison": "absolute"
+            },
+            "v49": {
+              "allowed_difference": 1.6999999999121384e-09,
+              "comparison": "absolute"
+            },
+            "v50": {
+              "allowed_difference": 5.149999999137045e-10,
+              "comparison": "absolute"
+            },
+            "v51": {
+              "allowed_difference": 2.1499999997403305e-10,
+              "comparison": "absolute"
+            },
+            "zn60": {
+              "allowed_difference": 9.500000000629598e-11,
+              "comparison": "absolute"
+            },
+            "zn61": {
+              "allowed_difference": 1.5499999988852057e-10,
+              "comparison": "absolute"
+            },
+            "zn62": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "zn63": {
+              "allowed_difference": 2.749999998969152e-10,
+              "comparison": "absolute"
+            },
+            "zn64": {
+              "allowed_difference": 1.9999999995265493e-10,
+              "comparison": "absolute"
+            }
+          }
+        }
+      }
+    },
+    "tnsn_alpha": {
+      "case": "tnsn_alpha",
+      "classification": "configuration-stable",
+      "zones": {
+        "1": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "10": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "2": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "3": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "4": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "5": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "6": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "7": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "8": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        },
+        "9": {
+          "l1_limit": {
+            "allowed_difference": 2.0755105009600632e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.14999999940063e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.150000012411056e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "cr48": {
+              "allowed_difference": 1.999999994006296e-10,
+              "comparison": "absolute"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          }
+        }
+      }
+    },
+    "tnsn_torch47": {
+      "case": "tnsn_torch47",
+      "classification": "configuration-stable",
+      "zones": {
+        "1": {
+          "l1_limit": {
+            "allowed_difference": 1.6688660765938614e-08,
+            "comparison": "absolute"
+          },
+          "linf_limit": {
+            "allowed_difference": 5.105000000068332e-09,
+            "comparison": "absolute"
+          },
+          "printed_sum_limit": {
+            "allowed_difference": 5.095038477088139e-09,
+            "comparison": "absolute"
+          },
+          "scalar_limits": {
+            "achieved_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "density": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "electron_fraction": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "target_time": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "temperature_gk": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            }
+          },
+          "selected_species_limits": {
+            "ar36": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ca40": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "co55": {
+              "allowed_difference": 1.1000000006833168e-10,
+              "comparison": "absolute"
+            },
+            "cr48": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "fe52": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ni56": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s31": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "s32": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "si28": {
+              "allowed_difference": 0.0,
+              "comparison": "exact"
+            },
+            "ti44": {
+              "allowed_difference": 1.2500000002872343e-11,
+              "comparison": "absolute"
+            }
+          }
+        }
+      }
+    }
+  },
+  "characterization_status": "characterization-only; empirical software-regression envelope, not scientific validation",
+  "derivation": {
+    "formula": "limit = 1.5 * maximum absolute deviation from mac-gnu16 + 0.5 * final printed decimal unit",
+    "printed_unit_allowance": "one half of the final printed decimal unit; complete-vector L1 uses half the sum and L-infinity half the maximum of species units",
+    "report_sha256": "424b7bb022308e30c12aef814b5e1bed9acbaecca2289766c7892400ae88eee0",
+    "safety_multiplier": 1.5
+  },
+  "issue30_source_revision": "96277db1cd466015f4f510628b23c312f5b985df",
+  "policy_schema": "xnet-empirical-portability-v1",
+  "study_inputs": {
+    "endpoint_sha256": {
+      "etacar-gnu16": "e18109c1234f0e34aa001d6bb2659324687d5df9e484e8c608f312dbb264e9ce",
+      "mac-gnu16": "10fb159a113910170f43efe753357c46d912e54891bb5478308809e44d598afe",
+      "mac-llvm": "cf2c62cbe9bbb42664f3e36473301004e68fc94a7ed140818e73748db00acecc"
+    },
+    "observation_count": 45
+  },
+  "supported_empirical_configurations": [
+    "mac-gnu16",
+    "mac-llvm",
+    "etacar-gnu16"
+  ]
+}

@@ -212,6 +212,60 @@ recorded build and inputs, not historical or independent scientific truth.
 
 ## Comparison policy and reference status
 
+### Issue #30 empirical portability envelope
+
+`mac-gnu16` remains the canonical reference-producing configuration for
+continuity and provenance: it produced the committed endpoints and was
+repeatable in the Issue #30 study.  It is not scientific truth and the policy
+does not assert that any compiler, CPU, operating system, optimization, or
+runtime component is more correct than another.
+
+Normal execution reads one shared
+`test/regression/empirical_policy.json` envelope; it never detects a platform,
+compiler, or executable label and never switches references.  The evidence
+behind that envelope is deliberately bounded to these serial CPU builds:
+
+| ID | Host/compiler | Required build selection |
+| --- | --- | --- |
+| `mac-gnu16` | GNU Fortran 16 on the studied macOS host | `PE_ENV=GNU` |
+| `mac-llvm` | LLVM Flang on that host | `PE_ENV=LLVM` |
+| `etacar-gnu16` | GNU Fortran 16 on etacar Linux | `PE_ENV=GNU` |
+
+Every row used `CMODE=OPT`, `MPI_MODE=OFF`, `OPENMP_MODE=OFF`, `GPU_MODE=OFF`,
+`EOS=STARKILLER`, `MATRIX_SOLVER=dense`, and `LAPACK_VER=NETLIB`, with the
+tracked optimized flags.  Applicability beyond those three observed rows is
+unproven.  This remains a software-regression characterization, not a
+scientific-validation suite.
+
+The policy declares Outcome A (`tnsn_alpha`, `heat_alpha`, and
+`tnsn_torch47`) as configuration-stable and Outcome B (`heat_sn160` and
+`bdf_sn160`) as a wider empirical gate.  It uses field- and zone-specific
+absolute limits, not a universal relative tolerance.  A limit is derived as
+`1.5 * maximum absolute deviation from mac-gnu16 + 0.5 * final printed decimal
+unit`; the vector norms use one half of the sum (L1) or maximum (L-infinity)
+of the component units. Values invariant at parsed precision stay exact. Selected species have
+their own limits.  Complete ordered vectors use independent L1 and L-infinity
+gates (L2 is diagnostic-only), so a vector failure cannot be hidden by
+selected-species checks.
+
+The printed composition sum is checked separately from the recomputed physical
+normalization check; it is the insertion-order sum of parsed printed abundance
+values. The normalization gate preserves its reference allowance and, for an
+absolute printed-sum policy, adds that explicit empirical printed allowance;
+an exact printed-sum policy adds none. `End`, TS, NR, Jacobian, Deriv, and CrossSect records remain strictly
+parsed and reported diagnostics, but are not cross-configuration numerical
+gates.  This avoids converting the bounded BDF coarse-path observations into
+portable solver invariants.
+
+`derive_issue30_policy.py` deterministically reproduces the policy from the
+three retained parsed study endpoint records and writes only to standard
+output.  It cannot update a reference or policy.  The policy records the exact
+input hashes, observation count, formula, print-resolution rule, source
+revision, and derivation-report hash.  Do not regenerate canonical endpoints
+or copy generated numeric tables into this document.  Future portability work
+must retain new exact observations, deliberately review a new bounded policy,
+and must not silently extend this matrix or add automatic reference updates.
+
 The historical script deletes the `Timers Summary:` heading plus the next 14
 lines, performs an exact whole-file diff, warns on differences, and normally
 returns success. A clean checkout has no tracked
@@ -318,46 +372,24 @@ well as membership so reviewers can audit each list directly.
 | `heat_alpha` | 5-6 | same case-wide list | `he4, c12, o16, mg24, si28, s32, ar36, ca40, ti44, cr48, fe52, ni56, zn60` |
 
 Thus the single-zone Torch47 case and all identical `tnsn_alpha` zones retain
-the same pass/fail coverage. In `heat_alpha`, for example, `o16` gates zones
-4-6 but remains diagnostic-only in zones 1-3. The focused tests apply the same
-sum-preserving `o16`/`c12` perturbation to zones 4 and 3 to check both outcomes;
-negative-fraction and composition-sum checks still cover the full vector.
+the same selected-species coverage. In `heat_alpha`, for example, `o16` is not
+a selected field in zones 1-3, but a material change in it can still be caught
+by the complete-vector gate. The reference retains every species and zone for
+strict structure, normalization, canonical provenance, and vector comparison.
 
-Every field has an explicit absolute tolerance grounded in its printed
-resolution and a relative tolerance of `5e-8`, reflecting half a unit at the
-diagnostic's eight-significant-digit precision. The `heat_alpha` absolute
-tolerances use half of each value's last printed place.
-Where a quantity's printed scale differs among its zones, the JSON records the
-absolute tolerances by zone. Reference values, absolute tolerances, and
-relative tolerances may each be either one scalar applied to every zone or a
-mapping with exactly one value for every expected zone. This preserves the
-compact existing `tnsn_alpha` reference while representing all six distinct
-`heat_alpha` endpoints explicitly. The policy remains a deliberately narrow
-same-configuration characterization; cross-compiler evidence is not yet
-available. The numerical-field criterion is
+The executable acceptance limits now live only in
+`empirical_policy.json`. Its explicit absolute limits are derived from the
+three-row Issue #30 evidence, with exact comparisons for invariant parsed
+fields. The older tolerance entries retained in `final_state.json` preserve
+the canonical-record schema and independent normalization allowance; they do
+not select a platform or provide a permissive fallback for normal execution.
 
-```text
-abs(actual - reference) <= atol + rtol * abs(reference)
-```
-
-Each reference contains the final mass fraction for every case-network species
-and every zone. The separate `mass_fraction_selection` and
-`mass_fraction_tolerances` mappings identify which species have field-aware
-pass/fail policies in each zone without repeating any composition value. A
-tolerance scalar applies wherever that species is selected; a zone mapping can
-provide distinct bounds and must define every expected zone. This keeps
-complete reference states for structural checks and diagnostic norms without
-inventing pass/fail tolerances for trace species.
-
-For diagnosis, `composition_error_norms.json` reports raw `L1`, `L2`, and
-`L-infinity` norms of the absolute mass-fraction error over all case species for
-each zone, plus the species responsible for `L-infinity`. The complete
-composition reference and selected tolerance mapping are stored separately in
-`final_state.json`, so each species value has a single source. These norms have
-no acceptance threshold and do not affect pass/fail. Raw
-norms can be dominated by abundant species or conceal the identity of other
-changes, so the selected field-aware comparisons remain the regression
-criteria.
+For diagnosis, `composition_error_norms.json` reports L1, L2, and L-infinity
+absolute composition errors over all case species, the L-infinity species, and
+the parsed `End`/counter values. L1 and L-infinity have explicit empirical
+acceptance limits; L2 remains diagnostic-only. Selected field-aware checks and
+the full-vector checks are independent, so neither can hide a failure in the
+other.
 
 Timer exclusion is structural rather than line-count based: only a
 `Timers Summary:` heading and immediately following timer-name/numeric-value

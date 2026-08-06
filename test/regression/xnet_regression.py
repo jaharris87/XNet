@@ -321,6 +321,7 @@ class RegressionCase:
     expected_zones: tuple[int, ...]
     expected_species: tuple[str, ...]
     network_inputs: tuple[str, ...]
+    policy: Path
     reference_schema: str | None = None
     expected_legacy_id: int | None = None
     expected_solver: str | None = None
@@ -419,6 +420,35 @@ class CompositionNorms:
     linf_species: str | None
 
 
+@dataclass(frozen=True)
+class EmpiricalLimit:
+    """One Issue #30 numerical acceptance limit."""
+
+    comparison: str
+    allowed_difference: float
+
+
+@dataclass(frozen=True)
+class EmpiricalZonePolicy:
+    scalar_limits: Mapping[str, EmpiricalLimit]
+    selected_species_limits: Mapping[str, EmpiricalLimit]
+    l1_limit: EmpiricalLimit
+    linf_limit: EmpiricalLimit
+    printed_sum_limit: EmpiricalLimit
+
+
+@dataclass(frozen=True)
+class EmpiricalComparisonPolicy:
+    """Configuration-bounded, characterization-only Issue #30 envelope."""
+
+    source: Path
+    case_name: str
+    classification: str
+    canonical_configuration: str
+    supported_configurations: tuple[str, ...]
+    zones: Mapping[int, EmpiricalZonePolicy]
+
+
 def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
     case_directory = repository_root / "test" / "regression" / "cases" / "tnsn_alpha"
     return RegressionCase(
@@ -432,6 +462,7 @@ def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
             repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
         ),
         reference=case_directory / "reference" / "final_state.json",
+        policy=repository_root / "test" / "regression" / "empirical_policy.json",
         expected_zones=tuple(range(1, 11)),
         expected_species=ALPHA_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
@@ -454,6 +485,7 @@ def heat_alpha_case(repository_root: Path) -> RegressionCase:
             repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
         ),
         reference=case_directory / "reference" / "final_state.json",
+        policy=repository_root / "test" / "regression" / "empirical_policy.json",
         expected_zones=tuple(range(1, 7)),
         expected_species=ALPHA_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
@@ -475,6 +507,7 @@ def tnsn_torch47_case(repository_root: Path) -> RegressionCase:
             repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
         ),
         reference=case_directory / "reference" / "final_state.json",
+        policy=repository_root / "test" / "regression" / "empirical_policy.json",
         expected_zones=(1,),
         expected_species=TORCH47_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
@@ -497,6 +530,7 @@ def heat_sn160_case(repository_root: Path) -> RegressionCase:
             repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
         ),
         reference=case_directory / "reference" / "final_state.json",
+        policy=repository_root / "test" / "regression" / "empirical_policy.json",
         expected_zones=tuple(range(1, 7)),
         expected_species=SN160_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
@@ -519,6 +553,7 @@ def bdf_sn160_case(repository_root: Path) -> RegressionCase:
             repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
         ),
         reference=case_directory / "reference" / "final_state.json",
+        policy=repository_root / "test" / "regression" / "empirical_policy.json",
         expected_zones=tuple(range(1, 7)),
         expected_species=SN160_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
@@ -612,6 +647,7 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         "Helmholtz EOS table": case.helm_table,
         "characterization reference": case.reference,
     }
+    required["empirical comparison policy"] = case.policy
     required.update(
         {
             f"thermodynamic trajectory {index}": path
@@ -1086,6 +1122,214 @@ def _unique_json_object(pairs: Sequence[tuple[str, object]]) -> dict[str, object
             raise ValueError(f"duplicate JSON object key: {key}")
         document[key] = value
     return document
+
+
+_EMPIRICAL_POLICY_SCHEMA = "xnet-empirical-portability-v1"
+_EMPIRICAL_SCALAR_FIELDS = (
+    "target_time",
+    "achieved_time",
+    "temperature_gk",
+    "density",
+    "electron_fraction",
+)
+_EMPIRICAL_CASES = (
+    "tnsn_alpha",
+    "heat_alpha",
+    "tnsn_torch47",
+    "heat_sn160",
+    "bdf_sn160",
+)
+
+
+def _load_empirical_limit(item: object, context: str) -> EmpiricalLimit:
+    if not isinstance(item, dict) or set(item) != {
+        "comparison",
+        "allowed_difference",
+    }:
+        raise SetupFailure(
+            f"empirical policy {context} must contain comparison and allowed_difference"
+        )
+    comparison = item["comparison"]
+    limit = item["allowed_difference"]
+    if comparison not in {"exact", "absolute"}:
+        raise SetupFailure(
+            f"empirical policy {context} has unknown comparison: {comparison!r}"
+        )
+    if (
+        not isinstance(limit, (int, float))
+        or isinstance(limit, bool)
+        or not math.isfinite(limit)
+        or limit < 0.0
+    ):
+        raise SetupFailure(
+            f"empirical policy {context} allowed_difference must be finite and nonnegative"
+        )
+    if (comparison == "exact") != (limit == 0.0):
+        raise SetupFailure(
+            f"empirical policy {context} exact comparison must use zero and "
+            "absolute comparison must use a positive limit"
+        )
+    return EmpiricalLimit(comparison, float(limit))
+
+
+def _load_empirical_zone_policy(item: object, context: str) -> EmpiricalZonePolicy:
+    required = {
+        "scalar_limits",
+        "selected_species_limits",
+        "l1_limit",
+        "linf_limit",
+        "printed_sum_limit",
+    }
+    if not isinstance(item, dict) or set(item) != required:
+        raise SetupFailure(
+            f"empirical policy {context} must contain scalar, selected-species, "
+            "norm, and printed-sum limits"
+        )
+    scalars = item["scalar_limits"]
+    if not isinstance(scalars, dict) or set(scalars) != set(_EMPIRICAL_SCALAR_FIELDS):
+        raise SetupFailure(
+            f"empirical policy {context}.scalar_limits must define exactly "
+            f"{list(_EMPIRICAL_SCALAR_FIELDS)}"
+        )
+    selected = item["selected_species_limits"]
+    if not isinstance(selected, dict) or not selected:
+        raise SetupFailure(
+            f"empirical policy {context}.selected_species_limits must be nonempty"
+        )
+    if not all(isinstance(species, str) and species for species in selected):
+        raise SetupFailure(
+            f"empirical policy {context}.selected_species_limits has an invalid species"
+        )
+    return EmpiricalZonePolicy(
+        scalar_limits={
+            name: _load_empirical_limit(value, f"{context}.scalar_limits.{name}")
+            for name, value in scalars.items()
+        },
+        selected_species_limits={
+            species: _load_empirical_limit(
+                value, f"{context}.selected_species_limits.{species}"
+            )
+            for species, value in selected.items()
+        },
+        l1_limit=_load_empirical_limit(item["l1_limit"], f"{context}.l1_limit"),
+        linf_limit=_load_empirical_limit(
+            item["linf_limit"], f"{context}.linf_limit"
+        ),
+        printed_sum_limit=_load_empirical_limit(
+            item["printed_sum_limit"], f"{context}.printed_sum_limit"
+        ),
+    )
+
+
+def load_empirical_policy(path: Path, case_name: str) -> EmpiricalComparisonPolicy:
+    """Load one explicit Issue #30 envelope without selecting a platform row."""
+
+    try:
+        document = json.loads(
+            path.read_text(encoding="utf-8"), object_pairs_hook=_unique_json_object
+        )
+    except OSError as error:
+        raise SetupFailure(f"could not read empirical policy {path}: {error}") from error
+    except json.JSONDecodeError as error:
+        raise SetupFailure(f"malformed empirical policy {path}: {error}") from error
+    except ValueError as error:
+        raise SetupFailure(f"invalid empirical policy {path}: {error}") from error
+
+    required = {
+        "policy_schema",
+        "characterization_status",
+        "canonical_configuration",
+        "supported_empirical_configurations",
+        "issue30_source_revision",
+        "derivation",
+        "study_inputs",
+        "cases",
+    }
+    if not isinstance(document, dict) or set(document) != required:
+        raise SetupFailure("empirical policy has missing, unknown, or unsupported fields")
+    if document["policy_schema"] != _EMPIRICAL_POLICY_SCHEMA:
+        raise SetupFailure(
+            f"unsupported empirical policy schema: {document['policy_schema']!r}"
+        )
+    if not isinstance(document["characterization_status"], str) or (
+        "characterization-only" not in document["characterization_status"]
+    ):
+        raise SetupFailure("empirical policy must declare characterization-only status")
+    if document["canonical_configuration"] != "mac-gnu16":
+        raise SetupFailure("empirical policy canonical_configuration must be mac-gnu16")
+    supported = document["supported_empirical_configurations"]
+    expected_supported = ("mac-gnu16", "mac-llvm", "etacar-gnu16")
+    if not isinstance(supported, list) or tuple(supported) != expected_supported:
+        raise SetupFailure(
+            "empirical policy supported_empirical_configurations must be the "
+            "accepted Issue #30 matrix"
+        )
+    if not isinstance(document["issue30_source_revision"], str) or re.fullmatch(
+        r"[0-9a-f]{40}", document["issue30_source_revision"]
+    ) is None:
+        raise SetupFailure("empirical policy issue30_source_revision must be a SHA")
+    derivation = document["derivation"]
+    if not isinstance(derivation, dict) or set(derivation) != {
+        "formula",
+        "safety_multiplier",
+        "printed_unit_allowance",
+        "report_sha256",
+    }:
+        raise SetupFailure("empirical policy derivation metadata is incomplete")
+    if derivation["safety_multiplier"] != 1.5 or not all(
+        isinstance(derivation[key], str) and derivation[key]
+        for key in ("formula", "printed_unit_allowance", "report_sha256")
+    ) or re.fullmatch(r"[0-9a-f]{64}", derivation["report_sha256"]) is None:
+        raise SetupFailure("empirical policy derivation metadata is contradictory")
+    study_inputs = document["study_inputs"]
+    if not isinstance(study_inputs, dict) or set(study_inputs) != {
+        "observation_count",
+        "endpoint_sha256",
+    } or study_inputs["observation_count"] != 45:
+        raise SetupFailure("empirical policy study observation metadata is incomplete")
+    hashes = study_inputs["endpoint_sha256"]
+    if not isinstance(hashes, dict) or set(hashes) != set(expected_supported) or not all(
+        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
+        for value in hashes.values()
+    ):
+        raise SetupFailure("empirical policy study input hashes are invalid")
+    cases = document["cases"]
+    if not isinstance(cases, dict) or set(cases) != set(_EMPIRICAL_CASES):
+        raise SetupFailure(
+            "empirical policy must define exactly the five accepted Issue #30 cases"
+        )
+    if case_name not in cases:
+        raise SetupFailure(f"empirical policy has no case entry for {case_name!r}")
+    entry = cases[case_name]
+    if not isinstance(entry, dict) or set(entry) != {"case", "classification", "zones"}:
+        raise SetupFailure(f"empirical policy case {case_name} is malformed")
+    if entry["case"] != case_name:
+        raise SetupFailure(
+            f"empirical policy case identity does not match {case_name!r}: {entry['case']!r}"
+        )
+    if entry["classification"] not in {
+        "configuration-stable",
+        "wider-empirical",
+    }:
+        raise SetupFailure(f"empirical policy case {case_name} has an unknown outcome")
+    zones = entry["zones"]
+    if not isinstance(zones, dict) or not zones:
+        raise SetupFailure(f"empirical policy case {case_name} has no zones")
+    loaded_zones: dict[int, EmpiricalZonePolicy] = {}
+    for key, value in zones.items():
+        if not isinstance(key, str) or not key.isdigit() or str(int(key)) != key:
+            raise SetupFailure(f"empirical policy case {case_name} has invalid zone {key!r}")
+        loaded_zones[int(key)] = _load_empirical_zone_policy(
+            value, f"cases.{case_name}.zones.{key}"
+        )
+    return EmpiricalComparisonPolicy(
+        source=path,
+        case_name=case_name,
+        classification=entry["classification"],
+        canonical_configuration=document["canonical_configuration"],
+        supported_configurations=tuple(supported),
+        zones={zone: loaded_zones[zone] for zone in sorted(loaded_zones)},
+    )
 
 
 def _load_reference_metadata(
@@ -1596,6 +1840,54 @@ def validate_reference_for_case(
             )
 
 
+def validate_empirical_policy_for_case(
+    case: RegressionCase,
+    reference: CharacterizationReference,
+    policy: EmpiricalComparisonPolicy,
+) -> None:
+    """Bind the shared policy document to exactly one registered case."""
+
+    if policy.case_name != case.name:
+        raise SetupFailure(
+            "empirical policy case does not match the case definition: "
+            f"{policy.case_name!r} != {case.name!r}"
+        )
+    if tuple(policy.zones) != case.expected_zones:
+        raise SetupFailure(
+            "empirical policy zones do not match the case definition: "
+            f"{tuple(policy.zones)} != {case.expected_zones}"
+        )
+    expected_outcomes = {
+        "tnsn_alpha": "configuration-stable",
+        "heat_alpha": "configuration-stable",
+        "tnsn_torch47": "configuration-stable",
+        "heat_sn160": "wider-empirical",
+        "bdf_sn160": "wider-empirical",
+    }
+    if policy.classification != expected_outcomes.get(case.name):
+        raise SetupFailure(
+            f"empirical policy {case.name} has the wrong accepted outcome"
+        )
+    for zone in case.expected_zones:
+        zone_policy = policy.zones[zone]
+        expected_selected = comparison_species_for_zone(
+            case.expected_species, reference.mass_fractions[zone]
+        )
+        actual_selected = tuple(zone_policy.selected_species_limits)
+        if set(actual_selected) != set(expected_selected):
+            raise SetupFailure(
+                "empirical policy selected species do not match the per-zone "
+                f"composition policy for zone {zone}: {sorted(actual_selected)} != "
+                f"{sorted(expected_selected)}"
+            )
+        unknown_species = set(actual_selected).difference(case.expected_species)
+        if unknown_species:
+            raise SetupFailure(
+                "empirical policy has unknown selected species: "
+                + ", ".join(sorted(unknown_species))
+            )
+
+
 def _difference(actual: float, reference: Tolerance) -> tuple[bool, float, float]:
     absolute_difference = abs(actual - reference.value)
     allowed = reference.atol + reference.rtol * abs(reference.value)
@@ -1629,10 +1921,18 @@ def calculate_composition_norms(
 
 
 def _write_composition_diagnostics(
-    work_directory: Path, diagnostics: Sequence[CompositionNorms]
+    work_directory: Path,
+    diagnostics: Sequence[CompositionNorms],
+    states: Sequence[FinalState],
+    policy: EmpiricalComparisonPolicy | None = None,
 ) -> None:
     document = {
-        "status": "diagnostic-only; these norms do not determine pass/fail",
+        "status": (
+            "empirical L1 and L-infinity limits determine pass/fail; "
+            "L2 remains diagnostic-only"
+            if policy is not None
+            else "diagnostic-only; these norms do not determine pass/fail"
+        ),
         "vector": "absolute mass-fraction errors for every species in the case",
         "zones": [
             {
@@ -1644,6 +1944,18 @@ def _write_composition_diagnostics(
             }
             for item in diagnostics
         ],
+        "steps_and_counters": [
+            {
+                "zone": state.zone,
+                "End": state.step,
+                "TS": state.counters.ts,
+                "NR": state.counters.nr,
+                "Jacobian": state.counters.jacobian,
+                "Deriv": state.counters.derivative,
+                "CrossSect": state.counters.cross_section,
+            }
+            for state in states
+        ],
     }
     path = work_directory / "composition_error_norms.json"
     try:
@@ -1654,7 +1966,7 @@ def _write_composition_diagnostics(
         ) from error
 
 
-def compare_final_states(
+def _compare_final_states_legacy(
     states: Sequence[FinalState], reference: CharacterizationReference
 ) -> None:
     failures: list[str] = []
@@ -1730,6 +2042,126 @@ def compare_final_states(
         raise ComparisonFailure("numerical characterization failed:\n  " + "\n  ".join(failures))
 
 
+def _passes_empirical_limit(
+    actual: float, canonical: float, limit: EmpiricalLimit
+) -> tuple[bool, float]:
+    difference = abs(actual - canonical)
+    if limit.comparison == "exact":
+        return actual == canonical, difference
+    return difference <= limit.allowed_difference, difference
+
+
+def compare_final_states(
+    states: Sequence[FinalState],
+    reference: CharacterizationReference,
+    policy: EmpiricalComparisonPolicy | None = None,
+) -> None:
+    """Apply the legacy checks or the explicit Issue #30 empirical envelope."""
+
+    if policy is None:
+        _compare_final_states_legacy(states, reference)
+        return
+
+    failures: list[str] = []
+    if tuple(state.zone for state in states) != reference.expected_zones:
+        failures.append(
+            f"case {policy.case_name}: zone records do not match the canonical reference"
+        )
+    for state in states:
+        if state.zone not in policy.zones or state.zone not in reference.fields:
+            failures.append(f"case {policy.case_name}: zone {state.zone} has no policy")
+            continue
+        zone_policy = policy.zones[state.zone]
+        canonical_fields = reference.fields[state.zone]
+        for field, limit in zone_policy.scalar_limits.items():
+            actual = state.time if field == "achieved_time" else getattr(state, field)
+            canonical = canonical_fields[
+                "target_time" if field == "achieved_time" and field not in canonical_fields else field
+            ].value
+            passed, difference = _passes_empirical_limit(actual, canonical, limit)
+            if not passed:
+                failures.append(
+                    f"case={policy.case_name} zone={state.zone} field={field}: "
+                    f"actual={actual:.17g}; canonical={canonical:.17g}; "
+                    f"absolute_difference={difference:.17g}; "
+                    f"allowed_difference={limit.allowed_difference:.17g}; "
+                    f"policy={policy.source}"
+                )
+        canonical_composition = reference.mass_fractions[state.zone]
+        for species, limit in zone_policy.selected_species_limits.items():
+            actual = state.mass_fractions[species]
+            canonical = canonical_composition[species]
+            passed, difference = _passes_empirical_limit(actual, canonical, limit)
+            if not passed:
+                failures.append(
+                    f"case={policy.case_name} zone={state.zone} species={species}: "
+                    f"actual={actual:.17g}; canonical={canonical:.17g}; "
+                    f"absolute_difference={difference:.17g}; "
+                    f"allowed_difference={limit.allowed_difference:.17g}; "
+                    f"policy={policy.source}"
+                )
+        negative_species = [
+            species for species, value in state.mass_fractions.items() if value < 0.0
+        ]
+        if negative_species:
+            failures.append(
+                f"case={policy.case_name} zone={state.zone} has negative mass fractions: "
+                + ", ".join(negative_species)
+            )
+        normalization_sum = sum(state.mass_fractions.values())
+        baseline_normalization_atol = reference.mass_fraction_sum_atols[state.zone]
+        printed_sum_allowance = (
+            zone_policy.printed_sum_limit.allowed_difference
+            if zone_policy.printed_sum_limit.comparison == "absolute"
+            else 0.0
+        )
+        normalization_atol = baseline_normalization_atol + printed_sum_allowance
+        if abs(normalization_sum - 1.0) > normalization_atol:
+            failures.append(
+                f"case={policy.case_name} zone={state.zone} has invalid "
+                f"normalization: sum={normalization_sum:.17g}; "
+                f"allowed |sum - 1| <= {normalization_atol:.17g} "
+                f"(baseline={baseline_normalization_atol:.17g}; "
+                f"empirical_printed_allowance={printed_sum_allowance:.17g})"
+            )
+        norms = calculate_composition_norms((state,), reference)[0]
+        for norm_name, actual, limit in (
+            ("L1", norms.l1, zone_policy.l1_limit),
+            ("L-infinity", norms.linf, zone_policy.linf_limit),
+        ):
+            passed, _ = _passes_empirical_limit(actual, 0.0, limit)
+            if not passed:
+                suffix = (
+                    f"; L-infinity species={norms.linf_species}"
+                    if norm_name == "L-infinity"
+                    else ""
+                )
+                failures.append(
+                    f"case={policy.case_name} zone={state.zone} norm={norm_name}: "
+                    f"actual_norm={actual:.17g}; "
+                    f"allowed_norm={limit.allowed_difference:.17g}{suffix}; "
+                    f"policy={policy.source}"
+                )
+        # This is the sum of parsed, printed abundance values; it is distinct
+        # from a physical normalization invariant and deliberately retains the
+        # established insertion-order summation used by the study extractor.
+        printed_sum = sum(state.mass_fractions.values())
+        canonical_sum = sum(canonical_composition.values())
+        passed, difference = _passes_empirical_limit(
+            printed_sum, canonical_sum, zone_policy.printed_sum_limit
+        )
+        if not passed:
+            failures.append(
+                f"case={policy.case_name} zone={state.zone} field=printed_composition_sum: "
+                f"actual={printed_sum:.17g}; canonical={canonical_sum:.17g}; "
+                f"absolute_difference={difference:.17g}; "
+                f"allowed_difference={zone_policy.printed_sum_limit.allowed_difference:.17g}; "
+                f"policy={policy.source}"
+            )
+    if failures:
+        raise ComparisonFailure("numerical characterization failed:\n  " + "\n  ".join(failures))
+
+
 def run_and_compare(
     executable: Path,
     case: RegressionCase,
@@ -1739,6 +2171,8 @@ def run_and_compare(
 ) -> ProcessResult:
     reference = load_reference(case.reference)
     validate_reference_for_case(case, reference)
+    policy = load_empirical_policy(case.policy, case.name)
+    validate_empirical_policy_for_case(case, reference, policy)
     prepared = prepare_work_directory(case, work_directory)
     result = run_xnet(
         executable,
@@ -1758,8 +2192,8 @@ def run_and_compare(
             diagnostic, case.expected_zones, case.expected_species
         )
         diagnostics = calculate_composition_norms(states, reference)
-        _write_composition_diagnostics(prepared, diagnostics)
-        compare_final_states(states, reference)
+        _write_composition_diagnostics(prepared, diagnostics, states, policy)
+        compare_final_states(states, reference, policy)
     except (ParsingFailure, ComparisonFailure) as error:
         raise type(error)(f"{error}; artifacts: {prepared}") from None
     return result

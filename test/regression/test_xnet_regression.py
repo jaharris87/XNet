@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -16,6 +17,7 @@ from xnet_regression import (
     CharacterizationReference,
     CompositionNorms,
     ComparisonFailure,
+    EmpiricalLimit,
     ExecutionFailure,
     FinalState,
     ParsingFailure,
@@ -31,6 +33,7 @@ from xnet_regression import (
     compare_final_states,
     heat_alpha_case,
     heat_sn160_case,
+    load_empirical_policy,
     load_reference,
     parse_diagnostic,
     prepare_work_directory,
@@ -41,6 +44,7 @@ from xnet_regression import (
     tnsn_torch47_case,
     validate_reference_for_case,
     validate_executable,
+    validate_empirical_policy_for_case,
 )
 
 
@@ -162,6 +166,7 @@ def _fake_case(tmp_path: Path) -> RegressionCase:
         trajectories=(tmp_path / "unused-trajectory",),
         helm_table=tmp_path / "unused-table",
         reference=tmp_path / "unused-reference",
+        policy=tmp_path / "unused-policy",
         expected_zones=(1,),
         expected_species=("he4",),
         network_inputs=("sunet",),
@@ -175,11 +180,369 @@ def _make_executable(tmp_path: Path, body: str) -> Path:
     return executable
 
 
+def _diagnostic_for_states(
+    case: RegressionCase, states: tuple[FinalState, ...]
+) -> str:
+    """Serialize structurally valid final records for a controlled test process."""
+
+    lines: list[str] = ["MyId    0    1"]
+    for state in states:
+        lines.append(
+            "End "
+            f"{state.zone} {state.step} {state.target_time:.17E} {state.time:.17E} "
+            f"{state.temperature_gk:.17E} {state.density:.17E} "
+            f"{state.electron_fraction:.17E}"
+        )
+        for offset in range(0, len(case.expected_species), 4):
+            lines.append(
+                " ".join(
+                    f"{species} {state.mass_fractions[species]:.17E}"
+                    for species in case.expected_species[offset : offset + 4]
+                )
+            )
+        lines.extend(
+            (
+                "Counters:  Zone        TS        NR  Jacobian     Deriv CrossSect",
+                f"{state.zone} {state.counters.ts} {state.counters.nr} "
+                f"{state.counters.jacobian} {state.counters.derivative} "
+                f"{state.counters.cross_section}",
+                "Timers Summary:",
+                " Total 1.0000000E-03",
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _controlled_process(
+    tmp_path: Path, case: RegressionCase, states: tuple[FinalState, ...]
+) -> Path:
+    tmp_path.mkdir()
+    diagnostic = _diagnostic_for_states(case, states)
+    body = (
+        "from pathlib import Path\n"
+        f"Path('net_diag01').write_text({diagnostic!r}, encoding='utf-8')\n"
+        f"for name in {case.required_outputs[1:]!r}:\n"
+        "    Path(name).write_text('controlled output\\n', encoding='utf-8')"
+    )
+    return _make_executable(tmp_path, body)
+
+
 def test_known_good_comparison_passes() -> None:
     states = parse_diagnostic(
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
     )
     compare_final_states(states, _matching_unit_reference())
+
+
+def test_empirical_policy_loads_for_every_registered_case() -> None:
+    for factory in (
+        tnsn_alpha_case,
+        heat_alpha_case,
+        tnsn_torch47_case,
+        heat_sn160_case,
+        bdf_sn160_case,
+    ):
+        case = factory(REPOSITORY_ROOT)
+        reference = load_reference(case.reference)
+        policy = load_empirical_policy(case.policy, case.name)
+        validate_empirical_policy_for_case(case, reference, policy)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (lambda document: document.pop("policy_schema"), "missing, unknown"),
+        (lambda document: document.__setitem__("policy_schema", "unknown"), "unsupported"),
+        (lambda document: document.pop("canonical_configuration"), "missing, unknown"),
+        (
+            lambda document: document.__setitem__("supported_empirical_configurations", []),
+            "accepted Issue #30 matrix",
+        ),
+        (
+            lambda document: document["cases"]["heat_sn160"]["zones"]["1"].pop("scalar_limits"),
+            "scalar, selected-species",
+        ),
+        (
+            lambda document: document["cases"]["heat_sn160"]["zones"]["1"].pop("selected_species_limits"),
+            "scalar, selected-species",
+        ),
+        (
+            lambda document: document["cases"]["heat_sn160"]["zones"]["1"].pop("l1_limit"),
+            "scalar, selected-species",
+        ),
+        (
+            lambda document: document["cases"]["heat_sn160"]["zones"].__setitem__("99", {}),
+            "scalar, selected-species",
+        ),
+        (
+            lambda document: document["cases"]["heat_sn160"]["zones"]["1"]["selected_species_limits"].__setitem__("xe999", {"comparison": "absolute", "allowed_difference": 1.0e-6}),
+            "selected species",
+        ),
+        (
+            lambda document: document["cases"]["heat_sn160"]["zones"]["1"]["l1_limit"].__setitem__("allowed_difference", -1.0),
+            "finite and nonnegative",
+        ),
+        (
+            lambda document: document["cases"]["heat_sn160"]["zones"]["1"]["l1_limit"].__setitem__("allowed_difference", 0.0),
+            "exact comparison",
+        ),
+        (
+            lambda document: document["derivation"].__setitem__("safety_multiplier", 2.0),
+            "contradictory",
+        ),
+        (
+            lambda document: document["derivation"].__setitem__("printed_unit_allowance", 0.5),
+            "contradictory",
+        ),
+        (
+            lambda document: document.__setitem__("automatic_reference_update", True),
+            "missing, unknown",
+        ),
+    ),
+)
+def test_empirical_policy_rejects_malformed_data(
+    tmp_path: Path, mutate: object, message: str
+) -> None:
+    source = REPOSITORY_ROOT / "test/regression/empirical_policy.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    assert callable(mutate)
+    mutate(document)
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(SetupFailure, match=message):
+        policy = load_empirical_policy(path, "heat_sn160")
+        case = heat_sn160_case(REPOSITORY_ROOT)
+        validate_empirical_policy_for_case(case, load_reference(case.reference), policy)
+
+
+def test_empirical_policy_boundaries_and_independent_vector_gates() -> None:
+    case = heat_sn160_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    policy = load_empirical_policy(case.policy, case.name)
+    state = _state_from_reference(reference, 1)
+    zone = policy.zones[1]
+
+    temperature_limit = zone.scalar_limits["temperature_gk"]
+    at_temperature_boundary = replace(
+        state,
+        temperature_gk=state.temperature_gk + temperature_limit.allowed_difference,
+    )
+    compare_final_states((at_temperature_boundary,), replace(reference, expected_zones=(1,)), policy)
+    beyond_temperature_boundary = replace(
+        state,
+        temperature_gk=math.nextafter(
+            state.temperature_gk + temperature_limit.allowed_difference, math.inf
+        ),
+    )
+    with pytest.raises(ComparisonFailure, match="field=temperature_gk"):
+        compare_final_states((beyond_temperature_boundary,), replace(reference, expected_zones=(1,)), policy)
+
+    species = next(iter(zone.selected_species_limits))
+    species_limit = zone.selected_species_limits[species]
+    composition = dict(state.mass_fractions)
+    composition[species] += species_limit.allowed_difference
+    compare_final_states((replace(state, mass_fractions=composition),), replace(reference, expected_zones=(1,)), policy)
+    composition[species] = math.nextafter(composition[species], math.inf)
+    with pytest.raises(ComparisonFailure, match=f"species={species}"):
+        compare_final_states((replace(state, mass_fractions=composition),), replace(reference, expected_zones=(1,)), policy)
+
+    # An unselected, nonnegative change can leave the selected gates untouched
+    # while L1 exceeds its own explicit limit.
+    unselected = next(name for name in state.mass_fractions if name not in zone.selected_species_limits)
+    composition = dict(state.mass_fractions)
+    composition[unselected] += 2.0 * zone.l1_limit.allowed_difference
+    with pytest.raises(ComparisonFailure, match="norm=L1"):
+        compare_final_states((replace(state, mass_fractions=composition),), replace(reference, expected_zones=(1,)), policy)
+
+    composition = dict(state.mass_fractions)
+    composition[unselected] += 1.0e-2
+    with pytest.raises(ComparisonFailure, match="invalid normalization"):
+        compare_final_states((replace(state, mass_fractions=composition),), replace(reference, expected_zones=(1,)), policy)
+
+
+def test_empirical_policy_rejects_wrong_case_nonfinite_and_duplicate_json(
+    tmp_path: Path,
+) -> None:
+    source = REPOSITORY_ROOT / "test/regression/empirical_policy.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    document["cases"]["heat_sn160"]["case"] = "tnsn_alpha"
+    wrong_case = tmp_path / "wrong-case.json"
+    wrong_case.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(SetupFailure, match="case identity"):
+        load_empirical_policy(wrong_case, "heat_sn160")
+
+    document = json.loads(source.read_text(encoding="utf-8"))
+    document["cases"]["heat_sn160"]["zones"]["1"]["l1_limit"][
+        "allowed_difference"
+    ] = math.inf
+    nonfinite = tmp_path / "nonfinite.json"
+    nonfinite.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(SetupFailure, match="finite and nonnegative"):
+        load_empirical_policy(nonfinite, "heat_sn160")
+
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text('{"policy_schema": "a", "policy_schema": "b"}', encoding="utf-8")
+    with pytest.raises(SetupFailure, match="duplicate JSON object key"):
+        load_empirical_policy(duplicate, "heat_sn160")
+
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    wrong_association = load_empirical_policy(source, "heat_sn160")
+    with pytest.raises(SetupFailure, match="does not match"):
+        validate_empirical_policy_for_case(case, reference, wrong_association)
+
+
+def test_empirical_policy_keeps_end_and_counters_diagnostic_only() -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    policy = load_empirical_policy(case.policy, case.name)
+    state = _state_from_reference(reference, 1)
+    changed_path = replace(
+        state,
+        step=state.step + 7,
+        counters=SolverCounters(
+            state.counters.ts + 7,
+            state.counters.nr + 7,
+            state.counters.jacobian + 7,
+            state.counters.derivative + 7,
+            state.counters.cross_section + 7,
+        ),
+    )
+    compare_final_states((changed_path,), replace(reference, expected_zones=(1,)), policy)
+
+
+def test_normalization_combines_baseline_and_empirical_printed_allowance() -> None:
+    case = heat_sn160_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    policy = load_empirical_policy(case.policy, case.name)
+    state = _state_from_reference(reference, 1)
+    zone = policy.zones[1]
+    combined = (
+        reference.mass_fraction_sum_atols[1]
+        + zone.printed_sum_limit.allowed_difference
+    )
+    relaxed_zone = replace(
+        zone,
+        selected_species_limits={
+            species: EmpiricalLimit("absolute", 1.0)
+            for species in zone.selected_species_limits
+        },
+        l1_limit=EmpiricalLimit("absolute", 1.0),
+        linf_limit=EmpiricalLimit("absolute", 1.0),
+    )
+    relaxed_policy = replace(policy, zones={**policy.zones, 1: relaxed_zone})
+    composition = dict(state.mass_fractions)
+    composition[next(iter(composition))] += 0.5 * combined
+    compare_final_states(
+        (replace(state, mass_fractions=composition),),
+        replace(reference, expected_zones=(1,)),
+        relaxed_policy,
+    )
+    composition[next(iter(composition))] += combined
+    with pytest.raises(ComparisonFailure, match="baseline=.*empirical_printed_allowance"):
+        compare_final_states(
+            (replace(state, mass_fractions=composition),),
+            replace(reference, expected_zones=(1,)),
+            relaxed_policy,
+        )
+
+
+@pytest.mark.parametrize(
+    "factory",
+    (tnsn_alpha_case, heat_alpha_case, tnsn_torch47_case, heat_sn160_case, bdf_sn160_case),
+    ids=("tnsn_alpha", "heat_alpha", "tnsn_torch47", "heat_sn160", "bdf_sn160"),
+)
+def test_registered_pytest_cases_reject_controlled_endpoint_perturbations(
+    tmp_path: Path, factory: object
+) -> None:
+    """Exercise each registered pytest case through process, parse, and policy paths."""
+
+    assert callable(factory)
+    case = factory(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    policy = load_empirical_policy(case.policy, case.name)
+    baseline = tuple(_state_from_reference(reference, zone) for zone in case.expected_zones)
+    first = baseline[0]
+    zone_policy = policy.zones[first.zone]
+
+    def changed_first(changed: FinalState) -> tuple[FinalState, ...]:
+        return (changed, *baseline[1:])
+
+    scalar_delta = max(
+        3.0 * zone_policy.scalar_limits["temperature_gk"].allowed_difference,
+        1.0e-5,
+    )
+    selected = next(iter(zone_policy.selected_species_limits))
+    selected_delta = max(
+        3.0 * zone_policy.selected_species_limits[selected].allowed_difference,
+        1.0e-5,
+    )
+    unselected = next(
+        species for species in case.expected_species
+        if species not in zone_policy.selected_species_limits
+    )
+    localized_delta = max(3.0 * zone_policy.linf_limit.allowed_difference, 1.0e-5)
+    broad_delta = max(3.0 * zone_policy.l1_limit.allowed_difference / 8.0, 1.0e-5)
+    broad_species = sorted(
+        case.expected_species,
+        key=first.mass_fractions.__getitem__,
+        reverse=True,
+    )[:8]
+
+    selected_composition = dict(first.mass_fractions)
+    selected_composition[selected] += selected_delta
+    localized_composition = dict(first.mass_fractions)
+    localized_composition[unselected] += localized_delta
+    broad_composition = dict(first.mass_fractions)
+    for species in broad_species[:4]:
+        broad_composition[species] += broad_delta
+    for species in broad_species[4:]:
+        broad_composition[species] -= broad_delta
+
+    perturbations = (
+        (
+            "scalar_temperature",
+            changed_first(replace(first, temperature_gk=first.temperature_gk + scalar_delta)),
+            "field=temperature_gk",
+        ),
+        (
+            "selected_species",
+            changed_first(replace(first, mass_fractions=selected_composition)),
+            f"species={selected}",
+        ),
+        (
+            "localized_vector",
+            changed_first(replace(first, mass_fractions=localized_composition)),
+            "norm=L-infinity",
+        ),
+        (
+            "eight_species_sum_preserving",
+            changed_first(replace(first, mass_fractions=broad_composition)),
+            "norm=L1",
+        ),
+    )
+    for name, states, expected_message in perturbations:
+        executable = _controlled_process(tmp_path / name, case, states)
+        completed = subprocess.run(
+            (
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "test/regression/test_regression.py",
+                f"--xnet-executable={executable}",
+                f"--basetemp={tmp_path / (name + '-artifacts')}",
+                "-k",
+                f"test_{case.name}",
+            ),
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert completed.returncode != 0, name
+        assert expected_message in completed.stdout + completed.stderr, name
 
 
 def test_mass_fraction_expectation_comes_from_complete_reference() -> None:

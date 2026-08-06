@@ -446,6 +446,9 @@ class EmpiricalComparisonPolicy:
     classification: str
     canonical_configuration: str
     supported_configurations: tuple[str, ...]
+    source_revision: str
+    derivation_report_sha256: str
+    endpoint_sha256: Mapping[str, str]
     zones: Mapping[int, EmpiricalZonePolicy]
 
 
@@ -1139,6 +1142,25 @@ _EMPIRICAL_CASES = (
     "heat_sn160",
     "bdf_sn160",
 )
+_EMPIRICAL_CHARACTERIZATION_STATUS = (
+    "characterization-only; empirical software-regression envelope, "
+    "not scientific validation"
+)
+_ISSUE30_SOURCE_REVISION = "96277db1cd466015f4f510628b23c312f5b985df"
+_EMPIRICAL_FORMULA = (
+    "limit = 1.5 * maximum absolute deviation from mac-gnu16 + "
+    "0.5 * final printed decimal unit"
+)
+_EMPIRICAL_PRINTED_ALLOWANCE = (
+    "one half of the final printed decimal unit; complete-vector L1 uses "
+    "half the sum and L-infinity half the maximum of species units"
+)
+_ISSUE30_DERIVATION_REPORT_SHA256 = "e44e04c6e8fdae216ebb7f7df876920a98e0dd4e125869d3db321c22c8d45eaf"
+_ISSUE30_ENDPOINT_SHA256 = {
+    "mac-gnu16": "10fb159a113910170f43efe753357c46d912e54891bb5478308809e44d598afe",
+    "mac-llvm": "cf2c62cbe9bbb42664f3e36473301004e68fc94a7ed140818e73748db00acecc",
+    "etacar-gnu16": "e18109c1234f0e34aa001d6bb2659324687d5df9e484e8c608f312dbb264e9ce",
+}
 
 
 def _load_empirical_limit(item: object, context: str) -> EmpiricalLimit:
@@ -1251,10 +1273,8 @@ def load_empirical_policy(path: Path, case_name: str) -> EmpiricalComparisonPoli
         raise SetupFailure(
             f"unsupported empirical policy schema: {document['policy_schema']!r}"
         )
-    if not isinstance(document["characterization_status"], str) or (
-        "characterization-only" not in document["characterization_status"]
-    ):
-        raise SetupFailure("empirical policy must declare characterization-only status")
+    if document["characterization_status"] != _EMPIRICAL_CHARACTERIZATION_STATUS:
+        raise SetupFailure("empirical policy characterization_status is not accepted")
     if document["canonical_configuration"] != "mac-gnu16":
         raise SetupFailure("empirical policy canonical_configuration must be mac-gnu16")
     supported = document["supported_empirical_configurations"]
@@ -1264,10 +1284,8 @@ def load_empirical_policy(path: Path, case_name: str) -> EmpiricalComparisonPoli
             "empirical policy supported_empirical_configurations must be the "
             "accepted Issue #30 matrix"
         )
-    if not isinstance(document["issue30_source_revision"], str) or re.fullmatch(
-        r"[0-9a-f]{40}", document["issue30_source_revision"]
-    ) is None:
-        raise SetupFailure("empirical policy issue30_source_revision must be a SHA")
+    if document["issue30_source_revision"] != _ISSUE30_SOURCE_REVISION:
+        raise SetupFailure("empirical policy issue30_source_revision is not accepted")
     derivation = document["derivation"]
     if not isinstance(derivation, dict) or set(derivation) != {
         "formula",
@@ -1276,10 +1294,12 @@ def load_empirical_policy(path: Path, case_name: str) -> EmpiricalComparisonPoli
         "report_sha256",
     }:
         raise SetupFailure("empirical policy derivation metadata is incomplete")
-    if derivation["safety_multiplier"] != 1.5 or not all(
-        isinstance(derivation[key], str) and derivation[key]
-        for key in ("formula", "printed_unit_allowance", "report_sha256")
-    ) or re.fullmatch(r"[0-9a-f]{64}", derivation["report_sha256"]) is None:
+    if (
+        derivation["formula"] != _EMPIRICAL_FORMULA
+        or derivation["safety_multiplier"] != 1.5
+        or derivation["printed_unit_allowance"] != _EMPIRICAL_PRINTED_ALLOWANCE
+        or derivation["report_sha256"] != _ISSUE30_DERIVATION_REPORT_SHA256
+    ):
         raise SetupFailure("empirical policy derivation metadata is contradictory")
     study_inputs = document["study_inputs"]
     if not isinstance(study_inputs, dict) or set(study_inputs) != {
@@ -1288,10 +1308,7 @@ def load_empirical_policy(path: Path, case_name: str) -> EmpiricalComparisonPoli
     } or study_inputs["observation_count"] != 45:
         raise SetupFailure("empirical policy study observation metadata is incomplete")
     hashes = study_inputs["endpoint_sha256"]
-    if not isinstance(hashes, dict) or set(hashes) != set(expected_supported) or not all(
-        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
-        for value in hashes.values()
-    ):
+    if hashes != _ISSUE30_ENDPOINT_SHA256:
         raise SetupFailure("empirical policy study input hashes are invalid")
     cases = document["cases"]
     if not isinstance(cases, dict) or set(cases) != set(_EMPIRICAL_CASES):
@@ -1328,6 +1345,9 @@ def load_empirical_policy(path: Path, case_name: str) -> EmpiricalComparisonPoli
         classification=entry["classification"],
         canonical_configuration=document["canonical_configuration"],
         supported_configurations=tuple(supported),
+        source_revision=document["issue30_source_revision"],
+        derivation_report_sha256=derivation["report_sha256"],
+        endpoint_sha256=hashes,
         zones={zone: loaded_zones[zone] for zone in sorted(loaded_zones)},
     )
 
@@ -1874,11 +1894,11 @@ def validate_empirical_policy_for_case(
             case.expected_species, reference.mass_fractions[zone]
         )
         actual_selected = tuple(zone_policy.selected_species_limits)
-        if set(actual_selected) != set(expected_selected):
+        if actual_selected != tuple(sorted(expected_selected)):
             raise SetupFailure(
                 "empirical policy selected species do not match the per-zone "
-                f"composition policy for zone {zone}: {sorted(actual_selected)} != "
-                f"{sorted(expected_selected)}"
+                f"composition policy for zone {zone}: {actual_selected} != "
+                f"{tuple(sorted(expected_selected))}"
             )
         unknown_species = set(actual_selected).difference(case.expected_species)
         if unknown_species:

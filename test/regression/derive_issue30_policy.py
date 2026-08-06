@@ -38,14 +38,15 @@ OUTCOMES = {
     "heat_sn160": "wider-empirical",
     "bdf_sn160": "wider-empirical",
 }
-DERIVATION_REPORT_SHA256 = "424b7bb022308e30c12aef814b5e1bed9acbaecca2289766c7892400ae88eee0"
+DERIVATION_REPORT_SHA256 = "e44e04c6e8fdae216ebb7f7df876920a98e0dd4e125869d3db321c22c8d45eaf"
 
 
 def printed_decimal_unit(value: float) -> float:
     """Return the final `E`-format decimal unit used by Issue #30 output."""
 
     if value == 0.0:
-        return 1.0e-15
+        # XNet prints zero as 0.0000000E+00 in ES14.7 output.
+        return 1.0e-7
     return 10.0 ** (math.floor(math.log10(abs(value))) - 7)
 
 
@@ -59,7 +60,7 @@ def limit(canonical: float, observations: list[float]) -> tuple[str, float, floa
 
 def l1_linf(canonical: dict[str, float], observed: dict[str, float]) -> tuple[float, float]:
     errors = [abs(observed[name] - value) for name, value in canonical.items()]
-    return sum(errors), max(errors)
+    return math.fsum(errors), max(errors)
 
 
 def selected_species(repository: Path, case_name: str, zone: int) -> tuple[str, ...]:
@@ -119,14 +120,17 @@ def main() -> None:
                     f"{configuration} {case_name}"
                 )
         canonical_record = representative(records["mac-gnu16"], case_name)
-        canonical_states = {state["zone"]: state for state in canonical_record["states"]}
+        canonical_states = {
+            state["zone"]: state for state in canonical_record["states"]
+        }
         case_observations = [
             record for configuration in CONFIGURATIONS for record in records[configuration]
             if record["case"] == case_name
         ]
         policy_zones: dict[str, object] = {}
         report_zones: dict[str, object] = {}
-        for zone, canonical in canonical_states.items():
+        for zone in sorted(canonical_states):
+            canonical = canonical_states[zone]
             observations = [
                 state for record in case_observations for state in record["states"]
                 if state["zone"] == zone
@@ -172,15 +176,18 @@ def main() -> None:
             norm_observations = [l1_linf(canonical["mass_fractions"], state["mass_fractions"]) for state in row_observations]
             l1_maximum = max(item[0] for item in norm_observations)
             linf_maximum = max(item[1] for item in norm_observations)
-            sum_units = sum(printed_decimal_unit(value) for value in canonical["mass_fractions"].values())
+            sum_units = math.fsum(
+                printed_decimal_unit(value)
+                for value in canonical["mass_fractions"].values()
+            )
             max_unit = max(printed_decimal_unit(value) for value in canonical["mass_fractions"].values())
             l1_mode = "exact" if l1_maximum == 0.0 else "absolute"
             linf_mode = "exact" if linf_maximum == 0.0 else "absolute"
             l1_limit = 0.0 if l1_mode == "exact" else 1.5 * l1_maximum + 0.5 * sum_units
             linf_limit = 0.0 if linf_mode == "exact" else 1.5 * linf_maximum + 0.5 * max_unit
-            sums = [sum(state["mass_fractions"].values()) for state in row_observations]
+            sums = [state["mass_fraction_sum"] for state in row_observations]
             sum_mode, sum_limit, sum_maximum, sum_unit = limit(
-                sum(canonical["mass_fractions"].values()), sums
+                canonical["mass_fraction_sum"], sums
             )
             policy_zones[str(zone)] = {
                 "scalar_limits": scalar_limits,
@@ -205,7 +212,7 @@ def main() -> None:
                     "candidate_limit": linf_limit,
                 },
                 "printed_composition_sum": {
-                    "canonical": sum(canonical["mass_fractions"].values()),
+                    "canonical": canonical["mass_fraction_sum"],
                     "observations": sums,
                     "maximum_absolute_deviation": sum_maximum,
                     "printed_decimal_unit": sum_unit,

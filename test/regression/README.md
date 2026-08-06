@@ -258,13 +258,16 @@ gates.  This avoids converting the bounded BDF coarse-path observations into
 portable solver invariants.
 
 `derive_issue30_policy.py` deterministically reproduces the policy from the
-three retained parsed study endpoint records and writes only to standard
-output.  It cannot update a reference or policy.  The policy records the exact
-input hashes, observation count, formula, print-resolution rule, source
-revision, and derivation-report hash.  Do not regenerate canonical endpoints
-or copy generated numeric tables into this document.  Future portability work
-must retain new exact observations, deliberately review a new bounded policy,
-and must not silently extend this matrix or add automatic reference updates.
+three committed parsed study endpoint records in
+`test/regression/study/issue30/` and writes only to standard output. It cannot
+update a reference or policy. These structured endpoint records are the durable
+study evidence; raw runtime output directories remain untracked. The policy
+records and the loader pins the exact input hashes, observation count, formula,
+print-resolution rule, source revision, and derivation-report hash. Do not
+regenerate canonical endpoints or copy generated numeric tables into this
+document. Future portability work must retain new exact observations,
+deliberately review a new bounded policy, and must not silently extend this
+matrix or add automatic reference updates.
 
 The historical script deletes the `Timers Summary:` heading plus the next 14
 lines, performs an exact whole-file diff, warns on differences, and normally
@@ -345,11 +348,13 @@ trace and intermediate abundances diagnostic-only there. Anchors are not
 required: a CNO or nova network with none of them selects its own material
 endpoint species by the same threshold.
 
-Selection is deterministic. A single pass over the complete network vector
-reported by XNet retains each anchor or above-threshold species in that vector's
-order; anchor status changes membership, not position. The reference's
-`mass_fraction_selection` object lists that exact ordered selection for every
-expected zone. The loader rejects
+Selection membership is deterministic. A single pass over the complete network
+vector reported by XNet retains each anchor or above-threshold species in that
+vector's order; anchor status changes membership, not position. The empirical
+policy serializes the resulting selected-species limits in sorted species-name
+order so its JSON remains reproducible across tools; validation requires that
+exact canonical serialized order. The reference's `mass_fraction_selection`
+object retains the network-order selection for its legacy schema. The loader rejects
 missing or unknown zones, empty selections, invalid or duplicate species,
 species absent from the complete composition vector, selected species without
 tolerances, and tolerance entries unused by every zone. Case validation then

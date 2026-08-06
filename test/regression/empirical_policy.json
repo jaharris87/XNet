@@ -15,7 +15,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 2.989596352406309e-07,
+            "allowed_difference": 2.989596355736978e-07,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -157,7 +157,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 2.3025650738717758e-07,
+            "allowed_difference": 2.3025650705411067e-07,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -347,7 +347,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 2.097747301129715e-07,
+            "allowed_difference": 2.0977472944683768e-07,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -593,7 +593,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 2.319474897413187e-07,
+            "allowed_difference": 2.3194748907518487e-07,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -891,7 +891,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 3.147321528659319e-07,
+            "allowed_difference": 3.1473215219979806e-07,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -2119,7 +2119,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 3.887239672081321e-08,
+            "allowed_difference": 3.887239705388012e-08,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -2261,7 +2261,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 1.624913202588118e-07,
+            "allowed_difference": 1.624913199257449e-07,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -3337,7 +3337,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 1.0937258218402519e-07,
+            "allowed_difference": 1.0937258201749174e-07,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -3717,7 +3717,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -3787,7 +3787,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -3857,7 +3857,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -3927,7 +3927,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -3997,7 +3997,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -4067,7 +4067,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -4137,7 +4137,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -4207,7 +4207,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -4277,7 +4277,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -4347,7 +4347,7 @@
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.150000012411056e-09,
+            "allowed_difference": 5.1500001789445094e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -4415,15 +4415,15 @@
       "zones": {
         "1": {
           "l1_limit": {
-            "allowed_difference": 1.6688660765938614e-08,
+            "allowed_difference": 1.6668865926593862e-07,
             "comparison": "absolute"
           },
           "linf_limit": {
-            "allowed_difference": 5.105000000068332e-09,
+            "allowed_difference": 5.010500000006833e-08,
             "comparison": "absolute"
           },
           "printed_sum_limit": {
-            "allowed_difference": 5.095038477088139e-09,
+            "allowed_difference": 5.095038643621592e-09,
             "comparison": "absolute"
           },
           "scalar_limits": {
@@ -4498,7 +4498,7 @@
   "derivation": {
     "formula": "limit = 1.5 * maximum absolute deviation from mac-gnu16 + 0.5 * final printed decimal unit",
     "printed_unit_allowance": "one half of the final printed decimal unit; complete-vector L1 uses half the sum and L-infinity half the maximum of species units",
-    "report_sha256": "424b7bb022308e30c12aef814b5e1bed9acbaecca2289766c7892400ae88eee0",
+    "report_sha256": "e44e04c6e8fdae216ebb7f7df876920a98e0dd4e125869d3db321c22c8d45eaf",
     "safety_multiplier": 1.5
   },
   "issue30_source_revision": "96277db1cd466015f4f510628b23c312f5b985df",

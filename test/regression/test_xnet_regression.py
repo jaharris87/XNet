@@ -11,6 +11,7 @@ import sys
 
 import pytest
 
+from derive_issue30_policy import printed_decimal_unit
 from xnet_regression import (
     ALPHA_SPECIES,
     bdf_sn160_case,
@@ -248,6 +249,53 @@ def test_empirical_policy_loads_for_every_registered_case() -> None:
         validate_empirical_policy_for_case(case, reference, policy)
 
 
+def test_policy_derivation_is_order_independent_and_uses_zero_es147_unit(
+    tmp_path: Path,
+) -> None:
+    assert printed_decimal_unit(0.0) == 1.0e-7
+    study = REPOSITORY_ROOT / "test/regression/study/issue30"
+    reordered_paths: list[Path] = []
+    for source in sorted(study.glob("*-endpoints.json")):
+        document = json.loads(source.read_text(encoding="utf-8"))
+        document["records"].reverse()
+        for record in document["records"]:
+            record["states"].reverse()
+            for state in record["states"]:
+                state["mass_fractions"] = dict(
+                    reversed(tuple(state["mass_fractions"].items()))
+                )
+        path = tmp_path / source.name
+        path.write_text(json.dumps(document), encoding="utf-8")
+        reordered_paths.append(path)
+    completed = subprocess.run(
+        (
+            sys.executable,
+            "test/regression/derive_issue30_policy.py",
+            ".",
+            str(next(path for path in reordered_paths if "mac-gnu16" in path.name)),
+            str(next(path for path in reordered_paths if "mac-llvm" in path.name)),
+            str(next(path for path in reordered_paths if "etacar" in path.name)),
+        ),
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    derived = json.loads(completed.stdout)
+    expected = json.loads(
+        (REPOSITORY_ROOT / "test/regression/empirical_policy.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    # The input hashes correctly change when serialization changes; all derived
+    # numerical policy data must remain independent of JSON key/list ordering.
+    derived["study_inputs"]["endpoint_sha256"] = expected["study_inputs"][
+        "endpoint_sha256"
+    ]
+    assert derived == expected
+
+
 @pytest.mark.parametrize(
     ("mutate", "message"),
     (
@@ -293,6 +341,26 @@ def test_empirical_policy_loads_for_every_registered_case() -> None:
         (
             lambda document: document["derivation"].__setitem__("printed_unit_allowance", 0.5),
             "contradictory",
+        ),
+        (
+            lambda document: document.__setitem__("characterization_status", "characterization-only"),
+            "status is not accepted",
+        ),
+        (
+            lambda document: document.__setitem__("issue30_source_revision", "0" * 40),
+            "source_revision is not accepted",
+        ),
+        (
+            lambda document: document["derivation"].__setitem__("formula", "other"),
+            "contradictory",
+        ),
+        (
+            lambda document: document["derivation"].__setitem__("report_sha256", "0" * 64),
+            "contradictory",
+        ),
+        (
+            lambda document: document["study_inputs"]["endpoint_sha256"].__setitem__("mac-gnu16", "0" * 64),
+            "study input hashes",
         ),
         (
             lambda document: document.__setitem__("automatic_reference_update", True),
@@ -390,6 +458,22 @@ def test_empirical_policy_rejects_wrong_case_nonfinite_and_duplicate_json(
     wrong_association = load_empirical_policy(source, "heat_sn160")
     with pytest.raises(SetupFailure, match="does not match"):
         validate_empirical_policy_for_case(case, reference, wrong_association)
+
+    document = json.loads(source.read_text(encoding="utf-8"))
+    selection = document["cases"]["heat_sn160"]["zones"]["1"][
+        "selected_species_limits"
+    ]
+    first_species, first_limit = next(iter(selection.items()))
+    selection.pop(first_species)
+    selection[first_species] = first_limit
+    reordered = tmp_path / "reordered.json"
+    reordered.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(SetupFailure, match="selected species"):
+        validate_empirical_policy_for_case(
+            heat_sn160_case(REPOSITORY_ROOT),
+            load_reference(heat_sn160_case(REPOSITORY_ROOT).reference),
+            load_empirical_policy(reordered, "heat_sn160"),
+        )
 
 
 def test_empirical_policy_keeps_end_and_counters_diagnostic_only() -> None:

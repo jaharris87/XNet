@@ -247,6 +247,47 @@ else ifeq ($(PE_ENV),GNU)
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
 
+else ifeq ($(PE_ENV),LLVM)
+
+    ifneq ($(FC),ftn)
+        FC        = flang
+        CC        = clang
+        CXX       = clang++
+        LDR       = flang
+        ARCHOPT   = -march=native
+    endif
+
+    # generic flags
+    OPT_FLAGS     = -g -O3 -funroll-loops $(ARCHOPT) $(INLINE)
+    DEBUG_FLAGS   = -g -O0
+                    
+
+    ifeq ($(OPENMP_MODE),ON)
+        OPENMP    = -fopenmp
+    else
+        OPENMP    =# -lgomp
+    endif
+    ifeq ($(OPENACC_MODE),ON)
+        OPENACC   =# -fopenacc
+    else
+        OPENACC   =
+    endif
+
+    # Fortran-specific flags
+    OPT_FFLAGS    =
+    DEBUG_FFLAGS  =
+
+    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-folding-value-checks
+    F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-folding-value-checks
+
+    # C-specific flags
+    OPT_CFLAGS    =
+    DEBUG_CFLAGS  =
+
+    # Linker flags
+    OPT_LDFLAGS   =
+    DEBUG_LDFLAGS =
+
 else ifeq ($(findstring $(PE_ENV),CCE CRAY),$(PE_ENV))
 
     INLINE_DB     = ./$(EXE)_inline

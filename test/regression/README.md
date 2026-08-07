@@ -4,8 +4,8 @@ This directory is a bounded replacement path for XNet regression testing. It
 exercises the compiled XNet program as an external process; it is not a Python
 binding, a scientific-validation suite, or a replacement for all legacy cases.
 The migrated cases are the serial, CPU-only `tnsn_alpha` and `tnsn_torch47`
-trajectory calculations and the `heat_alpha`, `heat_sn160`, and `bdf_sn160`
-self-heating calculations.
+trajectory calculations, `heat_alpha`, `heat_sn160`, and `bdf_sn160`
+self-heating calculations, and the `batch_alpha` serial zone-batching case.
 
 ## Prerequisites and command
 
@@ -36,11 +36,11 @@ The suite enforces a 30-second per-case process timeout. Use
 
 pytest supplies a new empty temporary directory for each case. The runner
 copies the complete `control` input into it, creates a local writable network
-directory containing absolute symlinks to only the case's five tracked source
-inputs (`sunet`, `netsu`, `netweak`, `netwinv`, and `ab_co`), and
-symlinks every trajectory required by the case plus the Helmholtz EOS table.
-Trajectory basenames must be unique so staging cannot silently replace an
-input. XNet runs with that directory as its current directory.
+directory containing the case's declared tracked source inputs, and stages
+every trajectory, Helmholtz EOS table, and any explicitly declared nested
+input at a safe relative destination. Duplicate destinations and unsafe paths
+are rejected, so staging cannot silently replace an input. XNet runs with that
+directory as its current directory.
 Network-preprocessing products therefore stay inside the temporary directory
 rather than mutating `test/Data_alpha`, `test/Data_torch47`, or
 `test/Data_SN160`. The runner also reads each staged network's `sunet` and
@@ -209,6 +209,68 @@ tracked inputs. The required fresh outputs are `net_diag01`,
 No tracked `test/Test_Problems/Results/net_diag_tnsn_torch47` exists in a
 clean checkout. The committed endpoint is therefore a characterization of the
 recorded build and inputs, not historical or independent scientific truth.
+
+### `batch_alpha`: serial zone-batching characterization
+
+Issue #22 migrates legacy aggregate ID 60's ID 61, `batch_alpha`, only. The
+legacy driver maps ID 61 to `do_test_batch`, which concatenates
+`test/test_settings_batch` with `test/Test_Problems/setup_batch_alpha`; ID 62
+is the separate `batch_torch47` case. The current `source/Makefile`
+`test_batch` target invokes ID 62, so it is historical context rather than the
+definition of this bounded regression.
+
+The committed standalone control preserves ID 61's 16 serial zones,
+`nzbatchmx = 4`, Backward Euler, self-heating, screening, weak reactions,
+runtime nuclear-data processing, alpha network, and 0.1-second target per
+zone. Its only edits remove `Test_Results/` from the history roots. It retains
+the legacy prefix rules: XNet expands `Data_alpha/ab_batch/ab_batch_` and
+`Test_Problems/th_batch/th_batch_` with two-digit global zone suffixes 01–16;
+the output roots similarly produce `ev_batch_alpha_01`–`_16` and
+`ts_batch_alpha_01`–`_16`.
+
+The case declares and safely stages the four alpha network inputs, all 16
+abundance files, all 16 trajectory files, and the Helmholtz table into an
+empty work directory. Nested relative destinations are allowed; traversal,
+absolute destinations, duplicates, missing sources, and replacement of an
+already staged destination are rejected. Preprocessing writes only into the
+isolated writable `Data_alpha` directory.
+
+`nzbatchmx` is the configured maximum zones per batch; `nzevolve` is
+`nzbatchmx * nthread`; `nzbatch` is the active count in the current batch;
+and `szbatch` is that batch's global starting zone, not the configured block
+size. `zb_lo` and `zb_hi` select a thread's local range in `nzevolve`, while
+`lzactive` masks inactive local slots. `net.F90` uses ceiling division for the
+batch count and maps a local index back to global zone number with
+`szbatch`. The permanent case therefore requires precisely four ordered
+diagnostic groups: zones 1–4, 5–8, 9–12, and 13–16. Each group has four
+ordered End/composition records, one matching four-row Counters table, and
+one delimited timer section. The parser rejects a sequence of one-zone groups
+as evidence for this case.
+
+End values are batch-level loop diagnostics, whereas the Counter values are
+per-zone solver counters. In the canonical run every End value is 605; TS
+counters repeat 553, 605, 1, and 573 by batch-local slot. They are recorded
+in the characterization reference but are not numerical gates and are not
+required to be equal. The four repeated input quartets (1/5/9/13,
+2/6/10/14, 3/7/11/15, and 4/8/12/16) had identical parsed endpoints in fresh
+canonical runs, so the runner requires exact endpoint equivalence as a
+state-leakage and association assertion.
+
+The committed reference is a serial-CPU characterization, not scientific
+validation. It records all 16 complete ordered 14-species endpoints,
+requested/achieved time, temperature, density, electron fraction, End and
+solver-counter diagnostics, source provenance, and hashes. It uses the
+existing `xnet-comparison-v1` exact policy for observed stable printed values,
+selected species, and complete-vector L1/L-infinity gates; L2 remains
+diagnostic-only. Normal execution only reads this reference.
+
+Implementation evidence also ran the same inputs at `nzbatchmx = 1` and 6.
+Block size 1 produced 16 singleton diagnostic groups and the same parsed
+endpoints; block size 6 produced exactly groups 1–6, 7–12, and 13–16, with no
+zones 17 or 18 and no inactive-slot records. These are temporary
+software-equivalence checks, not registered portability or scientific cases.
+Focused parser fixtures permanently cover the short final four-zone group.
+The results are limited to the tested default serial CPU configuration.
 
 ## Comparison policy and reference status
 

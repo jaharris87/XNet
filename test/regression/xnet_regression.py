@@ -286,6 +286,7 @@ TIMER_ROW = re.compile(rf"^\s+[A-Za-z][A-Za-z0-9_/-]*\s+{FLOAT_TOKEN}\s*$")
 COUNTER_HEADING = re.compile(
     r"^Counters:\s+Zone\s+TS\s+NR\s+Jacobian\s+Deriv\s+CrossSect\s*$"
 )
+COUNTER_ROW = re.compile(r"^\s*\d+(?:\s+\d+){5}\s*$")
 NONFINITE_TOKEN = re.compile(
     r"(?i)(?<![A-Za-z0-9_])[+-]?(?:nan|inf(?:inity)?)(?![A-Za-z0-9_])"
 )
@@ -312,6 +313,14 @@ class ComparisonFailure(RegressionFailure):
 
 
 @dataclass(frozen=True)
+class StagedInput:
+    """One tracked file linked into a relative path in an isolated run."""
+
+    source: Path
+    destination: Path
+
+
+@dataclass(frozen=True)
 class RegressionCase:
     name: str
     control: Path
@@ -328,6 +337,9 @@ class RegressionCase:
     expected_solver: str | None = None
     expected_effective_controls: Mapping[str, float] | None = None
     expected_characterization_metadata: Mapping[str, object] | None = None
+    staged_inputs: tuple[StagedInput, ...] = ()
+    diagnostic_groups: tuple[tuple[int, ...], ...] | None = None
+    equivalent_zone_groups: tuple[tuple[int, ...], ...] = ()
 
     @property
     def required_outputs(self) -> tuple[str, ...]:
@@ -341,6 +353,14 @@ class RegressionCase:
             )
         )
         return ("net_diag01", *zone_outputs)
+
+    @property
+    def expected_diagnostic_groups(self) -> tuple[tuple[int, ...], ...]:
+        """Return the declared End/counter/timer grouping for this case."""
+
+        if self.diagnostic_groups is not None:
+            return self.diagnostic_groups
+        return tuple((zone,) for zone in self.expected_zones)
 
 
 @dataclass(frozen=True)
@@ -523,10 +543,94 @@ def heat_sn160_case(repository_root: Path) -> RegressionCase:
     )
 
 
+def batch_alpha_case(repository_root: Path) -> RegressionCase:
+    """Legacy ID 61: four serial batches of four alpha-network zones."""
+
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "batch_alpha"
+    )
+    network_data = repository_root / "test" / "Data_alpha"
+    return RegressionCase(
+        name="batch_alpha",
+        control=case_directory / "control",
+        network_data=network_data,
+        trajectories=(),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=tuple(range(1, 17)),
+        expected_species=ALPHA_SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv"),
+        reference_schema="xnet-characterization-v1",
+        comparison_schema=COMPARISON_SCHEMA,
+        expected_legacy_id=61,
+        expected_solver="Backward Euler (isolv = 1)",
+        expected_effective_controls={},
+        expected_characterization_metadata={
+            "baseline_kind": "characterization",
+            "baseline_status": (
+                "characterization-only; not independently validated scientific truth"
+            ),
+            "generated_from_revision": "47befd90fff3c05828bf2f1b528cd74d7aa6a36c",
+            "generated_on": "2026-08-07",
+            "platform": "macOS 26.6 arm64",
+            "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+            "python": "Python 3.13.0",
+            "pytest": "pytest 9.1.1",
+            "build": {
+                "executable": "source/xnet",
+                "CMODE": "OPT",
+                "PE_ENV": "GNU",
+                "MPI_MODE": "OFF",
+                "OPENMP_MODE": "OFF",
+                "GPU_MODE": "OFF",
+                "EOS": "STARKILLER",
+                "MATRIX_SOLVER": "dense",
+                "LAPACK_VER": "NETLIB",
+            },
+            "legacy_provenance": {
+                "legacy_id": 61,
+                "assembly": [
+                    "test/test_settings_batch",
+                    "test/Test_Problems/setup_batch_alpha",
+                ],
+                "maintained_solver": "Backward Euler (isolv = 1)",
+                "normalized_changes": [
+                    "remove Test_Results/ from ASCII and binary output roots",
+                    "preserve nested abundance and trajectory prefixes in isolated staging",
+                ],
+                "effective_runtime_controls": {},
+            },
+        },
+        staged_inputs=tuple(
+            StagedInput(
+                network_data / "ab_batch" / f"ab_batch_{zone:02d}",
+                Path("Data_alpha") / "ab_batch" / f"ab_batch_{zone:02d}",
+            )
+            for zone in range(1, 17)
+        )
+        + tuple(
+            StagedInput(
+                repository_root
+                / "test"
+                / "Test_Problems"
+                / "th_batch"
+                / f"th_batch_{zone:02d}",
+                Path("Test_Problems") / "th_batch" / f"th_batch_{zone:02d}",
+            )
+            for zone in range(1, 17)
+        ),
+        diagnostic_groups=((1, 2, 3, 4), (5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16)),
+        equivalent_zone_groups=((1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15), (4, 8, 12, 16)),
+    )
+
+
 def bdf_sn160_case(repository_root: Path) -> RegressionCase:
     case_directory = (
         repository_root / "test" / "regression" / "cases" / "bdf_sn160"
     )
+
     return RegressionCase(
         name="bdf_sn160",
         control=case_directory / "control",
@@ -626,6 +730,62 @@ def validate_executable(executable: Path) -> Path:
     return executable
 
 
+def _validate_staged_destination(destination: Path, context: str) -> Path:
+    """Require a non-empty, traversal-free path below the work directory."""
+
+    if (
+        destination.is_absolute()
+        or not destination.parts
+        or any(part in ("", ".", "..") for part in destination.parts)
+    ):
+        raise SetupFailure(
+            f"invalid staged destination for {context}: {destination}"
+        )
+    return destination
+
+
+def _case_staged_inputs(case: RegressionCase) -> tuple[StagedInput, ...]:
+    """Return all default and explicitly declared isolated-workdir links."""
+
+    inputs = [
+        StagedInput(case.network_data / filename, Path(case.network_data.name) / filename)
+        for filename in case.network_inputs
+    ]
+    inputs.extend(
+        StagedInput(trajectory, Path(trajectory.name)) for trajectory in case.trajectories
+    )
+    inputs.extend(case.staged_inputs)
+    inputs.append(StagedInput(case.helm_table, Path(case.helm_table.name)))
+    return tuple(inputs)
+
+
+def _validate_diagnostic_groups(case: RegressionCase) -> None:
+    groups = case.expected_diagnostic_groups
+    if not groups or any(not group for group in groups):
+        raise SetupFailure(f"invalid diagnostic group definition for {case.name}")
+    flattened = tuple(zone for group in groups for zone in group)
+    if flattened != case.expected_zones or len(set(flattened)) != len(flattened):
+        raise SetupFailure(
+            f"diagnostic groups must contain each expected zone once in order for {case.name}"
+        )
+    for group in case.equivalent_zone_groups:
+        if len(group) < 2 or any(zone not in case.expected_zones for zone in group):
+            raise SetupFailure(f"invalid equivalent-zone group definition for {case.name}")
+
+
+def _reserved_work_directory_paths(case: RegressionCase) -> set[Path]:
+    """Paths owned by the runner or XNet rather than case-declared staging."""
+
+    return {
+        Path("control"),
+        *map(Path, case.required_outputs),
+        Path("xnet.stdout.txt"),
+        Path("xnet.stderr.txt"),
+        Path("xnet.status.txt"),
+        Path("composition_error_norms.json"),
+    }
+
+
 def _validate_case_inputs(case: RegressionCase) -> None:
     required = {
         "complete control input": case.control,
@@ -637,6 +797,12 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         {
             f"thermodynamic trajectory {index}": path
             for index, path in enumerate(case.trajectories, start=1)
+        }
+    )
+    required.update(
+        {
+            f"declared staged input {index}": item.source
+            for index, item in enumerate(case.staged_inputs, start=1)
         }
     )
     missing = [
@@ -655,7 +821,7 @@ def _validate_case_inputs(case: RegressionCase) -> None:
     ):
         raise SetupFailure(f"invalid expected species definition for {case.name}")
     trajectory_names = tuple(path.name for path in case.trajectories)
-    if not case.trajectories or len(set(trajectory_names)) != len(trajectory_names):
+    if case.trajectories and len(set(trajectory_names)) != len(trajectory_names):
         raise SetupFailure(
             f"invalid thermodynamic trajectory definition for {case.name}"
         )
@@ -681,6 +847,28 @@ def _validate_case_inputs(case: RegressionCase) -> None:
             f"network species input does not match the case definition for {case.name}: "
             f"{sunet_species} != {case.expected_species}"
         )
+    _validate_diagnostic_groups(case)
+    staged_destinations: set[Path] = set()
+    reserved_paths = _reserved_work_directory_paths(case)
+    for item in _case_staged_inputs(case):
+        destination = _validate_staged_destination(item.destination, str(item.source))
+        if any(
+            reserved == destination
+            or reserved in destination.parents
+            or destination in reserved.parents
+            for reserved in reserved_paths
+        ):
+            raise SetupFailure(f"staged destination is reserved: {destination}")
+        if destination in staged_destinations:
+            raise SetupFailure(f"duplicate staged destination: {destination}")
+        if any(
+            existing in destination.parents or destination in existing.parents
+            for existing in staged_destinations
+        ):
+            raise SetupFailure(
+                f"overlapping staged destinations: {destination}"
+            )
+        staged_destinations.add(destination)
 
 
 def prepare_work_directory(case: RegressionCase, work_directory: Path) -> Path:
@@ -700,15 +888,12 @@ def prepare_work_directory(case: RegressionCase, work_directory: Path) -> Path:
             work_directory.mkdir(parents=True)
 
         shutil.copy2(case.control, work_directory / "control")
-        local_network_data = work_directory / case.network_data.name
-        local_network_data.mkdir()
-        for filename in case.network_inputs:
-            (local_network_data / filename).symlink_to(
-                (case.network_data / filename).resolve()
-            )
-        for trajectory in case.trajectories:
-            (work_directory / trajectory.name).symlink_to(trajectory.resolve())
-        (work_directory / case.helm_table.name).symlink_to(case.helm_table.resolve())
+        for item in _case_staged_inputs(case):
+            destination = work_directory / item.destination
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if destination.exists() or destination.is_symlink():
+                raise SetupFailure(f"refusing to replace staged input: {destination}")
+            destination.symlink_to(item.source.resolve())
     except RegressionFailure:
         raise
     except OSError as error:
@@ -854,104 +1039,141 @@ def parse_diagnostic(
     text: str,
     expected_zones: Sequence[int],
     expected_species: Sequence[str],
+    expected_groups: Sequence[Sequence[int]] | None = None,
 ) -> tuple[FinalState, ...]:
-    """Parse complete final-state records while deliberately excluding timers."""
+    """Parse declared End/composition/counter/timer groups in diagnostic order."""
 
     if NONFINITE_TOKEN.search(text):
         token = NONFINITE_TOKEN.search(text)
         assert token is not None
         raise ParsingFailure(f"diagnostic contains non-finite token: {token.group(0)}")
 
-    normalized, timer_count = strip_timer_sections(text)
     expected_zones = tuple(expected_zones)
     expected_species = tuple(expected_species)
     if not expected_species or len(set(expected_species)) != len(expected_species):
         raise ParsingFailure("expected species definition is empty or contains duplicates")
-    if timer_count != len(expected_zones):
+    groups = (
+        tuple(tuple(group) for group in expected_groups)
+        if expected_groups is not None
+        else tuple((zone,) for zone in expected_zones)
+    )
+    if not groups or any(not group for group in groups):
+        raise ParsingFailure("expected diagnostic groups are empty or malformed")
+    if tuple(zone for group in groups for zone in group) != expected_zones:
         raise ParsingFailure(
-            f"expected {len(expected_zones)} timer sections, found {timer_count}"
+            "expected diagnostic groups do not contain ordered expected zones"
         )
 
-    lines = normalized.splitlines()
+    lines = text.splitlines()
     states: dict[int, FinalState] = {}
     index = 0
-    while index < len(lines):
-        if not lines[index].startswith("End"):
+    for group_number, group in enumerate(groups, start=1):
+        while index < len(lines) and not lines[index].startswith("End"):
+            if (
+                COUNTER_HEADING.match(lines[index])
+                or TIMER_HEADING.match(lines[index])
+                or COUNTER_ROW.match(lines[index])
+                or (group_number > 1 and TIMER_ROW.match(lines[index]))
+            ):
+                raise ParsingFailure(
+                    f"unexpected diagnostic structure before group {group_number}: "
+                    f"{lines[index]}"
+                )
             index += 1
-            continue
-
-        match = END_RECORD.match(lines[index])
-        if match is None:
-            raise ParsingFailure(f"malformed End record: {lines[index]}")
-        zone = int(match.group(1))
-        step = int(match.group(2))
-        if zone in states:
-            raise ParsingFailure(f"duplicate End record for zone {zone}")
-
-        values = [
-            _as_finite_float(token, f"zone {zone} End record")
-            for token in match.groups()[2:]
-        ]
-        index += 1
-        mass_fractions: dict[str, float] = {}
-        while len(mass_fractions) < len(expected_species):
-            if index >= len(lines) or lines[index].startswith("Counters:"):
+        group_states: list[FinalState] = []
+        for expected_zone in group:
+            if index >= len(lines):
                 raise ParsingFailure(
-                    f"incomplete abundance record for zone {zone}: "
-                    f"found {len(mass_fractions)} of {len(expected_species)} species"
+                    f"expected ordered final records for zone {expected_zone}; found none"
                 )
-            pairs = ABUNDANCE_PAIR.findall(lines[index])
-            if not pairs:
+            if COUNTER_HEADING.match(lines[index]):
                 raise ParsingFailure(
-                    f"malformed abundance row for zone {zone}: {lines[index]}"
+                    f"missing End record for zone {expected_zone} before Counters"
                 )
-            if ABUNDANCE_PAIR.sub("", lines[index]).strip():
+            match = END_RECORD.match(lines[index])
+            if match is None:
+                raise ParsingFailure(f"malformed End record: {lines[index]}")
+            zone = int(match.group(1))
+            if zone != expected_zone:
                 raise ParsingFailure(
-                    f"unexpected content in abundance row for zone {zone}: {lines[index]}"
+                    f"group {group_number} expected End zone {expected_zone}, found {zone}"
                 )
-            for species, token in pairs:
-                species = species.lower()
-                if species in mass_fractions:
+            if zone in states:
+                raise ParsingFailure(f"duplicate End record for zone {zone}")
+            values = [
+                _as_finite_float(token, f"zone {zone} End record")
+                for token in match.groups()[2:]
+            ]
+            index += 1
+            mass_fractions: dict[str, float] = {}
+            while len(mass_fractions) < len(expected_species):
+                if index >= len(lines) or lines[index].startswith(("End", "Counters:")):
                     raise ParsingFailure(
-                        f"duplicate abundance for species {species} in zone {zone}"
+                        f"incomplete abundance record for zone {zone}: "
+                        f"found {len(mass_fractions)} of {len(expected_species)} species"
                     )
-                mass_fractions[species] = _as_finite_float(
-                    token, f"zone {zone} species {species}"
+                pairs = ABUNDANCE_PAIR.findall(lines[index])
+                if not pairs or ABUNDANCE_PAIR.sub("", lines[index]).strip():
+                    raise ParsingFailure(
+                        f"malformed abundance row for zone {zone}: {lines[index]}"
+                    )
+                for species, token in pairs:
+                    species = species.lower()
+                    if species in mass_fractions:
+                        raise ParsingFailure(
+                            f"duplicate abundance for species {species} in zone {zone}"
+                        )
+                    mass_fractions[species] = _as_finite_float(
+                        token, f"zone {zone} species {species}"
+                    )
+                index += 1
+            if tuple(mass_fractions) != expected_species:
+                raise ParsingFailure(
+                    f"unexpected species structure for zone {zone}: {', '.join(mass_fractions)}"
                 )
-            index += 1
-
-        if tuple(mass_fractions) != expected_species:
-            raise ParsingFailure(
-                f"unexpected species structure for zone {zone}: "
-                f"{', '.join(mass_fractions)}"
+            group_states.append(
+                FinalState(zone, int(match.group(2)), values[0], values[1], values[2], values[3], values[4], mass_fractions, SolverCounters(0, 0, 0, 0, 0))
             )
         if index >= len(lines) or not COUNTER_HEADING.match(lines[index]):
-            raise ParsingFailure(f"missing Counters record after zone {zone} final state")
+            raise ParsingFailure(f"missing Counters record after group {group_number} final states")
         index += 1
-        if index >= len(lines):
-            raise ParsingFailure(f"missing counter values for zone {zone}")
-        counters = lines[index].split()
-        if len(counters) != 6 or not all(token.isdigit() for token in counters):
-            raise ParsingFailure(f"malformed counter values for zone {zone}: {lines[index]}")
-        counter_zone, *counter_values = (int(token) for token in counters)
-        solver_counters = SolverCounters(*counter_values)
-        if counter_zone != zone:
-            raise ParsingFailure(
-                f"zone {zone} counter record does not match its End record: {lines[index]}"
+        for state in group_states:
+            if index >= len(lines):
+                raise ParsingFailure(f"missing counter values for zone {state.zone}")
+            counters = lines[index].split()
+            if len(counters) != 6 or not all(token.isdigit() for token in counters):
+                raise ParsingFailure(f"malformed counter values for zone {state.zone}: {lines[index]}")
+            counter_zone, *counter_values = (int(token) for token in counters)
+            if counter_zone != state.zone:
+                raise ParsingFailure(
+                    f"zone {state.zone} counter record does not match its End record: {lines[index]}"
+                )
+            states[state.zone] = FinalState(
+                state.zone, state.step, state.target_time, state.time,
+                state.temperature_gk, state.density, state.electron_fraction,
+                state.mass_fractions, SolverCounters(*counter_values)
             )
-
-        states[zone] = FinalState(
-            zone=zone,
-            step=step,
-            target_time=values[0],
-            time=values[1],
-            temperature_gk=values[2],
-            density=values[3],
-            electron_fraction=values[4],
-            mass_fractions=mass_fractions,
-            counters=solver_counters,
-        )
+            index += 1
+        if index >= len(lines) or not TIMER_HEADING.match(lines[index]):
+            raise ParsingFailure(f"missing timer section for group {group_number}")
         index += 1
+        timer_rows = 0
+        timer_names: set[str] = set()
+        while index < len(lines) and TIMER_ROW.match(lines[index]):
+            timer_name = lines[index].split()[0]
+            if timer_name in timer_names:
+                raise ParsingFailure(
+                    f"duplicate timer row {timer_name} in group {group_number}"
+                )
+            timer_names.add(timer_name)
+            timer_rows += 1
+            index += 1
+        if timer_rows == 0:
+            raise ParsingFailure(f"timer section {group_number} contains no recognized timer rows")
+
+    for line in lines[index:]:
+        if line.startswith("End") or COUNTER_HEADING.match(line) or TIMER_HEADING.match(line):
+            raise ParsingFailure(f"unexpected extra diagnostic structure: {line}")
 
     actual_zones = tuple(states)
     if actual_zones != expected_zones:
@@ -1234,7 +1456,7 @@ def _load_reference_metadata(
         )
 
     inputs = document.get("inputs")
-    required_inputs = {
+    standard_inputs = {
         "control",
         "network_data",
         "network_source_inputs",
@@ -1242,22 +1464,26 @@ def _load_reference_metadata(
         "trajectories",
         "eos_table",
     }
-    if not isinstance(inputs, dict) or set(inputs) != required_inputs:
+    staged_inputs = {
+        "control",
+        "network_data",
+        "network_source_inputs",
+        "staged_inputs",
+        "eos_table",
+    }
+    if not isinstance(inputs, dict) or set(inputs) not in (standard_inputs, staged_inputs):
         raise SetupFailure(
             "reference inputs metadata must contain the complete input provenance"
         )
-    scalar_input_names = (
-        "control",
-        "network_data",
-        "initial_abundance",
-        "eos_table",
-    )
+    scalar_input_names = ["control", "network_data", "eos_table"]
+    if set(inputs) == standard_inputs:
+        scalar_input_names.append("initial_abundance")
     if not all(
         isinstance(inputs[name], str) and inputs[name]
         for name in scalar_input_names
     ):
         raise SetupFailure("reference inputs metadata contains an invalid path")
-    for name in ("network_source_inputs", "trajectories"):
+    for name in ("network_source_inputs",):
         values = inputs[name]
         if (
             not isinstance(values, list)
@@ -1267,6 +1493,36 @@ def _load_reference_metadata(
             raise SetupFailure(
                 f"reference inputs metadata {name} must be a nonempty string list"
             )
+    if set(inputs) == standard_inputs:
+        values = inputs["trajectories"]
+        if (
+            not isinstance(values, list)
+            or not values
+            or not all(isinstance(value, str) and value for value in values)
+        ):
+            raise SetupFailure(
+                "reference inputs metadata trajectories must be a nonempty string list"
+            )
+    else:
+        values = inputs["staged_inputs"]
+        if not isinstance(values, list) or not values:
+            raise SetupFailure("reference staged_inputs metadata must be a nonempty list")
+        destinations: set[str] = set()
+        for item in values:
+            if (
+                not isinstance(item, dict)
+                or set(item) != {"source", "destination"}
+                or not isinstance(item["source"], str)
+                or not item["source"]
+                or not isinstance(item["destination"], str)
+            ):
+                raise SetupFailure("reference staged_inputs metadata entry is invalid")
+            destination = _validate_staged_destination(
+                Path(item["destination"]), "reference metadata"
+            ).as_posix()
+            if destination in destinations:
+                raise SetupFailure("reference staged_inputs metadata duplicates a destination")
+            destinations.add(destination)
 
     legacy = document.get("legacy_provenance")
     required_legacy = {
@@ -1301,8 +1557,7 @@ def _load_reference_metadata(
     effective_controls = legacy["effective_runtime_controls"]
     if (
         not isinstance(effective_controls, dict)
-        or set(effective_controls)
-        != {"maximum_abundance_change", "maximum_temperature_change"}
+        or any(not isinstance(name, str) or not name for name in effective_controls)
         or not all(
             isinstance(value, (int, float))
             and not isinstance(value, bool)
@@ -1694,6 +1949,7 @@ def validate_reference_for_case(
             case.control,
             *(case.network_data / filename for filename in case.network_inputs),
             *case.trajectories,
+            *(item.source for item in case.staged_inputs),
             case.helm_table,
         )
         repository_root = Path(
@@ -1706,16 +1962,27 @@ def validate_reference_for_case(
         path_labels = {
             input_label(path): path for path in provenance_paths
         }
-        expected_inputs = {
+        expected_inputs: dict[str, object] = {
             "control": input_label(case.control),
             "network_data": input_label(case.network_data),
             "network_source_inputs": list(case.network_inputs),
-            "initial_abundance": input_label(case.network_data / "ab_co"),
-            "trajectories": [
-                input_label(path) for path in case.trajectories
-            ],
             "eos_table": input_label(case.helm_table),
         }
+        if case.staged_inputs:
+            expected_inputs["staged_inputs"] = [
+                {
+                    "source": input_label(item.source),
+                    "destination": item.destination.as_posix(),
+                }
+                for item in case.staged_inputs
+            ]
+        else:
+            expected_inputs["initial_abundance"] = input_label(
+                case.network_data / "ab_co"
+            )
+            expected_inputs["trajectories"] = [
+                input_label(path) for path in case.trajectories
+            ]
         if dict(reference.metadata_inputs) != expected_inputs:
             raise SetupFailure(
                 "reference input provenance does not match the case definition"
@@ -1935,6 +2202,34 @@ def compare_final_states(
         raise ComparisonFailure("numerical characterization failed:\n  " + "\n  ".join(failures))
 
 
+def compare_equivalent_zone_groups(
+    states: Sequence[FinalState], groups: Sequence[Sequence[int]]
+) -> None:
+    """Require declared repeated-input endpoints to be identical when characterized so."""
+
+    states_by_zone = {state.zone: state for state in states}
+    failures: list[str] = []
+    for group in groups:
+        first, *rest = group
+        baseline = states_by_zone[first]
+        for zone in rest:
+            candidate = states_by_zone[zone]
+            if (
+                candidate.target_time != baseline.target_time
+                or candidate.time != baseline.time
+                or candidate.temperature_gk != baseline.temperature_gk
+                or candidate.density != baseline.density
+                or candidate.electron_fraction != baseline.electron_fraction
+                or candidate.mass_fractions != baseline.mass_fractions
+            ):
+                failures.append(
+                    f"equivalent zones {tuple(group)} have non-identical endpoint values"
+                )
+                break
+    if failures:
+        raise ComparisonFailure("repeated-zone equivalence failed:\n  " + "\n  ".join(failures))
+
+
 def run_and_compare(
     executable: Path,
     case: RegressionCase,
@@ -1960,11 +2255,15 @@ def run_and_compare(
         ) from error
     try:
         states = parse_diagnostic(
-            diagnostic, case.expected_zones, case.expected_species
+            diagnostic,
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
         )
         diagnostics = calculate_composition_norms(states, reference)
         _write_composition_diagnostics(prepared, diagnostics, reference)
         compare_final_states(states, reference)
+        compare_equivalent_zone_groups(states, case.equivalent_zone_groups)
     except (ParsingFailure, ComparisonFailure) as error:
         raise type(error)(f"{error}; artifacts: {prepared}") from None
     return result

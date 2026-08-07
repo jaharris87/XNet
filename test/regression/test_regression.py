@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from xnet_regression import (
+    batch_alpha_case,
     bdf_sn160_case,
     RegressionCase,
     RegressionFailure,
@@ -109,6 +110,17 @@ def test_bdf_sn160(
         xnet_timeout,
         tmp_path,
         bdf_sn160_case(REPOSITORY_ROOT),
+    )
+
+
+def test_batch_alpha(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    _run_case(
+        xnet_executable,
+        xnet_timeout,
+        tmp_path,
+        batch_alpha_case(REPOSITORY_ROOT),
     )
 
 

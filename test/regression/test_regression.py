@@ -43,7 +43,8 @@ def _run_case(
         (work_directory / "composition_error_norms.json").read_text(encoding="utf-8")
     )
     assert diagnostics["status"] == (
-        "diagnostic-only; these norms do not determine pass/fail"
+        "L2 is diagnostic-only; L1 and L-infinity are pass/fail gates "
+        "only when this reference supplies limits"
     )
     assert diagnostics["vector"] == (
         "absolute mass-fraction errors for every species in the case"
@@ -52,7 +53,15 @@ def _run_case(
         case.expected_zones
     )
     for zone in diagnostics["zones"]:
-        assert set(zone) == {"zone", "l1", "l2", "linf", "linf_species"}
+        assert set(zone) == {
+            "zone",
+            "l1",
+            "l2",
+            "linf",
+            "linf_species",
+            "l1_limit",
+            "linf_limit",
+        }
         assert all(math.isfinite(zone[name]) for name in ("l1", "l2", "linf"))
         assert zone["l1"] >= zone["l2"] >= zone["linf"] >= 0.0
         assert zone["linf_species"] is None or isinstance(

@@ -239,22 +239,23 @@ delimited timer section per zone, and finite values. It has no default network
 species list. Case setup independently requires the same ordered species in
 `sunet`, so the network input, parsed diagnostic, and reference must agree. It
 rejects negative mass fractions and applies a coarse
-structural `|sum(X)-1|` check. The `tnsn_alpha` bound is `2.1e-8`.
+structural `|sum(X)-1|` check. The `tnsn_alpha` bound is `2.2e-8`.
 `heat_alpha` records a zone-specific bound from `7.60556005e-9` through
-`1.81105e-8`, and `tnsn_torch47` uses `1.656158052105501e-8`. Each bound is
+`1.81105e-8`, and `tnsn_torch47` uses `1.7e-8`. Each bound is
 the sum of the half-last-place rounding bounds for that zone's printed
 baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
-For `heat_sn160` and `bdf_sn160`, the printed mass fractions can sum to a value
-that differs from unity by more than their aggregate formatting uncertainty.
-Each zone-specific bound is therefore the absolute baseline printed-sum offset
-plus the sum of the half-last-place bounds of all 160 printed values. This
-accepts the characterized printed endpoint plus one complete-vector printing
-uncertainty. It is only a printed mass-fraction sum check. In particular, it
-is not the BDF `iconvc == 3` weighted RMS convergence norm and is not a check
-of `rtol`, `atol`, or `ymin`.
+XNet emits individual mass fractions, not a separate aggregate composition-sum
+record. The regression parser sums those emitted values in output order and
+compares the result with the canonical complete-vector sum through the normal
+`mass_fraction_printed_sum` policy. It separately uses `math.fsum` for the
+structural normalization-to-one check controlled by `mass_fraction_sum_atol`.
+For `heat_sn160` and `bdf_sn160`, the printed-sum limits cover the Issue #30
+three-row envelope with a compact margin; the normalization bounds retain the
+existing formatting-aware structural allowance. Neither is the BDF `iconvc ==
+3` weighted RMS convergence norm or a check of `rtol`, `atol`, or `ymin`.
 
 Each reference records characterized final step counts for diagnosis:
 `tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,
@@ -323,18 +324,13 @@ the same pass/fail coverage. In `heat_alpha`, for example, `o16` gates zones
 sum-preserving `o16`/`c12` perturbation to zones 4 and 3 to check both outcomes;
 negative-fraction and composition-sum checks still cover the full vector.
 
-Every field has an explicit absolute tolerance grounded in its printed
-resolution and a relative tolerance of `5e-8`, reflecting half a unit at the
-diagnostic's eight-significant-digit precision. The `heat_alpha` absolute
-tolerances use half of each value's last printed place.
-Where a quantity's printed scale differs among its zones, the JSON records the
-absolute tolerances by zone. Reference values, absolute tolerances, and
-relative tolerances may each be either one scalar applied to every zone or a
-mapping with exactly one value for every expected zone. This preserves the
-compact existing `tnsn_alpha` reference while representing all six distinct
-`heat_alpha` endpoints explicitly. The policy remains a deliberately narrow
-same-configuration characterization; cross-compiler evidence is not yet
-available. The numerical-field criterion is
+Each `final_state.json` declares `xnet-comparison-v1`. Endpoint values remain
+the one canonical `mac-gnu16` reference; comparison settings are properties of
+that same case reference, never selected by host, platform, compiler, or
+executable configuration. Scalar and selected-species settings explicitly
+declare either `exact: true` with zero tolerances, or absolute and relative
+limits. Values and limits can each be case-wide or a complete per-zone map.
+The numerical-field criterion is
 
 ```text
 abs(actual - reference) <= atol + rtol * abs(reference)
@@ -342,22 +338,26 @@ abs(actual - reference) <= atol + rtol * abs(reference)
 
 Each reference contains the final mass fraction for every case-network species
 and every zone. The separate `mass_fraction_selection` and
-`mass_fraction_tolerances` mappings identify which species have field-aware
-pass/fail policies in each zone without repeating any composition value. A
-tolerance scalar applies wherever that species is selected; a zone mapping can
-provide distinct bounds and must define every expected zone. This keeps
-complete reference states for structural checks and diagnostic norms without
-inventing pass/fail tolerances for trace species.
+`mass_fraction_tolerances` mappings identify field-aware species checks without
+repeating endpoint values. A compact `all_selected` setting can cover every
+selected species, while future cases may use per-species settings when evidence
+requires them. `composition_norm_limits` optionally adds complete
+vector `L1` and `L-infinity` gates; `L2` remains diagnostic-only. Selected
+species and vector gates are independent, so either can reject a result. An
+`L-infinity` failure reports the responsible species.
 
-For diagnosis, `composition_error_norms.json` reports raw `L1`, `L2`, and
-`L-infinity` norms of the absolute mass-fraction error over all case species for
-each zone, plus the species responsible for `L-infinity`. The complete
-composition reference and selected tolerance mapping are stored separately in
-`final_state.json`, so each species value has a single source. These norms have
-no acceptance threshold and do not affect pass/fail. Raw
-norms can be dominated by abundant species or conceal the identity of other
-changes, so the selected field-aware comparisons remain the regression
-criteria.
+`composition_error_norms.json` records complete-vector `L1`, `L2`, and
+`L-infinity` norms, the `L-infinity` species, and any reference-owned vector
+limits. It is an execution artifact, not a reference-update mechanism.
+
+Issue #30 provides the bounded three-row (`mac-gnu16`, `mac-llvm`, and
+`etacar-gnu16`) characterization evidence for the five current cases under
+the documented serial optimized configuration. This is characterization, not
+scientific validation, and it does not establish portability outside that
+matrix. Future cases should keep one canonical endpoint, choose the coarsest
+quantitatively justified settings, preserve exact invariants, and document
+their evidence in the governing issue or PR rather than adding study archives
+or platform branches to this tree.
 
 Timer exclusion is structural rather than line-count based: only a
 `Timers Summary:` heading and immediately following timer-name/numeric-value

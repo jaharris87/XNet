@@ -1,7 +1,9 @@
 """Focused tests for the XNet regression runner and comparator."""
 
 from dataclasses import replace
+import base64
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -14,6 +16,7 @@ from xnet_regression import (
     ALPHA_SPECIES,
     bdf_sn160_case,
     CharacterizationReference,
+    CompositionNormLimits,
     CompositionNorms,
     ComparisonFailure,
     ExecutionFailure,
@@ -175,6 +178,78 @@ def _make_executable(tmp_path: Path, body: str) -> Path:
     return executable
 
 
+def _diagnostic_for_states(states: tuple[FinalState, ...]) -> str:
+    """Build a structurally valid XNet diagnostic for registered-path tests."""
+
+    lines: list[str] = []
+    for state in states:
+        lines.append(
+            "End "
+            f"{state.zone} {state.step} {state.target_time:.16E} "
+            f"{state.time:.16E} {state.temperature_gk:.16E} "
+            f"{state.density:.16E} {state.electron_fraction:.16E}"
+        )
+        for species, value in state.mass_fractions.items():
+            lines.append(f" {species} {value:.16E}")
+        lines.extend(
+            (
+                "Counters:  Zone        TS        NR  Jacobian     Deriv CrossSect",
+                (
+                    f"{state.zone} {state.counters.ts} {state.counters.nr} "
+                    f"{state.counters.jacobian} {state.counters.derivative} "
+                    f"{state.counters.cross_section}"
+                ),
+                "Timers Summary:",
+                "        Total      1.000E-02",
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _registered_case_executable(
+    tmp_path: Path, case: RegressionCase, states: tuple[FinalState, ...]
+) -> Path:
+    """Return a fake XNet that writes fresh complete output in its work directory."""
+
+    diagnostic = base64.b64encode(
+        _diagnostic_for_states(states).encode("utf-8")
+    ).decode("ascii")
+    body = (
+        "from pathlib import Path\n"
+        "import base64\n"
+        f"Path('net_diag01').write_bytes(base64.b64decode({diagnostic!r}))\n"
+        f"for name in {case.required_outputs[1:]!r}:\n"
+        "    Path(name).write_bytes(b'fresh')"
+    )
+    return _make_executable(tmp_path, body)
+
+
+def _run_registered_pytest(
+    tmp_path: Path,
+    case: RegressionCase,
+    executable: Path,
+) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            f"test/regression/test_regression.py::test_{case.name}",
+            f"--xnet-executable={executable}",
+            f"--basetemp={tmp_path / 'artifacts'}",
+        ],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=environment,
+    )
+
+
 def test_known_good_comparison_passes() -> None:
     states = parse_diagnostic(
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
@@ -289,6 +364,99 @@ def test_zone_specific_reference_requires_every_zone(tmp_path: Path) -> None:
         load_reference(reference_path)
 
 
+def test_comparison_schema_requires_explicit_nonpermissive_policies(
+    tmp_path: Path,
+) -> None:
+    source = REPOSITORY_ROOT / "test/regression/cases/tnsn_alpha/reference/final_state.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    document["fields"]["temperature_gk"].pop("exact")
+    reference_path = tmp_path / "missing-exact-policy.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="exact"):
+        load_reference(reference_path)
+
+
+def test_registered_case_rejects_missing_comparison_schema_before_execution(
+    tmp_path: Path,
+) -> None:
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    document = json.loads(case.reference.read_text(encoding="utf-8"))
+    document.pop("comparison_schema")
+    reference_path = tmp_path / "missing-comparison-schema.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match="must contain exactly"):
+        run_and_compare(
+            tmp_path / "not-run", replace(case, reference=reference_path),
+            tmp_path / "work", timeout_seconds=1.0
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (
+            lambda document: document.__setitem__(
+                "comparison_schema", "xnet-comparison-v999"
+            ),
+            "unsupported comparison_schema",
+        ),
+        (
+            lambda document: document["fields"]["temperature_gk"].update(
+                {"exact": True, "atol": 1.0}
+            ),
+            "exact comparison with nonzero tolerance",
+        ),
+        (
+            lambda document: document.pop("mass_fraction_printed_sum"),
+            "mass_fraction_printed_sum is required",
+        ),
+        (
+            lambda document: document["mass_fraction_printed_sum"].update(
+                {"value": 0.5}
+            ),
+            "does not match the canonical composition sum",
+        ),
+        (
+            lambda document: document["composition_norm_limits"].update(
+                {"l1": -1.0}
+            ),
+            "negative tolerance",
+        ),
+        (
+            lambda document: document["composition_norm_limits"].update(
+                {"l2": 1.0}
+            ),
+            "one or both of l1 and linf",
+        ),
+    ],
+)
+def test_comparison_schema_rejects_malformed_policy(
+    tmp_path: Path, mutate, message: str
+) -> None:
+    source = REPOSITORY_ROOT / "test/regression/cases/tnsn_alpha/reference/final_state.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    mutate(document)
+    reference_path = tmp_path / "malformed-comparison-policy.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SetupFailure, match=message):
+        load_reference(reference_path)
+
+
+def test_comparison_norm_limit_round_trips_without_shrinking(tmp_path: Path) -> None:
+    source = REPOSITORY_ROOT / "test/regression/cases/tnsn_alpha/reference/final_state.json"
+    document = json.loads(source.read_text(encoding="utf-8"))
+    reference_path = tmp_path / "round-trip-reference.json"
+    reference_path.write_text(json.dumps(document), encoding="utf-8")
+
+    reference = load_reference(reference_path)
+    assert reference.composition_norm_limits is not None
+    assert reference.composition_norm_limits[1].l1 == 2.0e-10
+    assert reference.composition_norm_limits[1].linf == 2.0e-10
+
+
 def test_composition_selection_rejects_missing_zone(tmp_path: Path) -> None:
     source = REPOSITORY_ROOT / "test/regression/cases/heat_alpha/reference/final_state.json"
     document = json.loads(source.read_text(encoding="utf-8"))
@@ -370,11 +538,13 @@ def test_composition_selection_requires_selected_species_tolerance(
 ) -> None:
     case = heat_alpha_case(REPOSITORY_ROOT)
     document = json.loads(case.reference.read_text(encoding="utf-8"))
-    document["mass_fraction_tolerances"].pop("o16")
+    document["mass_fraction_tolerances"] = {
+        "si28": document["mass_fraction_tolerances"]["all_selected"]
+    }
     reference_path = tmp_path / "missing-selection-tolerance.json"
     reference_path.write_text(json.dumps(document), encoding="utf-8")
 
-    with pytest.raises(SetupFailure, match="no matching tolerance: o16"):
+    with pytest.raises(SetupFailure, match="no matching tolerance"):
         load_reference(reference_path)
 
 
@@ -417,6 +587,151 @@ def test_value_outside_tolerance_fails() -> None:
         )
 
 
+def test_exact_scalar_policy_rejects_any_difference() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    fields = {1: dict(reference.fields[1])}
+    fields[1]["temperature_gk"] = Tolerance(2.0, 0.0, 0.0, exact=True)
+
+    with pytest.raises(ComparisonFailure, match=r"allowed=0.000e\+00"):
+        compare_final_states(
+            (replace(state, temperature_gk=2.0 + 1.0e-12),),
+            replace(reference, fields=fields),
+        )
+
+
+def test_relative_scalar_policy_passes_exactly_at_boundary() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    fields = {1: dict(reference.fields[1])}
+    fields[1]["temperature_gk"] = Tolerance(2.0, 0.0, 0.25)
+
+    compare_final_states(
+        (replace(state, temperature_gk=2.5),), replace(reference, fields=fields)
+    )
+
+
+def test_combined_scalar_policy_honors_boundary_and_zero_reference() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    fields = {1: dict(reference.fields[1])}
+    fields[1]["temperature_gk"] = Tolerance(2.0, 0.1, 0.2)
+    bounded_reference = replace(reference, fields=fields)
+
+    compare_final_states((replace(state, temperature_gk=2.5),), bounded_reference)
+    with pytest.raises(ComparisonFailure, match="temperature_gk"):
+        compare_final_states(
+            (replace(state, temperature_gk=math.nextafter(2.5, math.inf)),),
+            bounded_reference,
+        )
+
+    fields[1]["temperature_gk"] = Tolerance(0.0, 0.0, 0.2)
+    with pytest.raises(ComparisonFailure, match="temperature_gk"):
+        compare_final_states(
+            (replace(state, temperature_gk=math.nextafter(0.0, math.inf)),),
+            replace(reference, fields=fields),
+        )
+
+
+def test_complete_vector_limits_are_independent_of_selected_species() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    unselected_change = dict(state.mass_fractions)
+    unselected_change["ne20"] += 2.0e-5
+    unselected_change["ar36"] -= 2.0e-5
+    vector_reference = replace(
+        reference,
+        composition_norm_limits={1: CompositionNormLimits(l1=1.0e-5, linf=1.0e-5)},
+    )
+
+    with pytest.raises(ComparisonFailure, match="case fake zone 1 L1"):
+        compare_final_states(
+            (replace(state, mass_fractions=unselected_change),), vector_reference
+        )
+
+    selected_change = dict(state.mass_fractions)
+    selected_change["si28"] += 2.0e-5
+    selected_change["c12"] -= 2.0e-5
+    permissive_vector_reference = replace(
+        reference,
+        composition_norm_limits={1: CompositionNormLimits(l1=1.0, linf=1.0)},
+    )
+    with pytest.raises(ComparisonFailure, match="si28 mass fraction"):
+        compare_final_states(
+            (replace(state, mass_fractions=selected_change),),
+            permissive_vector_reference,
+        )
+
+
+def test_linf_limit_identifies_responsible_species_and_boundary() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    changed = dict(state.mass_fractions)
+    changed["ne20"] += 0.125
+    changed["c12"] -= 0.125
+    limits = {1: CompositionNormLimits(linf=0.125)}
+    compare_final_states(
+        (replace(state, mass_fractions=changed),),
+        replace(reference, composition_norm_limits=limits),
+    )
+
+    changed["ne20"] += 1.0e-6
+    changed["c12"] -= 1.0e-6
+    with pytest.raises(ComparisonFailure, match="species=c12"):
+        compare_final_states(
+            (replace(state, mass_fractions=changed),),
+            replace(reference, composition_norm_limits=limits),
+        )
+
+
+def test_l1_and_linf_gates_fail_independently() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = replace(
+        _matching_unit_reference(), mass_fraction_tolerances={1: {}}
+    )
+
+    broad = dict(state.mass_fractions)
+    for donor, recipient in (("he4", "ne20"), ("c12", "mg24")):
+        broad[donor] -= 0.02
+        broad[recipient] += 0.02
+    with pytest.raises(ComparisonFailure, match="case fake zone 1 L1"):
+        compare_final_states(
+            (replace(state, mass_fractions=broad),),
+            replace(
+                reference,
+                composition_norm_limits={
+                    1: CompositionNormLimits(l1=0.05, linf=0.03)
+                },
+            ),
+        )
+
+    localized = dict(state.mass_fractions)
+    localized["he4"] -= 0.02
+    localized["ne20"] += 0.02
+    with pytest.raises(ComparisonFailure, match="case fake zone 1 L-infinity"):
+        compare_final_states(
+            (replace(state, mass_fractions=localized),),
+            replace(
+                reference,
+                composition_norm_limits={
+                    1: CompositionNormLimits(l1=0.05, linf=0.01)
+                },
+            ),
+        )
+
+
 def test_final_step_is_diagnostic_only() -> None:
     state = parse_diagnostic(
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
@@ -442,7 +757,7 @@ def test_achieved_time_must_reach_target_time() -> None:
     state = parse_diagnostic(
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
     )[0]
-    with pytest.raises(ComparisonFailure, match="did not reach target time"):
+    with pytest.raises(ComparisonFailure, match="achieved_time"):
         compare_final_states((replace(state, time=1.9),), _matching_unit_reference())
 
 
@@ -1192,25 +1507,19 @@ def test_sn160_references_cannot_be_swapped(
     assert not work_directory.exists()
 
 
-def test_reference_rejects_duplicate_tolerance_species(tmp_path: Path) -> None:
+def test_reference_rejects_duplicate_tolerance_declaration(tmp_path: Path) -> None:
     case = tnsn_torch47_case(REPOSITORY_ROOT)
     source = case.reference.read_text(encoding="utf-8")
-    co55_policy = """    "co55": {
-      "atol": 5e-12,
-      "rtol": 5e-8
-    }
-"""
-    duplicate = (
-        co55_policy.rstrip()
-        + ',\n    "co55": {"atol": 1.0, "rtol": 1.0}\n'
-    )
-    assert source.count(co55_policy) == 1
+    tolerance_start = source.index('"mass_fraction_tolerances": {')
+    declaration_start = source.index('\n    "all_selected":', tolerance_start)
+    duplicate = '\n    "all_selected": {"atol": 1.0, "rtol": 0.0, "exact": false},'
     reference_path = tmp_path / "duplicate-tolerance-reference.json"
     reference_path.write_text(
-        source.replace(co55_policy, duplicate), encoding="utf-8"
+        source[:declaration_start] + duplicate + source[declaration_start:],
+        encoding="utf-8",
     )
 
-    with pytest.raises(SetupFailure, match="duplicate JSON object key: co55"):
+    with pytest.raises(SetupFailure, match="duplicate JSON object key: all_selected"):
         load_reference(reference_path)
 
 
@@ -1282,7 +1591,7 @@ def test_heat_alpha_selected_zone_species_perturbation_fails() -> None:
         )
 
 
-def test_heat_alpha_same_perturbation_is_diagnostic_only_in_unselected_zone() -> None:
+def test_complete_vector_limits_detect_unselected_zone_change() -> None:
     case = heat_alpha_case(REPOSITORY_ROOT)
     reference = load_reference(case.reference)
     state = _state_from_reference(reference, 3)
@@ -1300,7 +1609,8 @@ def test_heat_alpha_same_perturbation_is_diagnostic_only_in_unselected_zone() ->
     assert calculate_composition_norms((perturbed,), reference)[0].linf == pytest.approx(
         1.0e-6
     )
-    compare_final_states((perturbed,), replace(reference, expected_zones=(3,)))
+    with pytest.raises(ComparisonFailure, match="zone 3 L1"):
+        compare_final_states((perturbed,), replace(reference, expected_zones=(3,)))
 
 
 def test_diagnostic_only_species_still_receive_negative_fraction_check() -> None:
@@ -1328,6 +1638,29 @@ def test_diagnostic_only_species_still_receive_composition_sum_check() -> None:
     with pytest.raises(ComparisonFailure, match="mass-fraction sum"):
         compare_final_states(
             (replace(state, mass_fractions=mass_fractions),), zone_reference
+        )
+
+
+def test_printed_sum_gate_rejects_change_hidden_by_normalization_allowance() -> None:
+    reference = load_reference(bdf_sn160_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 3)
+    mass_fractions = dict(state.mass_fractions)
+    for species in ("fe57", "ca42", "ti47"):
+        mass_fractions[species] -= 1.5e-5
+
+    norms = calculate_composition_norms(
+        (replace(state, mass_fractions=mass_fractions),), reference
+    )[0]
+    assert norms.l1 <= reference.composition_norm_limits[3].l1  # type: ignore[index]
+    assert norms.linf <= reference.composition_norm_limits[3].linf  # type: ignore[index]
+    assert all(
+        mass_fractions[species] == state.mass_fractions[species]
+        for species in reference.mass_fraction_tolerances[3]
+    )
+    with pytest.raises(ComparisonFailure, match="printed mass-fraction sum"):
+        compare_final_states(
+            (replace(state, mass_fractions=mass_fractions),),
+            replace(reference, expected_zones=(3,)),
         )
 
 
@@ -1434,3 +1767,116 @@ def test_failing_regression_makes_pytest_return_nonzero(tmp_path: Path) -> None:
     )
     assert completed.returncode != 0
     assert "execution failure" in completed.stdout + completed.stderr
+
+
+CASE_FACTORIES = (
+    tnsn_alpha_case,
+    heat_alpha_case,
+    tnsn_torch47_case,
+    heat_sn160_case,
+    bdf_sn160_case,
+)
+
+
+def _reference_states(reference: CharacterizationReference) -> tuple[FinalState, ...]:
+    return tuple(_state_from_reference(reference, zone) for zone in reference.expected_zones)
+
+
+def _move_mass_fraction(
+    state: FinalState, donor: str, recipient: str, amount: float
+) -> FinalState:
+    mass_fractions = dict(state.mass_fractions)
+    assert donor != recipient
+    assert mass_fractions[donor] >= amount
+    mass_fractions[donor] -= amount
+    mass_fractions[recipient] += amount
+    return replace(state, mass_fractions=mass_fractions)
+
+
+@pytest.mark.parametrize("case_factory", CASE_FACTORIES, ids=lambda item: item.__name__)
+@pytest.mark.parametrize(
+    ("mutation", "expected_diagnostic"),
+    (
+        ("temperature", "temperature_gk"),
+        ("selected_species", "mass fraction"),
+        ("localized_vector", "L-infinity"),
+        ("broad_vector", "L1"),
+    ),
+)
+def test_registered_cases_reject_controlled_policy_violations(
+    tmp_path: Path,
+    case_factory,
+    mutation: str,
+    expected_diagnostic: str,
+) -> None:
+    """Exercise each policy gate through the normal registered pytest entry point."""
+
+    case = case_factory(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    states = list(_reference_states(reference))
+    zone = reference.expected_zones[0]
+    state_index = 0
+    state = states[state_index]
+
+    if mutation == "temperature":
+        policy = reference.fields[zone]["temperature_gk"]
+        amount = 1.0e-6 if policy.exact else 3.0 * policy.atol
+        states[state_index] = replace(
+            state, temperature_gk=state.temperature_gk + amount
+        )
+    elif mutation == "selected_species":
+        selected = reference.mass_fraction_tolerances[zone]
+        recipient = max(selected, key=state.mass_fractions.__getitem__)
+        donor = max(
+            (species for species in state.mass_fractions if species != recipient),
+            key=state.mass_fractions.__getitem__,
+        )
+        bounds = selected[recipient]
+        amount = 1.0e-6 if bounds.exact else 3.0 * bounds.atol
+        states[state_index] = _move_mass_fraction(state, donor, recipient, amount)
+    elif mutation == "localized_vector":
+        assert reference.composition_norm_limits is not None
+        limits = reference.composition_norm_limits[zone]
+        assert limits.linf is not None
+        donor = max(state.mass_fractions, key=state.mass_fractions.__getitem__)
+        recipient = next(species for species in state.mass_fractions if species != donor)
+        states[state_index] = _move_mass_fraction(
+            state, donor, recipient, max(1.0e-6, 3.0 * limits.linf)
+        )
+    else:
+        assert reference.composition_norm_limits is not None
+        limits = reference.composition_norm_limits[zone]
+        assert limits.l1 is not None
+        ordered = sorted(
+            state.mass_fractions, key=state.mass_fractions.__getitem__
+        )
+        donors = ordered[-4:]
+        recipients = ordered[:4]
+        amount = max(1.0e-6, limits.l1 / 2.0)
+        changed = state
+        for donor, recipient in zip(donors, recipients, strict=True):
+            changed = _move_mass_fraction(changed, donor, recipient, amount)
+        states[state_index] = changed
+
+    executable = _registered_case_executable(tmp_path, case, tuple(states))
+    completed = _run_registered_pytest(tmp_path, case, executable)
+    output = completed.stdout + completed.stderr
+    assert completed.returncode != 0, output
+    assert "comparison failure" in output
+    assert expected_diagnostic in output
+
+
+@pytest.mark.parametrize("case_factory", CASE_FACTORIES, ids=lambda item: item.__name__)
+def test_registered_execution_cannot_modify_reference(
+    tmp_path: Path, case_factory
+) -> None:
+    case = case_factory(REPOSITORY_ROOT)
+    before = case.reference.read_bytes()
+    reference = load_reference(case.reference)
+    executable = _registered_case_executable(
+        tmp_path, case, _reference_states(reference)
+    )
+
+    completed = _run_registered_pytest(tmp_path, case, executable)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert case.reference.read_bytes() == before

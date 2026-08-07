@@ -258,6 +258,7 @@ SILICON_BURNING_COMPARISON_SPECIES = (
     "ni56",
 )
 MATERIAL_MASS_FRACTION_THRESHOLD = 1.0e-4
+COMPARISON_SCHEMA = "xnet-comparison-v1"
 
 
 def comparison_species_for_zone(
@@ -322,6 +323,7 @@ class RegressionCase:
     expected_species: tuple[str, ...]
     network_inputs: tuple[str, ...]
     reference_schema: str | None = None
+    comparison_schema: str | None = None
     expected_legacy_id: int | None = None
     expected_solver: str | None = None
     expected_effective_controls: Mapping[str, float] | None = None
@@ -379,6 +381,7 @@ class Tolerance:
     value: float
     atol: float
     rtol: float
+    exact: bool = False
 
 
 @dataclass(frozen=True)
@@ -387,6 +390,15 @@ class ToleranceBounds:
 
     atol: float
     rtol: float
+    exact: bool = False
+
+
+@dataclass(frozen=True)
+class CompositionNormLimits:
+    """Optional pass/fail limits for a complete composition vector."""
+
+    l1: float | None = None
+    linf: float | None = None
 
 
 @dataclass(frozen=True)
@@ -402,8 +414,10 @@ class CharacterizationReference:
     # This subset selects species for field-aware pass/fail comparison.
     mass_fraction_tolerances: Mapping[int, Mapping[str, ToleranceBounds]]
     mass_fraction_sum_atols: Mapping[int, float]
+    composition_norm_limits: Mapping[int, CompositionNormLimits] | None = None
     solver_counters: Mapping[int, SolverCounters] | None = None
     reference_schema: str | None = None
+    comparison_schema: str | None = None
     metadata_inputs: Mapping[str, object] | None = None
     input_sha256: Mapping[str, str] | None = None
     legacy_provenance: Mapping[str, object] | None = None
@@ -435,6 +449,7 @@ def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
         expected_zones=tuple(range(1, 11)),
         expected_species=ALPHA_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+        comparison_schema=COMPARISON_SCHEMA,
     )
 
 
@@ -457,6 +472,7 @@ def heat_alpha_case(repository_root: Path) -> RegressionCase:
         expected_zones=tuple(range(1, 7)),
         expected_species=ALPHA_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+        comparison_schema=COMPARISON_SCHEMA,
     )
 
 
@@ -478,6 +494,7 @@ def tnsn_torch47_case(repository_root: Path) -> RegressionCase:
         expected_zones=(1,),
         expected_species=TORCH47_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+        comparison_schema=COMPARISON_SCHEMA,
     )
 
 
@@ -500,6 +517,7 @@ def heat_sn160_case(repository_root: Path) -> RegressionCase:
         expected_zones=tuple(range(1, 7)),
         expected_species=SN160_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
+        comparison_schema=COMPARISON_SCHEMA,
     )
 
 
@@ -523,6 +541,7 @@ def bdf_sn160_case(repository_root: Path) -> RegressionCase:
         expected_species=SN160_SPECIES,
         network_inputs=("sunet", "netsu", "netweak", "netwinv", "ab_co"),
         reference_schema="xnet-characterization-v1",
+        comparison_schema=COMPARISON_SCHEMA,
         expected_legacy_id=54,
         expected_solver="Backward Differentiation Formula (isolv = 3)",
         expected_effective_controls={
@@ -996,36 +1015,90 @@ def _load_zone_integers(
 
 
 def _load_tolerance(
-    item: object, expected_zones: Sequence[int], context: str
+    item: object,
+    expected_zones: Sequence[int],
+    context: str,
+    *,
+    require_explicit_exact: bool,
 ) -> Mapping[int, Tolerance]:
-    if not isinstance(item, dict) or set(item) != {"value", "atol", "rtol"}:
+    required = {"value", "atol", "rtol"}
+    if require_explicit_exact:
+        required.add("exact")
+    if not isinstance(item, dict) or set(item) != required:
         raise SetupFailure(
-            f"reference entry {context} must contain exactly value, atol, and rtol"
+            f"reference entry {context} must contain exactly "
+            + ", ".join(sorted(required))
         )
+    exact = item.get("exact", False)
+    if not isinstance(exact, bool):
+        raise SetupFailure(f"reference entry {context}.exact must be a boolean")
     values = _load_zone_floats(item["value"], expected_zones, f"{context}.value")
     atols = _load_zone_floats(item["atol"], expected_zones, f"{context}.atol")
     rtols = _load_zone_floats(item["rtol"], expected_zones, f"{context}.rtol")
     if any(value < 0 for value in (*atols.values(), *rtols.values())):
         raise SetupFailure(f"reference entry {context} contains a negative tolerance")
+    if exact and any(value != 0.0 for value in (*atols.values(), *rtols.values())):
+        raise SetupFailure(
+            f"reference entry {context} declares exact comparison with nonzero tolerance"
+        )
     return {
-        zone: Tolerance(values[zone], atols[zone], rtols[zone])
+        zone: Tolerance(values[zone], atols[zone], rtols[zone], exact)
         for zone in expected_zones
     }
 
 
 def _load_tolerance_bounds(
-    item: object, expected_zones: Sequence[int], context: str
+    item: object,
+    expected_zones: Sequence[int],
+    context: str,
+    *,
+    require_explicit_exact: bool,
 ) -> Mapping[int, ToleranceBounds]:
-    if not isinstance(item, dict) or set(item) != {"atol", "rtol"}:
+    required = {"atol", "rtol"}
+    if require_explicit_exact:
+        required.add("exact")
+    if not isinstance(item, dict) or set(item) != required:
         raise SetupFailure(
-            f"reference entry {context} must contain exactly atol and rtol"
+            f"reference entry {context} must contain exactly "
+            + ", ".join(sorted(required))
         )
+    exact = item.get("exact", False)
+    if not isinstance(exact, bool):
+        raise SetupFailure(f"reference entry {context}.exact must be a boolean")
     atols = _load_zone_floats(item["atol"], expected_zones, f"{context}.atol")
     rtols = _load_zone_floats(item["rtol"], expected_zones, f"{context}.rtol")
     if any(value < 0 for value in (*atols.values(), *rtols.values())):
         raise SetupFailure(f"reference entry {context} contains a negative tolerance")
+    if exact and any(value != 0.0 for value in (*atols.values(), *rtols.values())):
+        raise SetupFailure(
+            f"reference entry {context} declares exact comparison with nonzero tolerance"
+        )
     return {
-        zone: ToleranceBounds(atols[zone], rtols[zone])
+        zone: ToleranceBounds(atols[zone], rtols[zone], exact)
+        for zone in expected_zones
+    }
+
+
+def _load_composition_norm_limits(
+    item: object, expected_zones: Sequence[int]
+) -> Mapping[int, CompositionNormLimits]:
+    if not isinstance(item, dict) or not item or set(item).difference({"l1", "linf"}):
+        raise SetupFailure(
+            "reference entry composition_norm_limits must contain one or both of l1 and linf"
+        )
+    limits = {
+        name: _load_zone_floats(value, expected_zones, f"composition_norm_limits.{name}")
+        for name, value in item.items()
+    }
+    if any(value < 0.0 for values in limits.values() for value in values.values()):
+        raise SetupFailure(
+            "reference entry composition_norm_limits contains a negative tolerance"
+        )
+    return {
+        zone: CompositionNormLimits(
+            l1=limits.get("l1", {}).get(zone),
+            linf=limits.get("linf", {}).get(zone),
+        )
         for zone in expected_zones
     }
 
@@ -1295,6 +1368,13 @@ def load_reference(path: Path) -> CharacterizationReference:
         )
     if reference_schema is None:
         legacy_provenance = None
+    comparison_schema = document.get("comparison_schema")
+    if comparison_schema is not None:
+        if comparison_schema != COMPARISON_SCHEMA:
+            raise SetupFailure(
+                f"unsupported comparison_schema: {comparison_schema!r}"
+            )
+    require_explicit_exact = comparison_schema == COMPARISON_SCHEMA
 
     try:
         case_name = document["case"]
@@ -1313,7 +1393,12 @@ def load_reference(path: Path) -> CharacterizationReference:
             document["final_step"], expected_zones, "final_step"
         )
         fields_by_name = {
-            name: _load_tolerance(item, expected_zones, f"fields.{name}")
+            name: _load_tolerance(
+                item,
+                expected_zones,
+                f"fields.{name}",
+                require_explicit_exact=require_explicit_exact,
+            )
             for name, item in document["fields"].items()
         }
         mass_fractions_by_species = {
@@ -1336,12 +1421,38 @@ def load_reference(path: Path) -> CharacterizationReference:
         mass_fraction_selection = _load_composition_selection(
             document["mass_fraction_selection"], expected_zones
         )
-        mass_fraction_tolerances_by_species = {
-            name: _load_tolerance_bounds(
-                item, expected_zones, f"mass_fraction_tolerances.{name}"
+        tolerance_items = document["mass_fraction_tolerances"]
+        if not isinstance(tolerance_items, dict):
+            raise ValueError("mass_fraction_tolerances must be an object")
+        all_selected_tolerances = (
+            _load_tolerance_bounds(
+                tolerance_items["all_selected"],
+                expected_zones,
+                "mass_fraction_tolerances.all_selected",
+                require_explicit_exact=require_explicit_exact,
             )
-            for name, item in document["mass_fraction_tolerances"].items()
-        }
+            if set(tolerance_items) == {"all_selected"}
+            else None
+        )
+        mass_fraction_tolerances_by_species = (
+            {}
+            if all_selected_tolerances is not None
+            else {
+                name: _load_tolerance_bounds(
+                    item,
+                    expected_zones,
+                    f"mass_fraction_tolerances.{name}",
+                    require_explicit_exact=require_explicit_exact,
+                )
+                for name, item in tolerance_items.items()
+            }
+        )
+        norm_limit_item = document.get("composition_norm_limits")
+        composition_norm_limits = (
+            None
+            if norm_limit_item is None
+            else _load_composition_norm_limits(norm_limit_item, expected_zones)
+        )
         mass_fraction_sum_atols = _load_zone_floats(
             document["mass_fraction_sum_atol"],
             expected_zones,
@@ -1418,16 +1529,12 @@ def load_reference(path: Path) -> CharacterizationReference:
         for species in mass_fractions_by_species
     ):
         raise SetupFailure("reference composition is empty or invalid")
-    if not mass_fraction_tolerances_by_species:
-        raise SetupFailure("reference mass-fraction tolerance selection is empty")
-    unknown_tolerance_species = set(mass_fraction_tolerances_by_species).difference(
-        mass_fractions_by_species
-    )
-    if unknown_tolerance_species:
+    if composition_norm_limits is not None and not mass_fractions_by_species:
         raise SetupFailure(
-            "reference mass-fraction tolerances have no matching composition value: "
-            + ", ".join(sorted(unknown_tolerance_species))
+            "composition norm limits require a complete reference vector"
         )
+    if not mass_fraction_tolerances_by_species and all_selected_tolerances is None:
+        raise SetupFailure("reference mass-fraction tolerance selection is empty")
     selected_species = {
         species
         for zone_selection in mass_fraction_selection.values()
@@ -1439,25 +1546,38 @@ def load_reference(path: Path) -> CharacterizationReference:
             "reference mass-fraction selection has no matching composition value: "
             + ", ".join(sorted(unknown_selected_species))
         )
-    missing_tolerances = selected_species.difference(
-        mass_fraction_tolerances_by_species
-    )
-    if missing_tolerances:
-        raise SetupFailure(
-            "reference mass-fraction selection has no matching tolerance: "
-            + ", ".join(sorted(missing_tolerances))
+    if all_selected_tolerances is None:
+        unknown_tolerance_species = set(mass_fraction_tolerances_by_species).difference(
+            mass_fractions_by_species
         )
-    unused_tolerances = set(mass_fraction_tolerances_by_species).difference(
-        selected_species
-    )
-    if unused_tolerances:
-        raise SetupFailure(
-            "reference mass-fraction tolerances are not selected in any zone: "
-            + ", ".join(sorted(unused_tolerances))
+        if unknown_tolerance_species:
+            raise SetupFailure(
+                "reference mass-fraction tolerances have no matching composition value: "
+                + ", ".join(sorted(unknown_tolerance_species))
+            )
+        missing_tolerances = selected_species.difference(
+            mass_fraction_tolerances_by_species
         )
+        if missing_tolerances:
+            raise SetupFailure(
+                "reference mass-fraction selection has no matching tolerance: "
+                + ", ".join(sorted(missing_tolerances))
+            )
+        unused_tolerances = set(mass_fraction_tolerances_by_species).difference(
+            selected_species
+        )
+        if unused_tolerances:
+            raise SetupFailure(
+                "reference mass-fraction tolerances are not selected in any zone: "
+                + ", ".join(sorted(unused_tolerances))
+            )
     mass_fraction_tolerances = {
         zone: {
-            species: mass_fraction_tolerances_by_species[species][zone]
+            species: (
+                all_selected_tolerances[zone]
+                if all_selected_tolerances is not None
+                else mass_fraction_tolerances_by_species[species][zone]
+            )
             for species in mass_fraction_selection[zone]
         }
         for zone in expected_zones
@@ -1472,8 +1592,10 @@ def load_reference(path: Path) -> CharacterizationReference:
         mass_fractions=mass_fractions,
         mass_fraction_tolerances=mass_fraction_tolerances,
         mass_fraction_sum_atols=mass_fraction_sum_atols,
+        composition_norm_limits=composition_norm_limits,
         solver_counters=solver_counters,
         reference_schema=reference_schema,
+        comparison_schema=comparison_schema,
         metadata_inputs=metadata_inputs,
         input_sha256=input_sha256,
         legacy_provenance=legacy_provenance,
@@ -1495,6 +1617,11 @@ def validate_reference_for_case(
         raise SetupFailure(
             "reference schema does not match the case definition: "
             f"{reference.reference_schema!r} != {case.reference_schema!r}"
+        )
+    if reference.comparison_schema != case.comparison_schema:
+        raise SetupFailure(
+            "reference comparison schema does not match the case definition: "
+            f"{reference.comparison_schema!r} != {case.comparison_schema!r}"
         )
     if reference.expected_zones != case.expected_zones:
         raise SetupFailure(
@@ -1598,7 +1725,11 @@ def validate_reference_for_case(
 
 def _difference(actual: float, reference: Tolerance) -> tuple[bool, float, float]:
     absolute_difference = abs(actual - reference.value)
-    allowed = reference.atol + reference.rtol * abs(reference.value)
+    allowed = (
+        0.0
+        if reference.exact
+        else reference.atol + reference.rtol * abs(reference.value)
+    )
     return absolute_difference <= allowed, absolute_difference, allowed
 
 
@@ -1629,10 +1760,16 @@ def calculate_composition_norms(
 
 
 def _write_composition_diagnostics(
-    work_directory: Path, diagnostics: Sequence[CompositionNorms]
+    work_directory: Path,
+    diagnostics: Sequence[CompositionNorms],
+    reference: CharacterizationReference,
 ) -> None:
+    limits = reference.composition_norm_limits
     document = {
-        "status": "diagnostic-only; these norms do not determine pass/fail",
+        "status": (
+            "L2 is diagnostic-only; L1 and L-infinity are pass/fail gates "
+            "only when this reference supplies limits"
+        ),
         "vector": "absolute mass-fraction errors for every species in the case",
         "zones": [
             {
@@ -1641,6 +1778,8 @@ def _write_composition_diagnostics(
                 "l2": item.l2,
                 "linf": item.linf,
                 "linf_species": item.linf_species,
+                "l1_limit": None if limits is None else limits[item.zone].l1,
+                "linf_limit": None if limits is None else limits[item.zone].linf,
             }
             for item in diagnostics
         ],
@@ -1660,26 +1799,34 @@ def compare_final_states(
     failures: list[str] = []
     zones = tuple(state.zone for state in states)
     if zones != reference.expected_zones:
-        failures.append(f"zone records {zones} != expected {reference.expected_zones}")
+        failures.append(
+            f"case {reference.case_name} zone records {zones} != expected "
+            f"{reference.expected_zones}"
+        )
 
     for state in states:
         if state.zone not in reference.fields:
-            failures.append(f"zone {state.zone} has no characterization reference")
+            failures.append(
+                f"case {reference.case_name} zone {state.zone} has no characterization reference"
+            )
             continue
 
         field_policies = reference.fields[state.zone]
         target_policy = field_policies["target_time"]
         if "achieved_time" not in field_policies:
             completion_policy = Tolerance(
-                state.target_time, target_policy.atol, target_policy.rtol
+                state.target_time,
+                target_policy.atol,
+                target_policy.rtol,
+                target_policy.exact,
             )
             completed, difference, allowed = _difference(
                 state.time, completion_policy
             )
             if not completed:
                 failures.append(
-                    f"zone {state.zone} achieved time {state.time:.9e} did not reach "
-                    f"target time {state.target_time:.9e}: "
+                    f"case {reference.case_name} zone {state.zone} achieved_time: "
+                    f"actual={state.time:.9e}, reference={completion_policy.value:.9e}, "
                     f"|difference|={difference:.3e}, allowed={allowed:.3e}"
                 )
 
@@ -1690,7 +1837,7 @@ def compare_final_states(
             passed, difference, allowed = _difference(actual, policy)
             if not passed:
                 failures.append(
-                    f"zone {state.zone} {field}: actual={actual:.9e}, "
+                    f"case {reference.case_name} zone {state.zone} {field}: actual={actual:.9e}, "
                     f"reference={policy.value:.9e}, |difference|={difference:.3e}, "
                     f"allowed={allowed:.3e} (atol={policy.atol:.3e}, "
                     f"rtol={policy.rtol:.3e})"
@@ -1700,15 +1847,34 @@ def compare_final_states(
         for species, bounds in reference.mass_fraction_tolerances[state.zone].items():
             actual = state.mass_fractions[species]
             policy = Tolerance(
-                expected_mass_fractions[species], bounds.atol, bounds.rtol
+                expected_mass_fractions[species],
+                bounds.atol,
+                bounds.rtol,
+                bounds.exact,
             )
             passed, difference, allowed = _difference(actual, policy)
             if not passed:
                 failures.append(
-                    f"zone {state.zone} {species} mass fraction: actual={actual:.9e}, "
+                    f"case {reference.case_name} zone {state.zone} {species} mass fraction: actual={actual:.9e}, "
                     f"reference={policy.value:.9e}, |difference|={difference:.3e}, "
                     f"allowed={allowed:.3e} (atol={policy.atol:.3e}, "
                     f"rtol={policy.rtol:.3e})"
+                )
+
+        norms = calculate_composition_norms((state,), reference)[0]
+        limits = reference.composition_norm_limits
+        if limits is not None:
+            zone_limits = limits[state.zone]
+            if zone_limits.l1 is not None and norms.l1 > zone_limits.l1:
+                failures.append(
+                    f"case {reference.case_name} zone {state.zone} L1: "
+                    f"actual norm={norms.l1:.3e}, allowed norm={zone_limits.l1:.3e}"
+                )
+            if zone_limits.linf is not None and norms.linf > zone_limits.linf:
+                failures.append(
+                    f"case {reference.case_name} zone {state.zone} L-infinity: "
+                    f"actual norm={norms.linf:.3e}, allowed norm={zone_limits.linf:.3e}, "
+                    f"species={norms.linf_species}"
                 )
 
         negative_species = [
@@ -1722,7 +1888,7 @@ def compare_final_states(
         sum_atol = reference.mass_fraction_sum_atols[state.zone]
         if abs(mass_fraction_sum - 1.0) > sum_atol:
             failures.append(
-                f"zone {state.zone} mass-fraction sum={mass_fraction_sum:.12e}; "
+                f"case {reference.case_name} zone {state.zone} mass-fraction sum={mass_fraction_sum:.12e}; "
                 f"allowed |sum - 1| <= {sum_atol:.3e}"
             )
 
@@ -1758,7 +1924,7 @@ def run_and_compare(
             diagnostic, case.expected_zones, case.expected_species
         )
         diagnostics = calculate_composition_norms(states, reference)
-        _write_composition_diagnostics(prepared, diagnostics)
+        _write_composition_diagnostics(prepared, diagnostics, reference)
         compare_final_states(states, reference)
     except (ParsingFailure, ComparisonFailure) as error:
         raise type(error)(f"{error}; artifacts: {prepared}") from None

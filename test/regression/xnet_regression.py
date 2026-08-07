@@ -1602,7 +1602,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
     if mass_fraction_printed_sum_tolerances is not None:
         for zone in expected_zones:
-            canonical_sum = sum(mass_fractions[zone].values())
+            canonical_sum = math.fsum(mass_fractions[zone].values())
             policy_value = mass_fraction_printed_sum_tolerances[zone].value
             if policy_value != canonical_sum:
                 raise SetupFailure(
@@ -1911,7 +1911,7 @@ def compare_final_states(
             failures.append(
                 f"zone {state.zone} has negative mass fractions: {', '.join(negative_species)}"
             )
-        printed_sum = sum(state.mass_fractions.values())
+        printed_sum = math.fsum(state.mass_fractions.values())
         printed_sum_tolerances = reference.mass_fraction_printed_sum_tolerances
         if printed_sum_tolerances is not None:
             policy = printed_sum_tolerances[state.zone]

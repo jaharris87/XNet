@@ -1600,6 +1600,16 @@ def load_reference(path: Path) -> CharacterizationReference:
     }
     if any(value < 0 for value in mass_fraction_sum_atols.values()):
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
+    if mass_fraction_printed_sum_tolerances is not None:
+        for zone in expected_zones:
+            canonical_sum = sum(mass_fractions[zone].values())
+            policy_value = mass_fraction_printed_sum_tolerances[zone].value
+            if policy_value != canonical_sum:
+                raise SetupFailure(
+                    "reference mass_fraction_printed_sum value does not match "
+                    f"the canonical composition sum for zone {zone}: "
+                    f"{policy_value:.17g} != {canonical_sum:.17g}"
+                )
     return CharacterizationReference(
         case_name=case_name,
         expected_zones=expected_zones,

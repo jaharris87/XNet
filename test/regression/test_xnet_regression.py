@@ -413,6 +413,12 @@ def test_registered_case_rejects_missing_comparison_schema_before_execution(
             "mass_fraction_printed_sum is required",
         ),
         (
+            lambda document: document["mass_fraction_printed_sum"].update(
+                {"value": 0.5}
+            ),
+            "does not match the canonical composition sum",
+        ),
+        (
             lambda document: document["composition_norm_limits"].update(
                 {"l1": -1.0}
             ),

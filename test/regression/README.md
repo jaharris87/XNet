@@ -248,12 +248,14 @@ XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
 XNet emits individual mass fractions, not a separate aggregate composition-sum
-record. The regression parser recomputes `sum(X)` from those emitted values;
-`mass_fraction_sum_atol` controls that structural check. For `heat_sn160` and
-`bdf_sn160`, each zone-specific bound allows the characterized printed-value
-offset plus one complete-vector printing uncertainty. It is not the BDF
-`iconvc == 3` weighted RMS convergence norm or a check of `rtol`, `atol`, or
-`ymin`.
+record. The regression parser sums those emitted values in output order and
+compares the result with the canonical complete-vector sum through the normal
+`mass_fraction_printed_sum` policy. It separately uses `math.fsum` for the
+structural normalization-to-one check controlled by `mass_fraction_sum_atol`.
+For `heat_sn160` and `bdf_sn160`, the printed-sum limits cover the Issue #30
+three-row envelope with a compact margin; the normalization bounds retain the
+existing formatting-aware structural allowance. Neither is the BDF `iconvc ==
+3` weighted RMS convergence norm or a check of `rtol`, `atol`, or `ymin`.
 
 Each reference records characterized final step counts for diagnosis:
 `tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,

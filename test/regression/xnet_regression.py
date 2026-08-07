@@ -414,6 +414,8 @@ class CharacterizationReference:
     # This subset selects species for field-aware pass/fail comparison.
     mass_fraction_tolerances: Mapping[int, Mapping[str, ToleranceBounds]]
     mass_fraction_sum_atols: Mapping[int, float]
+    # The sum of the emitted complete vector is compared to its canonical sum.
+    mass_fraction_printed_sum_tolerances: Mapping[int, Tolerance] | None = None
     composition_norm_limits: Mapping[int, CompositionNormLimits] | None = None
     solver_counters: Mapping[int, SolverCounters] | None = None
     reference_schema: str | None = None
@@ -1458,6 +1460,20 @@ def load_reference(path: Path) -> CharacterizationReference:
             expected_zones,
             "mass_fraction_sum_atol",
         )
+        printed_sum_item = document.get("mass_fraction_printed_sum")
+        if printed_sum_item is None:
+            if require_explicit_exact:
+                raise ValueError(
+                    "mass_fraction_printed_sum is required by the comparison schema"
+                )
+            mass_fraction_printed_sum_tolerances = None
+        else:
+            mass_fraction_printed_sum_tolerances = _load_tolerance(
+                printed_sum_item,
+                expected_zones,
+                "mass_fraction_printed_sum",
+                require_explicit_exact=require_explicit_exact,
+            )
         counter_items = document.get("solver_counters")
         if counter_items is None:
             if reference_schema is not None:
@@ -1592,6 +1608,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         mass_fractions=mass_fractions,
         mass_fraction_tolerances=mass_fraction_tolerances,
         mass_fraction_sum_atols=mass_fraction_sum_atols,
+        mass_fraction_printed_sum_tolerances=mass_fraction_printed_sum_tolerances,
         composition_norm_limits=composition_norm_limits,
         solver_counters=solver_counters,
         reference_schema=reference_schema,
@@ -1884,11 +1901,23 @@ def compare_final_states(
             failures.append(
                 f"zone {state.zone} has negative mass fractions: {', '.join(negative_species)}"
             )
-        mass_fraction_sum = sum(state.mass_fractions.values())
+        printed_sum = sum(state.mass_fractions.values())
+        printed_sum_tolerances = reference.mass_fraction_printed_sum_tolerances
+        if printed_sum_tolerances is not None:
+            policy = printed_sum_tolerances[state.zone]
+            passed, difference, allowed = _difference(printed_sum, policy)
+            if not passed:
+                failures.append(
+                    f"case {reference.case_name} zone {state.zone} printed mass-fraction sum: "
+                    f"actual={printed_sum:.12e}, reference={policy.value:.12e}, "
+                    f"|difference|={difference:.3e}, allowed={allowed:.3e} "
+                    f"(atol={policy.atol:.3e}, rtol={policy.rtol:.3e})"
+                )
+        mass_fraction_sum = math.fsum(state.mass_fractions.values())
         sum_atol = reference.mass_fraction_sum_atols[state.zone]
         if abs(mass_fraction_sum - 1.0) > sum_atol:
             failures.append(
-                f"case {reference.case_name} zone {state.zone} mass-fraction sum={mass_fraction_sum:.12e}; "
+                f"case {reference.case_name} zone {state.zone} recomputed mass-fraction normalization={mass_fraction_sum:.12e}; "
                 f"allowed |sum - 1| <= {sum_atol:.3e}"
             )
 

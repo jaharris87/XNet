@@ -3,6 +3,7 @@
 from dataclasses import replace
 import base64
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -408,6 +409,10 @@ def test_registered_case_rejects_missing_comparison_schema_before_execution(
             "exact comparison with nonzero tolerance",
         ),
         (
+            lambda document: document.pop("mass_fraction_printed_sum"),
+            "mass_fraction_printed_sum is required",
+        ),
+        (
             lambda document: document["composition_norm_limits"].update(
                 {"l1": -1.0}
             ),
@@ -604,6 +609,30 @@ def test_relative_scalar_policy_passes_exactly_at_boundary() -> None:
     )
 
 
+def test_combined_scalar_policy_honors_boundary_and_zero_reference() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = _matching_unit_reference()
+    fields = {1: dict(reference.fields[1])}
+    fields[1]["temperature_gk"] = Tolerance(2.0, 0.1, 0.2)
+    bounded_reference = replace(reference, fields=fields)
+
+    compare_final_states((replace(state, temperature_gk=2.5),), bounded_reference)
+    with pytest.raises(ComparisonFailure, match="temperature_gk"):
+        compare_final_states(
+            (replace(state, temperature_gk=math.nextafter(2.5, math.inf)),),
+            bounded_reference,
+        )
+
+    fields[1]["temperature_gk"] = Tolerance(0.0, 0.0, 0.2)
+    with pytest.raises(ComparisonFailure, match="temperature_gk"):
+        compare_final_states(
+            (replace(state, temperature_gk=math.nextafter(0.0, math.inf)),),
+            replace(reference, fields=fields),
+        )
+
+
 def test_complete_vector_limits_are_independent_of_selected_species() -> None:
     state = parse_diagnostic(
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
@@ -656,6 +685,44 @@ def test_linf_limit_identifies_responsible_species_and_boundary() -> None:
         compare_final_states(
             (replace(state, mass_fractions=changed),),
             replace(reference, composition_norm_limits=limits),
+        )
+
+
+def test_l1_and_linf_gates_fail_independently() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    reference = replace(
+        _matching_unit_reference(), mass_fraction_tolerances={1: {}}
+    )
+
+    broad = dict(state.mass_fractions)
+    for donor, recipient in (("he4", "ne20"), ("c12", "mg24")):
+        broad[donor] -= 0.02
+        broad[recipient] += 0.02
+    with pytest.raises(ComparisonFailure, match="case fake zone 1 L1"):
+        compare_final_states(
+            (replace(state, mass_fractions=broad),),
+            replace(
+                reference,
+                composition_norm_limits={
+                    1: CompositionNormLimits(l1=0.05, linf=0.03)
+                },
+            ),
+        )
+
+    localized = dict(state.mass_fractions)
+    localized["he4"] -= 0.02
+    localized["ne20"] += 0.02
+    with pytest.raises(ComparisonFailure, match="case fake zone 1 L-infinity"):
+        compare_final_states(
+            (replace(state, mass_fractions=localized),),
+            replace(
+                reference,
+                composition_norm_limits={
+                    1: CompositionNormLimits(l1=0.05, linf=0.01)
+                },
+            ),
         )
 
 
@@ -1565,6 +1632,29 @@ def test_diagnostic_only_species_still_receive_composition_sum_check() -> None:
     with pytest.raises(ComparisonFailure, match="mass-fraction sum"):
         compare_final_states(
             (replace(state, mass_fractions=mass_fractions),), zone_reference
+        )
+
+
+def test_printed_sum_gate_rejects_change_hidden_by_normalization_allowance() -> None:
+    reference = load_reference(bdf_sn160_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 3)
+    mass_fractions = dict(state.mass_fractions)
+    for species in ("fe57", "ca42", "ti47"):
+        mass_fractions[species] -= 1.5e-5
+
+    norms = calculate_composition_norms(
+        (replace(state, mass_fractions=mass_fractions),), reference
+    )[0]
+    assert norms.l1 <= reference.composition_norm_limits[3].l1  # type: ignore[index]
+    assert norms.linf <= reference.composition_norm_limits[3].linf  # type: ignore[index]
+    assert all(
+        mass_fractions[species] == state.mass_fractions[species]
+        for species in reference.mass_fraction_tolerances[3]
+    )
+    with pytest.raises(ComparisonFailure, match="printed mass-fraction sum"):
+        compare_final_states(
+            (replace(state, mass_fractions=mass_fractions),),
+            replace(reference, expected_zones=(3,)),
         )
 
 

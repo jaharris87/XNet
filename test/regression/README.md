@@ -247,14 +247,15 @@ baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
-For `heat_sn160` and `bdf_sn160`, the printed mass fractions can sum to a value
-that differs from unity by more than their aggregate formatting uncertainty.
-Each zone-specific bound is therefore the absolute baseline printed-sum offset
-plus the sum of the half-last-place bounds of all 160 printed values. This
-accepts the characterized printed endpoint plus one complete-vector printing
-uncertainty. It is only a printed mass-fraction sum check. In particular, it
-is not the BDF `iconvc == 3` weighted RMS convergence norm and is not a check
-of `rtol`, `atol`, or `ymin`.
+XNet emits individual mass fractions, not a separate aggregate composition-sum
+record. The regression parser first sums those emitted values in output order;
+`mass_fraction_sum_atol` controls that printed-value check. It separately
+computes `math.fsum` over the parsed values; the independently declared
+`mass_fraction_normalization_atol` controls that normalization check. Either
+check can fail without the other. For `heat_sn160` and `bdf_sn160`, both
+zone-specific bounds allow the characterized printed-value offset plus one
+complete-vector printing uncertainty. Neither check is the BDF `iconvc == 3`
+weighted RMS convergence norm or a check of `rtol`, `atol`, or `ymin`.
 
 Each reference records characterized final step counts for diagnosis:
 `tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,

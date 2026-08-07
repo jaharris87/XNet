@@ -413,7 +413,10 @@ class CharacterizationReference:
     mass_fractions: Mapping[int, Mapping[str, float]]
     # This subset selects species for field-aware pass/fail comparison.
     mass_fraction_tolerances: Mapping[int, Mapping[str, ToleranceBounds]]
+    # Sum in emitted species order and accurately recomputed normalization are
+    # deliberately separate checks.
     mass_fraction_sum_atols: Mapping[int, float]
+    mass_fraction_normalization_atols: Mapping[int, float] | None = None
     composition_norm_limits: Mapping[int, CompositionNormLimits] | None = None
     solver_counters: Mapping[int, SolverCounters] | None = None
     reference_schema: str | None = None
@@ -1458,6 +1461,22 @@ def load_reference(path: Path) -> CharacterizationReference:
             expected_zones,
             "mass_fraction_sum_atol",
         )
+        normalization_item = document.get("mass_fraction_normalization_atol")
+        if normalization_item is None:
+            if require_explicit_exact:
+                raise ValueError(
+                    "mass_fraction_normalization_atol is required by the comparison schema"
+                )
+            # Legacy references predate the separately named normalization
+            # policy. Preserve their established single bound without making a
+            # schema reference silently permissive.
+            mass_fraction_normalization_atols = mass_fraction_sum_atols
+        else:
+            mass_fraction_normalization_atols = _load_zone_floats(
+                normalization_item,
+                expected_zones,
+                "mass_fraction_normalization_atol",
+            )
         counter_items = document.get("solver_counters")
         if counter_items is None:
             if reference_schema is not None:
@@ -1584,6 +1603,10 @@ def load_reference(path: Path) -> CharacterizationReference:
     }
     if any(value < 0 for value in mass_fraction_sum_atols.values()):
         raise SetupFailure("reference mass_fraction_sum_atol must be finite and nonnegative")
+    if any(value < 0 for value in mass_fraction_normalization_atols.values()):
+        raise SetupFailure(
+            "reference mass_fraction_normalization_atol must be finite and nonnegative"
+        )
     return CharacterizationReference(
         case_name=case_name,
         expected_zones=expected_zones,
@@ -1592,6 +1615,7 @@ def load_reference(path: Path) -> CharacterizationReference:
         mass_fractions=mass_fractions,
         mass_fraction_tolerances=mass_fraction_tolerances,
         mass_fraction_sum_atols=mass_fraction_sum_atols,
+        mass_fraction_normalization_atols=mass_fraction_normalization_atols,
         composition_norm_limits=composition_norm_limits,
         solver_counters=solver_counters,
         reference_schema=reference_schema,
@@ -1759,6 +1783,20 @@ def calculate_composition_norms(
     return tuple(diagnostics)
 
 
+def _printed_mass_fraction_sum(mass_fractions: Mapping[str, float]) -> float:
+    """Sum emitted mass-fraction tokens in their diagnostic output order."""
+
+    return sum(mass_fractions.values())
+
+
+def _recomputed_mass_fraction_normalization(
+    mass_fractions: Mapping[str, float],
+) -> float:
+    """Accurately recompute composition normalization from parsed values."""
+
+    return math.fsum(mass_fractions.values())
+
+
 def _write_composition_diagnostics(
     work_directory: Path,
     diagnostics: Sequence[CompositionNorms],
@@ -1884,12 +1922,29 @@ def compare_final_states(
             failures.append(
                 f"zone {state.zone} has negative mass fractions: {', '.join(negative_species)}"
             )
-        mass_fraction_sum = sum(state.mass_fractions.values())
+        # XNet emits individual mass fractions, not an aggregate sum record.
+        # Keep the source-order sum of those printed values separate from the
+        # accurately recomputed normalization check below.
+        mass_fraction_sum = _printed_mass_fraction_sum(state.mass_fractions)
         sum_atol = reference.mass_fraction_sum_atols[state.zone]
         if abs(mass_fraction_sum - 1.0) > sum_atol:
             failures.append(
-                f"case {reference.case_name} zone {state.zone} mass-fraction sum={mass_fraction_sum:.12e}; "
+                f"case {reference.case_name} zone {state.zone} printed mass-fraction sum={mass_fraction_sum:.12e}; "
                 f"allowed |sum - 1| <= {sum_atol:.3e}"
+            )
+        normalization_sum = _recomputed_mass_fraction_normalization(
+            state.mass_fractions
+        )
+        normalization_atols = reference.mass_fraction_normalization_atols
+        normalization_atol = (
+            reference.mass_fraction_sum_atols[state.zone]
+            if normalization_atols is None
+            else normalization_atols[state.zone]
+        )
+        if abs(normalization_sum - 1.0) > normalization_atol:
+            failures.append(
+                f"case {reference.case_name} zone {state.zone} recomputed mass-fraction normalization={normalization_sum:.12e}; "
+                f"allowed |sum - 1| <= {normalization_atol:.3e}"
             )
 
     if failures:

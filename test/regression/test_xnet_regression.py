@@ -831,7 +831,7 @@ def test_composition_norms_are_diagnostic_only() -> None:
 
 
 def test_missing_final_output_is_a_parsing_failure() -> None:
-    with pytest.raises(ParsingFailure, match="final records"):
+    with pytest.raises(ParsingFailure, match="unexpected diagnostic structure"):
         parse_diagnostic(
             "Timers Summary:\n        Total 1.0E-02\n", (1,), ALPHA_SPECIES
         )
@@ -900,6 +900,29 @@ def test_grouped_parser_requires_declared_batch_structure() -> None:
     with pytest.raises(ParsingFailure, match="missing timer section for group 4"):
         parse_diagnostic(
             diagnostic.rsplit("Timers Summary:", 1)[0],
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
+    with pytest.raises(ParsingFailure, match="unexpected diagnostic structure before group 2"):
+        parse_diagnostic(
+            diagnostic.replace(
+                "\nEnd 5 ",
+                "\nCounters:  Zone        TS        NR  Jacobian     Deriv CrossSect\n"
+                "99 1 1 1 1 1\nEnd 5 ",
+                1,
+            ),
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
+    with pytest.raises(ParsingFailure, match="unexpected diagnostic structure before group 2"):
+        parse_diagnostic(
+            diagnostic.replace(
+                "\nEnd 5 ",
+                "\nTimers Summary:\n        Total      1.000E-02\nEnd 5 ",
+                1,
+            ),
             case.expected_zones,
             case.expected_species,
             case.expected_diagnostic_groups,
@@ -1878,6 +1901,9 @@ def test_batch_alpha_control_is_the_normalized_legacy_id_61_concatenation() -> N
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("../escape")), "invalid staged destination"),
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("/unsafe")), "invalid staged destination"),
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("Data_alpha/ab_batch/ab_batch_01")), "duplicate staged destination"),
+        (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("net_diag01")), "staged destination is reserved"),
+        (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("xnet.stdout.txt")), "staged destination is reserved"),
+        (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("Data_alpha")), "overlapping staged destinations"),
     ),
 )
 def test_batch_alpha_staging_rejects_missing_or_unsafe_inputs(
@@ -1885,7 +1911,7 @@ def test_batch_alpha_staging_rejects_missing_or_unsafe_inputs(
 ) -> None:
     case = batch_alpha_case(REPOSITORY_ROOT)
     staged_inputs = list(case.staged_inputs)
-    if message == "duplicate staged destination":
+    if message in ("duplicate staged destination", "staged destination is reserved"):
         staged_inputs.append(replacement)
     else:
         staged_inputs[index] = replacement

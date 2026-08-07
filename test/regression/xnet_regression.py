@@ -286,6 +286,7 @@ TIMER_ROW = re.compile(rf"^\s+[A-Za-z][A-Za-z0-9_/-]*\s+{FLOAT_TOKEN}\s*$")
 COUNTER_HEADING = re.compile(
     r"^Counters:\s+Zone\s+TS\s+NR\s+Jacobian\s+Deriv\s+CrossSect\s*$"
 )
+COUNTER_ROW = re.compile(r"^\s*\d+(?:\s+\d+){5}\s*$")
 NONFINITE_TOKEN = re.compile(
     r"(?i)(?<![A-Za-z0-9_])[+-]?(?:nan|inf(?:inity)?)(?![A-Za-z0-9_])"
 )
@@ -772,6 +773,19 @@ def _validate_diagnostic_groups(case: RegressionCase) -> None:
             raise SetupFailure(f"invalid equivalent-zone group definition for {case.name}")
 
 
+def _reserved_work_directory_paths(case: RegressionCase) -> set[Path]:
+    """Paths owned by the runner or XNet rather than case-declared staging."""
+
+    return {
+        Path("control"),
+        *map(Path, case.required_outputs),
+        Path("xnet.stdout.txt"),
+        Path("xnet.stderr.txt"),
+        Path("xnet.status.txt"),
+        Path("composition_error_norms.json"),
+    }
+
+
 def _validate_case_inputs(case: RegressionCase) -> None:
     required = {
         "complete control input": case.control,
@@ -835,10 +849,20 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         )
     _validate_diagnostic_groups(case)
     staged_destinations: set[Path] = set()
+    reserved_paths = _reserved_work_directory_paths(case)
     for item in _case_staged_inputs(case):
         destination = _validate_staged_destination(item.destination, str(item.source))
+        if destination in reserved_paths:
+            raise SetupFailure(f"staged destination is reserved: {destination}")
         if destination in staged_destinations:
             raise SetupFailure(f"duplicate staged destination: {destination}")
+        if any(
+            existing in destination.parents or destination in existing.parents
+            for existing in staged_destinations
+        ):
+            raise SetupFailure(
+                f"overlapping staged destinations: {destination}"
+            )
         staged_destinations.add(destination)
 
 
@@ -1040,6 +1064,15 @@ def parse_diagnostic(
     index = 0
     for group_number, group in enumerate(groups, start=1):
         while index < len(lines) and not lines[index].startswith("End"):
+            if (
+                COUNTER_HEADING.match(lines[index])
+                or TIMER_HEADING.match(lines[index])
+                or COUNTER_ROW.match(lines[index])
+            ):
+                raise ParsingFailure(
+                    f"unexpected diagnostic structure before group {group_number}: "
+                    f"{lines[index]}"
+                )
             index += 1
         group_states: list[FinalState] = []
         for expected_zone in group:

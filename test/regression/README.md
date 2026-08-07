@@ -4,8 +4,8 @@ This directory is a bounded replacement path for XNet regression testing. It
 exercises the compiled XNet program as an external process; it is not a Python
 binding, a scientific-validation suite, or a replacement for all legacy cases.
 The migrated cases are the serial, CPU-only `tnsn_alpha` and `tnsn_torch47`
-trajectory calculations and the `heat_alpha`, `heat_sn160`, and `bdf_sn160`
-self-heating calculations.
+trajectory calculations, `heat_alpha`, `heat_sn160`, and `bdf_sn160`
+self-heating calculations, and the `batch_alpha` serial zone-batching case.
 
 ## Prerequisites and command
 

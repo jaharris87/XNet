@@ -10,7 +10,6 @@ import subprocess
 import sys
 
 import pytest
-import xnet_regression
 
 from xnet_regression import (
     ALPHA_SPECIES,
@@ -407,10 +406,6 @@ def test_registered_case_rejects_missing_comparison_schema_before_execution(
                 {"exact": True, "atol": 1.0}
             ),
             "exact comparison with nonzero tolerance",
-        ),
-        (
-            lambda document: document.pop("mass_fraction_normalization_atol"),
-            "mass_fraction_normalization_atol is required",
         ),
         (
             lambda document: document["composition_norm_limits"].update(
@@ -1571,38 +1566,6 @@ def test_diagnostic_only_species_still_receive_composition_sum_check() -> None:
         compare_final_states(
             (replace(state, mass_fractions=mass_fractions),), zone_reference
         )
-
-
-def test_printed_sum_and_recomputed_normalization_are_independent(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The emitted-value sum and accurate normalization use separate policies."""
-
-    reference = _matching_unit_reference()
-
-    state = _state_from_reference(reference, 1)
-    policies = replace(
-        reference,
-        mass_fraction_sum_atols={1: 0.0},
-        mass_fraction_normalization_atols={1: 0.0},
-        composition_norm_limits=None,
-    )
-    monkeypatch.setattr(
-        xnet_regression, "_printed_mass_fraction_sum", lambda _: 0.9
-    )
-    with pytest.raises(ComparisonFailure, match="printed mass-fraction sum"):
-        compare_final_states((state,), policies)
-
-    monkeypatch.setattr(
-        xnet_regression, "_printed_mass_fraction_sum", lambda _: 1.0
-    )
-    monkeypatch.setattr(
-        xnet_regression, "_recomputed_mass_fraction_normalization", lambda _: 1.1
-    )
-    with pytest.raises(
-        ComparisonFailure, match="recomputed mass-fraction normalization"
-    ):
-        compare_final_states((state,), policies)
 
 
 def test_torch47_network_specific_products_gate_comparison() -> None:

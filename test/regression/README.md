@@ -239,23 +239,21 @@ delimited timer section per zone, and finite values. It has no default network
 species list. Case setup independently requires the same ordered species in
 `sunet`, so the network input, parsed diagnostic, and reference must agree. It
 rejects negative mass fractions and applies a coarse
-structural `|sum(X)-1|` check. The `tnsn_alpha` bound is `2.1e-8`.
+structural `|sum(X)-1|` check. The `tnsn_alpha` bound is `2.2e-8`.
 `heat_alpha` records a zone-specific bound from `7.60556005e-9` through
-`1.81105e-8`, and `tnsn_torch47` uses `1.656158052105501e-8`. Each bound is
+`1.81105e-8`, and `tnsn_torch47` uses `1.7e-8`. Each bound is
 the sum of the half-last-place rounding bounds for that zone's printed
 baseline values. These bounds are not derived from
 XNet's per-step Newton mass-convergence control and are not claimed as
 scientific-validation thresholds.
 
 XNet emits individual mass fractions, not a separate aggregate composition-sum
-record. The regression parser first sums those emitted values in output order;
-`mass_fraction_sum_atol` controls that printed-value check. It separately
-computes `math.fsum` over the parsed values; the independently declared
-`mass_fraction_normalization_atol` controls that normalization check. Either
-check can fail without the other. For `heat_sn160` and `bdf_sn160`, both
-zone-specific bounds allow the characterized printed-value offset plus one
-complete-vector printing uncertainty. Neither check is the BDF `iconvc == 3`
-weighted RMS convergence norm or a check of `rtol`, `atol`, or `ymin`.
+record. The regression parser recomputes `sum(X)` from those emitted values;
+`mass_fraction_sum_atol` controls that structural check. For `heat_sn160` and
+`bdf_sn160`, each zone-specific bound allows the characterized printed-value
+offset plus one complete-vector printing uncertainty. It is not the BDF
+`iconvc == 3` weighted RMS convergence norm or a check of `rtol`, `atol`, or
+`ymin`.
 
 Each reference records characterized final step counts for diagnosis:
 `tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,

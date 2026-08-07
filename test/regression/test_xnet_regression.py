@@ -14,6 +14,7 @@ import pytest
 
 from xnet_regression import (
     ALPHA_SPECIES,
+    batch_alpha_case,
     bdf_sn160_case,
     CharacterizationReference,
     CompositionNormLimits,
@@ -25,6 +26,7 @@ from xnet_regression import (
     RegressionCase,
     SN160_SPECIES,
     SolverCounters,
+    StagedInput,
     SetupFailure,
     Tolerance,
     ToleranceBounds,
@@ -178,27 +180,41 @@ def _make_executable(tmp_path: Path, body: str) -> Path:
     return executable
 
 
-def _diagnostic_for_states(states: tuple[FinalState, ...]) -> str:
+def _diagnostic_for_states(
+    states: tuple[FinalState, ...],
+    groups: tuple[tuple[int, ...], ...] | None = None,
+) -> str:
     """Build a structurally valid XNet diagnostic for registered-path tests."""
 
     lines: list[str] = []
-    for state in states:
-        lines.append(
-            "End "
-            f"{state.zone} {state.step} {state.target_time:.16E} "
-            f"{state.time:.16E} {state.temperature_gk:.16E} "
-            f"{state.density:.16E} {state.electron_fraction:.16E}"
-        )
-        for species, value in state.mass_fractions.items():
-            lines.append(f" {species} {value:.16E}")
+    states_by_zone = {state.zone: state for state in states}
+    if groups is None:
+        groups = tuple((state.zone,) for state in states)
+    for group in groups:
+        for zone in group:
+            state = states_by_zone[zone]
+            lines.append(
+                "End "
+                f"{state.zone} {state.step} {state.target_time:.16E} "
+                f"{state.time:.16E} {state.temperature_gk:.16E} "
+                f"{state.density:.16E} {state.electron_fraction:.16E}"
+            )
+            for species, value in state.mass_fractions.items():
+                lines.append(f" {species} {value:.16E}")
         lines.extend(
             (
                 "Counters:  Zone        TS        NR  Jacobian     Deriv CrossSect",
-                (
-                    f"{state.zone} {state.counters.ts} {state.counters.nr} "
-                    f"{state.counters.jacobian} {state.counters.derivative} "
-                    f"{state.counters.cross_section}"
-                ),
+            )
+        )
+        for zone in group:
+            state = states_by_zone[zone]
+            lines.append(
+                f"{state.zone} {state.counters.ts} {state.counters.nr} "
+                f"{state.counters.jacobian} {state.counters.derivative} "
+                f"{state.counters.cross_section}"
+            )
+        lines.extend(
+            (
                 "Timers Summary:",
                 "        Total      1.000E-02",
             )
@@ -212,12 +228,26 @@ def _registered_case_executable(
     """Return a fake XNet that writes fresh complete output in its work directory."""
 
     diagnostic = base64.b64encode(
-        _diagnostic_for_states(states).encode("utf-8")
+        _diagnostic_for_states(states, case.expected_diagnostic_groups).encode("utf-8")
     ).decode("ascii")
     body = (
         "from pathlib import Path\n"
         "import base64\n"
         f"Path('net_diag01').write_bytes(base64.b64decode({diagnostic!r}))\n"
+        f"for name in {case.required_outputs[1:]!r}:\n"
+        "    Path(name).write_bytes(b'fresh')"
+    )
+    return _make_executable(tmp_path, body)
+
+
+def _registered_diagnostic_executable(
+    tmp_path: Path, case: RegressionCase, diagnostic: str
+) -> Path:
+    encoded = base64.b64encode(diagnostic.encode("utf-8")).decode("ascii")
+    body = (
+        "from pathlib import Path\n"
+        "import base64\n"
+        f"Path('net_diag01').write_bytes(base64.b64decode({encoded!r}))\n"
         f"for name in {case.required_outputs[1:]!r}:\n"
         "    Path(name).write_bytes(b'fresh')"
     )
@@ -822,6 +852,129 @@ def test_counter_zone_must_agree_with_end_zone() -> None:
 
     with pytest.raises(ParsingFailure, match="does not match its End record"):
         parse_diagnostic(diagnostic, (1,), ALPHA_SPECIES)
+
+
+def test_grouped_parser_requires_declared_batch_structure() -> None:
+    case = batch_alpha_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    states = _reference_states(reference)
+    diagnostic = _diagnostic_for_states(states, case.expected_diagnostic_groups)
+    assert tuple(
+        state.zone
+        for state in parse_diagnostic(
+            diagnostic,
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
+    ) == case.expected_zones
+
+    one_zone_groups = tuple((zone,) for zone in case.expected_zones)
+    with pytest.raises(ParsingFailure, match="missing End record for zone 2"):
+        parse_diagnostic(
+            _diagnostic_for_states(states, one_zone_groups),
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
+    with pytest.raises(ParsingFailure, match="expected End zone 5, found 6"):
+        parse_diagnostic(
+            _diagnostic_for_states(
+                states, ((1, 2, 3, 4), (6, 5, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16))
+            ),
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
+    with pytest.raises(ParsingFailure, match="counter record does not match"):
+        parse_diagnostic(
+            diagnostic.replace(
+                f"\n1 {states[0].counters.ts}",
+                f"\n2 {states[0].counters.ts}",
+                1,
+            ),
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
+    with pytest.raises(ParsingFailure, match="missing timer section for group 4"):
+        parse_diagnostic(
+            diagnostic.rsplit("Timers Summary:", 1)[0],
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
+
+
+def test_grouped_parser_accepts_and_rejects_short_final_group() -> None:
+    case = batch_alpha_case(REPOSITORY_ROOT)
+    states = _reference_states(load_reference(case.reference))
+    groups = ((1, 2, 3, 4, 5, 6), (7, 8, 9, 10, 11, 12), (13, 14, 15, 16))
+    diagnostic = _diagnostic_for_states(states, groups)
+    parse_diagnostic(diagnostic, case.expected_zones, case.expected_species, groups)
+
+    mutations = (
+        (_diagnostic_for_states(states, (*groups[:2], (13, 14, 15))), "missing End record for zone 16"),
+        (_diagnostic_for_states(states, (*groups[:2], (13, 14, 15, 16, 1, 2))), "missing Counters record after group 3"),
+        (diagnostic.replace("End 16 ", "End 17 "), "expected End zone 16, found 17"),
+        ("\nTimers Summary:".join(diagnostic.rsplit("\nTimers Summary:", 1)[:-1]) + "\n16 1 1 1 2 2\nTimers Summary:" + diagnostic.rsplit("\nTimers Summary:", 1)[-1], "missing timer section"),
+        (_diagnostic_for_states(states, (*groups[:2], (13, 14, 16, 15))), "expected End zone 15, found 16"),
+        (diagnostic + "Timers Summary:\n        Total      1.000E-02\n", "unexpected extra diagnostic structure"),
+    )
+    for mutated, message in mutations:
+        with pytest.raises(ParsingFailure, match=message):
+            parse_diagnostic(mutated, case.expected_zones, case.expected_species, groups)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "missing_group",
+        "wrong_order",
+        "wrong_membership",
+        "cross_counter",
+        "malformed_final",
+        "singleton_groups",
+    ),
+)
+def test_batch_alpha_registered_path_rejects_group_mutations(
+    tmp_path: Path, mutation: str
+) -> None:
+    """Run structural failures through the registered external-process test."""
+
+    case = batch_alpha_case(REPOSITORY_ROOT)
+    states = _reference_states(load_reference(case.reference))
+    groups = case.expected_diagnostic_groups
+    if mutation == "missing_group":
+        diagnostic = _diagnostic_for_states(states, groups[:3])
+    elif mutation == "wrong_order":
+        diagnostic = _diagnostic_for_states(
+            states, (groups[0], (6, 5, 7, 8), groups[2], groups[3])
+        )
+    elif mutation == "wrong_membership":
+        diagnostic = _diagnostic_for_states(
+            states, (groups[0], (5, 6, 7, 9), groups[2], groups[3])
+        )
+    elif mutation == "cross_counter":
+        diagnostic = _diagnostic_for_states(states, groups).replace(
+            f"\n1 {states[0].counters.ts}",
+            f"\n2 {states[0].counters.ts}",
+            1,
+        )
+    elif mutation == "malformed_final":
+        diagnostic = _diagnostic_for_states(states, groups).rsplit(
+            "Timers Summary:", 1
+        )[0]
+    else:
+        diagnostic = _diagnostic_for_states(
+            states, tuple((zone,) for zone in case.expected_zones)
+        )
+    completed = _run_registered_pytest(
+        tmp_path, case, _registered_diagnostic_executable(tmp_path, case, diagnostic)
+    )
+    output = completed.stdout + completed.stderr
+    assert completed.returncode != 0, output
+    assert "parsing failure" in output
 
 
 def test_parser_accepts_distinct_end_step_and_ts_counter() -> None:
@@ -1695,6 +1848,54 @@ def test_duplicate_trajectory_basenames_are_a_setup_failure(tmp_path: Path) -> N
         prepare_work_directory(duplicated, tmp_path / "work")
 
 
+def test_batch_alpha_stages_nested_prefix_inputs(tmp_path: Path) -> None:
+    case = batch_alpha_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "work")
+    for item in case.staged_inputs:
+        staged = work_directory / item.destination
+        assert staged.is_symlink()
+        assert staged.resolve() == item.source.resolve()
+
+
+def test_batch_alpha_control_is_the_normalized_legacy_id_61_concatenation() -> None:
+    settings = (REPOSITORY_ROOT / "test/test_settings_batch").read_text(
+        encoding="utf-8"
+    )
+    setup = (REPOSITORY_ROOT / "test/Test_Problems/setup_batch_alpha").read_text(
+        encoding="utf-8"
+    )
+    normalized = "\n".join(line.rstrip() for line in (settings + setup).splitlines()) + "\n"
+    assert batch_alpha_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8") == normalized.replace(
+        "Test_Results/", ""
+    )
+
+
+@pytest.mark.parametrize(
+    ("index", "replacement", "message"),
+    (
+        (0, StagedInput(Path("missing-abundance"), Path("Data_alpha/ab_batch/ab_batch_01")), "declared staged input 1"),
+        (16, StagedInput(Path("missing-trajectory"), Path("Test_Problems/th_batch/th_batch_01")), "declared staged input 17"),
+        (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("../escape")), "invalid staged destination"),
+        (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("/unsafe")), "invalid staged destination"),
+        (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("Data_alpha/ab_batch/ab_batch_01")), "duplicate staged destination"),
+    ),
+)
+def test_batch_alpha_staging_rejects_missing_or_unsafe_inputs(
+    tmp_path: Path, index: int, replacement: StagedInput, message: str
+) -> None:
+    case = batch_alpha_case(REPOSITORY_ROOT)
+    staged_inputs = list(case.staged_inputs)
+    if message == "duplicate staged destination":
+        staged_inputs.append(replacement)
+    else:
+        staged_inputs[index] = replacement
+    with pytest.raises(SetupFailure, match=message):
+        prepare_work_directory(
+            replace(case, staged_inputs=tuple(staged_inputs)),
+            tmp_path / "work",
+        )
+
+
 def test_missing_case_input_is_a_setup_failure(tmp_path: Path) -> None:
     case = replace(tnsn_alpha_case(REPOSITORY_ROOT), control=tmp_path / "missing-control")
     with pytest.raises(SetupFailure, match="complete control input"):
@@ -1775,6 +1976,7 @@ CASE_FACTORIES = (
     tnsn_torch47_case,
     heat_sn160_case,
     bdf_sn160_case,
+    batch_alpha_case,
 )
 
 

@@ -916,6 +916,17 @@ def test_grouped_parser_requires_declared_batch_structure() -> None:
             case.expected_species,
             case.expected_diagnostic_groups,
         )
+    with pytest.raises(ParsingFailure, match="duplicate timer row Total in group 1"):
+        parse_diagnostic(
+            diagnostic.replace(
+                "\nEnd 5 ",
+                "\n        Total      1.000E-02\nEnd 5 ",
+                1,
+            ),
+            case.expected_zones,
+            case.expected_species,
+            case.expected_diagnostic_groups,
+        )
     with pytest.raises(ParsingFailure, match="unexpected diagnostic structure before group 2"):
         parse_diagnostic(
             diagnostic.replace(
@@ -1902,6 +1913,7 @@ def test_batch_alpha_control_is_the_normalized_legacy_id_61_concatenation() -> N
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("/unsafe")), "invalid staged destination"),
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("Data_alpha/ab_batch/ab_batch_01")), "duplicate staged destination"),
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("net_diag01")), "staged destination is reserved"),
+        (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("net_diag01/poison")), "staged destination is reserved"),
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("xnet.stdout.txt")), "staged destination is reserved"),
         (0, StagedInput(REPOSITORY_ROOT / "test/Data_alpha/ab_batch/ab_batch_01", Path("Data_alpha")), "overlapping staged destinations"),
     ),

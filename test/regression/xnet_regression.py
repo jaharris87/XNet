@@ -852,7 +852,12 @@ def _validate_case_inputs(case: RegressionCase) -> None:
     reserved_paths = _reserved_work_directory_paths(case)
     for item in _case_staged_inputs(case):
         destination = _validate_staged_destination(item.destination, str(item.source))
-        if destination in reserved_paths:
+        if any(
+            reserved == destination
+            or reserved in destination.parents
+            or destination in reserved.parents
+            for reserved in reserved_paths
+        ):
             raise SetupFailure(f"staged destination is reserved: {destination}")
         if destination in staged_destinations:
             raise SetupFailure(f"duplicate staged destination: {destination}")
@@ -1068,6 +1073,7 @@ def parse_diagnostic(
                 COUNTER_HEADING.match(lines[index])
                 or TIMER_HEADING.match(lines[index])
                 or COUNTER_ROW.match(lines[index])
+                or (group_number > 1 and TIMER_ROW.match(lines[index]))
             ):
                 raise ParsingFailure(
                     f"unexpected diagnostic structure before group {group_number}: "
@@ -1152,7 +1158,14 @@ def parse_diagnostic(
             raise ParsingFailure(f"missing timer section for group {group_number}")
         index += 1
         timer_rows = 0
+        timer_names: set[str] = set()
         while index < len(lines) and TIMER_ROW.match(lines[index]):
+            timer_name = lines[index].split()[0]
+            if timer_name in timer_names:
+                raise ParsingFailure(
+                    f"duplicate timer row {timer_name} in group {group_number}"
+                )
+            timer_names.add(timer_name)
             timer_rows += 1
             index += 1
         if timer_rows == 0:

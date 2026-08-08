@@ -30,8 +30,6 @@ PROGRAM reaclib_reader
   ! Finalize I/O
   CALL file_finalize
 
-  STOP
-
   CONTAINS
 
   SUBROUTINE build_netsu
@@ -70,12 +68,20 @@ PROGRAM reaclib_reader
       ! Read the rate header
       READ(lun_netsu_in,'(i2,3x,6a5,8x,a4,a1,a1,3x,1pe12.5)',IOSTAT=ierr) &
       &   k_read,(nname_read(j),j=1,6),desc_read,rflag_read,wflag_read,q_read
+      IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Cannot read initial REACLIB chapter'
+        STOP 1
+      END IF
 
       ! This loop will end after each line in the database has been processed
       LOOP1: DO
         ! Each new chapter begins with an empty entry, except for the chapter number
         krate = k_read
-        READ(lun_netsu_in,'(4e13.6)') (rc_read(j),j=1,7)
+        READ(lun_netsu_in,'(4e13.6)',IOSTAT=ierr) (rc_read(j),j=1,7)
+        IF ( ierr /= 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: REACLIB chapter record is truncated'
+          STOP 1
+        END IF
         CALL write_net_rate( lun_netsu_out, krate, nname_read, desc_read, rflag_read, wflag_read, q_read, rc_read )
 
         LOOP2: DO
@@ -101,7 +107,11 @@ PROGRAM reaclib_reader
             END IF
             EXIT LOOP2
           END IF
-          READ(lun_netsu_in,'(4e13.6)') (rc_read(j),j=1,7)
+          READ(lun_netsu_in,'(4e13.6)',IOSTAT=ierr) (rc_read(j),j=1,7)
+          IF ( ierr /= 0 ) THEN
+            WRITE(*,'(a)') 'ERROR: REACLIB rate record is truncated'
+            STOP 1
+          END IF
 
           ! If any of the nuclei for this reaction aren't in the network, skip it
           DO i = 1, k1(krate)
@@ -203,7 +213,15 @@ PROGRAM reaclib_reader
         krate = k_read
         READ(lun_netsu_in,'(1x,4x,6a5,8x,a4,a1,a1,3x,1pe12.5)',IOSTAT=ierr) &
         &   (nname_read(j),j=1,6),desc_read,rflag_read,wflag_read,q_read
-        READ(lun_netsu_in,'(4e13.6)') (rc_read(j),j=1,7)
+        IF ( ierr /= 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: Cannot read REACLIB rate header'
+          STOP 1
+        END IF
+        READ(lun_netsu_in,'(4e13.6)',IOSTAT=ierr) (rc_read(j),j=1,7)
+        IF ( ierr /= 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: REACLIB rate record is truncated'
+          STOP 1
+        END IF
 
         ! If any of the nuclei for this reaction aren't in the network, skip it
         DO i = 1, k1(krate)

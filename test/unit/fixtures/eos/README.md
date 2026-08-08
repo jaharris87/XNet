@@ -10,20 +10,46 @@ cosmetic changes from the Cococubed Timmes source dated 2018-12-10. The Timmes
 calculation evaluates the electron-positron integrals directly and does not use
 XNet's tracked Helmholtz table or adapted STARKILLER implementation.
 
-Exact fetched-source SHA-256 values were:
+The SHA-256 values below are for the immutable raw files, before any harness
+edits:
 
-| File | SHA-256 |
-| --- | --- |
-| `eosfxt.f90` | `59584ce4edd43727725a6de5452ddafa8e644e178b2b6d58c1b028080e756a0e` |
-| `const.dek` | `6ec5ea5cd8bd1b624be249ccf3bab46518583d7fb2135d2276b304d5f94c3ac6` |
-| `vector_eos.dek` | `39bbfac7ef6498bc6d3ecf7a1e1b4526a690fc831506b38589ca88306dc47d22` |
-| `implno.dek` | `14ef26968a421316ed25c96a0ae4ab269d7d7e3c517030bb2484df1b666b2611` |
+| File | Raw source | SHA-256 |
+| --- | --- | --- |
+| `eosfxt.f90` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/eosfxt.f90) | `4c3e45924c00cff751885377c936cdd44793838c3b38db6ba4c5fec1c58710d3` |
+| `const.dek` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/const.dek) | `bb6089c86b183d119a8e03ec5d893626e8a4a2f168bb201a09060a4996fc8ab1` |
+| `vector_eos.dek` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/vector_eos.dek) | `2310686dfd8f86990590ffd0b1b8ac2cbb793c99bf0cc3adc66b5f36155252c6` |
+| `implno.dek` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/implno.dek) | `e62d95098f636eb3d90871f3e1f07f462f184af4557a23cfdf3d7228a723b2ea` |
 
 For the isolated reference run, the bundled example `program teos` was renamed
 to a subroutine so that `timmes_reference_driver.F90` could provide the main
 program, and `nrowmax` in `vector_eos.dek` was reduced from 1,000,000 to 16.
 Neither local harness change modifies `eosfxt` calculations. GNU Fortran
 16.1.0 compiled and ran the driver on 2026-08-08.
+
+The reference can be reproduced from an XNet checkout with:
+
+```bash
+reference_dir=$(mktemp -d)
+cd "$reference_dir"
+timmes_commit=8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d
+for source_file in eosfxt.f90 const.dek vector_eos.dek implno.dek; do
+  curl -fsSLO "https://raw.githubusercontent.com/jschwab/python-helmholtz/${timmes_commit}/${source_file}"
+done
+shasum -a 256 eosfxt.f90 const.dek vector_eos.dek implno.dek
+perl -0pi -e 's/\A      program teos/      subroutine teos_unused/' eosfxt.f90
+perl -0pi -e 's/parameter \(nrowmax = 1000000\)/parameter (nrowmax = 16)/' vector_eos.dek
+cp <XNET_CHECKOUT>/test/unit/fixtures/eos/timmes_reference_driver.F90 .
+gfortran -O0 -I. eosfxt.f90 timmes_reference_driver.F90 -o timmes_reference_driver
+./timmes_reference_driver
+```
+
+After the two documented harness edits, the four SHA-256 values are
+`72f47ce95e82330552a7b0cda3f8c9ef0ce3a876f99ca501dd31cba4260542d6`,
+`bb6089c86b183d119a8e03ec5d893626e8a4a2f168bb201a09060a4996fc8ab1`,
+`c64bd494886c76da2e0000b6b4ce039bdb5cbf0de235bf353369d744f3d94a7a`,
+and `e62d95098f636eb3d90871f3e1f07f462f184af4557a23cfdf3d7228a723b2ea`
+in the table's file order. A clean reproduction with those inputs returned the
+values below exactly.
 
 The raw independent results are:
 

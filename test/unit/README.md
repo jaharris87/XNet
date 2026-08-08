@@ -70,9 +70,10 @@ The suite checks:
 - STARKILLER and Bahcall initialization, scalar/vector equivalence, argument
   order, finite/sign/range invariants, repeatability, and masked-lane
   preservation for the EOS and screening interfaces;
-- STARKILLER failure with a missing `helm_table.dat` and agreement at five
-  density, temperature, and composition states with independently executed
-  Timmes EOS values documented under `fixtures/eos/`;
+- STARKILLER failure with a missing `helm_table.dat` and agreement of its
+  table-based Helmholtz EOS at five density, temperature, and composition
+  states with direct Timmes EOS values independently generated from the
+  authoritative Cococubed source documented under `fixtures/eos/`;
 - direct `net_preprocess` and standalone `net_setup` semantic equivalence for
   the synthetic fixture described under `fixtures/preprocess/`;
 - nuclear/reaction translation, weak/reverse flags, repeated-participant
@@ -350,10 +351,12 @@ The tracked GNU configuration uses `PE_ENV=GNU`, `FC=gfortran`,
 the same selected variables in their isolated module directories.
 
 Both provider executables compile production sources behind their shared
-`xnet_eos` module name. The STARKILLER run reads the tracked table and compares
-the XNet fields at five states with the independent Timmes values and mappings
-documented in `fixtures/eos/README.md`. The Bahcall run is an interface and
-anti-bit-rot component; it is not an independent scientific qualification.
+`xnet_eos` module name. The STARKILLER run exercises the table-based Helmholtz
+EOS and compares its XNet fields at five states with values from a separate,
+direct Timmes EOS calculation. The Cococubed archive provenance, exact
+relationship between the implementations, and field mappings are documented
+in `fixtures/eos/README.md`. The Bahcall run is an interface and anti-bit-rot
+component; it is not an independent scientific qualification.
 
 Before the production correction, Bahcall failed scalar/vector agreement
 because its scalar procedure declared `(rho,t9,...)` while the generic call
@@ -371,8 +374,9 @@ value by one percent. Missing-table initialization also returns nonzero and
 names `helm_table.dat`.
 
 `EOS=HELMHOLTZ` is explicitly unqualified and unsupported by this repository
-state. The build requires `HELMHOLTZ_PATH`, no external `helmholtz` provider
-source is tracked, and no maintainer-approved external source snapshot is
-identified by #42. The component therefore does not stub that provider or
-claim qualification. A future support decision requires an approved source
-and a real provider-isolated run of the shared contract.
+state. This separate build choice requires source through `HELMHOLTZ_PATH`;
+the source is not tracked and the Cococubed archive was used here only as the
+authoritative upstream reference, not added as a production dependency. The
+component therefore does not stub that provider or claim qualification. A
+future support decision requires an approved maintained integration and a real
+provider-isolated run of the shared contract.

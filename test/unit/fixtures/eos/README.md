@@ -1,55 +1,70 @@
 # EOS scientific-reference fixture
 
-The five STARKILLER reference states were generated independently with the
-Timmes EOS from the
-[`jschwab/python-helmholtz` snapshot](https://github.com/jschwab/python-helmholtz/tree/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d)
-at commit `8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d`.
-[Cococubed's stellar-EOS page](https://cococubed.com/code_pages/eos.shtml)
-links that repository, and the repository states that `eosfxt.f90` has only
-cosmetic changes from the Cococubed Timmes source dated 2018-12-10. The Timmes
-calculation evaluates the electron-positron integrals directly and does not use
-XNet's tracked Helmholtz table or adapted STARKILLER implementation.
+This test validates XNet's default STARKILLER Helmholtz EOS against five
+independently calculated states from the direct Timmes EOS. These are distinct
+implementations. The direct Timmes EOS evaluates the electron-positron
+integrals and is described by
+[Timmes & Arnett (1999)](https://scixplorer.org/abs/1999ApJS..125..277T/abstract).
+The Helmholtz EOS interpolates a tabulated Helmholtz free energy and is
+described by
+[Timmes & Swesty (2000)](https://scixplorer.org/abs/2000ApJS..126..501T/abstract).
+
+The authoritative source is
+[Cococubed's stellar-EOS page](https://cococubed.com/code_pages/eos.shtml),
+which distributes the two implementations separately as `timmes.tbz` and
+`helmholtz.tbz`. Cococubed states that the Timmes EOS is its comparison
+reference and that the table used by the Helmholtz EOS is calculated from the
+Timmes EOS. The reference calculation here uses `eosfxt` from the Cococubed
+`timmes.tbz` archive and does not use XNet's tracked table or adapted
+STARKILLER implementation.
+
+The archives downloaded on 2026-08-08 have these SHA-256 values:
+
+| Archive | Authoritative source | SHA-256 |
+| --- | --- | --- |
+| `timmes.tbz` | [Cococubed](https://cococubed.com/codes/eos/timmes.tbz) | `e20c7d27e66c240486a3397a649c49673e33100284f0905cd6fa9893dbad30a9` |
+| `helmholtz.tbz` | [Cococubed](https://cococubed.com/codes/eos/helmholtz.tbz) | `fc55ca3b188598ed19f9dbf63bacf1033676a22d2065f420b67375a493b91eeb` |
 
 The SHA-256 values below are for the immutable raw files, before any harness
 edits:
 
-| File | Raw source | SHA-256 |
-| --- | --- | --- |
-| `eosfxt.f90` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/eosfxt.f90) | `4c3e45924c00cff751885377c936cdd44793838c3b38db6ba4c5fec1c58710d3` |
-| `const.dek` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/const.dek) | `bb6089c86b183d119a8e03ec5d893626e8a4a2f168bb201a09060a4996fc8ab1` |
-| `vector_eos.dek` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/vector_eos.dek) | `2310686dfd8f86990590ffd0b1b8ac2cbb793c99bf0cc3adc66b5f36155252c6` |
-| `implno.dek` | [raw](https://raw.githubusercontent.com/jschwab/python-helmholtz/8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d/implno.dek) | `e62d95098f636eb3d90871f3e1f07f462f184af4557a23cfdf3d7228a723b2ea` |
+| File in `timmes.tbz` | SHA-256 |
+| --- | --- |
+| `eosfxt.f90` | `4c3e45924c00cff751885377c936cdd44793838c3b38db6ba4c5fec1c58710d3` |
+| `const.dek` | `bb6089c86b183d119a8e03ec5d893626e8a4a2f168bb201a09060a4996fc8ab1` |
+| `vector_eos.dek` | `a76e72e174aa1440a2c8321968313f98f8d2cb8f488deb4283e3a2785058d427` |
+| `implno.dek` | `e62d95098f636eb3d90871f3e1f07f462f184af4557a23cfdf3d7228a723b2ea` |
 
 For the isolated reference run, the bundled example `program teos` was renamed
-to a subroutine so that `timmes_reference_driver.F90` could provide the main
-program, and `nrowmax` in `vector_eos.dek` was reduced from 1,000,000 to 16.
-Neither local harness change modifies `eosfxt` calculations. GNU Fortran
-16.1.0 compiled and ran the driver on 2026-08-08.
+to an unused subroutine so that `timmes_reference_driver.F90` could provide the
+main program. This harness-only edit does not modify `eosfxt` calculations.
+GNU Fortran 16.1.0 compiled and ran the driver on 2026-08-08.
 
 The reference can be reproduced from an XNet checkout with:
 
 ```bash
 reference_dir=$(mktemp -d)
 cd "$reference_dir"
-timmes_commit=8fc5f2be1c18ef8db2a9cde9f449b4e1bd139c5d
-for source_file in eosfxt.f90 const.dek vector_eos.dek implno.dek; do
-  curl -fsSLO "https://raw.githubusercontent.com/jschwab/python-helmholtz/${timmes_commit}/${source_file}"
-done
+curl -fL https://cococubed.com/codes/eos/timmes.tbz -o timmes.tbz
+shasum -a 256 timmes.tbz
+tar -xjf timmes.tbz
+cd timmes
 shasum -a 256 eosfxt.f90 const.dek vector_eos.dek implno.dek
 perl -0pi -e 's/\A      program teos/      subroutine teos_unused/' eosfxt.f90
-perl -0pi -e 's/parameter \(nrowmax = 1000000\)/parameter (nrowmax = 16)/' vector_eos.dek
 cp <XNET_CHECKOUT>/test/unit/fixtures/eos/timmes_reference_driver.F90 .
 gfortran -O0 -I. eosfxt.f90 timmes_reference_driver.F90 -o timmes_reference_driver
 ./timmes_reference_driver
 ```
 
-After the two documented harness edits, the four SHA-256 values are
+After the documented harness edit, the four SHA-256 values are
 `8604501a0eeba64d71f2fe2ff9d99c6e707c4c9d3e41f1e12dc4ffb44470cc00`,
 `bb6089c86b183d119a8e03ec5d893626e8a4a2f168bb201a09060a4996fc8ab1`,
-`c64bd494886c76da2e0000b6b4ce039bdb5cbf0de235bf353369d744f3d94a7a`,
+`a76e72e174aa1440a2c8321968313f98f8d2cb8f488deb4283e3a2785058d427`,
 and `e62d95098f636eb3d90871f3e1f07f462f184af4557a23cfdf3d7228a723b2ea`
 in the table's file order. A clean reproduction with those inputs returned the
-values below exactly.
+values below exactly. The tracked `timmes_reference_driver.F90` used for that
+run has SHA-256
+`571332fdb0ce65424cebdad6d7039c142db9b9d0a553021a44b02e9c36b558c9`.
 
 The raw independent results are:
 
@@ -84,5 +99,18 @@ The limits cover the observed tabulation/interpolation differences with modest
 compiler margin and remain well below the controlled one-percent reference
 perturbation.
 
-The tracked table used by STARKILLER has SHA-256
+The tracked table used by the STARKILLER Helmholtz implementation has SHA-256
 `c9a57c26c6fd2b2b378b9d5295ca1214022f6fec6289d038b47bf8c8938881a1`.
+It is byte-for-byte identical to `helmholtz/helm_table.dat` in the Cococubed
+`helmholtz.tbz` archive above. This establishes the table's authoritative
+Helmholtz provenance; the direct Timmes run remains the independent numerical
+reference. The identity check is reproducible with:
+
+```bash
+curl -fL https://cococubed.com/codes/eos/helmholtz.tbz -o helmholtz.tbz
+shasum -a 256 helmholtz.tbz
+tar -xjf helmholtz.tbz
+shasum -a 256 helmholtz/helm_table.dat
+cmp -s <XNET_CHECKOUT>/tools/starkiller-helmholtz/helm_table.dat \
+  helmholtz/helm_table.dat
+```

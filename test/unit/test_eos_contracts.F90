@@ -113,7 +113,7 @@ Contains
     testsuite = [ &
       & new_unittest('EOS scalar/vector contract',test_eos_interface), &
       & new_unittest('screening scalar/vector contract',test_screen_interface), &
-      & new_unittest('independent Helmholtz states',test_scientific_states) ]
+      & new_unittest('Helmholtz versus direct Timmes states',test_scientific_states) ]
 #else
     testsuite = [ &
       & new_unittest('EOS scalar/vector contract',test_eos_interface), &

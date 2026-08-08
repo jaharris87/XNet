@@ -51,8 +51,8 @@ def fixed_rate_header(
     chapter: int,
     names: tuple[str, ...] = (),
     descriptor: str = "",
+    resonance: str = "",
     reverse: str = "",
-    weak: str = "",
     q_value: float = 0.0,
 ) -> str:
     prefix = f"{chapter:1d}" + " " * 4 if chapter < 10 else f"{chapter:2d}" + " " * 3
@@ -61,7 +61,7 @@ def fixed_rate_header(
         prefix
         + "".join(f"{name:>5}" for name in participants)
         + " " * 8
-        + f"{descriptor:<4.4}{reverse:<1.1}{weak:<1.1}"
+        + f"{descriptor:<4.4}{resonance:<1.1}{reverse:<1.1}"
         + " " * 3
         + f"{q_value:12.5E}"
     )
@@ -83,7 +83,7 @@ def write_reaclib(path: Path) -> None:
         lines.extend(fixed_coefficients(zero))
         if chapter == 2:
             lines.append(
-                fixed_rate_header(0, ("o16", "he4", "c12"), "syn1", "v", "", -FORWARD_Q)
+                fixed_rate_header(0, ("o16", "he4", "c12"), "syn1", "", "v", -FORWARD_Q)
             )
             lines.extend(fixed_coefficients(slow))
         if chapter == 4:
@@ -101,8 +101,8 @@ def write_partition_source(path: Path) -> None:
     ]
     lines.extend(f"{name:>5}" for name, *_ in MASTER_SPECIES)
     lines.append(f"{MASTER_SPECIES[-1][0]:>5}")
-    for name, aa, zz, nn, spin, mass in MASTER_SPECIES:
-        raw_mass = mass + 0.125
+    for index, (name, aa, zz, nn, spin, mass) in enumerate(MASTER_SPECIES, start=1):
+        raw_mass = mass + 0.125 * index
         lines.append(
             f"{name:>5}{aa:12.3f}{zz:4d}{nn:4d}{spin:6.1f}{raw_mass:10.3f} {'ame11':<11}"
         )
@@ -188,7 +188,9 @@ def prepare_case(
     weak_enabled: bool = True,
     malformed_namelist: bool = False,
     malformed_reaclib: bool = False,
+    malformed_reaclib_late: bool = False,
     missing_mass: bool = False,
+    missing_weak: bool = False,
 ) -> None:
     directory.mkdir(parents=True)
     (directory / "out").mkdir()
@@ -203,6 +205,11 @@ def prepare_case(
         (directory / "reaclib_data" / "synthetic_reaclib").write_text(
             "not a REACLIB record\n", encoding="ascii"
         )
+    if malformed_reaclib_late:
+        reaclib_path = directory / "reaclib_data" / "synthetic_reaclib"
+        lines = reaclib_path.read_text(encoding="ascii").splitlines()
+        lines[3] = "not a later REACLIB header"
+        reaclib_path.write_text("\n".join(lines) + "\n", encoding="ascii")
     write_partition_source(directory / "partf_data" / "synthetic_netwinv")
     mass_names = (
         "mass_ame03.dat",
@@ -218,6 +225,8 @@ def prepare_case(
         (directory / "mass_data" / "mass_ame11.dat").unlink()
     if weak_enabled:
         write_weak_sources(directory / "weak_data")
+        if missing_weak:
+            (directory / "weak_data" / "updated_rate_table.txt").unlink()
     content = namelist_text(weak_enabled)
     if malformed_namelist:
         content = content.replace("  new_data_dir = './out'", "  unknown_file_control = 1")
@@ -288,14 +297,14 @@ def parse_netsu(path: Path) -> dict[str, object]:
             raise ContractError(f"netsu header is malformed at line {index + 1}") from error
         names = tuple(line[5 + 5 * item : 10 + 5 * item].strip() for item in range(6))
         descriptor = line[43:47].strip()
-        reverse = line[47:48]
-        weak = line[48:49]
+        resonance = line[47:48]
+        reverse = line[48:49]
         coefficients = floats_from_fixed(lines[index + 1], 13) + floats_from_fixed(lines[index + 2], 13)
         if len(coefficients) != 7:
             fail(f"netsu coefficient count is wrong at line {index + 2}")
         if marker > 0:
             chapter = marker
-        records.append((chapter, marker, names, descriptor, reverse, weak, q_value, coefficients))
+        records.append((chapter, marker, names, descriptor, resonance, reverse, q_value, coefficients))
         index += 3
     return {"counts": header, "records": tuple(records)}
 
@@ -395,19 +404,24 @@ def verify_output(directory: Path, *, weak_enabled: bool) -> tuple[object, ...]:
         fail("netweak record count is inconsistent with netsu")
 
     selected_rates = []
-    for chapter, marker, names, descriptor, reverse, weak, q_value, coefficients in rates["records"]:
+    for chapter, marker, names, descriptor, resonance, reverse, q_value, coefficients in rates["records"]:
         participants = tuple(name for name in names if name)
         if marker == 0 and any(name not in EXPECTED_SPECIES for name in participants):
             fail(f"retained reaction has an absent participant: {participants}")
         if marker == 0:
-            selected_rates.append((chapter, participants, descriptor, reverse, weak, q_value, coefficients))
+            selected_rates.append((chapter, participants, descriptor, resonance, reverse, q_value, coefficients))
 
     strong = {(record[0], record[1], record[2]): record for record in selected_rates if record[2] == "syn1"}
     reverse_key = (2, ("o16", "he4", "c12"), "syn1")
     forward_key = (4, ("he4", "c12", "o16"), "syn1")
     if set(strong) != {reverse_key, forward_key}:
         fail(f"wrong retained forward/reverse reactions: {tuple(strong)}")
-    if strong[reverse_key][3] != "v" or strong[forward_key][3].strip():
+    if (
+        strong[reverse_key][3].strip()
+        or strong[forward_key][3].strip()
+        or strong[reverse_key][4] != "v"
+        or strong[forward_key][4].strip()
+    ):
         fail("forward/reverse flags are wrong")
     if not close(strong[reverse_key][5], -FORWARD_Q) or not close(strong[forward_key][5], FORWARD_Q):
         fail("strong reaction Q values are inconsistent with copied masses")
@@ -625,8 +639,10 @@ def main(argv: list[str]) -> int:
         ("unavailable-request", {"requested": ("N01", "H1", "HE4", "C12", "FE56")}),
         ("unknown-request", {"requested": ("N01", "H1", "HE4", "C12", "XY99")}),
         ("malformed-namelist", {"malformed_namelist": True}),
-        ("malformed-reaclib", {"malformed_reaclib": True}),
+        ("malformed-reaclib-initial", {"malformed_reaclib": True}),
+        ("malformed-reaclib-late", {"malformed_reaclib_late": True}),
         ("missing-required-mass", {"missing_mass": True}),
+        ("missing-enabled-weak", {"missing_weak": True}),
     )
     for name, options in negative_cases:
         case = work_dir / name

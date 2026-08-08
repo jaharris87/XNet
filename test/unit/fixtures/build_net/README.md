@@ -12,6 +12,8 @@ retained forward/reverse pair and one `ne20` rate that must be excluded. The
 public synthetic weak source has one `p`/`n` pair and 143 constant table
 points. All six required mass filenames contain the same six synthetic
 records; `ame11` is selected by the partition records.
+The raw partition records deliberately use different per-species mass offsets
+from the selected AME values so the weak-Q checks distinguish those contracts.
 
 No production database or private neutrino source is copied or opened. The
 runner also constructs duplicate, blank, unavailable, malformed-namelist,

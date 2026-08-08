@@ -27,9 +27,6 @@ BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
 BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
 BUILD_NET_WORK_DIR := $(abspath $(BUILD_DIR)/build-net-work)
 PRODUCTION_XNET_EXE := $(XNET_DIR)/xnet
-PRODUCTION_XNET_STAMP := $(BUILD_DIR)/production-xnet.stamp
-PRODUCTION_XNET_SOURCES := $(wildcard $(XNET_DIR)/*.F90 $(XNET_DIR)/*.f90) \
-  $(XNET_DIR)/Makefile $(XNET_DIR)/Makefile.opt $(XNET_DIR)/Makefile.internal
 
 OBJECTS := \
   $(BUILD_DIR)/testdrive.o \
@@ -77,10 +74,10 @@ BUILD_NET_OBJECTS := \
 
 .DEFAULT_GOAL := test
 
-.PHONY: test clean
+.PHONY: test clean production-xnet
 
 test: $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
-    $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) $(PRODUCTION_XNET_STAMP)
+    $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) production-xnet
 	@$(TEST_EXE)
 	@bash run_preprocess_contracts.sh $(PREPROCESS_FIXTURE_DIR) $(PREPROCESS_WORK_DIR) \
 	  $(abspath $(PREPROCESS_DIRECT_EXE)) $(abspath $(PREPROCESS_NET_SETUP_EXE)) \
@@ -104,10 +101,9 @@ $(PREPROCESS_BUILD_DIR):
 $(BUILD_NET_BUILD_DIR):
 	mkdir -p $@
 
-$(PRODUCTION_XNET_STAMP): $(PRODUCTION_XNET_SOURCES) | $(BUILD_DIR)
+production-xnet: | $(BUILD_DIR)
 	$(MAKE) -C $(XNET_DIR) clean
 	$(MAKE) -C $(XNET_DIR) -j CMODE=$(CMODE)
-	touch $@
 
 $(BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@

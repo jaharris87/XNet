@@ -116,13 +116,17 @@ The runner executes identical positive construction twice and compares parsed
 semantics, then checks every expected output field rather than comparing raw
 files. It requires nonzero status and an error diagnostic for a normalized
 duplicate, blank or unavailable requested species, malformed namelist,
-malformed REACLIB data, and missing required mass input. Controlled output
+malformed initial or later REACLIB data, missing required mass input, and
+missing explicitly enabled weak input. Controlled output
 mutations must be rejected for a retained reaction with an absent participant,
 changed species order, changed mass, and changed Q value.
 
 The unmodified positive output passes through the real `net_setup` program.
 The resulting binary artifacts are then loaded by production nuclear,
-reaction, match, and PARDISO sparse-data readers before the tracked serial GNU
+reaction, match, and PARDISO sparse-data readers. Fixture-specific checks cover
+the selected nuclear and partition values, reaction participants and
+coefficients, recomputed Q and weak/reverse flags, match associations, exact
+CRS coordinates, and every reaction-to-entry map before the tracked serial GNU
 `source/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
 requires normal target-time completion and emitted counters; it is an
 interoperability check, not a stored scientific endpoint comparison.
@@ -272,11 +276,11 @@ including construction, preprocessing readers, and the one-zone smoke:
 ```text
 make -C test/unit clean test CMODE=DEBUG
 build_net construction, preprocessing, and one-zone smoke contracts passed
-real 17.15
+real 15.01
 
 make -C test/unit clean test
 build_net construction, preprocessing, and one-zone smoke contracts passed
-real 27.19
+real 24.26
 ```
 
 The optimized production `xnet` and `xnse` executables also passed the complete
@@ -286,13 +290,15 @@ external-process preservation suite:
 python3 -m pytest -q test/regression \
     --xnet-executable=/absolute/path/to/source/xnet \
     --xnse-executable=/absolute/path/to/source/xnse
-182 passed in 23.49s
+182 passed in 22.28s
 ```
 
 All four controlled semantic output mutations and every invalid-input case
-were detected. Repeated positive construction produced the same parsed
-semantics. The legacy `test/build_net` Makefile also built successfully with
-its ordinary sequential `make` invocation. These checks cover the tracked
+were detected. A fifth controlled production mutation restoring the old
+raw-mass weak-Q calculation failed with `weak Q value is inconsistent with
+copied masses for ('p', 'n')`. Repeated positive construction produced the
+same parsed semantics. The legacy `test/build_net` Makefile also built
+successfully with its ordinary sequential `make` invocation. These checks cover the tracked
 serial GNU CPU configuration and synthetic source formats only; they do not
 validate production nuclear-data quality, private neutrino data, MPI,
 accelerators, other compilers, or a long scientific result.

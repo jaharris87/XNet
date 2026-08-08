@@ -88,8 +88,11 @@ PROGRAM reaclib_reader
           ! Read the rate header
           READ(lun_netsu_in,'(i2,3x,6a5,8x,a4,a1,a1,3x,1pe12.5)',IOSTAT=ierr) &
           &   k_read,(nname_read(j),j=1,6),desc_read,rflag_read,wflag_read,q_read
-          IF ( ierr /= 0 ) THEN
-            EXIT LOOP1 ! Presumably, this should only happen at the end of the file
+          IF ( ierr < 0 ) THEN
+            EXIT LOOP1
+          ELSE IF ( ierr > 0 ) THEN
+            WRITE(*,'(a)') 'ERROR: Cannot read REACLIB rate header'
+            STOP 1
           ELSE IF ( k_read /= 0 ) THEN
             ! k_read /= 0 means we have read all the entries in the krate chapter
             ! Write out any weak rates for nuclei in the network that may not yet have been convered
@@ -185,7 +188,11 @@ PROGRAM reaclib_reader
       krate = 1
       LOOP3: DO
         READ(lun_netsu_in,'(i2)',IOSTAT=ierr) k_read
-        IF ( ierr /= 0 ) EXIT LOOP3
+        IF ( ierr < 0 ) EXIT LOOP3
+        IF ( ierr > 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: Cannot read REACLIB chapter'
+          STOP 1
+        END IF
 
         ! k_read /= krate means we have read all the entries in the krate chapter
         ! Write out any weak rates for nuclei in the network that may not yet have been convered

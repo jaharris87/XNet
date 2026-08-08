@@ -136,8 +136,9 @@ make -C test/unit
 
 It uses the tracked GNU optimized configuration by default, compiles selected
 production sources into the ignored `test/unit/build/` directory, and performs
-no network access. Its build-net interoperability check also cleans and builds
-the tracked `source/xnet` configuration in place before running the smoke. Run
+no network access. Its build-net interoperability check always cleans and
+builds the requested tracked `source/xnet` configuration in place before
+running the smoke, so a previous in-place configuration cannot be reused. Run
 the bounds-checking configuration with:
 
 ```bash

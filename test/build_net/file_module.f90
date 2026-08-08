@@ -127,12 +127,12 @@ MODULE file_module
 
     IF ( netweak_flag ) THEN
       CALL safe_open_old( lun_netweak_in, netweak_data_dir, netweak_in_fname, ierr )
-      IF ( ierr /= 0 ) netweak_flag = .false.
+      IF ( ierr /= 0 ) CALL build_net_error( 'Missing enabled weak-rate source' )
     END IF
     
     IF ( netweak_flag ) THEN
       CALL safe_open_old( lun_element_in, netweak_data_dir, element_list_fname, ierr)
-      IF ( ierr /=0 ) netweak_flag = .false.
+      IF ( ierr /= 0 ) CALL build_net_error( 'Missing enabled weak-rate element list' )
     END IF
 
     IF ( netneutr_flag ) THEN

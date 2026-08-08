@@ -106,14 +106,12 @@ Subroutine pardisoinit(pt,mtype,iparm)
   Integer, Intent(in) :: mtype
   Integer, Intent(inout) :: iparm(*)
 
-  Integer :: i
-
   init_calls = init_calls + 1
   init_abi = 64
-  Do i = 1, 64
-    pt(i) = 0_i8
-    iparm(i) = 200 + i
-  EndDo
+  pt(1:64) = 0_i8
+  iparm(1:64) = 0
+  iparm(1) = 1
+  iparm(7) = 7
   If ( mtype /= 11 ) iparm(1) = -100
 
   Return
@@ -140,8 +138,10 @@ Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b
   EndIf
   index_base_valid = index_base_valid .and. ia(1) == 1 .and. ia(n+1) > ia(1)
   options_valid = options_valid .and. maxfct == 2 .and. mnum >= 1 .and. mnum <= 2 .and. &
-    & mtype == 11 .and. nrhs == 1 .and. iparm(3) == 1 .and. &
-    & (iparm(7) == 77 .or. iparm(7) == 207) .and. &
+    & mtype == 11 .and. nrhs == 1 .and. iparm(3) == 0 .and. &
+    & iparm(5) == 0 .and. iparm(6) == 0 .and. iparm(12) == 0 .and. &
+    & iparm(31) == 0 .and. iparm(35) == 0 .and. iparm(36) == 0 .and. &
+    & (iparm(7) == 77 .or. iparm(7) == 7) .and. &
     & msglvl == 1 .and. all(perm(1:n) == 0)
 
   If ( .not. index_base_valid ) Then

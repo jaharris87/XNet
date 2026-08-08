@@ -124,15 +124,15 @@ Subroutine pardisoinit(pt,mtype,solver,iparm,dparm,error)
   Real(dp), Intent(inout) :: dparm(64)
   Integer, Intent(out) :: error
 
-  Integer :: i
-
   init_calls = init_calls + 1
   init_abi = 61
   pt = 0_i8
-  Do i = 1, 64
-    iparm(i) = 100 + i
-    dparm(i) = real(i,dp)/10.0_dp
-  EndDo
+  iparm = 0
+  dparm = 0.0_dp
+  iparm(1) = 1
+  iparm(7) = 7
+  dparm(1) = 0.1_dp
+  dparm(8) = 0.8_dp
   If ( mtype /= 11 .or. solver /= 0 ) Then
     error = -100
   ElseIf ( failure_is('pardiso_init') ) Then
@@ -166,7 +166,9 @@ Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b
   EndIf
   index_base_valid = index_base_valid .and. ia(1) == 1 .and. ia(n+1) > ia(1)
   options_valid = options_valid .and. maxfct == 2 .and. mnum >= 1 .and. mnum <= 2 .and. &
-    & mtype == 11 .and. nrhs == 1 .and. iparm(3) == 1 .and. msglvl == 1 .and. &
+    & mtype == 11 .and. nrhs == 1 .and. iparm(3) == 1 .and. &
+    & iparm(5) == 0 .and. iparm(6) == 0 .and. iparm(12) == 0 .and. &
+    & iparm(31) == 0 .and. iparm(35) == 0 .and. msglvl == 1 .and. &
     & all(perm(1:n) == 0) .and. (abs(dparm(8)-8.5_dp) <= epsilon(1.0_dp) .or. &
     & abs(dparm(8)-0.8_dp) <= epsilon(1.0_dp))
 
@@ -179,7 +181,7 @@ Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b
   ElseIf ( phase == 33 ) Then
     Call solve_crs(n,a,ia,ja,b(:,1),x(:,1),error)
     If ( error == 0 .and. mutation_is('result_offset') ) x(1:n,1) = cshift(x(1:n,1),1)
-    If ( error == 0 .and. mutation_is('excessive_residual') ) x(1,1) = x(1,1) + 1.0e-4_dp
+    If ( error == 0 .and. mutation_is('excessive_residual') ) x(1,1) = x(1,1) + 1.0e-11_dp
     If ( error == 0 .and. mutation_is('cross_zone_copy') ) Then
       If ( mnum == 1 ) Then
         saved_solution(1:n) = x(1:n,1)

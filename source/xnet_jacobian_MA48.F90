@@ -179,10 +179,14 @@ Contains
         icntl(5) = 256
       EndIf
 
-      ! Unit numbers for MA48 error/diagnostic output will be set to XNet diagnostic file by default,
-      ! but we put in random values here so we can later check for user-defined input
-      icntl(1) = -99
-      icntl(2) = -99
+      ! MA48 suppresses native output for nonpositive unit numbers. XNet's NEWUNIT may be negative,
+      ! so use it only when positive; wrapper diagnostics continue to use lun_diag in either case.
+      icntl(1) = 0
+      icntl(2) = 0
+      If ( lun_diag > 0 ) Then
+        icntl(1) = lun_diag
+        icntl(2) = lun_diag
+      EndIf
 
       ! Override defaults with user-defined inputs
       Open(newunit=lun_solver, file="sparse_controls.nml", action='read', status='old', iostat=ierr)
@@ -190,8 +194,6 @@ Contains
         Read(lun_solver,nml=ma48_controls)
         Close(lun_solver)
       EndIf
-      If ( icntl(1) == -99 ) icntl(1) = lun_diag
-      If ( icntl(2) == -99 ) icntl(2) = lun_diag
     EndIf
     Call parallel_bcast(icntl)
     Call parallel_bcast(cntl)

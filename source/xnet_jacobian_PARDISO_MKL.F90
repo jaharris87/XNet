@@ -77,7 +77,6 @@ Contains
     End Interface
     Call pardisoinit(pt,mtype,iparm)
     dparm = 0.0_dp
-    iparm(3) = 1 ! Set # of OpenMP threads for PARDISO to use
     error = 0
     Return
   End Subroutine mkl_pardisoinit
@@ -289,6 +288,16 @@ Contains
         Read(lun_solver,nml=pardiso_controls)
         Close(lun_solver)
       EndIf
+
+      ! oneMKL reserves iparm(3). XNet supplies no permutation, solves A*x=b in one-based
+      ! full-system storage, and copies the solution from x. These are adapter invariants.
+      iparm(3) = 0
+      iparm(5) = 0
+      iparm(6) = 0
+      iparm(12) = 0
+      iparm(31) = 0
+      iparm(35) = 0
+      iparm(36) = 0
     EndIf
     Call parallel_bcast(iparm)
     Call parallel_bcast(dparm)

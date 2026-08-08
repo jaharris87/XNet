@@ -291,6 +291,14 @@ Contains
         Read(lun_solver,nml=pardiso_controls)
         Close(lun_solver)
       EndIf
+
+      ! XNet supplies no permutation, solves A*x=b in one-based full-system storage,
+      ! and copies the solution from x. These adapter invariants are not user controls.
+      iparm(5) = 0
+      iparm(6) = 0
+      iparm(12) = 0
+      iparm(31) = 0
+      iparm(35) = 0
     EndIf
     Call parallel_bcast(iparm)
     Call parallel_bcast(dparm)

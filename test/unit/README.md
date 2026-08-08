@@ -76,8 +76,9 @@ The suite checks:
   diagonal;
 - MA48 control translation plus analysis/factor/solve sequencing, reuse, and
   one-shot warning/storage recovery;
-- standalone and MKL PARDISO initialization ABI, option, one-based index,
-  phase, symbolic/numeric reuse, and copy-back differences; and
+- standalone and MKL PARDISO initialization ABI, adapter-owned option and
+  one-based-index invariants, phase, symbolic/numeric reuse, and copy-back
+  differences; and
 - two-zone known-system solutions with residual checks and fatal subprocess
   checks for injected initialization, storage, singularity, factorization, and
   solve failures.
@@ -243,32 +244,3 @@ passed:
 The checks are limited to the tracked serial GNU CPU configuration. They make
 no raw-byte portability, optional sparse-solver execution, scientific-rate,
 or accelerator claim.
-
-## Issue 43 effectiveness record
-
-On 2026-08-07, GNU Fortran 16.1.0 and GNU Make 3.81 on macOS were used for
-clean GNU OPT and DEBUG/bounds-checking runs. Each provider was compiled from
-its production source in an isolated module directory. Both the explicit
-test controls and the tracked `source/sparse_controls.nml` template were read
-by MA48, standalone PARDISO, and MKL PARDISO paths.
-
-Before the production corrections, the new DEBUG suite failed the MA48
-control test because the diagnostic-unit sentinels and solver job arrays were
-not finalized. Standalone and MKL PARDISO printed nonzero factor/solve status
-but continued, and standalone initialization status was overwritten before it
-could be acted on. The corrected providers initialize their control state and
-terminate before failed PARDISO results can be copied back.
-
-The test runner applies controlled test-only mutations and requires every one
-to fail: shifted row pointer, zero-based indices, missing self-heating entry,
-wrong reaction map, incorrect PARDISO phase, result offset, cross-zone result
-copy, and excessive residual. Separate subprocess probes require nonzero
-status and a solver-specific diagnostic for PARDISO initialization,
-factorization, and solve errors and for MA48 analysis warning, storage,
-factorization, singularity, and solve failures.
-
-The known systems use the directly specified nonsymmetric matrix and right
-hand side. The acceptance check is
-`max(abs(matmul(A,x)-b)) <= 1e-12 * (1 + max(abs(b)))`; it is a software
-contract check, not a scientific validation. No test links HSL, standalone
-PARDISO, or MKL, and no real-library support or performance claim is made.

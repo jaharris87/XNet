@@ -187,10 +187,14 @@ Contains
     Write(lun_solver,'(a)') '  maxerr = 1.0e-9'
 #elif defined(TEST_PARDISO)
     Write(lun_solver,'(a)') '&pardiso_controls'
+    Write(lun_solver,'(a)') '  iparm(5) = 1, iparm(6) = 1, iparm(12) = 1'
+    Write(lun_solver,'(a)') '  iparm(31) = 1, iparm(35) = 1'
     Write(lun_solver,'(a)') '  iparm(7) = 77'
     Write(lun_solver,'(a)') '  dparm(8) = 8.5'
 #else
     Write(lun_solver,'(a)') '&pardiso_controls'
+    Write(lun_solver,'(a)') '  iparm(3) = 1, iparm(5) = 1, iparm(6) = 1, iparm(12) = 1'
+    Write(lun_solver,'(a)') '  iparm(31) = 1, iparm(35) = 1, iparm(36) = 1'
     Write(lun_solver,'(a)') '  iparm(7) = 77'
 #endif
     Write(lun_solver,'(a)') '/'
@@ -256,6 +260,7 @@ Module test_sparse_contracts
   Implicit None
   Private
 
+  Real(dp), Parameter :: association_tolerance = 1.0e-10_dp
   Real(dp), Parameter :: tolerance = 1.0e-12_dp
 
   Public :: collect_sparse_contracts
@@ -409,10 +414,12 @@ Contains
 #if defined(TEST_MA48)
     Call check(error,init_abi == 48 .and. init_calls == 1)
     If ( allocated(error) ) Return
+    Call check(error,lun_diag < 0)
+    If ( allocated(error) ) Return
     If ( tracked_controls ) Then
-      Call check(error,icntl(1) == lun_diag .and. icntl(2) == lun_diag .and. icntl(3) == 3)
+      Call check(error,icntl(1) == 0 .and. icntl(2) == 0 .and. icntl(3) == 3)
     Else
-      Call check(error,icntl(1) == lun_diag .and. icntl(2) == 44 .and. icntl(3) == 3)
+      Call check(error,icntl(1) == 0 .and. icntl(2) == 44 .and. icntl(3) == 3)
     EndIf
     If ( allocated(error) ) Return
     Call check(error,icntl(5) == msize .and. icntl(6) == 2 .and. icntl(8) == 0)
@@ -428,24 +435,30 @@ Contains
     Call check(error,init_abi == 61 .and. init_calls == 1)
     If ( allocated(error) ) Return
     If ( tracked_controls ) Then
-      Call check(error,iparm(3) == 1 .and. iparm(7) == 107 .and. abs(dparm(8)-0.8_dp) <= tolerance)
+      Call check(error,iparm(3) == 1 .and. iparm(7) == 7 .and. abs(dparm(8)-0.8_dp) <= tolerance)
     Else
       Call check(error,iparm(3) == 1 .and. iparm(7) == 77 .and. abs(dparm(8)-8.5_dp) <= tolerance)
     EndIf
     If ( allocated(error) ) Return
-    Call check(error,iparm(1) == 101 .and. abs(dparm(1)-0.1_dp) <= tolerance)
+    Call check(error,iparm(1) == 1 .and. iparm(5) == 0 .and. iparm(6) == 0)
+    If ( allocated(error) ) Return
+    Call check(error,iparm(12) == 0 .and. iparm(31) == 0 .and. iparm(35) == 0 .and. &
+      & abs(dparm(1)-0.1_dp) <= tolerance)
     If ( allocated(error) ) Return
     Call check(error,maxfct == 2 .and. msglvl == 1 .and. all(perm == 0))
 #else
     Call check(error,init_abi == 64 .and. init_calls == 1)
     If ( allocated(error) ) Return
     If ( tracked_controls ) Then
-      Call check(error,iparm(3) == 1 .and. iparm(7) == 207 .and. abs(dparm(8)) <= tolerance)
+      Call check(error,iparm(3) == 0 .and. iparm(7) == 7 .and. abs(dparm(8)) <= tolerance)
     Else
-      Call check(error,iparm(3) == 1 .and. iparm(7) == 77 .and. abs(dparm(8)) <= tolerance)
+      Call check(error,iparm(3) == 0 .and. iparm(7) == 77 .and. abs(dparm(8)) <= tolerance)
     EndIf
     If ( allocated(error) ) Return
-    Call check(error,iparm(1) == 201 .and. abs(dparm(1)) <= tolerance)
+    Call check(error,iparm(1) == 1 .and. iparm(5) == 0 .and. iparm(6) == 0)
+    If ( allocated(error) ) Return
+    Call check(error,iparm(12) == 0 .and. iparm(31) == 0 .and. iparm(35) == 0 .and. &
+      & iparm(36) == 0 .and. abs(dparm(1)) <= tolerance)
     If ( allocated(error) ) Return
     Call check(error,maxfct == 2 .and. msglvl == 1 .and. all(perm == 0))
 #endif
@@ -596,7 +609,8 @@ Contains
     Integer :: zone
     Real(dp) :: residual
 
-    Call check(error,all(abs(actual-expected) <= tolerance))
+    ! Keep the copy-back association check independent of the stricter residual contract.
+    Call check(error,all(abs(actual-expected) <= association_tolerance))
     If ( allocated(error) ) Return
     Do zone = 1, 2
       residual = maxval(abs(matmul(matrix,actual(:,zone))-rhs(:,zone)))

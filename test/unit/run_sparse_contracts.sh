@@ -30,6 +30,7 @@ expect_failure() {
   local name=$1
   local executable=$2
   local failure=$3
+  local diagnostic=$4
   local work_dir="$work_root/failure-$name-$failure"
   local log_file="$work_dir/output.log"
 
@@ -41,7 +42,7 @@ expect_failure() {
     echo "$name accepted injected failure $failure" >&2
     exit 1
   fi
-  if ! grep -Eq 'PARDISO|MA48' "$log_file"; then
+  if ! grep -Fq "$diagnostic" "$log_file"; then
     echo "$name failure $failure did not produce an actionable solver diagnostic" >&2
     cat "$log_file" >&2
     exit 1
@@ -108,16 +109,16 @@ run_tracked_controls pardiso-mkl "$pardiso_mkl_exe"
 run_recovery_case ma48 "$ma48_exe" ma48_analysis_warning
 run_recovery_case ma48 "$ma48_exe" ma48_storage_resize
 
-expect_failure pardiso "$pardiso_exe" pardiso_init
-expect_failure pardiso "$pardiso_exe" pardiso_factor
-expect_failure pardiso "$pardiso_exe" pardiso_solve
-expect_failure pardiso-mkl "$pardiso_mkl_exe" pardiso_factor
-expect_failure pardiso-mkl "$pardiso_mkl_exe" pardiso_solve
-expect_failure ma48 "$ma48_exe" ma48_analysis
-expect_failure ma48 "$ma48_exe" ma48_storage
-expect_failure ma48 "$ma48_exe" ma48_factor
-expect_failure ma48 "$ma48_exe" ma48_singular
-expect_failure ma48 "$ma48_exe" ma48_solve
+expect_failure pardiso "$pardiso_exe" pardiso_init 'PARDISO initialization failed'
+expect_failure pardiso "$pardiso_exe" pardiso_factor 'PARDISO factorization failed'
+expect_failure pardiso "$pardiso_exe" pardiso_solve 'PARDISO solve failed'
+expect_failure pardiso-mkl "$pardiso_mkl_exe" pardiso_factor 'PARDISO factorization failed'
+expect_failure pardiso-mkl "$pardiso_mkl_exe" pardiso_solve 'PARDISO solve failed'
+expect_failure ma48 "$ma48_exe" ma48_analysis 'Error during MA48AD'
+expect_failure ma48 "$ma48_exe" ma48_storage 'Error during MA48AD'
+expect_failure ma48 "$ma48_exe" ma48_factor 'Error during MA48BD'
+expect_failure ma48 "$ma48_exe" ma48_singular 'Error during MA48BD'
+expect_failure ma48 "$ma48_exe" ma48_solve 'Error during MA48CD'
 
 expect_mutation_failure pardiso "$pardiso_exe" base shifted_row_pointer
 expect_mutation_failure pardiso "$pardiso_exe" base wrong_index_base

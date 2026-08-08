@@ -190,6 +190,8 @@ Contains
         Read(lun_solver,nml=ma48_controls)
         Close(lun_solver)
       EndIf
+      If ( icntl(1) == -99 ) icntl(1) = lun_diag
+      If ( icntl(2) == -99 ) icntl(2) = lun_diag
     EndIf
     Call parallel_bcast(icntl)
     Call parallel_bcast(cntl)
@@ -199,6 +201,9 @@ Contains
     Allocate (jobA(nzevolve))
     Allocate (jobB(nzevolve))
     Allocate (jobC(nzevolve))
+    jobA = 3
+    jobB = 1
+    jobC = 1
 
     !$omp parallel default(shared) copyin(cntl,icntl)
 

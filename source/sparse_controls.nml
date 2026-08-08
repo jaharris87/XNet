@@ -147,6 +147,21 @@
 /
 
 
+&pardiso_controls
+
+!----------------------------------------------------------------------------------------------
+
+  ! PARDISO initializes iparm and, for the standalone ABI, dparm before reading this group.
+  ! XNet defaults iparm(3) to one solver thread. Uncomment only backend-supported entries.
+
+!   iparm(3) = 1
+!   dparm(1) = 0.0
+
+!----------------------------------------------------------------------------------------------
+
+/
+
+
 &hsl_ma48_controls
 
 !----------------------------------------------------------------------------------------------
@@ -303,4 +318,3 @@
 !   maxerr = 1.0d-11
 
 /
-

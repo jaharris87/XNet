@@ -19,8 +19,11 @@ actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
 `xnet_nnu.F90`, `xnet_timers.F90`, and `xnet_nse.F90` sources, plus the
 selected LAPACK routines or libraries required by the NSE solver. It also
 compiles the production network preprocessing, data, match, and PARDISO
-sparse-reader modules. It neither builds nor changes the default `source/xnet`
-target.
+sparse-reader modules. Backend-isolated executables compile the production
+dense, MA48, standalone PARDISO, and MKL PARDISO Jacobian providers in separate
+module directories because those sources intentionally provide the same
+`xnet_jacobian` module name. The suite neither builds nor changes the default
+`source/xnet` target.
 
 ## Bounded support and coverage
 
@@ -32,6 +35,12 @@ eight-species fixture with physical mass and binding inputs; they do not copy
 a production algorithm or provide a generic mock framework. The runner explicitly disables `test-drive` test-level
 parallelism because the component fixtures intentionally share this small
 module state; production code still compiles with the selected OpenMP flags.
+
+The solver-adapter executables use a three-equation nonsymmetric fixture in two
+zones, with an optional fourth temperature equation. Test-only MA48 and
+PARDISO external symbols record ABI arguments, phases, controls, and zone
+association and solve only that fixture. They do not represent or qualify any
+licensed solver implementation.
 
 The suite checks:
 
@@ -56,9 +65,22 @@ The suite checks:
   the synthetic fixture described under `fixtures/preprocess/`;
 - nuclear/reaction translation, weak/reverse flags, repeated-participant
   multiplicities, recomputed Q values, match associations, and the full CRS
-  structure and reaction-to-entry maps; and
+  structure and reaction-to-entry maps;
 - detectable failure for truncated rates, inconsistent participant layouts,
-  and an unreadable generated reaction artifact.
+  and an unreadable generated reaction artifact;
+- storage-order-independent agreement between dense, MA48 coordinate, and
+  PARDISO CRS matrices, including identity entries and every fixture reaction
+  map;
+- exact self-heating structure for each sparse provider, covering the
+  abundance-temperature column, temperature-abundance row, and temperature
+  diagonal;
+- MA48 control translation plus analysis/factor/solve sequencing, reuse, and
+  one-shot warning/storage recovery;
+- standalone and MKL PARDISO initialization ABI, option, one-based index,
+  phase, symbolic/numeric reuse, and copy-back differences; and
+- two-zone known-system solutions with residual checks and fatal subprocess
+  checks for injected initialization, storage, singularity, factorization, and
+  solve failures.
 
 ## Network preprocessing component
 
@@ -221,3 +243,32 @@ passed:
 The checks are limited to the tracked serial GNU CPU configuration. They make
 no raw-byte portability, optional sparse-solver execution, scientific-rate,
 or accelerator claim.
+
+## Issue 43 effectiveness record
+
+On 2026-08-07, GNU Fortran 16.1.0 and GNU Make 3.81 on macOS were used for
+clean GNU OPT and DEBUG/bounds-checking runs. Each provider was compiled from
+its production source in an isolated module directory. Both the explicit
+test controls and the tracked `source/sparse_controls.nml` template were read
+by MA48, standalone PARDISO, and MKL PARDISO paths.
+
+Before the production corrections, the new DEBUG suite failed the MA48
+control test because the diagnostic-unit sentinels and solver job arrays were
+not finalized. Standalone and MKL PARDISO printed nonzero factor/solve status
+but continued, and standalone initialization status was overwritten before it
+could be acted on. The corrected providers initialize their control state and
+terminate before failed PARDISO results can be copied back.
+
+The test runner applies controlled test-only mutations and requires every one
+to fail: shifted row pointer, zero-based indices, missing self-heating entry,
+wrong reaction map, incorrect PARDISO phase, result offset, cross-zone result
+copy, and excessive residual. Separate subprocess probes require nonzero
+status and a solver-specific diagnostic for PARDISO initialization,
+factorization, and solve errors and for MA48 analysis warning, storage,
+factorization, singularity, and solve failures.
+
+The known systems use the directly specified nonsymmetric matrix and right
+hand side. The acceptance check is
+`max(abs(matmul(A,x)-b)) <= 1e-12 * (1 + max(abs(b)))`; it is a software
+contract check, not a scientific validation. No test links HSL, standalone
+PARDISO, or MKL, and no real-library support or performance claim is made.

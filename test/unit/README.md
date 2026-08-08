@@ -13,8 +13,9 @@ run uses the same target with `CMODE=DEBUG`:
 make -C test/unit clean test CMODE=DEBUG
 ```
 
-The Makefile puts all generated files under the ignored `test/unit/build/`
-directory. It includes the production GNU configuration and compiles the
+The Makefile puts its generated fixtures and focused-test objects under the
+ignored `test/unit/build/` directory. It includes the production GNU
+configuration and compiles the
 actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
 `xnet_nnu.F90`, `xnet_timers.F90`, and `xnet_nse.F90` sources, plus the
 selected LAPACK routines or libraries required by the NSE solver. It also
@@ -22,8 +23,10 @@ compiles the production network preprocessing, data, match, and PARDISO
 sparse-reader modules. Backend-isolated executables compile the production
 dense, MA48, standalone PARDISO, and MKL PARDISO Jacobian providers in separate
 module directories because those sources intentionally provide the same
-`xnet_jacobian` module name. The suite neither builds nor changes the default
-`source/xnet` target.
+`xnet_jacobian` module name. The build-net interoperability component cleans
+and rebuilds the tracked `source/xnet` configuration because its final check is
+a real one-zone executable smoke; production objects and executables therefore
+remain in the ignored in-place `source/` build location.
 
 ## Bounded support and coverage
 
@@ -81,7 +84,16 @@ The suite checks:
   differences; and
 - two-zone known-system solutions with residual checks and fatal subprocess
   checks for injected initialization, storage, singularity, factorization, and
-  solve failures.
+  solve failures;
+- deterministic `build_net` selection from tiny public synthetic mass,
+  partition-function, REACLIB, and weak-rate catalogs, both with and without
+  weak rates and without private neutrino data;
+- generated species order, selected mass and partition data, retained and
+  excluded reactions, weak/reverse metadata, and mass-consistent Q values;
+- nonzero `build_net` status for missing, duplicate, unavailable, malformed,
+  and truncated inputs; and
+- `build_net` output interoperability through `net_setup`, the production
+  nuclear/reaction/match/sparse readers, and a short production `xnet` run.
 
 ## Network preprocessing component
 
@@ -113,6 +125,34 @@ reaction index, missing diagonal, out-of-range column, nonmonotone row
 pointer, and reversed match association. Separate subprocesses require
 nonzero results for truncated and inconsistent ASCII inputs and for an
 unreadable `nets3` artifact.
+
+## Build-net construction and interoperability
+
+`fixtures/build_net/README.md` defines the five-species output assembled from
+tiny generated source catalogs. The catalog also contains one unrequested
+species and a strong rate involving an unavailable participant so the suite
+can prove that selection occurred. The public-format weak fixture contains two
+directional rates; a second successful run disables weak rates and requires no
+weak source. No private neutrino data is used.
+
+The runner executes identical positive construction twice and compares parsed
+semantics, then checks every expected output field rather than comparing raw
+files. It requires nonzero status and an error diagnostic for a normalized
+duplicate, blank or unavailable requested species, malformed namelist,
+malformed initial or later REACLIB data, missing required mass input, and
+missing explicitly enabled weak input. Controlled output
+mutations must be rejected for a retained reaction with an absent participant,
+changed species order, changed mass, and changed Q value.
+
+The unmodified positive output passes through the real `net_setup` program.
+The resulting binary artifacts are then loaded by production nuclear,
+reaction, match, and PARDISO sparse-data readers. Fixture-specific checks cover
+the selected nuclear and partition values, reaction participants and
+coefficients, recomputed Q and weak/reverse flags, match associations, exact
+CRS coordinates, and every reaction-to-entry map before the tracked serial GNU
+`source/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
+requires normal target-time completion and emitted counters; it is an
+interoperability check, not a stored scientific endpoint comparison.
 
 ## Vendored test-drive dependency
 
@@ -244,3 +284,44 @@ passed:
 The checks are limited to the tracked serial GNU CPU configuration. They make
 no raw-byte portability, optional sparse-solver execution, scientific-rate,
 or accelerator claim.
+
+## Issue 39 effectiveness record
+
+On 2026-08-07, GNU Fortran 16.1.0, GNU Make 3.81, Python 3.13.0, and pytest
+9.1.1 on macOS were used for the final checks. Before the production changes,
+running the existing optimized `build_net` in an empty directory printed the
+missing `sunet.sn160` diagnostic but returned process status 0. The corrected
+required-input and parsing paths return nonzero status with a specific error.
+
+Clean tracked configurations passed the complete deterministic suite,
+including construction, preprocessing readers, and the one-zone smoke:
+
+```text
+make -C test/unit clean test CMODE=DEBUG
+build_net construction, preprocessing, and one-zone smoke contracts passed
+real 15.01
+
+make -C test/unit clean test
+build_net construction, preprocessing, and one-zone smoke contracts passed
+real 24.26
+```
+
+The optimized production `xnet` and `xnse` executables also passed the complete
+external-process preservation suite:
+
+```text
+python3 -m pytest -q test/regression \
+    --xnet-executable=/absolute/path/to/source/xnet \
+    --xnse-executable=/absolute/path/to/source/xnse
+182 passed in 22.28s
+```
+
+All four controlled semantic output mutations and every invalid-input case
+were detected. A fifth controlled production mutation restoring the old
+raw-mass weak-Q calculation failed with `weak Q value is inconsistent with
+copied masses for ('p', 'n')`. Repeated positive construction produced the
+same parsed semantics. The legacy `test/build_net` Makefile also built
+successfully with its ordinary sequential `make` invocation. These checks cover the tracked
+serial GNU CPU configuration and synthetic source formats only; they do not
+validate production nuclear-data quality, private neutrino data, MPI,
+accelerators, other compilers, or a long scientific result.

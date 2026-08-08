@@ -127,17 +127,19 @@ evidence collected for the task.
 
 ## Focused deterministic contract tests
 
-The bounded Fortran component suite builds and runs independently of a
-complete XNet executable:
+The bounded Fortran component suite includes a complete serial XNet executable
+smoke:
 
 ```bash
 make -C test/unit
 ```
 
-It uses the tracked GNU optimized configuration by default, compiles the
-selected production sources, writes generated files only below the ignored
-`test/unit/build/` directory, and performs no network access. Run its
-bounds-checking configuration with:
+It uses the tracked GNU optimized configuration by default, compiles selected
+production sources into the ignored `test/unit/build/` directory, and performs
+no network access. Its build-net interoperability check always cleans and
+builds the requested tracked `source/xnet` configuration in place before
+running the smoke, so a previous in-place configuration cannot be reused. Run
+the bounds-checking configuration with:
 
 ```bash
 make -C test/unit clean test CMODE=DEBUG

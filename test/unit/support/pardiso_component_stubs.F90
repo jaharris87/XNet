@@ -63,8 +63,8 @@ Contains
     Real(dp), Intent(out) :: x(n)
     Integer, Intent(out) :: error
 
-    Integer :: i, j, k, pivot_row
-    Real(dp) :: factor, matrix(n,n), pivot_value, rhs(n), row_buffer(n), rhs_buffer
+    Integer :: i, info, ipiv(n), k
+    Real(dp) :: matrix(n,n)
 
     matrix = 0.0_dp
     Do i = 1, n
@@ -72,41 +72,14 @@ Contains
         matrix(i,ja(k)) = a(k)
       EndDo
     EndDo
-    rhs = b
-
-    Do k = 1, n-1
-      pivot_row = k - 1 + maxloc(abs(matrix(k:n,k)),dim=1)
-      pivot_value = matrix(pivot_row,k)
-      If ( abs(pivot_value) <= tiny(1.0_dp) ) Then
-        error = -4
-        x = 0.0_dp
-        Return
-      EndIf
-      If ( pivot_row /= k ) Then
-        row_buffer = matrix(k,:)
-        matrix(k,:) = matrix(pivot_row,:)
-        matrix(pivot_row,:) = row_buffer
-        rhs_buffer = rhs(k)
-        rhs(k) = rhs(pivot_row)
-        rhs(pivot_row) = rhs_buffer
-      EndIf
-      Do i = k+1, n
-        factor = matrix(i,k)/matrix(k,k)
-        matrix(i,k:n) = matrix(i,k:n) - factor*matrix(k,k:n)
-        rhs(i) = rhs(i) - factor*rhs(k)
-      EndDo
-    EndDo
-
-    If ( abs(matrix(n,n)) <= tiny(1.0_dp) ) Then
+    x = b
+    Call dgesv(n,1,matrix,n,ipiv,x,n,info)
+    If ( info /= 0 ) Then
       error = -4
       x = 0.0_dp
-      Return
+    Else
+      error = 0
     EndIf
-    x = 0.0_dp
-    Do i = n, 1, -1
-      x(i) = (rhs(i)-sum(matrix(i,i+1:n)*x(i+1:n)))/matrix(i,i)
-    EndDo
-    error = 0
 
     Return
   End Subroutine solve_crs

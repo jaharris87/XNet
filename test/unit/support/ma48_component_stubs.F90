@@ -69,43 +69,18 @@ Contains
     Real(dp), Intent(out) :: x(n)
     Integer, Intent(out) :: error
 
-    Integer :: i, k, pivot_row
-    Real(dp) :: factor, work(n,n), pivot_value, rhs(n), row_buffer(n), rhs_buffer
+    Integer :: info, ipiv(n)
+    Real(dp) :: work(n,n)
 
     work = matrix
-    rhs = b
-    Do k = 1, n-1
-      pivot_row = k - 1 + maxloc(abs(work(k:n,k)),dim=1)
-      pivot_value = work(pivot_row,k)
-      If ( abs(pivot_value) <= tiny(1.0_dp) ) Then
-        error = -5
-        x = 0.0_dp
-        Return
-      EndIf
-      If ( pivot_row /= k ) Then
-        row_buffer = work(k,:)
-        work(k,:) = work(pivot_row,:)
-        work(pivot_row,:) = row_buffer
-        rhs_buffer = rhs(k)
-        rhs(k) = rhs(pivot_row)
-        rhs(pivot_row) = rhs_buffer
-      EndIf
-      Do i = k+1, n
-        factor = work(i,k)/work(k,k)
-        work(i,k:n) = work(i,k:n) - factor*work(k,k:n)
-        rhs(i) = rhs(i) - factor*rhs(k)
-      EndDo
-    EndDo
-    If ( abs(work(n,n)) <= tiny(1.0_dp) ) Then
+    x = b
+    Call dgesv(n,1,work,n,ipiv,x,n,info)
+    If ( info /= 0 ) Then
       error = -5
       x = 0.0_dp
-      Return
+    Else
+      error = 0
     EndIf
-    x = 0.0_dp
-    Do i = n, 1, -1
-      x(i) = (rhs(i)-sum(work(i,i+1:n)*x(i+1:n)))/work(i,i)
-    EndDo
-    error = 0
 
     Return
   End Subroutine solve_dense

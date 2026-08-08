@@ -40,55 +40,6 @@ Module xnet_linalg
 
 Contains
 
-  Subroutine solve_dense(n,matrix,b,x,error)
-    Implicit None
-
-    Integer, Intent(in) :: n
-    Real(dp), Intent(in) :: matrix(n,n), b(n)
-    Real(dp), Intent(out) :: x(n)
-    Integer, Intent(out) :: error
-
-    Integer :: i, k, pivot_row
-    Real(dp) :: factor, work(n,n), pivot_value, rhs(n), row_buffer(n), rhs_buffer
-
-    work = matrix
-    rhs = b
-    Do k = 1, n-1
-      pivot_row = k - 1 + maxloc(abs(work(k:n,k)),dim=1)
-      pivot_value = work(pivot_row,k)
-      If ( abs(pivot_value) <= tiny(1.0_dp) ) Then
-        error = -1
-        x = 0.0_dp
-        Return
-      EndIf
-      If ( pivot_row /= k ) Then
-        row_buffer = work(k,:)
-        work(k,:) = work(pivot_row,:)
-        work(pivot_row,:) = row_buffer
-        rhs_buffer = rhs(k)
-        rhs(k) = rhs(pivot_row)
-        rhs(pivot_row) = rhs_buffer
-      EndIf
-      Do i = k+1, n
-        factor = work(i,k)/work(k,k)
-        work(i,k:n) = work(i,k:n) - factor*work(k,k:n)
-        rhs(i) = rhs(i) - factor*rhs(k)
-      EndDo
-    EndDo
-    If ( abs(work(n,n)) <= tiny(1.0_dp) ) Then
-      error = -1
-      x = 0.0_dp
-      Return
-    EndIf
-    x = 0.0_dp
-    Do i = n, 1, -1
-      x(i) = (rhs(i)-sum(work(i,i+1:n)*x(i+1:n)))/work(i,i)
-    EndDo
-    error = 0
-
-    Return
-  End Subroutine solve_dense
-
   Subroutine LinearSolve_CPU(trans,n,nrhs,a,lda,ipiv,b,ldb,info)
     Implicit None
 
@@ -99,17 +50,14 @@ Contains
     Real(dp), Intent(inout) :: b(ldb,*)
     Integer, Intent(out) :: info
 
-    Integer :: i
-    Real(dp) :: solution(n)
+    Real(dp) :: work(n,n)
 
     If ( trans /= 'N' .or. nrhs /= 1 ) Then
       info = -1
       Return
     EndIf
-    Call solve_dense(n,a(1:n,1:n),b(1:n,1),solution,info)
-    If ( info == 0 ) b(1:n,1) = solution
-    ipiv(1:n) = (/ (i,i=1,n) /)
-    info = 0
+    work = a(1:n,1:n)
+    Call dgesv(n,nrhs,work,n,ipiv,b,ldb,info)
 
     Return
   End Subroutine LinearSolve_CPU

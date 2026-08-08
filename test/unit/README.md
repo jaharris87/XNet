@@ -42,8 +42,9 @@ module state; production code still compiles with the selected OpenMP flags.
 The solver-adapter executables use a three-equation nonsymmetric fixture in two
 zones, with an optional fourth temperature equation. Test-only MA48 and
 PARDISO external symbols record ABI arguments, phases, controls, and zone
-association and solve only that fixture. They do not represent or qualify any
-licensed solver implementation.
+association. The dense linear-algebra stub and sparse solver stubs pass the
+received dense or reconstructed matrix to the vendored NETLIB `dgesv`; they do
+not represent or qualify any licensed solver implementation.
 
 The suite checks:
 

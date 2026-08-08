@@ -312,8 +312,9 @@ $(SPARSE_BUILD_DIR)/$(1)/sparse_contract_tests: \
     $(SPARSE_BUILD_DIR)/$(1)/sparse_component_stubs.o \
     $(SPARSE_BUILD_DIR)/$(1)/solver_component_stubs.o \
     $(SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.o \
-    $(SPARSE_BUILD_DIR)/$(1)/test_sparse_contracts.o
-	$$(LDR) -o $$@ $$^ $$(LDFLAGS)
+    $(SPARSE_BUILD_DIR)/$(1)/test_sparse_contracts.o \
+    $$(LAPACK_OBJECTS)
+	$$(LDR) -o $$@ $$^ $$(LDFLAGS) $$(LAPACK_LIBDIR) $$(LAPACK_LIBS)
 endef
 
 $(eval $(call sparse_provider_rules,dense,support/dense_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_dense.F90,TEST_DENSE))

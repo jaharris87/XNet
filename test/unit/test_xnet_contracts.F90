@@ -24,7 +24,10 @@ Contains
       & new_unittest('trajectory vector mask', test_t9rhofind_vector), &
       & new_unittest('abundance scalar moment', test_y_moment_scalar), &
       & new_unittest('abundance vector mask', test_y_moment_vector), &
-      & new_unittest('neutrino interpolation', test_nnu_flux) ]
+      & new_unittest('neutrino interpolation', test_nnu_flux), &
+      & new_unittest('NSE unscreened states', test_nse_unscreened), &
+      & new_unittest('NSE supplied guess repeatability', test_nse_repeatability), &
+      & new_unittest('NSE screened behavior', test_nse_screened) ]
 
     Return
   End Subroutine collect_xnet_contracts
@@ -314,6 +317,76 @@ Contains
     Return
   End Subroutine test_nnu_flux
 
+  Subroutine test_nse_unscreened(error)
+    Use xnet_controls, Only: iscrn
+    Use xnet_eos, Only: eos_screen_calls
+    Use xnet_nse, Only: nse_solve
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Real(dp), Parameter :: densities(3) = (/ 1.0e6_dp, 1.0e7_dp, 1.0e8_dp /)
+    Real(dp), Parameter :: temperatures(3) = (/ 7.0_dp, 9.0_dp, 11.0_dp /)
+    Real(dp), Parameter :: electron_fractions(3) = (/ 0.45_dp, 0.50_dp, 0.55_dp /)
+    Integer :: state
+
+    Call initialize_nse_fixture
+    iscrn = 0
+    eos_screen_calls = 0
+    Do state = 1, size(densities)
+      Call nse_solve(densities(state),temperatures(state),electron_fractions(state))
+      Call check_nse_solution(error,electron_fractions(state))
+      If ( allocated(error) ) Return
+    EndDo
+    Call check(error,eos_screen_calls,0)
+
+    Return
+  End Subroutine test_nse_unscreened
+
+  Subroutine test_nse_repeatability(error)
+    Use xnet_controls, Only: iscrn
+    Use xnet_nse, Only: nse_solve, unse, xnse
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Real(dp), Parameter :: electron_fraction = 0.49_dp
+    Real(dp) :: default_composition(8), default_roots(2), supplied_guess(2)
+
+    Call initialize_nse_fixture
+    iscrn = 0
+    Call nse_solve(1.0e7_dp,9.0_dp,electron_fraction)
+    default_composition = xnse
+    default_roots = (/ unse(1), unse(2) /)
+    supplied_guess = default_roots + (/ 2.0_dp, -2.0_dp /)
+    Call nse_solve(1.0e7_dp,9.0_dp,electron_fraction,supplied_guess)
+
+    Call check(error,all(abs(xnse-default_composition) <= 1.0e-10_dp))
+    If ( allocated(error) ) Return
+    Call check_nse_solution(error,electron_fraction)
+
+    Return
+  End Subroutine test_nse_repeatability
+
+  Subroutine test_nse_screened(error)
+    Use xnet_controls, Only: iscrn
+    Use xnet_eos, Only: eos_screen_calls
+    Use xnet_nse, Only: nse_solve
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call initialize_nse_fixture
+    iscrn = 1
+    eos_screen_calls = 0
+    Call nse_solve(1.0e7_dp,9.0_dp,0.49_dp)
+    Call check_nse_solution(error,0.49_dp)
+    If ( allocated(error) ) Return
+    Call check(error,eos_screen_calls > 0)
+
+    Return
+  End Subroutine test_nse_screened
+
   Subroutine initialize_zone_fixture
     Use xnet_conditions, Only: nh, rhoh, t9h, th
     Use xnet_controls, Only: lzactive, nzevolve, zb_hi, zb_lo
@@ -360,6 +433,79 @@ Contains
 
     Return
   End Subroutine initialize_nuclear_fixture
+
+  Subroutine initialize_nse_fixture
+    Use nuclear_data, Only: aa, angm, be, g, ia, iz, izmax, mex, mm, ng, nname, nn, ny, t9i, &
+      & zz, zz2, zzi, zseq, zseq53, zseqi
+    Use xnet_constants, Only: avn, bip1, five3rd, thbim1
+    Use xnet_controls, Only: idiag, itsout
+    Use xnet_nse, Only: nse_initialize, xnse
+    Implicit None
+
+    Integer :: i
+
+    If ( allocated(xnse) ) Return
+
+    ny = 8
+    izmax = 28
+    If ( allocated(aa) ) Deallocate(aa)
+    If ( allocated(zz) ) Deallocate(zz)
+    If ( allocated(zz2) ) Deallocate(zz2)
+    If ( allocated(zzi) ) Deallocate(zzi)
+    Allocate(aa(ny),angm(ny),be(ny),g(ng,ny),ia(ny),iz(ny),mex(ny),mm(ny),nname(ny), &
+      & nn(ny),t9i(ng),zz(ny),zz2(ny),zzi(ny))
+    Allocate(zseq(0:izmax+2),zseq53(0:izmax+2),zseqi(0:izmax+2))
+
+    nname = (/ '    n', '    p', '  he4', ' si28', ' fe52', ' fe54', ' ni56', ' ni58' /)
+    ia = (/ 1, 1, 4, 28, 52, 54, 56, 58 /)
+    iz = (/ 0, 1, 2, 14, 26, 26, 28, 28 /)
+    aa = real(ia,dp)
+    zz = real(iz,dp)
+    nn = aa - zz
+    be = (/ 0.0_dp, 0.0_dp, 28.2957_dp, 236.5369_dp, 447.6996_dp, 471.7696_dp, &
+      & 483.9957_dp, 506.4590_dp /)
+    mex = 0.0_dp
+    mm = aa / avn
+    angm = 1.0_dp
+    g = 1.0_dp
+    t9i = (/ (0.5_dp*real(i,dp), i=1,ng) /)
+    zz2 = zz*zz
+    zzi = zz**thbim1
+    zseq = (/ (real(i,dp), i=0,izmax+2) /)
+    zseq53 = zseq**five3rd
+    zseqi = zseq**bip1
+    idiag = 0
+    itsout = 0
+    Call nse_initialize
+
+    Return
+  End Subroutine initialize_nse_fixture
+
+  Subroutine check_nse_solution(error,expected_ye)
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
+    Use nuclear_data, Only: aa, zz
+    Use xnet_nse, Only: knrtot, xnse, ynse
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Real(dp), Intent(in) :: expected_ye
+
+    Call check(error,all(ieee_is_finite(xnse)))
+    If ( allocated(error) ) Return
+    Call check(error,all(ieee_is_finite(ynse)))
+    If ( allocated(error) ) Return
+    Call check(error,all(xnse >= 0.0_dp))
+    If ( allocated(error) ) Return
+    Call check(error,sum(xnse),1.0_dp,thr=1.0e-8_dp)
+    If ( allocated(error) ) Return
+    Call check(error,sum(zz*xnse/aa),expected_ye,thr=1.0e-8_dp)
+    If ( allocated(error) ) Return
+    Call check(error,all(knrtot >= 0))
+    If ( allocated(error) ) Return
+    Call check(error,knrtot(3) > 0)
+
+    Return
+  End Subroutine check_nse_solution
 
   Subroutine check_trajectory(error,nf,t9,rho,expected_nf,expected_t9,expected_rho)
     Implicit None

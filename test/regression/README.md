@@ -5,7 +5,9 @@ exercises the compiled XNet program as an external process; it is not a Python
 binding, a scientific-validation suite, or a replacement for all legacy cases.
 The migrated cases are the serial, CPU-only `tnsn_alpha` and `tnsn_torch47`
 trajectory calculations, `heat_alpha`, `heat_sn160`, and `bdf_sn160`
-self-heating calculations, and the `batch_alpha` serial zone-batching case.
+self-heating calculations, the `batch_alpha` serial zone-batching case, and one
+SN160 trajectory initialized through NSE. A separate process test exercises
+the standalone `xnse` program.
 
 ## Prerequisites and command
 
@@ -15,11 +17,13 @@ Use Python 3.11 or newer and install the single test dependency:
 python3 -m pip install -r test/regression/requirements.txt
 ```
 
-Build XNet separately, then select the executable explicitly:
+Build XNet and `xnse` separately, then select both executables explicitly:
 
 ```bash
+make -C source -j xnet xnse
 python3 -m pytest test/regression \
-    --xnet-executable="$PWD/source/xnet"
+    --xnet-executable="$PWD/source/xnet" \
+    --xnse-executable="$PWD/source/xnse"
 ```
 
 There is no default executable name and no `XNET_EXECUTABLE` fallback. The
@@ -88,10 +92,10 @@ concatenation.
 
 The Starkiller EOS initializes even though `tnsn_alpha` disables self-heating,
 so `tools/starkiller-helmholtz/helm_table.dat` is also an explicit required
-input. Investigation found that a missing table can produce a fatal message,
-a partial `net_diag01`, and process status zero. The runner therefore requires
-all expected output and complete final records instead of relying on status or
-stderr keyword heuristics alone.
+input. Before issue #40 corrected the serial abort status, a missing table
+could produce a fatal message, a partial `net_diag01`, and process status zero.
+The runner still requires all expected output and complete final records
+instead of relying on status or stderr keyword heuristics alone.
 
 Legacy ID 51 in `test/test_xnet.sh` names `heat_alpha` and calls
 `do_test_heat`, which historically concatenates `test/test_settings_heat` and
@@ -764,14 +768,33 @@ declaration and shares the existing loader-free validation path. A TOML
 manifest would duplicate these values while adding schema and loading code, so
 issue #16 retains explicit Python registration for all three cases.
 
+## NSE software-contract coverage
+
+Issue #40 adds exactly one complete ordinary NSE-initialized evolution. The
+`nse_sn160` case uses the tracked `th_frohlich2006_nse` trajectory, whose
+initial temperature exceeds the 8 GK threshold and whose subsequent evolution
+cools below it. The supplied `ab_ye49` file differs from the trajectory's
+initial `Ye = 0.55`. The runner therefore requires the production diagnostic
+marker `Initial abundances from NSE` in addition to the normal complete-state
+comparison; silently selecting the file state cannot satisfy the case.
+
+The standalone `xnse` test supplies three ordered density/temperature/Ye rows
+and checks their association with complete state and counter output. Two
+bounded failure probes require nonzero status for malformed input and for a
+deliberately invalid density that drives NSE nonconvergence. These checks are
+software contracts and characterization evidence, not scientific validation
+of NSE physics or screening models.
+
 ## Current limits and next cases
 
 These cases establish runtime and software-behavior checks plus narrow
 numerical characterization. They do not establish broad scientific validity,
 portability, performance benchmarking, CI suitability, or support for MPI,
-threading, accelerators, NSE, log-ft rates, batching, or networks larger than
-SN160. BDF coverage is limited to the characterized `bdf_sn160` endpoint on
-the recorded optimized configuration.
+threading, accelerators, log-ft rates, or networks larger than SN160. NSE
+coverage is limited to direct software invariants, one ordinary unscreened
+trajectory characterization, and deterministic process behavior; it does not
+validate screened physics. BDF coverage is limited to the characterized
+`bdf_sn160` endpoint on the recorded optimized configuration.
 
 The self-heating comparisons cover final `net_diag01` endpoints only. They do
 not inspect the evolution history in `ev_*` or binary `ts_*` output. Issue #12

@@ -13,6 +13,7 @@ from xnet_regression import (
     RegressionFailure,
     heat_alpha_case,
     heat_sn160_case,
+    nse_sn160_case,
     run_and_compare,
     tnsn_alpha_case,
     tnsn_torch47_case,
@@ -110,6 +111,17 @@ def test_bdf_sn160(
         xnet_timeout,
         tmp_path,
         bdf_sn160_case(REPOSITORY_ROOT),
+    )
+
+
+def test_nse_sn160(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    _run_case(
+        xnet_executable,
+        xnet_timeout,
+        tmp_path,
+        nse_sn160_case(REPOSITORY_ROOT),
     )
 
 

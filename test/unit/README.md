@@ -68,10 +68,10 @@ The generated-file inventory is:
 | `match_data` | Production match reader plus participant, sign, Q, weak-flag, and reverse-association checks. |
 | `sparse_ind` | Production PARDISO reader plus CRS and every reaction-to-entry map check. |
 | `ab_blank` | Species order and zero abundances. |
-| `match_read` | Readable semantic record count. |
-| `matr_shape` | Dimension, coordinate ranges, and complete nonzero count. |
-| `net_desc` | Description structure and all chapter ranges. |
-| `net_diag` | Readable, nonempty diagnostics. |
+| `match_read` | Every participant, descriptor, endpoint coordinate, scale, and record order. |
+| `matr_shape` | Trial right-hand side plus exact ordered coordinates and values reconstructed from the sparse reaction maps. |
+| `net_desc` | Description payload, species and reaction dimensions, chapter ranges, non-REACLIB counts, and sparse widths. |
+| `net_diag` | Fixture Q corrections, matched reaction diagnostics, and every sparse-row diagnostic. |
 
 The PARDISO library entry points are narrow test stubs because only the
 production sparse-file reader is invoked; no solver result is simulated or

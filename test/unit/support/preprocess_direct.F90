@@ -3,7 +3,8 @@ Program preprocess_direct
   Use xnet_preprocess, Only: net_preprocess
   Implicit None
 
-  Character(256) :: data_desc, data_dir
+  Character(80) :: data_desc
+  Character(256) :: data_dir
 
   If ( command_argument_count() /= 2 ) Then
     Write(output_unit,*) 'usage: preprocess_direct DATA_DIR DESCRIPTION'
@@ -11,6 +12,6 @@ Program preprocess_direct
   EndIf
   Call get_command_argument(1,data_dir)
   Call get_command_argument(2,data_desc)
-  Call net_preprocess(output_unit,trim(data_dir),trim(data_desc))
+  Call net_preprocess(output_unit,trim(data_dir),data_desc)
 
 End Program preprocess_direct

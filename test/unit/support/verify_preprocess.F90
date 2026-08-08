@@ -13,6 +13,7 @@ Program verify_preprocess
   Implicit None
 
   Real(dp), Parameter :: tolerance = 1.0e-12_dp
+  Character(*), Parameter :: expected_description = 'preprocess contract fixture'
   Character(80) :: data_desc
   Character(256) :: data_dir, message, summary_file
   Integer :: chapter(11), chapter_end(11), chapter_start(11)
@@ -38,6 +39,7 @@ Program verify_preprocess
   zb_hi = 1
 
   Call read_nuclear_data(trim(data_dir),data_desc)
+  Call require(trim(data_desc) == expected_description,'production net_desc description mismatch')
   Call read_reaction_data(trim(data_dir))
   Call read_match_data(trim(data_dir))
   Call read_jacobian_data(trim(data_dir))
@@ -420,7 +422,9 @@ Contains
     Character(*), Intent(in) :: directory
     Integer, Intent(out) :: chapter_out(11), start_out(11), end_out(11)
 
-    Character(5) :: blank_name(6)
+    Character(5) :: blank_name(6), expected_names(8), match_arrow, match_desc, match_names(8)
+    Character(17) :: label17
+    Character(32) :: label32
     Character(256) :: filename, line
     Character(32), Parameter :: artifacts(10) = (/ &
       & 'nuc_data                        ', 'nets3                           ', &
@@ -428,13 +432,13 @@ Contains
       & 'match_data                      ', 'match_read                      ', &
       & 'sparse_ind                      ', 'matr_shape                      ', &
       & 'net_desc                        ', 'net_diag                        ' /)
-    Integer :: coordinate_count, i, ierr, lun, row_index, column_index, line_count
-    Integer :: binary_ny
+    Integer :: column_index, counts(4), i, ierr, ifl_orig, ifl_term, j, lun, match_index, row_index
+    Integer :: binary_ny, nonreaclib_counts(2), widths(2)
     Logical :: exists
-    Real(dp) :: blank_value(6), value
+    Real(dp) :: blank_value(6), match_coordinates(4), match_value, rhs(6), value
     Character(5), Allocatable :: binary_name(:)
     Real(dp), Allocatable :: binary_aa(:), binary_angm(:), binary_be(:), binary_g(:,:), binary_nn(:)
-    Real(dp), Allocatable :: binary_t9(:), binary_zz(:)
+    Real(dp), Allocatable :: binary_t9(:), binary_zz(:), shape_values(:)
 
     Do i = 1, size(artifacts)
       filename = trim(directory)//'/'//trim(artifacts(i))
@@ -460,13 +464,42 @@ Contains
 
     Open(newunit=lun,file=trim(directory)//'/net_desc',status='old',action='read')
     Read(lun,'(a)') line
+    Call require(trim(line) == trim(data_desc),'net_desc description payload mismatch')
     Read(lun,'(a)') line
+    Call require(trim(adjustl(line)) == 'Number of Nuclear Species=    6', &
+      & 'net_desc species count mismatch')
     Read(lun,'(a)') line
+    Call require(trim(line) == 'Reaction Count for the 11 different types', &
+      & 'net_desc reaction-count heading mismatch')
     Read(lun,*) (chapter_out(i),start_out(i),end_out(i),i=1,11)
-    Close(lun)
     Call require(all(chapter_out == (/ (i,i=1,11) /)),'net_desc chapter numbering mismatch')
     Call require(all(start_out == (/ 1,2,3,1,2,2,2,1,2,1,4 /)) .and. &
       & all(end_out == (/ 1,2,3,1,1,1,1,1,1,0,3 /)),'net_desc chapter ranges mismatch')
+    Read(lun,'(a)') line
+    Call require(trim(line) == 'Necessary dimensions','net_desc dimension heading mismatch')
+    Read(lun,'(a17,4i8)') label17, counts
+    Call require(trim(adjustl(label17)) == 'nreac(1,2,3,4)=' .and. all(counts == nreac), &
+      & 'net_desc reaction dimensions mismatch')
+    Read(lun,'(a17,4i8)') label17, counts
+    Call require(trim(adjustl(label17)) == 'nan(1,2,3,4)=' .and. all(counts == nan), &
+      & 'net_desc extended dimensions mismatch')
+    Read(lun,'(a)') line
+    Call require(trim(line) == 'Reaction Count for non-REACLIB rates', &
+      & 'net_desc non-REACLIB heading mismatch')
+    Read(lun,'(a7,i8,a7,i8)') label32(1:7), nonreaclib_counts(1), label32(8:14), nonreaclib_counts(2)
+    Call require(trim(adjustl(label32(1:7))) == 'nffn=' .and. trim(adjustl(label32(8:14))) == 'nnu=' .and. &
+      & all(nonreaclib_counts == 0),'net_desc non-REACLIB counts mismatch')
+    Read(lun,'(a)') line
+    Call require(trim(line) == 'Matrix Sparseness parameters','net_desc sparse heading mismatch')
+    Read(lun,'(a16,2i5)') label32(1:16), widths
+    Call require(trim(label32(1:16)) == 'Border Widths' .and. all(widths == ny), &
+      & 'net_desc border widths mismatch')
+    Read(lun,'(a16,2i5)') label32(1:16), widths
+    Call require(trim(label32(1:16)) == 'Diagonal Widths' .and. all(widths == 0), &
+      & 'net_desc diagonal widths mismatch')
+    Read(lun,'(a)',iostat=ierr) line
+    Call require(ierr == iostat_end,'net_desc has unexpected trailing records')
+    Close(lun)
 
     Open(newunit=lun,file=trim(directory)//'/ab_blank',status='old',action='read')
     Read(lun,'(a)') line
@@ -480,45 +513,186 @@ Contains
     EndDo
 
     Open(newunit=lun,file=trim(directory)//'/match_read',status='old',action='read')
-    line_count = 0
-    Do
-      Read(lun,'(a)',iostat=ierr) line
-      If ( ierr == iostat_end ) Exit
-      Call require(ierr == 0,'match_read is unreadable')
-      line_count = line_count + 1
+    Do i = 1, mflx
+      Read(lun,'(10a5,1es10.3)',iostat=ierr) match_names(1:4), match_arrow, match_names(5:8), &
+        & match_desc, match_value
+      Call require(ierr == 0,'match_read participant record is unreadable')
+      Do j = 1, 8
+        expected_names(j) = participant_name(nflx(j,i))
+      EndDo
+      Call require(all(match_names == expected_names),'match_read participant names mismatch')
+      Call require(match_arrow == ' --> ','match_read arrow mismatch')
+      Call require(trim(adjustl(match_desc)) == trim(adjustl(descx(i))), &
+        & 'match_read participant descriptor mismatch')
+      Call require(abs(match_value) < tolerance,'match_read participant value mismatch')
     EndDo
+    Do i = 1, mflx
+      Read(lun,'(i5,4f6.1,es13.5,a5)',iostat=ierr) match_index, match_coordinates, match_value, match_desc
+      Call require(ierr == 0,'match_read coordinate record is unreadable')
+      ifl_orig = nflx(count(nflx(1:4,i) /= 0),i)
+      ifl_term = nflx(count(nflx(5:8,i) /= 0)+4,i)
+      Call require(match_index == i .and. &
+        & maxval(abs(match_coordinates-(/ zz(ifl_orig),nn(ifl_orig),zz(ifl_term),nn(ifl_term) /))) < tolerance .and. &
+        & abs(match_value-1.0_dp) < tolerance .and. &
+        & trim(adjustl(match_desc)) == trim(adjustl(descx(i))), &
+        & 'match_read coordinate record mismatch')
+    EndDo
+    Read(lun,'(a)',iostat=ierr) line
     Close(lun)
-    Call require(line_count == 2*mflx,'match_read record count mismatch')
+    Call require(ierr == iostat_end,'match_read has unexpected trailing records')
 
     Open(newunit=lun,file=trim(directory)//'/matr_shape',status='old',action='read')
     Read(lun,'(a)') line
     Call require(trim(adjustl(line)) == 'NY=   6','matr_shape dimension mismatch')
-    Read(lun,'(a)') line
-    coordinate_count = 0
-    Do
+    Read(lun,*) rhs
+    Call require(maxval(abs(rhs-1.0_dp)) < tolerance,'matr_shape trial right-hand side mismatch')
+    Allocate(shape_values(lval))
+    shape_values = 0.0_dp
+    Do i = 1, ny
+      shape_values(find_diagonal(i)) = shape_values(find_diagonal(i)) + 10.0_dp
+    EndDo
+    Do i = 1, nan(1)
+      shape_values(ns11(i)) = shape_values(ns11(i)) + 1.0_dp
+    EndDo
+    Do i = 1, nan(2)
+      shape_values(ns21(i)) = shape_values(ns21(i)) + 1.0_dp
+      shape_values(ns22(i)) = shape_values(ns22(i)) + 1.0_dp
+    EndDo
+    Do i = 1, nan(3)
+      shape_values(ns31(i)) = shape_values(ns31(i)) + 1.0_dp
+      shape_values(ns32(i)) = shape_values(ns32(i)) + 1.0_dp
+      shape_values(ns33(i)) = shape_values(ns33(i)) + 1.0_dp
+    EndDo
+    Do i = 1, nan(4)
+      shape_values(ns41(i)) = shape_values(ns41(i)) + 1.0_dp
+      shape_values(ns42(i)) = shape_values(ns42(i)) + 1.0_dp
+      shape_values(ns43(i)) = shape_values(ns43(i)) + 1.0_dp
+      shape_values(ns44(i)) = shape_values(ns44(i)) + 1.0_dp
+    EndDo
+    Do i = 1, lval
       Read(lun,*,iostat=ierr) row_index,column_index,value
-      If ( ierr == iostat_end ) Exit
       Call require(ierr == 0,'matr_shape coordinate is unreadable')
-      Call require(row_index >= 1 .and. row_index <= ny .and. column_index >= 1 .and. &
-        & column_index <= ny,'matr_shape coordinate is out of range')
-      coordinate_count = coordinate_count + 1
+      Call require(row_index == ridx(i) .and. column_index == cidx(i) .and. &
+        & abs(value-shape_values(i)) < tolerance,'matr_shape ordered coordinate/value mismatch')
     EndDo
+    Read(lun,'(a)',iostat=ierr) line
     Close(lun)
-    Call require(coordinate_count == lval,'matr_shape coordinate count mismatch')
+    Call require(ierr == iostat_end,'matr_shape has unexpected trailing coordinates')
+    Deallocate(shape_values)
 
-    Open(newunit=lun,file=trim(directory)//'/net_diag',status='old',action='read')
-    line_count = 0
-    Do
-      Read(lun,'(a)',iostat=ierr) line
-      If ( ierr == iostat_end ) Exit
-      Call require(ierr == 0,'net_diag is unreadable')
-      line_count = line_count + 1
-    EndDo
-    Close(lun)
-    Call require(line_count > 0,'net_diag is empty')
+    Call check_net_diagnostics(trim(directory)//'/net_diag')
 
     Return
   End Subroutine check_generated_artifacts
+
+  Function participant_name(index) Result(name)
+    Implicit None
+
+    Integer, Intent(in) :: index
+    Character(5) :: name
+
+    If ( index >= lbound(nname,1) .and. index <= ubound(nname,1) ) Then
+      name = nname(index)
+    Else
+      name = '     '
+    EndIf
+
+    Return
+  End Function participant_name
+
+  Subroutine check_q_diagnostic(lun,descriptor,names,input_q,computed_q)
+    Implicit None
+
+    Integer, Intent(in) :: lun
+    Character(*), Intent(in) :: descriptor
+    Character(5), Intent(in) :: names(6)
+    Real(dp), Intent(in) :: input_q, computed_q
+
+    Character(256) :: actual_line, expected_line
+    Integer :: i, ierr
+
+    Read(lun,'(a)',iostat=ierr) actual_line
+    Call require(ierr == 0,'net_diag Q diagnostic is unreadable')
+    Write(expected_line,"(a,7a6,a,es9.2,a,es9.2)") &
+      & 'Inconsistent q-value for ',descriptor,(names(i),i=1,6),'  netsu: ',input_q,' netwinv: ',computed_q
+    Call require(trim(actual_line) == trim(expected_line),'net_diag Q diagnostic mismatch')
+
+    Return
+  End Subroutine check_q_diagnostic
+
+  Subroutine check_net_diagnostics(filename)
+    Implicit None
+
+    Character(*), Intent(in) :: filename
+
+    Character(5), Parameter :: blank5 = '     ', arrow = ' --> '
+    Character(256) :: actual_line, expected_line
+    Integer :: i, ierr, ii, k, lun, row_index
+
+    Open(newunit=lun,file=filename,status='old',action='read')
+    Call check_q_diagnostic(lun,descx(1), &
+      & (/ '    n', '    p', '     ', '     ', '     ', '     ' /),9.9_dp,q1(1))
+    Call check_q_diagnostic(lun,descx(2), &
+      & (/ '  o16', '  he4', '  c12', '     ', '     ', '     ' /),-1.0_dp,q1(2))
+    Call check_q_diagnostic(lun,descx(3), &
+      & (/ '  c12', '  he4', '  he4', '  he4', '     ', '     ' /),-2.0_dp,q1(3))
+    Call check_q_diagnostic(lun,descx(2), &
+      & (/ '  he4', '  c12', '  o16', '     ', '     ', '     ' /),3.0_dp,q2(1))
+    Call check_q_diagnostic(lun,descx(3), &
+      & (/ '  he4', '  he4', '  he4', '  c12', '     ', '     ' /),4.0_dp,q3(1))
+
+    Do ii = 1, mflx
+      Read(lun,'(a)',iostat=ierr) actual_line
+      Call require(ierr == 0 .and. trim(actual_line) == '--','net_diag match-group marker mismatch')
+      Do k = 1, nreac(1)
+        If ( abs(ifl1(k)) == ii ) Then
+          Write(expected_line,"(9a5,2i2,i6,1es12.4)") participant_name(n1i(1,k)),blank5,blank5,arrow, &
+            & participant_name(n1i(2,k)),participant_name(n1i(3,k)),participant_name(n1i(4,k)), &
+            & blank5,descx(ii),ires1(k),irev1(k),ifl1(k),q1(k)
+          Read(lun,'(a)',iostat=ierr) actual_line
+          Call require(ierr == 0 .and. trim(actual_line) == trim(expected_line), &
+            & 'net_diag one-reactant match record mismatch')
+        EndIf
+      EndDo
+      Do k = 1, nreac(2)
+        If ( abs(ifl2(k)) == ii ) Then
+          Write(expected_line,"(9a5,2i2,i6,1es12.4)") participant_name(n2i(1,k)), &
+            & participant_name(n2i(2,k)),blank5,arrow,participant_name(n2i(3,k)), &
+            & participant_name(n2i(4,k)),participant_name(n2i(5,k)),participant_name(n2i(6,k)), &
+            & descx(ii),ires2(k),irev2(k),ifl2(k),q2(k)
+          Read(lun,'(a)',iostat=ierr) actual_line
+          Call require(ierr == 0 .and. trim(actual_line) == trim(expected_line), &
+            & 'net_diag two-reactant match record mismatch')
+        EndIf
+      EndDo
+      Do k = 1, nreac(3)
+        If ( abs(ifl3(k)) == ii ) Then
+          Write(expected_line,"(9a5,2i2,i6,1es12.4)") participant_name(n3i(1,k)), &
+            & participant_name(n3i(2,k)),participant_name(n3i(3,k)),arrow,participant_name(n3i(4,k)), &
+            & participant_name(n3i(5,k)),blank5,blank5,descx(ii),ires3(k),irev3(k),ifl3(k),q3(k)
+          Read(lun,'(a)',iostat=ierr) actual_line
+          Call require(ierr == 0 .and. trim(actual_line) == trim(expected_line), &
+            & 'net_diag three-reactant match record mismatch')
+        EndIf
+      EndDo
+    EndDo
+
+    Do i = 1, ny
+      Read(lun,'(a)',iostat=ierr) actual_line
+      Call require(ierr == 0,'net_diag sparse-row index is unreadable')
+      Read(actual_line,*,iostat=ierr) row_index
+      Call require(ierr == 0 .and. row_index == i,'net_diag sparse-row index mismatch')
+      Read(lun,'(a)',iostat=ierr) actual_line
+      Call require(ierr == 0,'net_diag sparse-row columns are unreadable')
+      Write(expected_line,"(18i4)") cidx(pb(i):pb(i+1)-1)
+      Call require(trim(actual_line) == trim(expected_line),'net_diag sparse-row columns mismatch')
+    EndDo
+    Read(lun,'(a)',iostat=ierr) actual_line
+    Call require(ierr == iostat_end,'net_diag has unexpected trailing records')
+    Close(lun)
+
+    Return
+  End Subroutine check_net_diagnostics
 
   Subroutine write_summary(filename,chapter_in,start_in,end_in)
     Implicit None
@@ -529,6 +703,7 @@ Contains
     Integer :: lun
 
     Open(newunit=lun,file=filename,status='replace',action='write')
+    Write(lun,'(a)') trim(data_desc)
     Write(lun,*) ny,nname(1:ny)
     Write(lun,*) aa,zz,nn,be,t9i,g,angm(1:ny)
     Write(lun,*) chapter_in,start_in,end_in

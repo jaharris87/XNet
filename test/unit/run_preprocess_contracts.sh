@@ -29,11 +29,11 @@ copy_ascii_fixture() {
 
 copy_ascii_fixture "$work_dir/direct"
 cp "$fixture_dir/netsu" "$work_dir/direct/netsu"
-"$direct_exe" "$work_dir/direct" "direct preprocessing fixture"
+"$direct_exe" "$work_dir/direct" "preprocess contract fixture"
 
 copy_ascii_fixture "$work_dir/standalone"
 cp "$fixture_dir/netsu" "$work_dir/standalone/netsu"
-printf '%s\n' "standalone preprocessing fixture" | (cd "$work_dir/standalone" && "$net_setup_exe")
+printf '%s\n' "preprocess contract fixture" | (cd "$work_dir/standalone" && "$net_setup_exe")
 
 "$verify_exe" "$work_dir/direct" "$work_dir/direct.summary"
 "$verify_exe" "$work_dir/standalone" "$work_dir/standalone.summary"

@@ -782,9 +782,9 @@ comparison; silently selecting the file state cannot satisfy the case.
 The standalone `xnse` test supplies three ordered density/temperature/Ye rows
 and checks their association with complete state and counter output. Two
 bounded failure probes require nonzero status for malformed input and for a
-deliberately invalid density that drives NSE nonconvergence. These checks are
-software contracts and characterization evidence, not scientific validation
-of NSE physics or screening models.
+deliberately out-of-domain electron fraction that drives NSE nonconvergence.
+These checks are software contracts and characterization evidence, not
+scientific validation of NSE physics or screening models.
 
 ## Current limits and next cases
 

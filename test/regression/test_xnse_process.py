@@ -62,6 +62,17 @@ STATE_ROW = re.compile(
     re.MULTILINE,
 )
 COUNTER_ROW = re.compile(r"^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", re.MULTILINE)
+TIMER_HEADING = re.compile(r"^Timers:", re.MULTILINE)
+TIMER_ROW = re.compile(
+    r"^\s*([+-]?\d+\.\d+E[+-]\d+)\s+"
+    r"([+-]?\d+\.\d+E[+-]\d+)\s+"
+    r"([+-]?\d+\.\d+E[+-]\d+)\s+"
+    r"([+-]?\d+\.\d+E[+-]\d+)\s+"
+    r"([+-]?\d+\.\d+E[+-]\d+)\s+"
+    r"([+-]?\d+\.\d+E[+-]\d+)\s+"
+    r"([+-]?\d+\.\d+E[+-]\d+)\s*$",
+    re.MULTILINE,
+)
 ABUNDANCE_ROW = re.compile(
     r"^\s*([a-z][a-z0-9]*)\s+([+-]?\d+\.\d+E[+-]\d+)\s*$", re.MULTILINE
 )
@@ -138,6 +149,7 @@ def test_xnse_multirow_output_association(
         if line.strip()
     )
     counters = []
+    timers = []
     for index, match in enumerate(state_matches):
         state_end = (
             state_matches[index + 1].start()
@@ -173,10 +185,22 @@ def test_xnse_multirow_output_association(
         counter_match = COUNTER_ROW.search(diagnostic, counter_heading, state_end)
         assert counter_match is not None
         counters.append(tuple(int(value) for value in counter_match.groups()))
+        timer_headings = tuple(
+            TIMER_HEADING.finditer(diagnostic, counter_match.end(), state_end)
+        )
+        assert len(timer_headings) == 1
+        timer_match = TIMER_ROW.search(
+            diagnostic, timer_headings[0].end(), state_end
+        )
+        assert timer_match is not None
+        timers.append(tuple(float(value) for value in timer_match.groups()))
     assert [row[0] for row in counters] == [1, 2, 3]
     assert all(all(value >= 0 for value in row[1:]) and row[3] > 0 for row in counters)
+    assert all(
+        all(math.isfinite(value) and value >= 0.0 for value in row) and row[0] > 0.0
+        for row in timers
+    )
     assert diagnostic.count("NSE Counters:") == 3
-    assert diagnostic.count("Timers:") == 3
 
 
 @pytest.mark.parametrize(

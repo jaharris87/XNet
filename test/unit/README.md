@@ -17,8 +17,10 @@ The Makefile puts all generated files under the ignored `test/unit/build/`
 directory. It includes the production GNU configuration and compiles the
 actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
 `xnet_nnu.F90`, `xnet_timers.F90`, and `xnet_nse.F90` sources, plus the
-vendored NETLIB routines required by the NSE solver. It neither builds nor
-changes the default `source/xnet` target.
+selected LAPACK routines or libraries required by the NSE solver. It also
+compiles the production network preprocessing, data, match, and PARDISO
+sparse-reader modules. It neither builds nor changes the default `source/xnet`
+target.
 
 ## Bounded support and coverage
 
@@ -49,7 +51,45 @@ The suite checks:
   reconstruction, and solver counters;
 - repeatability between the default NSE roots and a materially different
   supplied initial guess; and
-- screened NSE execution through a deterministic software-only EOS seam.
+- screened NSE execution through a deterministic software-only EOS seam;
+- direct `net_preprocess` and standalone `net_setup` semantic equivalence for
+  the synthetic fixture described under `fixtures/preprocess/`;
+- nuclear/reaction translation, weak/reverse flags, repeated-participant
+  multiplicities, recomputed Q values, match associations, and the full CRS
+  structure and reaction-to-entry maps; and
+- detectable failure for truncated rates, inconsistent participant layouts,
+  and an unreadable generated reaction artifact.
+
+## Network preprocessing component
+
+The process-integration part runs in isolated directories below `build/` and
+does not alter tracked network data. The fixture is synthetic, contains no
+private data, and deliberately includes one rate with an unavailable species
+that production preprocessing must drop. The suite compares formatted
+semantic summaries from direct preprocessing and `net_setup`; it does not
+compare compiler-specific sequential-unformatted bytes.
+
+The generated-file inventory is:
+
+| Artifact | Check |
+| --- | --- |
+| `nuc_data` | Test-side decoder matches species, nuclear values, temperature grid, partition functions, and spins loaded by production nuclear-data code. |
+| `nets3`, `nets4` | Production reaction reader plus reaction, index, and multiplicity checks. |
+| `match_data` | Production match reader plus participant, sign, Q, weak-flag, and reverse-association checks. |
+| `sparse_ind` | Production PARDISO reader plus CRS and every reaction-to-entry map check. |
+| `ab_blank` | Species order and zero abundances. |
+| `match_read` | Every participant, descriptor, endpoint coordinate, scale, and record order. |
+| `matr_shape` | Trial right-hand side plus exact ordered coordinates and values reconstructed from the sparse reaction maps. |
+| `net_desc` | Description payload, species and reaction dimensions, chapter ranges, non-REACLIB counts, and sparse widths. |
+| `net_diag` | Fixture Q corrections, matched reaction diagnostics, and every sparse-row diagnostic. |
+
+The PARDISO library entry points are narrow test stubs because only the
+production sparse-file reader is invoked; no solver result is simulated or
+claimed. Controlled in-memory corruptions must reject a wrong extended
+reaction index, missing diagonal, out-of-range column, nonmonotone row
+pointer, and reversed match association. Separate subprocesses require
+nonzero results for truncated and inconsistent ASCII inputs and for an
+unreadable `nets3` artifact.
 
 ## Vendored test-drive dependency
 
@@ -145,3 +185,39 @@ That process coverage exposed an existing serial termination defect: both
 malformed `xnse` input and NSE nonconvergence printed fatal diagnostics but
 returned process status 0. `xnet_parallel_stubs.F90` now uses `stop 1` in its
 two serial abort paths. The MPI implementation is unchanged.
+
+## Issue 38 effectiveness record
+
+On 2026-08-07, GNU Fortran 16.1.0 and GNU Make 3.81 on macOS were used for
+clean OPT and DEBUG/bounds-checking runs. Both configurations passed the nine
+existing deterministic tests and the preprocessing process-integration
+component; each clean build-and-run completed in seconds.
+
+Before the production correction, EOF after a reaction header was treated as
+normal end-of-input and could silently produce an incomplete network. The
+corrected path rejects that truncation, rejects participant counts that do not
+match the active chapter, reports a missing `netsu`, and makes serial
+`parallel_abort` return nonzero. The final suite observed nonzero status for
+both direct and standalone truncated-input runs, for the inconsistent fixture,
+and for production reaction-reader failure with an unreadable `nets3`.
+
+Five controlled in-memory corruptions were each rejected: a wrong extended
+reaction index, missing diagonal, out-of-range sparse column, nonmonotone row
+pointer, and reversed match association. The fixture's unavailable `mg24`
+participant was dropped and the expected reaction and extended-map counts
+were retained. Direct and standalone formatted semantic summaries were
+identical.
+
+The tracked default production build linked successfully. The complete
+external-process regression suite, including all six maintained cases, also
+passed:
+
+```text
+.venv/bin/python -m pytest -q test/regression \
+    --xnet-executable=/absolute/path/to/source/xnet
+172 passed in 16.97s
+```
+
+The checks are limited to the tracked serial GNU CPU configuration. They make
+no raw-byte portability, optional sparse-solver execution, scientific-rate,
+or accelerator claim.

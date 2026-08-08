@@ -496,9 +496,17 @@ Contains
     If ( allocated(error) ) Return
     Call check(error,all(xnse >= 0.0_dp))
     If ( allocated(error) ) Return
+    Call check(error,all(ynse >= 0.0_dp))
+    If ( allocated(error) ) Return
+    Call check(error,all(abs(aa*ynse-xnse) <= 1.0e-12_dp))
+    If ( allocated(error) ) Return
     Call check(error,sum(xnse),1.0_dp,thr=1.0e-8_dp)
     If ( allocated(error) ) Return
     Call check(error,sum(zz*xnse/aa),expected_ye,thr=1.0e-8_dp)
+    If ( allocated(error) ) Return
+    Call check(error,sum(aa*ynse),1.0_dp,thr=1.0e-8_dp)
+    If ( allocated(error) ) Return
+    Call check(error,sum(zz*ynse),expected_ye,thr=1.0e-8_dp)
     If ( allocated(error) ) Return
     Call check(error,all(knrtot >= 0))
     If ( allocated(error) ) Return

@@ -14,6 +14,46 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CASE_DIRECTORY = REPOSITORY_ROOT / "test" / "regression" / "cases" / "xnse_sn160"
 NETWORK_INPUTS = ("sunet", "netsu", "netweak", "netwinv")
+ELEMENT_Z = {
+    symbol: charge
+    for charge, symbol in enumerate(
+        (
+            "",
+            "h",
+            "he",
+            "li",
+            "be",
+            "b",
+            "c",
+            "n",
+            "o",
+            "f",
+            "ne",
+            "na",
+            "mg",
+            "al",
+            "si",
+            "p",
+            "s",
+            "cl",
+            "ar",
+            "k",
+            "ca",
+            "sc",
+            "ti",
+            "v",
+            "cr",
+            "mn",
+            "fe",
+            "co",
+            "ni",
+            "cu",
+            "zn",
+            "ga",
+            "ge",
+        )
+    )
+}
 STATE_ROW = re.compile(
     r"^\s*NSE solved\s+"
     r"([+-]?\d+\.\d+E[+-]\d+)\s+"
@@ -25,6 +65,18 @@ COUNTER_ROW = re.compile(r"^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", re.MULTILINE)
 ABUNDANCE_ROW = re.compile(
     r"^\s*([a-z][a-z0-9]*)\s+([+-]?\d+\.\d+E[+-]\d+)\s*$", re.MULTILINE
 )
+
+
+def _mass_and_charge(species: str) -> tuple[int, int]:
+    if species == "n":
+        return 1, 0
+    if species == "p":
+        return 1, 1
+    if species == "d":
+        return 2, 1
+    match = re.fullmatch(r"([a-z]+)(\d+)", species)
+    assert match is not None
+    return int(match.group(2)), ELEMENT_Z[match.group(1)]
 
 
 def _prepare_work_directory(tmp_path: Path) -> Path:
@@ -85,12 +137,18 @@ def test_xnse_multirow_output_association(
         .splitlines()
         if line.strip()
     )
-    for match in state_matches:
-        block_end = diagnostic.index("NSE Counters:", match.end())
+    counters = []
+    for index, match in enumerate(state_matches):
+        state_end = (
+            state_matches[index + 1].start()
+            if index + 1 < len(state_matches)
+            else len(diagnostic)
+        )
+        counter_heading = diagnostic.index("NSE Counters:", match.end(), state_end)
         abundances = tuple(
             (name, float(value))
             for name, value in ABUNDANCE_ROW.findall(
-                diagnostic, match.end(), block_end
+                diagnostic, match.end(), counter_heading
             )
         )
         assert tuple(name for name, _ in abundances) == expected_species
@@ -101,10 +159,20 @@ def test_xnse_multirow_output_association(
             rel_tol=0.0,
             abs_tol=1.0e-6,
         )
-    counters = [
-        tuple(int(value) for value in match)
-        for match in COUNTER_ROW.findall(diagnostic)
-    ]
+        reconstructed_ye = math.fsum(
+            charge / mass * value
+            for name, value in abundances
+            for mass, charge in (_mass_and_charge(name),)
+        )
+        assert math.isclose(
+            reconstructed_ye,
+            expected_states[index][2],
+            rel_tol=0.0,
+            abs_tol=1.0e-6,
+        )
+        counter_match = COUNTER_ROW.search(diagnostic, counter_heading, state_end)
+        assert counter_match is not None
+        counters.append(tuple(int(value) for value in counter_match.groups()))
     assert [row[0] for row in counters] == [1, 2, 3]
     assert all(all(value >= 0 for value in row[1:]) and row[3] > 0 for row in counters)
     assert diagnostic.count("NSE Counters:") == 3

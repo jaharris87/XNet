@@ -125,6 +125,28 @@ and prerequisites before use. Their presence records an available recipe and
 selection path. Current support depends on the requested platform and the
 evidence collected for the task.
 
+## Focused deterministic contract tests
+
+The bounded Fortran component suite builds and runs independently of a
+complete XNet executable:
+
+```bash
+make -C test/unit
+```
+
+It uses the tracked GNU optimized configuration by default, compiles the
+selected production sources, writes generated files only below the ignored
+`test/unit/build/` directory, and performs no network access. Run its
+bounds-checking configuration with:
+
+```bash
+make -C test/unit clean test CMODE=DEBUG
+```
+
+See `test/unit/README.md` for the exact tested contracts, narrow test-only
+state and stubs, vendored `test-drive` revision and license, update procedure,
+and issue-specific effectiveness evidence.
+
 ## Runtime inputs
 
 The stand-alone driver reads a file named `control` from its working directory.

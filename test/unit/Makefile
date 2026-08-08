@@ -22,6 +22,14 @@ PREPROCESS_VERIFY_EXE := $(PREPROCESS_BUILD_DIR)/verify_preprocess
 BUILD_NET_READER_EXE := $(PREPROCESS_BUILD_DIR)/verify_build_net_readers
 PREPROCESS_WORK_DIR := $(abspath $(BUILD_DIR)/preprocess-work)
 PREPROCESS_FIXTURE_DIR := $(abspath fixtures/preprocess)
+SPARSE_BUILD_DIR := $(BUILD_DIR)/sparse
+SPARSE_WORK_DIR := $(abspath $(BUILD_DIR)/sparse-work)
+DENSE_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/dense/sparse_contract_tests
+MA48_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/ma48/sparse_contract_tests
+PARDISO_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/pardiso/sparse_contract_tests
+PARDISO_MKL_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/pardiso_mkl/sparse_contract_tests
+SPARSE_CONTRACT_EXES := $(DENSE_CONTRACT_EXE) $(MA48_CONTRACT_EXE) \
+  $(PARDISO_CONTRACT_EXE) $(PARDISO_MKL_CONTRACT_EXE)
 BUILD_NET_BUILD_DIR := $(BUILD_DIR)/build-net
 BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
 BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
@@ -77,11 +85,14 @@ BUILD_NET_OBJECTS := \
 .PHONY: test clean production-xnet
 
 test: $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
-    $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) production-xnet
+    $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) production-xnet
 	@$(TEST_EXE)
 	@bash run_preprocess_contracts.sh $(PREPROCESS_FIXTURE_DIR) $(PREPROCESS_WORK_DIR) \
 	  $(abspath $(PREPROCESS_DIRECT_EXE)) $(abspath $(PREPROCESS_NET_SETUP_EXE)) \
 	  $(abspath $(PREPROCESS_VERIFY_EXE))
+	@bash run_sparse_contracts.sh $(SPARSE_WORK_DIR) $(abspath $(DENSE_CONTRACT_EXE)) \
+	  $(abspath $(MA48_CONTRACT_EXE)) $(abspath $(PARDISO_CONTRACT_EXE)) \
+	  $(abspath $(PARDISO_MKL_CONTRACT_EXE)) $(abspath $(XNET_DIR)/sparse_controls.nml)
 	@python3 run_build_net_contracts.py $(BUILD_NET_WORK_DIR) $(abspath $(BUILD_NET_EXE)) \
 	  $(abspath $(PREPROCESS_NET_SETUP_EXE)) $(abspath $(BUILD_NET_READER_EXE)) \
 	  $(abspath $(PRODUCTION_XNET_EXE)) $(abspath $(HELM_TABLE))
@@ -233,6 +244,7 @@ $(PREPROCESS_BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 \
 $(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o: $(XNET_DIR)/xnet_jacobian_PARDISO.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_abundances.o $(PREPROCESS_BUILD_DIR)/xnet_conditions.o \
     $(PREPROCESS_BUILD_DIR)/xnet_data.o $(PREPROCESS_BUILD_DIR)/xnet_timers.o \
+    $(PREPROCESS_BUILD_DIR)/xnet_util.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
@@ -252,6 +264,63 @@ $(PREPROCESS_BUILD_DIR)/verify_preprocess.o: support/verify_preprocess.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o $(PREPROCESS_BUILD_DIR)/xnet_match.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+define sparse_provider_rules
+$(SPARSE_BUILD_DIR)/$(1):
+	mkdir -p $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/testdrive.o: vendor/test-drive/testdrive.F90 | $(SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(SPARSE_BUILD_DIR)/$(1) -I$(SPARSE_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/xnet_types.o: $$(XNET_DIR)/xnet_types.F90 | $(SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(SPARSE_BUILD_DIR)/$(1) -I$(SPARSE_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/sparse_component_stubs.o: support/sparse_component_stubs.F90 \
+    $(SPARSE_BUILD_DIR)/$(1)/xnet_types.o | $(SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(SPARSE_BUILD_DIR)/$(1) -I$(SPARSE_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/solver_component_stubs.o: $(2) \
+    $(SPARSE_BUILD_DIR)/$(1)/xnet_types.o | $(SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(SPARSE_BUILD_DIR)/$(1) -I$(SPARSE_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/xnet_macros.fh: $$(XNET_DIR)/xnet_macros.fh | $(SPARSE_BUILD_DIR)/$(1)
+	cp $$< $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.F90: $(3) | $(SPARSE_BUILD_DIR)/$(1)
+	cp $$< $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.o: $(SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.F90 \
+    $(SPARSE_BUILD_DIR)/$(1)/xnet_macros.fh \
+    $(SPARSE_BUILD_DIR)/$(1)/sparse_component_stubs.o \
+    $(SPARSE_BUILD_DIR)/$(1)/solver_component_stubs.o | $(SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(SPARSE_BUILD_DIR)/$(1) -I$(SPARSE_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/test_sparse_contracts.o: test_sparse_contracts.F90 \
+    $(SPARSE_BUILD_DIR)/$(1)/testdrive.o $(SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.o \
+    $(SPARSE_BUILD_DIR)/$(1)/solver_component_stubs.o | $(SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -D$(4) -J$(SPARSE_BUILD_DIR)/$(1) \
+	  -I$(SPARSE_BUILD_DIR)/$(1) -c $$< -o $$@
+
+$(SPARSE_BUILD_DIR)/$(1)/sparse_contract_tests: \
+    $(SPARSE_BUILD_DIR)/$(1)/testdrive.o \
+    $(SPARSE_BUILD_DIR)/$(1)/xnet_types.o \
+    $(SPARSE_BUILD_DIR)/$(1)/sparse_component_stubs.o \
+    $(SPARSE_BUILD_DIR)/$(1)/solver_component_stubs.o \
+    $(SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.o \
+    $(SPARSE_BUILD_DIR)/$(1)/test_sparse_contracts.o \
+    $$(LAPACK_OBJECTS)
+	$$(LDR) -o $$@ $$^ $$(LDFLAGS) $$(LAPACK_LIBDIR) $$(LAPACK_LIBS)
+endef
+
+$(eval $(call sparse_provider_rules,dense,support/dense_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_dense.F90,TEST_DENSE))
+$(eval $(call sparse_provider_rules,ma48,support/ma48_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_MA48.F90,TEST_MA48))
+$(eval $(call sparse_provider_rules,pardiso,support/pardiso_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO.F90,TEST_PARDISO))
+$(eval $(call sparse_provider_rules,pardiso_mkl,support/pardiso_mkl_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL))
 
 $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o: support/verify_build_net_readers.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o $(PREPROCESS_BUILD_DIR)/xnet_match.o \

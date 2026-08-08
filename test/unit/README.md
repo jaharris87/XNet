@@ -20,9 +20,12 @@ actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
 `xnet_nnu.F90`, `xnet_timers.F90`, and `xnet_nse.F90` sources, plus the
 selected LAPACK routines or libraries required by the NSE solver. It also
 compiles the production network preprocessing, data, match, and PARDISO
-sparse-reader modules. The build-net interoperability component cleans and
-rebuilds the tracked `source/xnet` configuration because its final check is a
-real one-zone executable smoke; production objects and executables therefore
+sparse-reader modules. Backend-isolated executables compile the production
+dense, MA48, standalone PARDISO, and MKL PARDISO Jacobian providers in separate
+module directories because those sources intentionally provide the same
+`xnet_jacobian` module name. The build-net interoperability component cleans
+and rebuilds the tracked `source/xnet` configuration because its final check is
+a real one-zone executable smoke; production objects and executables therefore
 remain in the ignored in-place `source/` build location.
 
 ## Bounded support and coverage
@@ -35,6 +38,13 @@ eight-species fixture with physical mass and binding inputs; they do not copy
 a production algorithm or provide a generic mock framework. The runner explicitly disables `test-drive` test-level
 parallelism because the component fixtures intentionally share this small
 module state; production code still compiles with the selected OpenMP flags.
+
+The solver-adapter executables use a three-equation nonsymmetric fixture in two
+zones, with an optional fourth temperature equation. Test-only MA48 and
+PARDISO external symbols record ABI arguments, phases, controls, and zone
+association. The dense linear-algebra stub and sparse solver stubs pass the
+received dense or reconstructed matrix to the vendored NETLIB `dgesv`; they do
+not represent or qualify any licensed solver implementation.
 
 The suite checks:
 
@@ -59,9 +69,23 @@ The suite checks:
   the synthetic fixture described under `fixtures/preprocess/`;
 - nuclear/reaction translation, weak/reverse flags, repeated-participant
   multiplicities, recomputed Q values, match associations, and the full CRS
-  structure and reaction-to-entry maps; and
+  structure and reaction-to-entry maps;
 - detectable failure for truncated rates, inconsistent participant layouts,
   and an unreadable generated reaction artifact;
+- storage-order-independent agreement between dense, MA48 coordinate, and
+  PARDISO CRS matrices, including identity entries and every fixture reaction
+  map;
+- exact self-heating structure for each sparse provider, covering the
+  abundance-temperature column, temperature-abundance row, and temperature
+  diagonal;
+- MA48 control translation plus analysis/factor/solve sequencing, reuse, and
+  one-shot warning/storage recovery;
+- standalone and MKL PARDISO initialization ABI, adapter-owned option and
+  one-based-index invariants, phase, symbolic/numeric reuse, and copy-back
+  differences; and
+- two-zone known-system solutions with residual checks and fatal subprocess
+  checks for injected initialization, storage, singularity, factorization, and
+  solve failures;
 - deterministic `build_net` selection from tiny public synthetic mass,
   partition-function, REACLIB, and weak-rate catalogs, both with and without
   weak rates and without private neutrino data;

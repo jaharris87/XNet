@@ -126,6 +126,7 @@ Contains
     Use reaction_data, Only: la, le, n11, n21, n22, n31, n32, n33, n41, n42, n43, n44
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -281,7 +282,8 @@ Contains
     ! Read and broadcast user-defined PARDISO controls
     If ( parallel_IOProcessor() ) Then
 
-      call xnet_pardisoinit(ierr)
+      Call xnet_pardisoinit(ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('PARDISO initialization failed',ierr)
 
       ! Override defaults with user-defined inputs
       Open(newunit=lun_solver, file="sparse_controls.nml", action='read', status='old', iostat=ierr)
@@ -289,6 +291,14 @@ Contains
         Read(lun_solver,nml=pardiso_controls)
         Close(lun_solver)
       EndIf
+
+      ! XNet supplies no permutation, solves A*x=b in one-based full-system storage,
+      ! and copies the solution from x. These adapter invariants are not user controls.
+      iparm(5) = 0
+      iparm(6) = 0
+      iparm(12) = 0
+      iparm(31) = 0
+      iparm(35) = 0
     EndIf
     Call parallel_bcast(iparm)
     Call parallel_bcast(dparm)
@@ -606,6 +616,7 @@ Contains
     Use xnet_controls, Only: kitmx, kmon, lun_stdout, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Use xnet_types, Only: dp
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -639,8 +650,13 @@ Contains
         Else
           phase = 22
         EndIf
+        rhs = 0.0_dp
+        dx = 0.0_dp
         Call xnet_pardiso(izb,tvals(:,izb),rhs,dx,err)
-        If ( err /= 0 ) Write(lun_stdout,*) 'PARDISO error ',err,' phase=',phase
+        If ( err /= 0 ) Then
+          Write(lun_stdout,*) 'PARDISO error ',err,' phase=',phase
+          Call xnet_terminate('PARDISO factorization failed',err)
+        EndIf
       EndIf
     EndDo
 
@@ -659,6 +675,7 @@ Contains
     Use xnet_controls, Only: idiag, iheat, lun_diag, lun_stdout, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -696,7 +713,10 @@ Contains
         rhs(1:ny) = yrhs(:,izb)
         If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
         Call xnet_pardiso(izb,tvals(:,izb),rhs,dx,err)
-        If ( err /= 0 ) Write(lun_stdout,*) 'PARDISO error ',err,' phase=',phase
+        If ( err /= 0 ) Then
+          Write(lun_stdout,*) 'PARDISO error ',err,' phase=',phase
+          Call xnet_terminate('PARDISO solve failed',err)
+        EndIf
         dy(:,izb) = dx(1:ny)
         If ( iheat > 0 ) dt9(izb) = dx(ny+1)
       EndIf

@@ -340,6 +340,7 @@ class RegressionCase:
     staged_inputs: tuple[StagedInput, ...] = ()
     diagnostic_groups: tuple[tuple[int, ...], ...] | None = None
     equivalent_zone_groups: tuple[tuple[int, ...], ...] = ()
+    required_diagnostic_markers: tuple[str, ...] = ()
 
     @property
     def required_outputs(self) -> tuple[str, ...]:
@@ -701,6 +702,84 @@ def bdf_sn160_case(repository_root: Path) -> RegressionCase:
     )
 
 
+def nse_sn160_case(repository_root: Path) -> RegressionCase:
+    """One ordinary trajectory initialized through the production NSE branch."""
+
+    case_directory = (
+        repository_root / "test" / "regression" / "cases" / "nse_sn160"
+    )
+    network_data = repository_root / "test" / "Data_SN160"
+    return RegressionCase(
+        name="nse_sn160",
+        control=case_directory / "control",
+        network_data=network_data,
+        trajectories=(),
+        helm_table=(
+            repository_root / "tools" / "starkiller-helmholtz" / "helm_table.dat"
+        ),
+        reference=case_directory / "reference" / "final_state.json",
+        expected_zones=(1,),
+        expected_species=SN160_SPECIES,
+        network_inputs=("sunet", "netsu", "netweak", "netwinv"),
+        reference_schema="xnet-characterization-v1",
+        comparison_schema=COMPARISON_SCHEMA,
+        expected_legacy_id=41,
+        expected_solver="Backward Euler (isolv = 1)",
+        expected_effective_controls={},
+        expected_characterization_metadata={
+            "baseline_kind": "characterization",
+            "baseline_status": (
+                "characterization-only; not independently validated scientific truth"
+            ),
+            "generated_from_revision": "e5c01dded7ccae53f04122599eb0b2face773c2c",
+            "generated_on": "2026-08-07",
+            "platform": "macOS 26.6 arm64",
+            "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+            "python": "Python 3.13.0",
+            "pytest": "pytest 9.1.1",
+            "build": {
+                "executable": "source/xnet",
+                "CMODE": "OPT",
+                "PE_ENV": "GNU",
+                "MPI_MODE": "OFF",
+                "OPENMP_MODE": "OFF",
+                "GPU_MODE": "OFF",
+                "EOS": "STARKILLER",
+                "MATRIX_SOLVER": "dense",
+                "LAPACK_VER": "NETLIB",
+            },
+            "legacy_provenance": {
+                "legacy_id": 41,
+                "assembly": [
+                    "test/test_settings_nse",
+                    "test/Test_Problems/setup_nse_ccsn_nup",
+                    "issue #40 SN160 characterization definition",
+                ],
+                "maintained_solver": "Backward Euler (isolv = 1)",
+                "normalized_changes": [
+                    "replace Data_nup with the maintained SN160 network",
+                    "use ab_ye49 so the file state differs from trajectory Ye=0.55",
+                    "remove Test_Results/ and Test_Problems/ runtime path prefixes",
+                ],
+                "effective_runtime_controls": {},
+            },
+        },
+        staged_inputs=(
+            StagedInput(
+                network_data / "ab_ye49", Path("Data_SN160") / "ab_ye49"
+            ),
+            StagedInput(
+                repository_root
+                / "test"
+                / "Test_Problems"
+                / "th_frohlich2006_nse",
+                Path("th_frohlich2006_nse"),
+            ),
+        ),
+        required_diagnostic_markers=("Initial abundances from NSE",),
+    )
+
+
 def _read_sunet_species(path: Path) -> tuple[str, ...]:
     try:
         species = tuple(
@@ -820,6 +899,14 @@ def _validate_case_inputs(case: RegressionCase) -> None:
         case.expected_species
     ):
         raise SetupFailure(f"invalid expected species definition for {case.name}")
+    if (
+        len(set(case.required_diagnostic_markers))
+        != len(case.required_diagnostic_markers)
+        or any(not marker.strip() for marker in case.required_diagnostic_markers)
+    ):
+        raise SetupFailure(
+            f"invalid required diagnostic marker definition for {case.name}"
+        )
     trajectory_names = tuple(path.name for path in case.trajectories)
     if case.trajectories and len(set(trajectory_names)) != len(trajectory_names):
         raise SetupFailure(
@@ -2254,6 +2341,16 @@ def run_and_compare(
             f"could not read diagnostic {diagnostic_path}: {error}; artifacts: {prepared}"
         ) from error
     try:
+        missing_markers = tuple(
+            marker
+            for marker in case.required_diagnostic_markers
+            if marker not in diagnostic
+        )
+        if missing_markers:
+            raise ParsingFailure(
+                "required diagnostic marker is missing: "
+                + ", ".join(repr(marker) for marker in missing_markers)
+            )
         states = parse_diagnostic(
             diagnostic,
             case.expected_zones,

@@ -37,6 +37,7 @@ from xnet_regression import (
     heat_alpha_case,
     heat_sn160_case,
     load_reference,
+    nse_sn160_case,
     parse_diagnostic,
     prepare_work_directory,
     run_and_compare,
@@ -227,8 +228,14 @@ def _registered_case_executable(
 ) -> Path:
     """Return a fake XNet that writes fresh complete output in its work directory."""
 
+    marker_text = "".join(
+        f"{marker}\n" for marker in case.required_diagnostic_markers
+    )
     diagnostic = base64.b64encode(
-        _diagnostic_for_states(states, case.expected_diagnostic_groups).encode("utf-8")
+        (
+            marker_text
+            + _diagnostic_for_states(states, case.expected_diagnostic_groups)
+        ).encode("utf-8")
     ).decode("ascii")
     body = (
         "from pathlib import Path\n"
@@ -2014,6 +2021,7 @@ CASE_FACTORIES = (
     tnsn_torch47_case,
     heat_sn160_case,
     bdf_sn160_case,
+    nse_sn160_case,
     batch_alpha_case,
 )
 
@@ -2031,6 +2039,24 @@ def _move_mass_fraction(
     mass_fractions[donor] -= amount
     mass_fractions[recipient] += amount
     return replace(state, mass_fractions=mass_fractions)
+
+
+def test_nse_case_rejects_missing_initialization_marker(tmp_path: Path) -> None:
+    case = nse_sn160_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    executable = _registered_diagnostic_executable(
+        tmp_path,
+        case,
+        _diagnostic_for_states(
+            _reference_states(reference), case.expected_diagnostic_groups
+        ),
+    )
+
+    completed = _run_registered_pytest(tmp_path, case, executable)
+    output = completed.stdout + completed.stderr
+    assert completed.returncode != 0, output
+    assert "parsing failure" in output
+    assert "Initial abundances from NSE" in output
 
 
 @pytest.mark.parametrize("case_factory", CASE_FACTORIES, ids=lambda item: item.__name__)

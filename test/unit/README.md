@@ -15,17 +15,21 @@ make -C test/unit clean test CMODE=DEBUG
 
 The Makefile puts all generated files under the ignored `test/unit/build/`
 directory. It includes the production GNU configuration and compiles the
-actual deterministic-contract sources plus the production network
-preprocessing, data, match, and PARDISO sparse-reader modules. It neither
-builds nor changes the default `source/xnet` target.
+actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
+`xnet_nnu.F90`, `xnet_timers.F90`, and `xnet_nse.F90` sources, plus the
+selected LAPACK routines or libraries required by the NSE solver. It also
+compiles the production network preprocessing, data, match, and PARDISO
+sparse-reader modules. It neither builds nor changes the default `source/xnet`
+target.
 
 ## Bounded support and coverage
 
 `support/xnet_test_stubs.F90` supplies only the controls, zone mask, tiny
-`nuclear_data` arrays, diagnostic units, and serial abort service needed to
-link the selected production modules. Tests initialize two nuclei and three
-zones directly; they do not copy a production algorithm or provide a generic
-mock framework. The runner explicitly disables `test-drive` test-level
+`nuclear_data` arrays, diagnostic units, serial abort service, and deterministic
+EOS behavior needed to link the selected production modules. Most tests
+initialize two nuclei and three zones directly. The NSE tests use a compact
+eight-species fixture with physical mass and binding inputs; they do not copy
+a production algorithm or provide a generic mock framework. The runner explicitly disables `test-drive` test-level
 parallelism because the component fixtures intentionally share this small
 module state; production code still compiles with the selected OpenMP flags.
 
@@ -42,6 +46,12 @@ The suite checks:
 - constant neutrino histories, zero/zero, zero/nonzero, and logarithmic
   positive-flux interpolation, exact knots, endpoints, and both sides of the
   supplied time range;
+- unscreened NSE states across three density, temperature, and electron-fraction
+  combinations, including finite/nonnegative composition, mass and charge
+  reconstruction, and solver counters;
+- repeatability between the default NSE roots and a materially different
+  supplied initial guess; and
+- screened NSE execution through a deterministic software-only EOS seam;
 - direct `net_preprocess` and standalone `net_setup` semantic equivalence for
   the synthetic fixture described under `fixtures/preprocess/`;
 - nuclear/reaction translation, weak/reverse flags, repeated-participant
@@ -162,6 +172,19 @@ The pre-fix range failure was reproduced separately by restoring the original
 unconditional ratio calculation in a temporary copy. These mutations and the
 pre-fix reproduction all returned nonzero status under `CMODE=DEBUG`; the
 repository sources were restored before the final verification runs.
+
+## Issue 40 effectiveness record
+
+The NSE additions exercise the production `nse_solve` calculation directly.
+They use the same finite-state, mass-normalization, reconstructed-charge, and
+counter checks for screened and unscreened calls. A separate bounded process
+test drives `xnse` with three ordered SN160 rows and rejects malformed input,
+invalid solver states, incomplete output, and row/counter misassociation.
+
+That process coverage exposed an existing serial termination defect: both
+malformed `xnse` input and NSE nonconvergence printed fatal diagnostics but
+returned process status 0. `xnet_parallel_stubs.F90` now uses `stop 1` in its
+two serial abort paths. The MPI implementation is unchanged.
 
 ## Issue 38 effectiveness record
 

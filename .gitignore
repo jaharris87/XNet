@@ -27,6 +27,9 @@ test/build_net/new_data
 # compiled python
 *.pyc
 
+# focused Fortran test builds
+/test/unit/build/
+
 # HSL source
 MA4[18].f
 tools/HSL

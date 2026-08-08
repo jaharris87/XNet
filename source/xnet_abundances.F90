@@ -124,7 +124,7 @@ Contains
     If ( .not. any(mask) ) Return
 
     !XDIR XENTER_DATA XASYNC(tid) &
-    !XDIR XCREATE(ye,ytot,abar,zbar,z2bar,zibar) &
+    !XDIR XCOPYIN(ye,ytot,abar,zbar,z2bar,zibar) &
     !XDIR XCOPYIN(mask,y,xext,aext,zext)
        
     ! Calculate abundance moments

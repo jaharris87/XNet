@@ -82,16 +82,18 @@ The other production correction changes the masked vector `y_moment` result
 arrays from `Intent(out)` to `Intent(inout)`. With `Intent(out)`, Fortran made
 every result undefined on entry, so skipping an inactive lane could not
 contractually preserve its incoming value. The corrected interface matches
-the masked implementation and the sentinel checks.
+the masked implementation and the sentinel checks. Its accelerator data entry
+also copies incoming result values to the device before active lanes are
+updated, so the whole-array copyout preserves inactive lanes.
 
 After the corrections, both tracked configurations passed all nine tests. The
-clean build-and-run wall times measured with `/usr/bin/time -p` were 1.28
+clean build-and-run wall times measured with `/usr/bin/time -p` were 1.27
 seconds for the final DEBUG run and 2.08 seconds for the final OPT run. The
 existing helper-only suite also passed unchanged:
 
 ```text
 .venv/bin/python -m pytest -q test/regression/test_xnet_regression.py
-166 passed in 12.97s
+166 passed in 12.83s
 ```
 
 The serial-runner review fix was checked with a clean
@@ -100,6 +102,11 @@ executable passed 500 consecutive runs with `OMP_NUM_THREADS=9`. The runner
 therefore remains serial even when the production modules are compiled with
 OpenMP enabled. `make -C source -j` also recompiled the changed production
 modules and linked the tracked default `source/xnet` target successfully.
+Preprocessor inspection showed the masked `y_moment` entry/exit mapping as
+OpenACC `copyin`/`copyout` and OpenMP offload `map(to:)`/`map(from:)` for all
+six result arrays. A GNU OpenACC host-fallback build of that expanded
+production routine passed 9/9, including the inactive sentinels. No
+accelerator-device runtime was available.
 
 Six additional controlled source mutations were applied only in temporary
 copies and each made the named test fail:

@@ -3,6 +3,8 @@ SHELL = /bin/bash
 ROOT_DIR := $(abspath ../..)
 XNET_DIR := $(ROOT_DIR)/source
 NETLIB_DIR := $(ROOT_DIR)/tools/LAPACK
+BUILD_NET_SOURCE_DIR := $(ROOT_DIR)/test/build_net
+HELM_TABLE := $(ROOT_DIR)/tools/starkiller-helmholtz/helm_table.dat
 
 include $(XNET_DIR)/Makefile.opt
 include $(XNET_DIR)/Makefile.internal
@@ -17,8 +19,14 @@ PREPROCESS_MODULE_FLAGS := -J$(PREPROCESS_BUILD_DIR) -I$(PREPROCESS_BUILD_DIR) -
 PREPROCESS_DIRECT_EXE := $(PREPROCESS_BUILD_DIR)/preprocess_direct
 PREPROCESS_NET_SETUP_EXE := $(PREPROCESS_BUILD_DIR)/net_setup
 PREPROCESS_VERIFY_EXE := $(PREPROCESS_BUILD_DIR)/verify_preprocess
+BUILD_NET_READER_EXE := $(PREPROCESS_BUILD_DIR)/verify_build_net_readers
 PREPROCESS_WORK_DIR := $(abspath $(BUILD_DIR)/preprocess-work)
 PREPROCESS_FIXTURE_DIR := $(abspath fixtures/preprocess)
+BUILD_NET_BUILD_DIR := $(BUILD_DIR)/build-net
+BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
+BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
+BUILD_NET_WORK_DIR := $(abspath $(BUILD_DIR)/build-net-work)
+PRODUCTION_XNET_EXE := $(XNET_DIR)/xnet
 
 OBJECTS := \
   $(BUILD_DIR)/testdrive.o \
@@ -56,15 +64,27 @@ PREPROCESS_VERIFY_OBJECTS := \
   $(PREPROCESS_BUILD_DIR)/pardiso_test_stubs.o \
   $(PREPROCESS_BUILD_DIR)/verify_preprocess.o
 
+BUILD_NET_OBJECTS := \
+  $(BUILD_NET_BUILD_DIR)/net_module.o \
+  $(BUILD_NET_BUILD_DIR)/partf_module.o \
+  $(BUILD_NET_BUILD_DIR)/ffn_module.o \
+  $(BUILD_NET_BUILD_DIR)/nnu_module.o \
+  $(BUILD_NET_BUILD_DIR)/file_module.o \
+  $(BUILD_NET_BUILD_DIR)/reaclib_reader.o
+
 .DEFAULT_GOAL := test
 
-.PHONY: test clean
+.PHONY: test clean production-xnet
 
-test: $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE)
+test: $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
+    $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) production-xnet
 	@$(TEST_EXE)
 	@bash run_preprocess_contracts.sh $(PREPROCESS_FIXTURE_DIR) $(PREPROCESS_WORK_DIR) \
 	  $(abspath $(PREPROCESS_DIRECT_EXE)) $(abspath $(PREPROCESS_NET_SETUP_EXE)) \
 	  $(abspath $(PREPROCESS_VERIFY_EXE))
+	@python3 run_build_net_contracts.py $(BUILD_NET_WORK_DIR) $(abspath $(BUILD_NET_EXE)) \
+	  $(abspath $(PREPROCESS_NET_SETUP_EXE)) $(abspath $(BUILD_NET_READER_EXE)) \
+	  $(abspath $(PRODUCTION_XNET_EXE)) $(abspath $(HELM_TABLE))
 
 $(TEST_EXE): $(OBJECTS)
 	$(LDR) -o $@ $(OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
@@ -77,6 +97,13 @@ $(BUILD_DIR)/lapack:
 
 $(PREPROCESS_BUILD_DIR):
 	mkdir -p $@
+
+$(BUILD_NET_BUILD_DIR):
+	mkdir -p $@
+
+production-xnet: | $(BUILD_DIR)
+	$(MAKE) -C $(XNET_DIR) clean
+	$(MAKE) -C $(XNET_DIR) -j CMODE=$(CMODE)
 
 $(BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
@@ -135,6 +162,10 @@ $(PREPROCESS_NET_SETUP_EXE): $(PREPROCESS_CORE_OBJECTS) $(PREPROCESS_BUILD_DIR)/
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
 $(PREPROCESS_VERIFY_EXE): $(PREPROCESS_VERIFY_OBJECTS)
+	$(LDR) -o $@ $^ $(LDFLAGS)
+
+$(BUILD_NET_READER_EXE): $(PREPROCESS_VERIFY_OBJECTS:$(PREPROCESS_BUILD_DIR)/verify_preprocess.o=) \
+    $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
 $(PREPROCESS_BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(PREPROCESS_BUILD_DIR)
@@ -221,6 +252,40 @@ $(PREPROCESS_BUILD_DIR)/verify_preprocess.o: support/verify_preprocess.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o $(PREPROCESS_BUILD_DIR)/xnet_match.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o: support/verify_build_net_readers.F90 \
+    $(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o $(PREPROCESS_BUILD_DIR)/xnet_match.o \
+    | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_NET_EXE): $(BUILD_NET_OBJECTS)
+	$(LDR) -o $@ $^ $(LDFLAGS)
+
+$(BUILD_NET_BUILD_DIR)/net_module.o: $(BUILD_NET_SOURCE_DIR)/net_module.f90 | $(BUILD_NET_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(BUILD_NET_MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_NET_BUILD_DIR)/partf_module.o: $(BUILD_NET_SOURCE_DIR)/partf_module.f90 \
+    $(BUILD_NET_BUILD_DIR)/net_module.o | $(BUILD_NET_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(BUILD_NET_MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_NET_BUILD_DIR)/ffn_module.o: $(BUILD_NET_SOURCE_DIR)/ffn_module.f90 \
+    $(BUILD_NET_BUILD_DIR)/net_module.o $(BUILD_NET_BUILD_DIR)/partf_module.o \
+    | $(BUILD_NET_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(BUILD_NET_MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_NET_BUILD_DIR)/nnu_module.o: $(BUILD_NET_SOURCE_DIR)/nnu_module.f90 \
+    $(BUILD_NET_BUILD_DIR)/net_module.o | $(BUILD_NET_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(BUILD_NET_MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_NET_BUILD_DIR)/file_module.o: $(BUILD_NET_SOURCE_DIR)/file_module.f90 \
+    $(BUILD_NET_BUILD_DIR)/net_module.o $(BUILD_NET_BUILD_DIR)/partf_module.o \
+    $(BUILD_NET_BUILD_DIR)/ffn_module.o $(BUILD_NET_BUILD_DIR)/nnu_module.o \
+    | $(BUILD_NET_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(BUILD_NET_MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_NET_BUILD_DIR)/reaclib_reader.o: $(BUILD_NET_SOURCE_DIR)/reaclib_reader.f90 \
+    $(BUILD_NET_BUILD_DIR)/file_module.o | $(BUILD_NET_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(BUILD_NET_MODULE_FLAGS) -c $< -o $@
 
 clean:
 	rm -rf build

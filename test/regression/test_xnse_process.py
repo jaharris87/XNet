@@ -183,7 +183,7 @@ def test_xnse_multirow_output_association(
     ("input_text", "expected_message"),
     [
         ("1.0E+07 9.0\n", "Not enough inputs"),
-        ("-1.0E+07 9.0 0.5\n", "NSE ERROR: NR Failed"),
+        ("1.0E+07 9.0 1.01\n", "NSE ERROR: NR Failed"),
     ],
 )
 def test_xnse_rejects_bad_state_rows(

@@ -35,7 +35,7 @@ test: $(TEST_EXE)
 	@$(TEST_EXE)
 
 $(TEST_EXE): $(OBJECTS)
-	$(LDR) -o $@ $(OBJECTS) $(LDFLAGS)
+	$(LDR) -o $@ $(OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 $(BUILD_DIR):
 	mkdir -p $@

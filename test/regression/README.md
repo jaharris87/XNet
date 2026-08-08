@@ -61,6 +61,7 @@ standard option, for example:
 ```bash
 python3 -m pytest test/regression \
     --xnet-executable="$PWD/source/xnet" \
+    --xnse-executable="$PWD/source/xnse" \
     --basetemp=/tmp/xnet-regression-artifacts
 ```
 

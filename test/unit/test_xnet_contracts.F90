@@ -47,7 +47,7 @@ Contains
     If ( allocated(error) ) Return
     Call check(error,safe_exp(huge(1.0_dp)),expected_max,thr=tolerance)
     If ( allocated(error) ) Return
-    Call check(error,safe_exp(-huge(1.0_dp)),expected_min,thr=tolerance)
+    Call check(error,safe_exp(-huge(1.0_dp)),expected_min,thr=tolerance,rel=.True.)
     If ( allocated(error) ) Return
 
     input = (/ 0.0_dp, huge(1.0_dp), -huge(1.0_dp) /)
@@ -56,7 +56,7 @@ Contains
     If ( allocated(error) ) Return
     Call check(error,output(2),expected_max,thr=tolerance)
     If ( allocated(error) ) Return
-    Call check(error,output(3),expected_min,thr=tolerance)
+    Call check(error,output(3),expected_min,thr=tolerance,rel=.True.)
 
     Return
   End Subroutine test_safe_exp
@@ -433,7 +433,7 @@ Program xnet_contract_test_runner
   stat = 0
   testsuites = [ new_testsuite('XNet deterministic contracts',collect_xnet_contracts) ]
   Write(error_unit,'("# Testing: ",a)') testsuites(1)%name
-  Call run_testsuite(testsuites(1)%collect,error_unit,stat)
+  Call run_testsuite(testsuites(1)%collect,error_unit,stat,parallel=.False.)
 
   If ( stat > 0 ) Then
     Write(error_unit,'(i0,1x,a)') stat,'test(s) failed'

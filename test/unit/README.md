@@ -25,7 +25,9 @@ actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
 `nuclear_data` arrays, diagnostic units, and serial abort service needed to
 link the selected production modules. Tests initialize two nuclei and three
 zones directly; they do not copy a production algorithm or provide a generic
-mock framework.
+mock framework. The runner explicitly disables `test-drive` test-level
+parallelism because the component fixtures intentionally share this small
+module state; production code still compiles with the selected OpenMP flags.
 
 The suite checks:
 
@@ -67,26 +69,39 @@ configurations plus the controlled effectiveness checks below.
 ## Issue 37 effectiveness record
 
 On 2026-08-07, GNU Fortran 16.1.0 and GNU Make 3.81 on macOS were used for the
-following checks. The checked production correction restricts calculation of
-the neutrino interpolation ratio to an interior or exact-upper-knot interval.
-Before the correction, the DEBUG suite stopped in `nnu_flux` with status 2:
+following checks. One production correction restricts calculation of the
+neutrino interpolation ratio to an interior or exact-upper-knot interval.
+Before that correction, the DEBUG suite stopped in `nnu_flux` with status 2:
 
 ```text
 Fortran runtime error: Index '0' of dimension 1 of array 'ts' below lower bound of 1
 Fortran runtime error: Index '4' of dimension 1 of array 'ts' above upper bound of 3
 ```
 
-After the correction, both tracked configurations passed all nine tests. The
+The other production correction changes the masked vector `y_moment` result
+arrays from `Intent(out)` to `Intent(inout)`. With `Intent(out)`, Fortran made
+every result undefined on entry, so skipping an inactive lane could not
+contractually preserve its incoming value. The corrected interface matches
+the masked implementation and the sentinel checks.
+
+After the corrections, both tracked configurations passed all nine tests. The
 clean build-and-run wall times measured with `/usr/bin/time -p` were 1.28
-seconds for the final DEBUG run and 2.11 seconds for the final OPT run. The
+seconds for the final DEBUG run and 2.08 seconds for the final OPT run. The
 existing helper-only suite also passed unchanged:
 
 ```text
 .venv/bin/python -m pytest -q test/regression/test_xnet_regression.py
-166 passed in 13.18s
+166 passed in 12.97s
 ```
 
-Five additional controlled source mutations were applied only in temporary
+The serial-runner review fix was checked with a clean
+`CMODE=DEBUG OPENMP_MODE=ON` build. After that build passed 9/9, the test
+executable passed 500 consecutive runs with `OMP_NUM_THREADS=9`. The runner
+therefore remains serial even when the production modules are compiled with
+OpenMP enabled. `make -C source -j` also recompiled the changed production
+modules and linked the tracked default `source/xnet` target successfully.
+
+Six additional controlled source mutations were applied only in temporary
 copies and each made the named test fail:
 
 | Controlled mutation | Detecting test |
@@ -96,6 +111,7 @@ copies and each made the named test fail:
 | Remove the integer-format precision used for zero padding | `ordered output suffix` |
 | Pass density history as the vector temperature history | `trajectory vector mask` |
 | Execute the trajectory vector body for an inactive lane | `trajectory vector mask` |
+| Return zero instead of the lower `safe_exp` clamp | `safe exponential` |
 
 The pre-fix range failure was reproduced separately by restoring the original
 unconditional ratio calculation in a temporary copy. These mutations and the

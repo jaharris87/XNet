@@ -104,9 +104,9 @@ Contains
     Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
     Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
 
-    ! Output variables
-    Real(dp), Intent(out) :: ye(zb_lo:zb_hi), ytot(zb_lo:zb_hi), abar(zb_lo:zb_hi)
-    Real(dp), Intent(out) :: zbar(zb_lo:zb_hi), z2bar(zb_lo:zb_hi), zibar(zb_lo:zb_hi)
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: ye(zb_lo:zb_hi), ytot(zb_lo:zb_hi), abar(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: zbar(zb_lo:zb_hi), z2bar(zb_lo:zb_hi), zibar(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)

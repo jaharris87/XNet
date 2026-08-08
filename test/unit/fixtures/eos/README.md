@@ -44,7 +44,7 @@ gfortran -O0 -I. eosfxt.f90 timmes_reference_driver.F90 -o timmes_reference_driv
 ```
 
 After the two documented harness edits, the four SHA-256 values are
-`72f47ce95e82330552a7b0cda3f8c9ef0ce3a876f99ca501dd31cba4260542d6`,
+`8604501a0eeba64d71f2fe2ff9d99c6e707c4c9d3e41f1e12dc4ffb44470cc00`,
 `bb6089c86b183d119a8e03ec5d893626e8a4a2f168bb201a09060a4996fc8ab1`,
 `c64bd494886c76da2e0000b6b4ce039bdb5cbf0de235bf353369d744f3d94a7a`,
 and `e62d95098f636eb3d90871f3e1f07f462f184af4557a23cfdf3d7228a723b2ea`

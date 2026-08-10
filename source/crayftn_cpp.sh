@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Preprocess XNet's variadic accelerator macros before invoking Cray Fortran.
+
+set -u -o pipefail
+
+compiler=${XNET_CRAY_FTN:-ftn}
+preprocessor=${XNET_CPP:-cpp}
+source_file=
+source_form=
+compiler_arguments=()
+preprocessor_arguments=(-P -traditional-cpp)
+
+for argument in "$@"; do
+  case "${argument}" in
+    -eZ)
+      ;;
+    -D*|-U*)
+      preprocessor_arguments+=("${argument}")
+      ;;
+    -I*)
+      preprocessor_arguments+=("${argument}")
+      compiler_arguments+=("${argument}")
+      ;;
+    *.F90|*.F95|*.F03|*.F08|*.F18|*.FTN)
+      if [[ -n ${source_file} ]]; then
+        echo "crayftn_cpp.sh accepts one Fortran source per compilation" >&2
+        exit 2
+      fi
+      source_file=${argument}
+      source_form=free
+      ;;
+    *.F|*.FOR)
+      if [[ -n ${source_file} ]]; then
+        echo "crayftn_cpp.sh accepts one Fortran source per compilation" >&2
+        exit 2
+      fi
+      source_file=${argument}
+      source_form=fixed
+      ;;
+    *)
+      compiler_arguments+=("${argument}")
+      ;;
+  esac
+done
+
+if [[ -z ${source_file} ]]; then
+  exec "${compiler}" "$@"
+fi
+
+temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/xnet-crayftn-cpp.XXXXXX")
+trap 'rm -rf -- "${temporary_directory}"' EXIT HUP INT TERM
+preprocessed_source="${temporary_directory}/source.f90"
+if [[ ${source_form} == fixed ]]; then
+  preprocessed_source="${temporary_directory}/source.f"
+fi
+
+if ! "${preprocessor}" "${preprocessor_arguments[@]}" \
+    "${source_file}" > "${preprocessed_source}"; then
+  echo "crayftn_cpp.sh: preprocessing failed for ${source_file}" >&2
+  exit 1
+fi
+
+"${compiler}" "${compiler_arguments[@]}" "${preprocessed_source}"

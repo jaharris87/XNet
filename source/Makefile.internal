@@ -293,6 +293,12 @@ else ifeq ($(findstring $(PE_ENV),CCE CRAY),$(PE_ENV))
     INLINE_DB     = ./$(EXE)_inline
     INLINE        = -h wp -h pl=$(INLINE_DB)
 
+    # Cray's Fortran preprocessor does not accept the variadic directive
+    # macros in xnet_macros.fh. GPU builds use a C preprocessor before ftn.
+    ifeq ($(GPU_MODE),ON)
+        FC = $(XNET_DIR)/crayftn_cpp.sh
+    endif
+
     # generic flags
     OPT_FLAGS     = -O2 -g
     DEBUG_FLAGS   = -O0 -eD

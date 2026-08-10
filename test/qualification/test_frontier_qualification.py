@@ -2,7 +2,10 @@
 
 from dataclasses import replace
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 
 import pytest
@@ -200,3 +203,40 @@ def test_manifest_schema_file_is_versioned_and_matches_runner() -> None:
         (FRONTIER_DIRECTORY / "manifest.schema.json").read_text(encoding="utf-8")
     )
     assert schema["properties"]["schema"]["const"] == _manifest()["schema"]
+
+
+def test_cray_wrapper_expands_variadic_accelerator_macros(tmp_path: Path) -> None:
+    if shutil.which("cpp") is None:
+        pytest.skip("system C preprocessor is unavailable")
+    source = tmp_path / "probe.F90"
+    source.write_text(
+        "#define XDIR $omp\n"
+        "#define XPRIVATE(...) private(__VA_ARGS__)\n"
+        "Program probe\n"
+        "!XDIR parallel XPRIVATE(first,second)\n"
+        "End Program probe\n",
+        encoding="utf-8",
+    )
+    capture = tmp_path / "preprocessed.f90"
+    compiler = tmp_path / "capture-compiler"
+    compiler.write_text(
+        "#!/bin/bash\n"
+        "for argument in \"$@\"; do source_file=$argument; done\n"
+        "cp \"${source_file}\" \"${XNET_CAPTURE}\"\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+    environment = os.environ.copy()
+    environment.update(
+        {"XNET_CRAY_FTN": str(compiler), "XNET_CAPTURE": str(capture)}
+    )
+    wrapper = FRONTIER_DIRECTORY.parents[2] / "source" / "crayftn_cpp.sh"
+    completed = subprocess.run(
+        [str(wrapper), "-eZ", "-c", str(source), "-o", str(tmp_path / "probe.o")],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "!$omp parallel private(first,second)" in capture.read_text(encoding="utf-8")

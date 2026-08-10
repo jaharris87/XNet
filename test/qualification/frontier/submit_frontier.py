@@ -84,7 +84,12 @@ def _preflight(source_root: Path) -> str:
     for variable in ("ROCM_PATH", "OLCF_HIPFORT_ROOT"):
         if not os.environ.get(variable):
             raise SubmissionFailure("environment", f"module variable {variable} is not set")
-    for command in (["ftn", "--version"], ["sbatch", "--version"], ["srun", "--version"]):
+    for command in (
+        ["ftn", "--version"],
+        ["cpp", "--version"],
+        ["sbatch", "--version"],
+        ["srun", "--version"],
+    ):
         completed = _run(command, source_root)
         if completed.returncode != 0:
             raise SubmissionFailure("environment", f"{command[0]} is unavailable")

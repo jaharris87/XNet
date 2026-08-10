@@ -102,6 +102,13 @@ The loaded accelerator target module makes `ftn -fopenmp` target the MI250X
 `gfx90a` device. GPU runs set `OMP_TARGET_OFFLOAD=MANDATORY`, so host fallback
 is a failure rather than a misleading pass.
 
+Cray's native Fortran preprocessor requires a fixed argument count for
+function-like macros, while XNet's shared accelerator-directive layer uses
+variadic macros. For Cray GPU builds, `source/crayftn_cpp.sh` therefore runs
+the system `cpp -P -traditional-cpp` first and passes the resulting Fortran
+source to `ftn`. The qualification records both compiler and preprocessor
+versions.
+
 ## Evidence and result review
 
 On return, inspect and validate the manifest:

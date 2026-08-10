@@ -633,6 +633,7 @@ def _capture_environment(artifact_root: Path) -> dict[str, object]:
         )
     commands = {
         "compiler": ["ftn", "--version"],
+        "preprocessor": ["cpp", "--version"],
         "rocm": ["rocminfo"],
         "gpu": ["rocm-smi", "--showproductname"],
     }
@@ -663,6 +664,7 @@ def _capture_environment(artifact_root: Path) -> dict[str, object]:
     return {
         "modules": list(modules),
         "compiler": command_summaries["compiler"],
+        "preprocessor": command_summaries["preprocessor"],
         "rocm": command_summaries["rocm"],
         "gpu": command_summaries["gpu"],
         "gpu_model": gpu_model,

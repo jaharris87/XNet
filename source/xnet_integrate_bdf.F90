@@ -2049,9 +2049,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine returns the error weights for comparing errors in y
     !-----------------------------------------------------------------------------------------------
-    !XDIR XROUTINE_VECTOR
     Use xnet_controls, Only: iconvc, ymin
     Implicit None
+    !XDIR XROUTINE_VECTOR
 
     ! Input variables
     Real(dp), Intent(in) :: y(n), rtol(n), atol(n)
@@ -2094,8 +2094,8 @@ Contains
     !   iconvc = 3 : RMS norm
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: iconvc
-    !XDIR XROUTINE_VECTOR
     Implicit None
+    !XDIR XROUTINE_VECTOR
 
     ! Input variables
     Real(dp), Intent(in) :: x(n), wt(n)

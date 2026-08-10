@@ -214,10 +214,13 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     source.write_text(
         "#define XDIR $omp\n"
         "#define XPRIVATE(...) private(__VA_ARGS__)\n"
-        "Program probe\n"
+        "Integer Function probe()\n"
+        "Implicit None\n"
+        "!XDIR declare target\n"
         'character(len=*), parameter :: joined = "a" // "b"\n'
         "!XDIR parallel XPRIVATE(first,second)\n"
-        "End Program probe\n",
+        "probe = 0\n"
+        "End Function probe\n",
         encoding="utf-8",
     )
     capture = tmp_path / "preprocessed.f90"
@@ -244,4 +247,5 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     assert completed.returncode == 0, completed.stderr
     preprocessed = capture.read_text(encoding="utf-8")
     assert 'joined = "a" // "b"' in preprocessed
+    assert preprocessed.index("Implicit None") < preprocessed.index("!$omp declare target")
     assert "!$omp parallel private(first,second)" in preprocessed

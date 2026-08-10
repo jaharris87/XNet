@@ -28,6 +28,14 @@ MASS_SOURCE_FILES = {
     "reac1": "mass_reac1.dat",
     "frdm": "mass_frdm.dat",
 }
+BUILD_NET_ARCHIVE = {
+    "repository": "https://github.com/jaharris87/build_net",
+    "initial_database_commit": "77141ca2a3dfc9fa9fd52ef0fcf39a49d74c08e1",
+    "initial_database_commit_date": "2017-01-24",
+    "xnet_subtree_import_commit": "90e9363d5f9443a8ad2d5e986232c1f60bb5b96a",
+    "mass_reac1_git_blob_sha1": "acd42b416e52edea020990d68631fb2b8063275d",
+    "winvne_JINAv22_git_blob_sha1": "5bac4be2a2095bfd6a6fe3b1282bea4bcd6040ea",
+}
 
 
 class ExtractionError(RuntimeError):
@@ -250,6 +258,22 @@ def reconcile_raw_provenance(
     return {
         "partition_source": "test/build_net/partf_data/winvne_JINAv22",
         "partition_source_sha256": sha256(partition_path),
+        "archive": {
+            **BUILD_NET_ARCHIVE,
+            "partition_snapshot": (
+                "JINA REACLIB V2.2 snapshot dated 2016-11-14; the exact retained "
+                "bytes are fixed by the commit, Git blob, and SHA-256 recorded here"
+            ),
+            "partition_archive_url": (
+                "https://reaclib.jinaweb.org/library.php?action=viewsnapshots"
+            ),
+            "mass_reac1_origin": (
+                "The retained file header identifies the JINA Nuclide Database "
+                "evaluation label reac1. The public build_net archive fixes its "
+                "exact bytes, but the original JINA per-record publication or "
+                "snapshot identifier is not recoverable from retained metadata."
+            ),
+        },
         "mass_source_counts": dict(sorted(source_counts.items())),
         "mass_source_files": {
             label: {

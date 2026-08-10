@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import decimal
 import hashlib
 import itertools
 import json
+import platform
 from decimal import Decimal, ROUND_CEILING, localcontext
 from pathlib import Path
 from typing import Any
@@ -21,7 +23,7 @@ from reference_solver import (
 )
 
 
-GENERATOR_VERSION = "xnet-independent-nse-reference-v2"
+GENERATOR_VERSION = "xnet-independent-nse-reference-v3"
 REFERENCE_PRECISION = 50
 PRECISION_CHECKS = (35, 65)
 REFERENCE_RESIDUAL_LIMIT = Decimal("1e-25")
@@ -392,6 +394,12 @@ def generate(network_directory: Path) -> tuple[dict[str, Any], str]:
             "version": GENERATOR_VERSION,
             "language": "Python standard library only",
             "arithmetic": f"Decimal, {REFERENCE_PRECISION} requested decimal digits",
+            "runtime": {
+                "python_implementation": platform.python_implementation(),
+                "python_version": platform.python_version(),
+                "decimal_module_version": decimal.__version__,
+                "libmpdec_version": decimal.__libmpdec_version__,
+            },
             "residual_limit": str(REFERENCE_RESIDUAL_LIMIT),
             "route_difference_limit": str(ROUTE_DIFFERENCE_LIMIT),
             "files": {

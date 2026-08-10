@@ -51,14 +51,20 @@
   "generator": {
     "arithmetic": "Decimal, 50 requested decimal digits",
     "files": {
-      "extract_inputs.py": "7a8248b851a98329b36dbf29b333be042398ca780c4712c79ce866026c3f3272",
-      "generate_reference.py": "30be95f210b8644475ae56701f632b14a31f99b4d163488c8e3a19c6d1ac98fe",
+      "extract_inputs.py": "913d0f12b8ab7b9b3ae34bae40241dafe26044e77f21e999b4ded875438104b9",
+      "generate_reference.py": "a272d00e7ff12b64d1a853524c10765b75713a9a53c2c63aed2eb8e3828645b0",
       "reference_solver.py": "fc0d4bf62bb11a29600318442212d3852ee6f468f0ea5461937d2e72221b14a5"
     },
     "language": "Python standard library only",
     "residual_limit": "1E-25",
     "route_difference_limit": "1E-24",
-    "version": "xnet-independent-nse-reference-v2"
+    "runtime": {
+      "decimal_module_version": "1.70",
+      "libmpdec_version": "4.0.1",
+      "python_implementation": "CPython",
+      "python_version": "3.13.0"
+    },
+    "version": "xnet-independent-nse-reference-v3"
   },
   "issue": "https://github.com/jaharris87/XNet/issues/41",
   "limitations": [
@@ -70,7 +76,7 @@
   "network": {
     "build_input": "test/nse_validation/network/build_input.namelist",
     "build_input_sha256": "40415defe7d152dd265a2b51cbb8ef599b006c7d9012594824d94c722f890d23",
-    "canonical_input_sha256": "ae77368d32a33f38ce10c27799ed17b86f1fbbc940473d91b354c888ebe11bdb",
+    "canonical_input_sha256": "524cdeb6f7d268107ab35817b87d7304b4efe50006b7a1c80684861f58a32f78",
     "directory": "test/nse_validation/network",
     "generated_with": "test/build_net using winvne_JINAv22 and the mass sources recorded below; weak and neutrino-rate output disabled",
     "netwinv_sha256": "efd4551e7597c732a49931e699453cf469e9fd9f9296bc1b3e841bd21ed42379",
@@ -89,6 +95,17 @@
     "sunet_sha256": "930fcd3e43b9fbbac1ce2441b69368b341baf488e29edff53935d9f3cbf05d1f"
   },
   "raw_data_provenance": {
+    "archive": {
+      "initial_database_commit": "77141ca2a3dfc9fa9fd52ef0fcf39a49d74c08e1",
+      "initial_database_commit_date": "2017-01-24",
+      "mass_reac1_git_blob_sha1": "acd42b416e52edea020990d68631fb2b8063275d",
+      "mass_reac1_origin": "The retained file header identifies the JINA Nuclide Database evaluation label reac1. The public build_net archive fixes its exact bytes, but the original JINA per-record publication or snapshot identifier is not recoverable from retained metadata.",
+      "partition_archive_url": "https://reaclib.jinaweb.org/library.php?action=viewsnapshots",
+      "partition_snapshot": "JINA REACLIB V2.2 snapshot dated 2016-11-14; the exact retained bytes are fixed by the commit, Git blob, and SHA-256 recorded here",
+      "repository": "https://github.com/jaharris87/build_net",
+      "winvne_JINAv22_git_blob_sha1": "5bac4be2a2095bfd6a6fe3b1282bea4bcd6040ea",
+      "xnet_subtree_import_commit": "90e9363d5f9443a8ad2d5e986232c1f60bb5b96a"
+    },
     "mass_source_counts": {
       "ame11": 450,
       "reac1": 39
@@ -132,7 +149,7 @@
     ],
     "primary": "Seitenzahl et al. 2009, DOI 10.1016/j.adt.2008.08.001, equations (2)-(10)"
   },
-  "scientific_dataset_sha256": "896878f78e312b543443da363fd7ce99d73f86662a56db6d7504983a6d83532c",
+  "scientific_dataset_sha256": "c1651b543e821b05ba9c9d4449011df2d65db06e47a75c0a670e60083f5de4ac",
   "source_hashes": {
     "source/xnet_constants.F90": "0dd51bb156b3c059323d099d380a0bc0962040f9aacab1f6937e4c4d1ca240a5",
     "source/xnet_data.F90": "a6154d817d51115d6d20684bb66a75234e9f103f64c47e2b7faba24bcdb4b187",

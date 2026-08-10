@@ -103,16 +103,18 @@ network-boundary stress test and will only be retained if expanded-network
 preflight supports it.  Similarly, a proton-rich state may be more demanding
 but will not be chosen solely because it makes the solver fail.
 
-### Independent scientific authority and implementation independence
+### Scientific authority and implementation independence
 
-The reference equations are the Maxwell-Boltzmann chemical-equilibrium and
-mass/charge constraints in Seitenzahl et al. (2009), equations (2)--(10),
-with the constraint notation corroborated by Hix & Meyer (2006) and the
-high-precision verification method in Lippuner & Roberts (2017), Appendix B.
-The retained equations are implemented in `reference_solver.py` with Python's
-`Decimal` arithmetic.  That code imports no XNet routine, does not execute
-XNet, and is organized around log-sum-exp constrained equilibrium rather than
-the implementation structure of `source/xnet_nse.F90`.
+The scientific authority is the Maxwell-Boltzmann chemical-equilibrium and
+mass/charge formulation in Seitenzahl et al. (2009), equations (2)--(10),
+with the constraint notation corroborated by Hix & Meyer (2006).  Lippuner &
+Roberts (2017), Appendix B, supplies an independent published NSE derivation
+and numerical-method precedent.  The generator is an independent numerical
+realization of those sources, not itself scientific authority.  Its equations
+are implemented in `reference_solver.py` with Python's `Decimal` arithmetic.
+That code imports no XNet routine, does not execute XNet, and is organized
+around log-sum-exp constrained equilibrium rather than the implementation
+structure of `source/xnet_nse.F90`.
 
 The supplied paper files used in this verification have these SHA-256 hashes:
 
@@ -174,9 +176,25 @@ binding and translational-mass inputs.  Every selected spin and normalized
 partition factor is checked against
 `test/build_net/partf_data/winvne_JINAv22`.  Every mass excess is checked
 against the mass source selected by that file after the network builder's
-eight-decimal MeV storage rounding.  This establishes JINA REACLIB v2.2 input
-provenance for the tracked network data; it does not claim that those nuclear
-inputs are exact measurements.
+eight-decimal MeV storage rounding.  This reconciles the exact retained input
+bytes; it does not claim that those nuclear inputs are exact measurements or
+that every mass table belongs to REACLIB v2.2.
+
+The public `jaharris87/build_net` archive fixes both central raw inputs at its
+initial database commit `77141ca2a3dfc9fa9fd52ef0fcf39a49d74c08e1`
+(2017-01-24).  At that commit, `mass_reac1.dat` has Git blob
+`acd42b416e52edea020990d68631fb2b8063275d` and retained SHA-256
+`0d068a92c6694485e117df2da8b081fe1a7cd7b80757303d1f72d4bfc16fff50`;
+`winvne_JINAv22` has Git blob
+`5bac4be2a2095bfd6a6fe3b1282bea4bcd6040ea` and retained SHA-256
+`5fc838645cac2f5e2eb9ddfd5a60bb41df8a6378b8f28748b1b47ed6148555aa`.
+XNet imported those exact blobs at subtree commit
+`90e9363d5f9443a8ad2d5e986232c1f60bb5b96a`.  JINA's public snapshot archive
+dates REACLIB v2.2 to 2016-11-14.  The `mass_reac1.dat` header identifies the
+JINA Nuclide Database evaluation label `reac1`, but the original JINA
+per-record publication or snapshot identifier is not recoverable from the
+retained metadata.  `reference.json` records that limitation instead of
+inventing a stronger source attribution.
 
 The proton record uses the neutral-hydrogen atomic mass excess.  Because the
 same atomic-mass convention appears with the same `Z` in both sides of the
@@ -228,6 +246,30 @@ This choice follows quantitative preflight, not network size alone:
 | torch489 versus full 7852 | `(7,1e9,0.45)` | `1.911e-6` | `5.856e-6` | `8.657e-7` |
 | torch489 versus full 7852 | `(6.5,1e7,0.55)` | `7.241e-6` | `7.241e-6` | `5.636e-6` |
 
+These aggregate figures are non-gating network/state-selection evidence, not
+part of the ordinary three-state XNet test.  The retained preflight program now
+refuses a pairwise comparison unless all shared species have identical masses,
+bindings, spins, partition data, translational masses, constants, temperature
+grid, and conventions.  The verified shared-input fingerprints are
+`685793a11a2b68ce46b4a5fd2ad5bd026aeb735dced82078b8cd32f1fd83aff6`
+for SN160/SN231 and
+`cf42edfae59d56c1b3d25abc114152e0811c9eba9993ef6e3dbf0c8e743fac00`
+for torch489/full.  The exact rerun reconstructs the exploratory manifests and
+diagnostic JSON; the full network intentionally skips raw-source reconciliation
+because it is not the retained reference network:
+
+```bash
+python3 test/nse_validation/extract_inputs.py test/Data_SN160 /tmp/sn160.json
+python3 test/nse_validation/extract_inputs.py test/Data_SN231 /tmp/sn231.json
+python3 test/nse_validation/extract_inputs.py \
+  test/nse_validation/network /tmp/torch489.json
+python3 test/nse_validation/extract_inputs.py \
+  test/Data_Reaclib20180621 /tmp/full7852.json --skip-raw-reconciliation
+python3 test/nse_validation/preflight_states.py \
+  /tmp/sn160.json /tmp/sn231.json /tmp/torch489.json /tmp/full7852.json \
+  > /tmp/nse-preflight.json
+```
+
 SN160 therefore fails the bounded-network requirement, especially at the
 report's neutron-rich point.  SN231 improves the result but still leaves about
 one percent of the full-network mass outside its set at that point.  Torch489
@@ -259,8 +301,10 @@ used for the snapshot.
 
 The third state replaces the report's hot symmetric point.  It supplies a
 proton-rich regime, a material thermodynamic change, and a non-grid-node
-partition-function interpolation while remaining above the approximately
-5 GK NSE applicability threshold.  All three states converged from four
+partition-function interpolation.  All three are static equilibrium benchmark
+points in a high-temperature range commonly relevant to NSE; whether a dynamic
+system attains NSE also depends on density, reaction rates, and its available
+timescale.  All three states converged from four
 starting offsets using both analytic- and numerical-Jacobian Newton routes.
 XNet is also run at every retained state from its default guess and from a
 supplied root offset by `(+2,-2)`; both results must independently pass the
@@ -271,10 +315,11 @@ for finite-network boundary sensitivity, not because XNet was consulted.
 
 ### Reference quality, stored data, and tolerances
 
-Generator `xnet-independent-nse-reference-v2` uses the standard library only;
+Generator `xnet-independent-nse-reference-v3` uses the standard library only;
 `generate_reference.py` calls
 `reference_solver.py`; neither imports or executes XNet.  The solver uses
-50 requested decimal digits with 20--30 working guard digits.  Checks at 35
+CPython 3.13.0 with `decimal` 1.70/libmpdec 4.0.1 and 50 requested decimal
+digits with 20--30 working guard digits.  Checks at 35
 and 65 requested digits produce
 identical stored binary64 mass fractions, so the report's proposed
 80/120/180-digit ladder was unnecessary.  The largest retained reference
@@ -285,7 +330,7 @@ retained mass fraction is
 `8.80e-1`, below its upper clip.
 
 The scientific dataset SHA-256 is
-`896878f78e312b543443da363fd7ce99d73f86662a56db6d7504983a6d83532c`.
+`c1651b543e821b05ba9c9d4449011df2d65db06e47a75c0a670e60083f5de4ac`.
 The Fortran-facing `reference.dat` SHA-256 is
 `df5b50465152e99aa97b4cb275cb938ea25f019bb8154fe8f7d24b7ea151dffd`.
 `reference.json` records the generator/source hashes, exact binary64 state
@@ -303,7 +348,10 @@ every compiler's optimized transcendental library.  For each state the
 generator solves the four corners and four edge midpoints sampled on the
 resulting mass/XNet-charge residual box.  The composition gate is the maximum
 sampled displacement plus analytic/numerical-Jacobian, stored-binary64, and
-arithmetic budgets, rounded upward to four significant digits.
+arithmetic budgets, rounded upward to four significant digits.  These are
+sampled, GNU-serial-configuration-qualified acceptance envelopes, not rigorous
+global sensitivity bounds over the full residual box.  That distinction does
+not alter the frozen gate values.
 
 | Gating quantity (dimensionless absolute error) | symmetric | neutron rich | proton-rich low density |
 | --- | ---: | ---: | ---: |
@@ -352,16 +400,21 @@ retained expected data.
 Focused tests reject controlled changes to a dominant expected species, the
 complete vector, reconstructed `Ye`, XNet's charge residual, normalization,
 species order, duplicate identity, missing identity, physical `A/Z/N`
-identity, NaN, negativity, and a 10 keV `co55` binding-energy input.  They also
-set each numeric metric to the next representable binary64 value above its
-gate.  The independent Python test changes the same binding input in the
-generator path and requires both composition norms to move beyond their
-gates.  These mutations operate on parsed, identity-valid data or in-memory
-scientific inputs; none depends on a metadata parse failure.
+identity, NaN, negativity, and a 10 keV `co55` binding-energy input.  Separate
+metric-comparator boundary tests set each already computed numeric metric to
+the next representable binary64 value above its gate; they are not constructed
+489-species physical-vector tests.  The independent Python test changes the
+same binding input in the generator path and requires both composition norms
+to move beyond their gates.  These mutations operate on parsed, identity-valid
+data or in-memory scientific inputs; none depends on a metadata parse failure.
 
 The strongest supported claim is limited to the complete, unscreened static
 ideal-NSE composition for this exact 489-species set and these three states,
 using the retained XNet mass, partition, constant, and translational-mass
 conventions.  It does not validate screening, reaction or weak rates, the
 timescale for reaching NSE, other networks/states, or the absolute accuracy of
-the underlying nuclear data.
+the underlying nuclear data.  The several-parts-per-million full-network
+boundary differences are larger than the XNet/reference discrepancies and
+remain outside this finite-network claim.  The same-PR provenance record and
+author-run review evidence also do not replace independent human scientific
+approval.

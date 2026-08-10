@@ -9,6 +9,7 @@ ex-ante state search performed for issue #41.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from decimal import Decimal, localcontext
 from pathlib import Path
@@ -37,6 +38,18 @@ CANDIDATE_STATES = (
     ("intermediate_density_proton_rich", "1e8", "7", "0.55"),
     ("proton_rich_low_density", "1e7", "6.5", "0.55"),
     ("cool_low_density_proton_rich", "1e7", "6", "0.55"),
+)
+
+SHARED_SPECIES_INPUT_KEYS = (
+    "a",
+    "z",
+    "n",
+    "spin",
+    "ground_state_degeneracy",
+    "mass_excess_mev",
+    "partition_factors",
+    "binding_energy_mev",
+    "translational_mass_g",
 )
 
 
@@ -175,11 +188,64 @@ def analyze(manifest_path: Path, precision: int) -> dict[str, Any]:
     }
 
 
+def indexed_species(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    result = {item["name"]: item for item in manifest["species"]}
+    if len(result) != len(manifest["species"]):
+        raise RuntimeError("preflight manifest contains duplicate species names")
+    return result
+
+
+def shared_input_record(item: dict[str, Any]) -> dict[str, Any]:
+    return {key: item[key] for key in SHARED_SPECIES_INPUT_KEYS}
+
+
+def verify_shared_scientific_inputs(
+    left_manifest: dict[str, Any], right_manifest: dict[str, Any]
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], str]:
+    for key in ("constants", "temperature_grid_gk", "conventions"):
+        if left_manifest[key] != right_manifest[key]:
+            raise RuntimeError(f"preflight manifests use different {key}")
+    left_index = indexed_species(left_manifest)
+    right_index = indexed_species(right_manifest)
+    shared_names = sorted(set(left_index) & set(right_index))
+    for name in shared_names:
+        if shared_input_record(left_index[name]) != shared_input_record(
+            right_index[name]
+        ):
+            raise RuntimeError(
+                f"preflight scientific inputs differ for shared species {name}"
+            )
+    retained = {
+        "constants": left_manifest["constants"],
+        "temperature_grid_gk": left_manifest["temperature_grid_gk"],
+        "conventions": left_manifest["conventions"],
+        "species": [
+            {"name": name, **shared_input_record(left_index[name])}
+            for name in shared_names
+        ],
+    }
+    fingerprint = hashlib.sha256(
+        (json.dumps(retained, sort_keys=True, separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    return left_index, right_index, fingerprint
+
+
 def compare_pair(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
-    left_names = json.loads(Path(left["manifest"]).read_text())["species"]
-    right_names = json.loads(Path(right["manifest"]).read_text())["species"]
-    left_index = {item["name"]: index for index, item in enumerate(left_names)}
-    right_index = {item["name"]: index for index, item in enumerate(right_names)}
+    left_manifest = json.loads(Path(left["manifest"]).read_text(encoding="utf-8"))
+    right_manifest = json.loads(Path(right["manifest"]).read_text(encoding="utf-8"))
+    left_species, right_species, shared_input_sha256 = verify_shared_scientific_inputs(
+        left_manifest, right_manifest
+    )
+    left_index = {
+        item["name"]: index for index, item in enumerate(left_manifest["species"])
+    }
+    right_index = {
+        item["name"]: index for index, item in enumerate(right_manifest["species"])
+    }
+    if set(left_species) != set(left_index) or set(right_species) != set(right_index):
+        raise RuntimeError("preflight species indexing is inconsistent")
     comparisons = []
     for left_state, right_state in zip(left["states"], right["states"], strict=True):
         if left_state["id"] != right_state["id"]:
@@ -222,6 +288,7 @@ def compare_pair(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     return {
         "left": left["network"]["directory"],
         "right": right["network"]["directory"],
+        "shared_scientific_inputs_sha256": shared_input_sha256,
         "states": comparisons,
     }
 

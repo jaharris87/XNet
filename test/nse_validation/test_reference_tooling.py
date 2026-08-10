@@ -7,12 +7,14 @@ import copy
 import hashlib
 import json
 import math
+import tempfile
 import unittest
 from decimal import Decimal, localcontext
 from pathlib import Path
 
 from extract_inputs import REPOSITORY_ROOT, extract, sha256
 from generate_reference import scientific_dataset_hash
+from preflight_states import compare_pair
 from reference_solver import (
     Species,
     State,
@@ -62,6 +64,28 @@ class ReferenceToolingTests(unittest.TestCase):
             "network_builder_source_hashes"
         ].items():
             self.assertEqual(expected, sha256(REPOSITORY_ROOT / name))
+        self.assertEqual(
+            self.payload["generator"]["runtime"],
+            {
+                "python_implementation": "CPython",
+                "python_version": "3.13.0",
+                "decimal_module_version": "1.70",
+                "libmpdec_version": "4.0.1",
+            },
+        )
+        archive = self.payload["raw_data_provenance"]["archive"]
+        self.assertEqual(
+            archive["initial_database_commit"],
+            "77141ca2a3dfc9fa9fd52ef0fcf39a49d74c08e1",
+        )
+        self.assertEqual(
+            archive["mass_reac1_git_blob_sha1"],
+            "acd42b416e52edea020990d68631fb2b8063275d",
+        )
+        self.assertEqual(
+            archive["winvne_JINAv22_git_blob_sha1"],
+            "5bac4be2a2095bfd6a6fe3b1282bea4bcd6040ea",
+        )
 
     def test_complete_dataset_identity_and_hashes(self) -> None:
         expected_names = [item["name"] for item in self.manifest["species"]]
@@ -280,6 +304,30 @@ class ReferenceToolingTests(unittest.TestCase):
             self.assertTrue(
                 all(item["stored_binary64_identical"] for item in checks)
             )
+
+    def test_preflight_rejects_different_shared_scientific_inputs(self) -> None:
+        left = copy.deepcopy(self.manifest)
+        right = copy.deepcopy(self.manifest)
+        right["species"][0]["mass_excess_mev"]["hex"] = "0x1.0p+99"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            left_path = Path(temporary_directory) / "left.json"
+            right_path = Path(temporary_directory) / "right.json"
+            left_path.write_text(json.dumps(left), encoding="utf-8")
+            right_path.write_text(json.dumps(right), encoding="utf-8")
+            result = {
+                "network": left["network"],
+                "manifest": str(left_path),
+                "states": [],
+            }
+            changed = {
+                "network": right["network"],
+                "manifest": str(right_path),
+                "states": [],
+            }
+            with self.assertRaisesRegex(
+                RuntimeError, "scientific inputs differ for shared species n"
+            ):
+                compare_pair(result, changed)
 
 
 if __name__ == "__main__":

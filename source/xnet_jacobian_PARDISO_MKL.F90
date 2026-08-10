@@ -44,7 +44,7 @@ Module xnet_jacobian
   Integer, Parameter :: solver = 0 ! Solver method (0 = sparse direct)
 
   ! Solver controls
-  Integer(i8), Allocatable :: pt(:,:) ! PARDISO internal data pointers, one handle per zone
+  Integer(i8), Allocatable :: pt(:,:) ! PARDISO internal data pointers, one handle per batch slot
   Integer     :: iparm(64)         ! PARDISO solver parameters
   Real(dp)    :: dparm(64)         ! PARDISO solver parameters for iterative solver
   Integer     :: phase             ! PARDISO execution mode
@@ -312,8 +312,8 @@ Contains
       msglvl = 0
     EndIf
 
-    ! Each zone has an independent PARDISO handle so analysis and refactorization for one zone do
-    ! not invalidate another zone's stored factors.
+    ! Each local batch slot has an independent PARDISO handle so analysis and refactorization in
+    ! one slot do not invalidate another slot's stored factors.
     maxfct = 1
 
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))

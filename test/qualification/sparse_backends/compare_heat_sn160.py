@@ -58,6 +58,17 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _executable_hashes(dense_executable: Path, sparse_executable: Path):
+    dense_hash = _sha256(dense_executable)
+    sparse_hash = _sha256(sparse_executable)
+    if dense_hash == sparse_hash:
+        raise RegressionFailure(
+            "dense and sparse qualification executables have identical SHA-256 "
+            f"hashes ({dense_hash}); distinct backend builds are required"
+        )
+    return dense_hash, sparse_hash
+
+
 def _field_value(state, name: str) -> float:
     return state.time if name == "achieved_time" else getattr(state, name)
 
@@ -136,6 +147,10 @@ def _arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = _arguments()
+    dense_hash, sparse_hash = _executable_hashes(
+        arguments.dense_executable,
+        arguments.sparse_executable,
+    )
     case = heat_sn160_case(REPOSITORY_ROOT)
     policy = load_reference(case.reference)
     validate_reference_for_case(case, policy)
@@ -170,12 +185,12 @@ def main() -> int:
     report["executables"] = {
         "dense": {
             "path": str(dense_result.executable),
-            "sha256": _sha256(dense_result.executable),
+            "sha256": dense_hash,
             "return_code": dense_result.return_code,
         },
         "sparse": {
             "path": str(sparse_result.executable),
-            "sha256": _sha256(sparse_result.executable),
+            "sha256": sparse_hash,
             "return_code": sparse_result.return_code,
         },
     }

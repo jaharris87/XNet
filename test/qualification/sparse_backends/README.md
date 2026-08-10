@@ -32,7 +32,8 @@ the additional Newton/timestep rounding path without defining solver-specific
 canonical values. The runner writes an untracked JSON report with
 process status, executable hashes, every compared field, complete-composition
 norms, and the largest selected-species difference. It does not create or
-update a canonical endpoint reference.
+update a canonical endpoint reference. It rejects dense and sparse executables
+with identical SHA-256 hashes before staging or running the problem.
 
 ## HSL MA48
 
@@ -71,10 +72,11 @@ redistribution rights.
 The approved issue #44 qualification uses oneMKL PARDISO, not the distinct
 standalone PARDISO ABI. Intel documents oneMKL licensing in its
 [oneMKL License FAQ](https://www.intel.com/content/www/us/en/developer/articles/tool/onemkl-license-faq.html).
-The oneMKL adapter keeps one solver handle per zone. This preserves each
-zone's analysis/refactorization state independently; sharing one handle across
-the two real contract zones corrupted the first stored factorization under
-oneMKL 2026.1 even though both solver calls returned success.
+The oneMKL adapter keeps one solver handle per local batch slot. This preserves
+each concurrently evolved zone's analysis/refactorization state independently;
+sharing one handle across the two real contract zones corrupted the first
+stored factorization under oneMKL 2026.1 even though both solver calls returned
+success.
 On `etacar`, initialize the installed oneAPI environment before each build:
 
 ```bash

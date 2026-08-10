@@ -675,16 +675,21 @@ Contains
     Real(dp), Intent(in) :: expected(msize,2), actual(msize,2)
 
     Integer :: zone
-    Real(dp) :: residual
+    Real(dp) :: maximum_residual, residual
 
     ! Keep the copy-back association check independent of the stricter residual contract.
     Call check(error,all(abs(actual-expected) <= association_tolerance))
     If ( allocated(error) ) Return
+    maximum_residual = 0.0_dp
     Do zone = 1, 2
       residual = maxval(abs(matmul(matrix,actual(:,zone))-rhs(:,zone)))
+      maximum_residual = max(maximum_residual,residual)
       Call check(error,residual <= tolerance*(1.0_dp+maxval(abs(rhs(:,zone)))))
       If ( allocated(error) ) Return
     EndDo
+#if defined(TEST_REAL_SOLVER)
+    Write(*,'(a,es12.5)') 'maximum real-solver residual=',maximum_residual
+#endif
 
     Return
   End Subroutine check_solutions

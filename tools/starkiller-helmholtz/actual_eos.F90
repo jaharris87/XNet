@@ -100,16 +100,16 @@ module actual_eos_module
     real(dp), parameter :: onethird = 1.0_dp/3.0_dp
     real(dp), parameter :: esqu = qe * qe
 
-    !XDIR XDECLARE_VAR(tlo, thi, dlo, dhi)
-    !XDIR XDECLARE_VAR(tstp, tstpi, dstp, dstpi)
-    !XDIR XDECLARE_VAR(ttol, dtol)
-    !XDIR XDECLARE_VAR(itmax, jtmax, d, t)
-    !XDIR XDECLARE_VAR(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
-    !XDIR XDECLARE_VAR(dpdf, dpdfd, dpdft, dpdfdt)
-    !XDIR XDECLARE_VAR(ef, efd, eft, efdt, xf, xfd, xft, xfdt)
-    !XDIR XDECLARE_VAR(dt_sav, dt2_sav, dti_sav, dt2i_sav)
-    !XDIR XDECLARE_VAR(dd_sav, dd2_sav, ddi_sav, dd2i_sav)
-    !XDIR XDECLARE_VAR(do_coulomb, input_is_constant)
+    !XDIR XDECLARE_ALLOC(tlo, thi, dlo, dhi)
+    !XDIR XDECLARE_ALLOC(tstp, tstpi, dstp, dstpi)
+    !XDIR XDECLARE_ALLOC(ttol, dtol)
+    !XDIR XDECLARE_ALLOC(itmax, jtmax, d, t)
+    !XDIR XDECLARE_ALLOC(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
+    !XDIR XDECLARE_ALLOC(dpdf, dpdfd, dpdft, dpdfdt)
+    !XDIR XDECLARE_ALLOC(ef, efd, eft, efdt, xf, xfd, xft, xfdt)
+    !XDIR XDECLARE_ALLOC(dt_sav, dt2_sav, dti_sav, dt2i_sav)
+    !XDIR XDECLARE_ALLOC(dd_sav, dd2_sav, ddi_sav, dd2i_sav)
+    !XDIR XDECLARE_ALLOC(do_coulomb, input_is_constant)
 
     public :: actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
     public :: xnet_actual_eos, actual_eos_eta, actual_eos_cv
@@ -1699,18 +1699,18 @@ contains
         maxdens = 10.d0**dhi
 
 #if defined(XNET_OMP_OL)
-        ! The declare-target allocatables are registered before their host allocation. Remap them
-        ! after initialization so the device allocation status, shape, and values are all current.
+        ! Establish the allocated table mappings at their initialization owner. Ordinary map(to:)
+        ! retains present-or-copy behavior when a caller has already made the data available.
         !$omp target enter data &
-        !$omp& map(always, to: mintemp, maxtemp, mindens, maxdens) &
-        !$omp& map(always, to: tlo, thi, dlo, dhi, tstp, tstpi, dstp, dstpi) &
-        !$omp& map(always, to: itmax, jtmax, d, t) &
-        !$omp& map(always, to: f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
-        !$omp& map(always, to: dpdf, dpdfd, dpdft, dpdfdt) &
-        !$omp& map(always, to: ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
-        !$omp& map(always, to: dt_sav, dt2_sav, dti_sav, dt2i_sav) &
-        !$omp& map(always, to: dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
-        !$omp& map(always, to: do_coulomb, input_is_constant)
+        !$omp& map(to: mintemp, maxtemp, mindens, maxdens) &
+        !$omp& map(to: tlo, thi, dlo, dhi, tstp, tstpi, dstp, dstpi, ttol, dtol) &
+        !$omp& map(to: itmax, jtmax, d, t) &
+        !$omp& map(to: f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+        !$omp& map(to: dpdf, dpdfd, dpdft, dpdfdt) &
+        !$omp& map(to: ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
+        !$omp& map(to: dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+        !$omp& map(to: dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+        !$omp& map(to: do_coulomb, input_is_constant)
 #else
         !XDIR XUPDATE &
         !XDIR XDEVICE(mintemp, maxtemp, mindens, maxdens) &
@@ -1876,6 +1876,20 @@ contains
     subroutine actual_eos_finalize
 
       implicit none
+
+#if defined(XNET_OMP_OL)
+      ! Remove persistent mappings before their host allocations are released.
+      !$omp target exit data &
+      !$omp& map(delete: mintemp, maxtemp, mindens, maxdens) &
+      !$omp& map(delete: tlo, thi, dlo, dhi, tstp, tstpi, dstp, dstpi, ttol, dtol) &
+      !$omp& map(delete: itmax, jtmax, d, t) &
+      !$omp& map(delete: f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+      !$omp& map(delete: dpdf, dpdfd, dpdft, dpdfdt) &
+      !$omp& map(delete: ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
+      !$omp& map(delete: dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+      !$omp& map(delete: dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+      !$omp& map(delete: do_coulomb, input_is_constant)
+#endif
 
       ! Deallocate managed module variables
 

@@ -387,7 +387,7 @@ def test_openmp_rocm_batched_solve_uses_contiguous_strides() -> None:
     assert "hipblasDgetrsStridedBatched" in strided_solve
 
 
-def test_openmp_helmholtz_initialization_remaps_allocatable_tables() -> None:
+def test_openmp_helmholtz_initialization_maps_allocatable_tables() -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")
     repository = FRONTIER_DIRECTORY.parents[2]
@@ -414,7 +414,16 @@ def test_openmp_helmholtz_initialization_remaps_allocatable_tables() -> None:
     initialization = completed.stdout.split("subroutine actual_eos_init", 1)[1]
     initialization = initialization.split("end subroutine actual_eos_init", 1)[0]
     normalized = " ".join(initialization.split())
-    assert "!$omp target enter data & !$omp& map(always, to:" in normalized
-    for table in ("f", "ef", "xf", "dt_sav", "dd_sav"):
+    assert "!$omp target enter data & !$omp& map(to:" in normalized
+    for table in ("f", "ef", "xf", "dt_sav", "dd_sav", "ttol", "dtol"):
         assert table in initialization
+    assert "always" not in initialization
     assert "!$omp target update" not in initialization
+
+    declarations = completed.stdout.split("contains", 1)[0]
+    assert "!$omp declare target link(f, fd, ft" in declarations
+
+    finalization = completed.stdout.split("subroutine actual_eos_finalize", 1)[1]
+    finalization = finalization.split("end subroutine actual_eos_finalize", 1)[0]
+    assert "!$omp target exit data" in finalization
+    assert "map(delete: f, fd, ft" in finalization

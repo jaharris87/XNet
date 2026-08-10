@@ -249,3 +249,24 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     assert 'joined = "a" // "b"' in preprocessed
     assert preprocessed.index("Implicit None") < preprocessed.index("!$omp declare target")
     assert "!$omp parallel private(first,second)" in preprocessed
+
+
+def test_accelerator_routine_directives_follow_ordered_specification_statements() -> None:
+    repository = FRONTIER_DIRECTORY.parents[2]
+    source_files = list((repository / "source").glob("*.F90"))
+    source_files.extend((repository / "tools" / "starkiller-helmholtz").glob("*.F90"))
+
+    for source_file in source_files:
+        lines = source_file.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if "XROUTINE_SEQ" not in line and "XROUTINE_VECTOR" not in line:
+                continue
+            for following in lines[index + 1 :]:
+                statement = following.strip()
+                if not statement or statement.startswith("!") or statement.startswith("#"):
+                    continue
+                assert not statement.lower().startswith(("use ", "implicit none")), (
+                    f"{source_file}:{index + 1}: accelerator routine directive "
+                    f"precedes {statement!r}"
+                )
+                break

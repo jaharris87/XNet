@@ -231,9 +231,8 @@ contains
 
   subroutine eos_get_small_temp(small_temp_out)
 
-    !XDIR XROUTINE_SEQ
-
     implicit none
+    !XDIR XROUTINE_SEQ
 
     real(dp), intent(out) :: small_temp_out
 
@@ -245,9 +244,8 @@ contains
 
   subroutine eos_get_small_dens(small_dens_out)
 
-    !XDIR XROUTINE_SEQ
-
     implicit none
+    !XDIR XROUTINE_SEQ
 
     real(dp), intent(out) :: small_dens_out
 
@@ -259,9 +257,8 @@ contains
 
   subroutine eos_get_max_temp(max_temp_out)
 
-    !XDIR XROUTINE_SEQ
-
     implicit none
+    !XDIR XROUTINE_SEQ
 
     real(dp), intent(out) :: max_temp_out
 
@@ -273,9 +270,8 @@ contains
 
   subroutine eos_get_max_dens(max_dens_out)
 
-    !XDIR XROUTINE_SEQ
-
     implicit none
+    !XDIR XROUTINE_SEQ
 
     real(dp), intent(out) :: max_dens_out
 

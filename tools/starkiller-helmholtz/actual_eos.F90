@@ -168,9 +168,8 @@ contains
 
     subroutine actual_eos(input, state)
 
-        !XDIR XROUTINE_SEQ
-
         implicit none
+        !XDIR XROUTINE_SEQ
 
         !..input arguments
         integer,      intent(in   ) :: input
@@ -1153,9 +1152,8 @@ contains
         ! quantities needed by XNet: electron chemical potential, its derivative
         ! w.r.t. temperature, and specific heat.
 
-        !XDIR XROUTINE_SEQ
-
         implicit none
+        !XDIR XROUTINE_SEQ
 
         !..input arguments
         integer,      intent(in   ) :: input
@@ -1188,9 +1186,8 @@ contains
         ! quantities needed by XNet: electron chemical potential, its derivative
         ! w.r.t. temperature, and specific heat.
 
-        !XDIR XROUTINE_SEQ
-
         implicit none
+        !XDIR XROUTINE_SEQ
 
         !..input arguments
         real(dp),     intent(in ) :: temp,den,ye

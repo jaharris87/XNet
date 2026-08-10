@@ -71,6 +71,16 @@ class ReferenceToolingTests(unittest.TestCase):
             names = [item["name"] for item in state["composition"]]
             self.assertEqual(names, expected_names)
             self.assertEqual(len(set(names)), len(names))
+            self.assertEqual(
+                [
+                    (item["a"], item["z"], item["n"])
+                    for item in state["composition"]
+                ],
+                [
+                    (item["a"], item["z"], item["n"])
+                    for item in self.manifest["species"]
+                ],
+            )
             numeric_tolerances = [
                 float(state["tolerances"][name])
                 for name in (
@@ -97,6 +107,16 @@ class ReferenceToolingTests(unittest.TestCase):
             self.assertLess(
                 abs(reconstructed_ye - float(state["inputs"]["ye"])), 5.0e-15
             )
+            reference = state["reference"]
+            self.assertLess(abs(Decimal(reference["mass_residual"])), Decimal("1e-25"))
+            self.assertLess(abs(Decimal(reference["charge_residual"])), Decimal("1e-25"))
+            self.assertLess(
+                abs(Decimal(reference["xnet_basis_charge_residual"])),
+                Decimal("1e-25"),
+            )
+            self.assertGreater(Decimal(reference["jacobian_condition_inf"]), 0)
+            self.assertLess(Decimal(reference["route_difference_l1"]), Decimal("1e-24"))
+            self.assertLess(Decimal(reference["route_difference_linf"]), Decimal("1e-24"))
         self.assertEqual(
             self.payload["scientific_dataset_sha256"],
             scientific_dataset_hash(self.payload),
@@ -106,9 +126,17 @@ class ReferenceToolingTests(unittest.TestCase):
             hashlib.sha256(REFERENCE_DATA.read_bytes()).hexdigest(),
         )
 
+    def test_scientific_hash_covers_numerical_quality_record(self) -> None:
+        mutated = copy.deepcopy(self.payload)
+        mutated["states"][0]["reference"]["mass_residual"] = "9.99"
+        self.assertNotEqual(
+            self.payload["scientific_dataset_sha256"],
+            scientific_dataset_hash(mutated),
+        )
+
     def test_fortran_data_has_complete_stable_order(self) -> None:
         lines = REFERENCE_DATA.read_text(encoding="ascii").splitlines()
-        self.assertEqual(lines[0], "XNET_NSE_REFERENCE_V1")
+        self.assertEqual(lines[0], "XNET_NSE_REFERENCE_V2")
         species_count, state_count = (int(value) for value in lines[1].split())
         self.assertEqual((species_count, state_count), (489, 3))
         self.assertEqual(lines[2], self.manifest["network"]["order_sha256"])
@@ -139,13 +167,22 @@ class ReferenceToolingTests(unittest.TestCase):
             )
             cursor += 3
             names = []
+            identities = []
             values = []
             for _ in range(species_count):
-                name, value = lines[cursor].split()
+                name, aa, zz, nn, value = lines[cursor].split()
                 names.append(name)
+                identities.append((int(aa), int(zz), int(nn)))
                 values.append(value)
                 cursor += 1
             self.assertEqual(names, expected_names)
+            self.assertEqual(
+                identities,
+                [
+                    (item["a"], item["z"], item["n"])
+                    for item in self.manifest["species"]
+                ],
+            )
             self.assertEqual(
                 values,
                 [item["mass_fraction"] for item in expected_state["composition"]],

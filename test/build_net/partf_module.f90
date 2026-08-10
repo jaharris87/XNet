@@ -192,6 +192,7 @@ MODULE partf_module
     ! Local variables
     INTEGER :: iz_read, ia_read
     CHARACTER(LEN=15) :: eval_read
+    CHARACTER(LEN=32) :: mex_field
     CHARACTER(LEN=256) :: line_read
     REAL(8) :: mex_read
 
@@ -218,10 +219,15 @@ MODULE partf_module
       END IF
       IF ( LEN_TRIM(line_read) == 0 ) CYCLE
 
-      READ(line_read,*,IOSTAT=ierr) iz_read, ia_read, eval_read, mex_read
+      READ(line_read,*,IOSTAT=ierr) iz_read, ia_read, eval_read, mex_field
       IF ( ierr /= 0 ) THEN
-        IF ( INDEX(line_read,'#') > 0 ) CYCLE
         WRITE(*,'(a)') 'ERROR: Cannot read mass source record'
+        STOP 1
+      END IF
+      IF ( TRIM(mex_field) == '#' ) CYCLE
+      READ(mex_field,*,IOSTAT=ierr) mex_read
+      IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Cannot read mass source value'
         STOP 1
       END IF
 

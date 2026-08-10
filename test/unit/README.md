@@ -158,9 +158,10 @@ weak source. No private neutrino data is used.
 
 The runner executes identical positive construction twice and compares parsed
 semantics, then checks every expected output field rather than comparing raw
-files.  Its mass catalog includes both a valid selected mass with an unavailable
-`#` uncertainty and an unselected unavailable `#` mass, so the reader must
-distinguish the required field.  It requires nonzero status and an error diagnostic for a normalized
+files.  Its mass catalog includes a valid selected mass with an unavailable
+`#` uncertainty, an unselected unavailable `#` mass, a selected unavailable
+mass, and a malformed row containing `#`, so the reader must distinguish the
+required field.  It requires nonzero status and an error diagnostic for a normalized
 duplicate, blank or unavailable requested species, malformed namelist,
 malformed initial or later REACLIB data, missing required mass input, and
 missing explicitly enabled weak input. Controlled output

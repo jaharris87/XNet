@@ -195,7 +195,8 @@ $(BUILD_DIR)/nse_validation_support.o: support/nse_validation_support.F90 \
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
 $(BUILD_DIR)/test_nse_scientific_validation.o: test_nse_scientific_validation.F90 \
-    $(BUILD_DIR)/nse_validation_support.o $(BUILD_DIR)/xnet_nse.o | $(BUILD_DIR)
+    $(BUILD_DIR)/nse_validation_support.o $(BUILD_DIR)/xnet_nse.o \
+    $(BUILD_DIR)/testdrive.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_DIRECT_EXE): $(PREPROCESS_CORE_OBJECTS) $(PREPROCESS_BUILD_DIR)/preprocess_direct.o

@@ -21,7 +21,7 @@ from reference_solver import (
 )
 
 
-GENERATOR_VERSION = "xnet-independent-nse-reference-v1"
+GENERATOR_VERSION = "xnet-independent-nse-reference-v2"
 REFERENCE_PRECISION = 50
 PRECISION_CHECKS = (35, 65)
 REFERENCE_RESIDUAL_LIMIT = Decimal("1e-25")
@@ -167,7 +167,9 @@ def make_state_record(
         analytic.composition, numeric.composition
     )
     if max(route_l1, route_linf) > ROUTE_DIFFERENCE_LIMIT:
-        raise RuntimeError(f"independent numerical routes disagree for {state.state_id}")
+        raise RuntimeError(
+            f"analytic/numerical Jacobian variants disagree for {state.state_id}"
+        )
     if max(
         abs(analytic.mass_residual),
         abs(analytic.charge_residual),
@@ -280,10 +282,11 @@ def make_state_record(
                 "composition_l1_unrounded_budget": str(l1_budget),
                 "composition_linf_unrounded_budget": str(linf_budget),
                 "terms": (
-                    "maximum composition displacement at all eight corners/edges "
-                    "of the accepted mass/XNet-charge residual box + numerical-route "
-                    "difference + binary64 serialization difference + binary64 "
-                    "operation budget; rounded upward to four significant digits"
+                    "maximum composition displacement at the four corners and four "
+                    "edge midpoints sampled on the accepted mass/XNet-charge residual "
+                    "box + analytic/numerical-Jacobian difference + binary64 "
+                    "serialization difference + binary64 operation budget; rounded "
+                    "upward to four significant digits"
                 ),
                 "reconstructed_ye": (
                     "|sum(qX)-Ye| <= |sum((q-Ye)X)| + "
@@ -296,7 +299,13 @@ def make_state_record(
             for value, name in dominant
         ],
         "composition": [
-            {"name": item["name"], "mass_fraction": value}
+            {
+                "name": item["name"],
+                "a": item["a"],
+                "z": item["z"],
+                "n": item["n"],
+                "mass_fraction": value,
+            }
             for item, value in zip(manifest["species"], stored, strict=True)
         ],
     }
@@ -304,24 +313,16 @@ def make_state_record(
 
 def scientific_dataset_hash(payload: dict[str, Any]) -> str:
     scientific = {
-        "schema": payload["schema"],
-        "network": payload["network"],
-        "states": [
-            {
-                "id": item["id"],
-                "inputs": item["inputs"],
-                "tolerances": item["tolerances"],
-                "composition": item["composition"],
-            }
-            for item in payload["states"]
-        ],
+        key: value
+        for key, value in payload.items()
+        if key not in ("scientific_dataset_sha256", "reference_data_sha256")
     }
     return hashlib.sha256(canonical_bytes(scientific)).hexdigest()
 
 
 def reference_data_text(payload: dict[str, Any]) -> str:
     lines = [
-        "XNET_NSE_REFERENCE_V1",
+        "XNET_NSE_REFERENCE_V2",
         f"{payload['network']['species_count']} {len(payload['states'])}",
         payload["network"]["order_sha256"],
     ]
@@ -345,7 +346,8 @@ def reference_data_text(payload: dict[str, Any]) -> str:
             )
         )
         lines.extend(
-            f"{item['name']:>5} {item['mass_fraction']}"
+            f"{item['name']:>5} {item['a']} {item['z']} {item['n']} "
+            f"{item['mass_fraction']}"
             for item in state["composition"]
         )
     return "\n".join(lines) + "\n"
@@ -373,7 +375,7 @@ def generate(network_directory: Path) -> tuple[dict[str, Any], str]:
         directory / "generate_reference.py",
     )
     payload: dict[str, Any] = {
-        "schema": "xnet-independent-nse-reference-v1",
+        "schema": "xnet-independent-nse-reference-v2",
         "issue": "https://github.com/jaharris87/XNet/issues/41",
         "xnet_base_commit": manifest["xnet_base_commit"],
         "scientific_authority": {

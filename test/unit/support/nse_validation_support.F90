@@ -57,12 +57,15 @@ Contains
     Return
   End Subroutine apply_nse_validation_gates
 
-  Subroutine evaluate_nse_candidate(expected_names,candidate_names,aa,zz,expected,candidate, &
-    & ye,tolerances,metrics,failures)
+  Subroutine evaluate_nse_candidate(expected_names,candidate_names,expected_a,expected_z, &
+    & expected_n,candidate_a,candidate_z,candidate_n,expected,candidate,ye,tolerances, &
+    & metrics,failures)
     Implicit None
 
     Character(5), Intent(in) :: candidate_names(:), expected_names(:)
-    Real(dp), Intent(in) :: aa(:), candidate(:), expected(:), ye, zz(:)
+    Integer, Intent(in) :: expected_a(:), expected_n(:), expected_z(:)
+    Real(dp), Intent(in) :: candidate(:), candidate_a(:), candidate_n(:), candidate_z(:)
+    Real(dp), Intent(in) :: expected(:), ye
     Type(nse_validation_tolerances), Intent(in) :: tolerances
     Type(nse_validation_metrics), Intent(out) :: metrics
     Integer, Intent(out) :: failures
@@ -76,12 +79,21 @@ Contains
     If ( size(expected_names) /= species_count .OR. &
       & size(candidate_names) /= species_count .OR. &
       & size(candidate) /= species_count .OR. &
-      & size(aa) /= species_count .OR. size(zz) /= species_count ) Then
+      & size(expected_a) /= species_count .OR. &
+      & size(expected_z) /= species_count .OR. &
+      & size(expected_n) /= species_count .OR. &
+      & size(candidate_a) /= species_count .OR. &
+      & size(candidate_z) /= species_count .OR. &
+      & size(candidate_n) /= species_count ) Then
       failures = ior(failures,nse_fail_identity)
       Return
     EndIf
 
     If ( any(expected_names /= candidate_names) ) &
+      & failures = ior(failures,nse_fail_identity)
+    If ( any(real(expected_a,dp) /= candidate_a) .OR. &
+      & any(real(expected_z,dp) /= candidate_z) .OR. &
+      & any(real(expected_n,dp) /= candidate_n) ) &
       & failures = ior(failures,nse_fail_identity)
     Do i = 1, species_count
       Do j = i + 1, species_count
@@ -104,8 +116,8 @@ Contains
     Allocate(difference(species_count))
     difference = abs(candidate-expected)
     metrics%mass_residual = sum(candidate) - 1.0_dp
-    metrics%charge_residual = sum((zz/aa-ye)*candidate)
-    metrics%ye_error = sum(zz*candidate/aa) - ye
+    metrics%charge_residual = sum((candidate_z/candidate_a-ye)*candidate)
+    metrics%ye_error = sum(candidate_z*candidate/candidate_a) - ye
     metrics%l1 = sum(difference)
     metrics%linf = maxval(difference)
     metrics%dominant_index = maxloc(expected,dim=1)

@@ -93,7 +93,7 @@ stress candidates at lower NSE-domain temperature/density, proton-rich
 1. the state remains in a regime where NSE is a physically meaningful target,
 2. the chosen finite network represents the result without material boundary
    mass,
-3. two independent numerical solution routes and multiple starts converge,
+3. analytic- and finite-difference-Jacobian variants and multiple starts converge,
 4. no material abundance is controlled by XNet's exponential/clipping guards,
 5. the three states are scientifically nonredundant and numerically durable.
 
@@ -242,11 +242,12 @@ substitute network.
 
 The build exposed one necessary tooling defect: the mass reader stopped on
 the documented `#` unavailable-value rows even when those rows were not
-selected.  `test/build_net/partf_module.f90` now skips those rows while
-retaining the existing later error if a requested species has no mass.  The
-unit fixture includes an unselected missing row.  `network/build_input.namelist`
-retains the exact torch489, REACLIB, partition, mass, and disabled weak/neutrino
-settings used for the snapshot.
+selected.  `test/build_net/partf_module.f90` now skips a row only when its
+required mass field is exactly `#`, while malformed rows remain errors and the
+existing later error still rejects a requested species with no mass.  Focused
+contracts cover all three cases.  `network/build_input.namelist` retains the
+exact torch489, REACLIB, partition, mass, and disabled weak/neutrino settings
+used for the snapshot.
 
 ### Exact states
 
@@ -270,33 +271,39 @@ for finite-network boundary sensitivity, not because XNet was consulted.
 
 ### Reference quality, stored data, and tolerances
 
-`generate_reference.py` uses the standard library only and calls
+Generator `xnet-independent-nse-reference-v2` uses the standard library only;
+`generate_reference.py` calls
 `reference_solver.py`; neither imports or executes XNet.  The solver uses
 50 requested decimal digits with 20--30 working guard digits.  Checks at 35
 and 65 requested digits produce
 identical stored binary64 mass fractions, so the report's proposed
 80/120/180-digit ladder was unnecessary.  The largest retained reference
-mass or charge residual is `2.25e-28`; the largest analytic/numerical-route
-L1 disagreement is `2.85e-49`.  The smallest retained mass fraction is
+mass or charge residual is `2.25e-28`; the largest analytic- versus
+finite-difference-Jacobian L1 disagreement is `2.85e-49`.  The smallest
+retained mass fraction is
 `5.25e-44`, far above XNet's protected-exponential floor, and the largest is
 `8.80e-1`, below its upper clip.
 
 The scientific dataset SHA-256 is
-`a48033b186c175848d9b604c0d0806412aa1ae499250884fcbb9281a686df7f0`.
+`896878f78e312b543443da363fd7ce99d73f86662a56db6d7504983a6d83532c`.
 The Fortran-facing `reference.dat` SHA-256 is
-`b3aacc793bd6c091038a71e9d2a3a9b4820d1da3b8910d42a0bd41c35f7564d7`.
+`df5b50465152e99aa97b4cb275cb938ea25f019bb8154fe8f7d24b7ea151dffd`.
 `reference.json` records the generator/source hashes, exact binary64 state
 inputs and constants, residuals, starts, precision checks, complete vectors,
-and derivation details.
+and derivation details.  The scientific hash covers that complete durable
+record except its two derived hash fields, so changing a residual or other
+numerical-quality diagnostic changes the fingerprint.
 
 The residual gate starts from XNet's configured `1e-8` function tolerance.
 An inspected upper bound of 32 correctly-rounded binary64 operation
 equivalents per species plus complete serial accumulation gives
 `gamma_16136 = 1.792e-12`, rounded upward to a `2e-12` arithmetic budget.
-For each state the generator independently solves all eight corners and edges
-of the resulting mass/XNet-charge residual box.  The composition gate is the
-maximum displacement at that boundary plus numerical-route, stored-binary64,
-and arithmetic budgets, rounded upward to four significant digits.
+This is an explicit portability assumption rather than a rigorous bound on
+every compiler's optimized transcendental library.  For each state the
+generator solves the four corners and four edge midpoints sampled on the
+resulting mass/XNet-charge residual box.  The composition gate is the maximum
+sampled displacement plus analytic/numerical-Jacobian, stored-binary64, and
+arithmetic budgets, rounded upward to four significant digits.
 
 | Gating quantity (dimensionless absolute error) | symmetric | neutron rich | proton-rich low density |
 | --- | ---: | ---: | ---: |
@@ -306,10 +313,11 @@ and arithmetic budgets, rounded upward to four significant digits.
 | complete-vector L1 | `4.192e-7` | `9.608e-7` | `4.689e-8` |
 | complete-vector L-infinity | `9.529e-8` | `1.050e-7` | `2.057e-8` |
 
-Finiteness, nonnegativity, unique identity, completeness, and exact order have
-no fallback tolerance.  The dominant species are reported by name and their
-errors are checked through the complete-vector L-infinity gate; no looser
-dominant-only gate exists.  Candidate XNet output is never renormalized.
+Finiteness, nonnegativity, unique name and `A/Z/N` identity, completeness, and
+exact order have no fallback tolerance.  The dominant species are reported by
+name and their errors are checked through the complete-vector L-infinity gate;
+no looser dominant-only gate exists.  Candidate XNet output is never
+renormalized.
 
 ### Reproduction and ordinary test separation
 
@@ -343,13 +351,13 @@ retained expected data.
 
 Focused tests reject controlled changes to a dominant expected species, the
 complete vector, reconstructed `Ye`, XNet's charge residual, normalization,
-species order, duplicate identity, missing identity, NaN, negativity, and a
-10 keV `co55` binding-energy input.  They also set each numeric metric to the
-next representable binary64 value above its gate.  The independent Python
-test changes the same binding input in the generator path and requires both
-composition norms to move beyond their gates.  These mutations operate on
-parsed, identity-valid data or in-memory scientific inputs; none depends on a
-metadata parse failure.
+species order, duplicate identity, missing identity, physical `A/Z/N`
+identity, NaN, negativity, and a 10 keV `co55` binding-energy input.  They also
+set each numeric metric to the next representable binary64 value above its
+gate.  The independent Python test changes the same binding input in the
+generator path and requires both composition norms to move beyond their
+gates.  These mutations operate on parsed, identity-valid data or in-memory
+scientific inputs; none depends on a metadata parse failure.
 
 The strongest supported claim is limited to the complete, unscreened static
 ideal-NSE composition for this exact 489-species set and these three states,

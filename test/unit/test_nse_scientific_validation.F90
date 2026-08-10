@@ -10,6 +10,7 @@ Module test_nse_scientific_validation
 
   Character(32), Allocatable :: state_id(:)
   Character(5), Allocatable :: expected_names(:,:)
+  Integer, Allocatable :: expected_a(:,:), expected_n(:,:), expected_z(:,:)
   Real(dp), Allocatable :: expected_x(:,:), state_rho(:), state_t9(:), state_ye(:)
   Type(nse_validation_tolerances), Allocatable :: state_tolerances(:)
   Integer :: state_count = 0
@@ -130,7 +131,7 @@ Contains
     Open(newunit=lun,file=trim(reference_path),status='old',action='read',iostat=ierr)
     If ( ierr /= 0 ) Call fail_fixture('cannot open issue #41 reference data')
     Read(lun,'(a)',iostat=ierr) line
-    If ( ierr /= 0 .OR. trim(line) /= 'XNET_NSE_REFERENCE_V1' ) &
+    If ( ierr /= 0 .OR. trim(line) /= 'XNET_NSE_REFERENCE_V2' ) &
       & Call fail_fixture('invalid issue #41 reference schema')
     Read(lun,*,iostat=ierr) reference_species_count, state_count
     If ( ierr /= 0 .OR. reference_species_count /= ny .OR. state_count /= 3 ) &
@@ -141,7 +142,8 @@ Contains
 
     Allocate(state_id(state_count),state_rho(state_count),state_t9(state_count), &
       & state_ye(state_count),state_tolerances(state_count))
-    Allocate(expected_names(ny,state_count),expected_x(ny,state_count))
+    Allocate(expected_names(ny,state_count),expected_a(ny,state_count), &
+      & expected_z(ny,state_count),expected_n(ny,state_count),expected_x(ny,state_count))
     Do state = 1, state_count
       Read(lun,'(a)',iostat=ierr) line
       If ( ierr /= 0 .OR. line(1:6) /= 'STATE ' ) &
@@ -157,7 +159,8 @@ Contains
         Read(lun,'(a)',iostat=ierr) line
         If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 composition row')
         expected_names(inuc,state) = line(1:5)
-        Read(line(7:),*,iostat=ierr) expected_x(inuc,state)
+        Read(line(7:),*,iostat=ierr) expected_a(inuc,state),expected_z(inuc,state), &
+          & expected_n(inuc,state),expected_x(inuc,state)
         If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 mass fraction')
       EndDo
     EndDo
@@ -201,7 +204,7 @@ Contains
   End Subroutine solve_state
 
   Subroutine evaluate_state(state,candidate,candidate_names,metrics,failures)
-    Use nuclear_data, Only: aa, nname, zz
+    Use nuclear_data, Only: aa, nname, nn, zz
     Implicit None
 
     Integer, Intent(in) :: state
@@ -210,9 +213,9 @@ Contains
     Type(nse_validation_metrics), Intent(out) :: metrics
     Integer, Intent(out) :: failures
 
-    Call evaluate_nse_candidate(expected_names(:,state),candidate_names,aa,zz, &
-      & expected_x(:,state),candidate,state_ye(state),state_tolerances(state), &
-      & metrics,failures)
+    Call evaluate_nse_candidate(expected_names(:,state),candidate_names, &
+      & expected_a(:,state),expected_z(:,state),expected_n(:,state),aa,zz,nn, &
+      & expected_x(:,state),candidate,state_ye(state),state_tolerances(state),metrics,failures)
 
     Return
   End Subroutine evaluate_state
@@ -267,8 +270,9 @@ Contains
     mutated_expected(dominant) = mutated_expected(dominant) &
       & + 2.0_dp*state_tolerances(1)%linf
     Call evaluate_nse_candidate(expected_names(:,1),nname, &
-      & get_mass_numbers(),get_proton_numbers(),mutated_expected,xnse,state_ye(1), &
-      & state_tolerances(1),metrics,failures)
+      & expected_a(:,1),expected_z(:,1),expected_n(:,1),get_mass_numbers(), &
+      & get_proton_numbers(),get_neutron_numbers(),mutated_expected,xnse, &
+      & state_ye(1),state_tolerances(1),metrics,failures)
     Call require_flag(error,failures,nse_fail_dominant)
     If ( allocated(error) ) Return
     Call require_flag(error,failures,nse_fail_linf)
@@ -276,8 +280,9 @@ Contains
 
     mutated_expected = 0.99_dp*expected_x(:,1)
     Call evaluate_nse_candidate(expected_names(:,1),nname, &
-      & get_mass_numbers(),get_proton_numbers(),mutated_expected,xnse,state_ye(1), &
-      & state_tolerances(1),metrics,failures)
+      & expected_a(:,1),expected_z(:,1),expected_n(:,1),get_mass_numbers(), &
+      & get_proton_numbers(),get_neutron_numbers(),mutated_expected,xnse, &
+      & state_ye(1),state_tolerances(1),metrics,failures)
     Call require_flag(error,failures,nse_fail_l1)
     Deallocate(mutated_expected)
 
@@ -318,7 +323,7 @@ Contains
 
   Subroutine test_identity_mutations(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
-    Use nuclear_data, Only: aa, nname, ny, zz
+    Use nuclear_data, Only: aa, nname, nn, ny, zz
     Use xnet_nse, Only: xnse
     Implicit None
 
@@ -327,11 +332,11 @@ Contains
     Character(5) :: saved_name
     Character(5), Allocatable :: candidate_names(:)
     Integer :: failures
-    Real(dp), Allocatable :: candidate(:)
+    Real(dp), Allocatable :: candidate(:), candidate_a(:)
     Type(nse_validation_metrics) :: metrics
 
     Call solve_state(1)
-    Allocate(candidate(ny),candidate_names(ny))
+    Allocate(candidate(ny),candidate_a(ny),candidate_names(ny))
     candidate = xnse
     candidate_names = nname
     saved_name = candidate_names(1)
@@ -347,8 +352,17 @@ Contains
     Call require_flag(error,failures,nse_fail_duplicate)
     If ( allocated(error) ) Return
 
-    Call evaluate_nse_candidate(expected_names(:,1),nname(:ny-1),aa(:ny-1),zz(:ny-1), &
+    Call evaluate_nse_candidate(expected_names(:,1),nname(:ny-1),expected_a(:,1), &
+      & expected_z(:,1),expected_n(:,1),aa(:ny-1),zz(:ny-1),nn(:ny-1), &
       & expected_x(:,1),candidate(:ny-1),state_ye(1),state_tolerances(1),metrics,failures)
+    Call require_flag(error,failures,nse_fail_identity)
+    If ( allocated(error) ) Return
+
+    candidate_a = aa
+    candidate_a(ny) = candidate_a(ny) + 1.0_dp
+    Call evaluate_nse_candidate(expected_names(:,1),nname,expected_a(:,1), &
+      & expected_z(:,1),expected_n(:,1),candidate_a,zz,nn,expected_x(:,1), &
+      & candidate,state_ye(1),state_tolerances(1),metrics,failures)
     Call require_flag(error,failures,nse_fail_identity)
     If ( allocated(error) ) Return
 
@@ -362,7 +376,7 @@ Contains
     candidate(1) = -tiny(1.0_dp)
     Call evaluate_state(1,candidate,nname,metrics,failures)
     Call require_flag(error,failures,nse_fail_nonnegative)
-    Deallocate(candidate,candidate_names)
+    Deallocate(candidate,candidate_a,candidate_names)
 
     Return
   End Subroutine test_identity_mutations
@@ -495,6 +509,17 @@ Contains
 
     Return
   End Function get_proton_numbers
+
+  Function get_neutron_numbers() Result(values)
+    Use nuclear_data, Only: nn
+    Implicit None
+
+    Real(dp) :: values(size(nn))
+
+    values = nn
+
+    Return
+  End Function get_neutron_numbers
 
   Integer Function find_name_index(name) Result(index)
     Use nuclear_data, Only: nname, ny

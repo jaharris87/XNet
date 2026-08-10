@@ -62,10 +62,17 @@ def verify_imported_sources(checkout: Path, package_file: str) -> None:
         "pynucastro/networks/rate_collection.py",
         "pynucastro/nucdata/nucleus.py",
     ):
-        expected = hashlib.sha256((checkout / relative).read_bytes()).digest()
+        expected_source = subprocess.run(
+            ["git", "-C", str(checkout), "show", f"{PINNED_COMMIT}:{relative}"],
+            check=True,
+            capture_output=True,
+        ).stdout
+        expected = hashlib.sha256(expected_source).digest()
         actual = hashlib.sha256((installed_root / relative).read_bytes()).digest()
         if actual != expected:
-            raise RuntimeError(f"imported pynucastro source differs for {relative}")
+            raise RuntimeError(
+                f"imported pynucastro source differs from pinned commit for {relative}"
+            )
 
 
 def main() -> None:
@@ -137,6 +144,8 @@ def main() -> None:
         charge = sum(
             nucleus.Z / nucleus.A * composition.X[nucleus] for nucleus in nuclei
         ) - float(inputs["ye"])
+        if not all(math.isfinite(value) for value in (*differences, mass, charge)):
+            raise RuntimeError(f"nonfinite pynucastro result for {state['id']}")
         print(
             f"{state['id']} L1={sum(differences):.9e} "
             f"Linf={max(differences):.9e} mass={mass:.3e} charge={charge:.3e}"

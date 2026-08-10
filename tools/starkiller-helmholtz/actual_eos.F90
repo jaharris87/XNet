@@ -1699,21 +1699,20 @@ contains
         maxdens = 10.d0**dhi
 
 #if defined(XNET_OMP_OL)
-        ! Establish the initialized allocatable storage before the existing update
-        ! copies its values.
+        ! Establish the linked device descriptor and its initialized payload
+        ! together for these host-allocated variables.
         !XDIR XENTER_DATA &
-        !XDIR XCREATE(mintemp, maxtemp, mindens, maxdens) &
-        !XDIR XCREATE(tlo, thi, dlo, dhi) &
-        !XDIR XCREATE(tstp, tstpi, dstp, dstpi) &
-        !XDIR XCREATE(itmax, jtmax, d, t) &
-        !XDIR XCREATE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
-        !XDIR XCREATE(dpdf, dpdfd, dpdft, dpdfdt) &
-        !XDIR XCREATE(ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
-        !XDIR XCREATE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
-        !XDIR XCREATE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
-        !XDIR XCREATE(do_coulomb, input_is_constant)
-#endif
-
+        !XDIR XCOPYIN(mintemp, maxtemp, mindens, maxdens) &
+        !XDIR XCOPYIN(tlo, thi, dlo, dhi) &
+        !XDIR XCOPYIN(tstp, tstpi, dstp, dstpi) &
+        !XDIR XCOPYIN(itmax, jtmax, d, t) &
+        !XDIR XCOPYIN(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+        !XDIR XCOPYIN(dpdf, dpdfd, dpdft, dpdfdt) &
+        !XDIR XCOPYIN(ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
+        !XDIR XCOPYIN(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+        !XDIR XCOPYIN(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+        !XDIR XCOPYIN(do_coulomb, input_is_constant)
+#else
         !XDIR XUPDATE &
         !XDIR XDEVICE(mintemp, maxtemp, mindens, maxdens) &
         !XDIR XDEVICE(tlo, thi, dlo, dhi) &
@@ -1725,6 +1724,7 @@ contains
         !XDIR XDEVICE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
         !XDIR XDEVICE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
         !XDIR XDEVICE(do_coulomb, input_is_constant)
+#endif
 
     end subroutine actual_eos_init
 

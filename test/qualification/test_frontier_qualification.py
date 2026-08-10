@@ -434,11 +434,10 @@ def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
 
     initialization = completed.stdout.split("subroutine actual_eos_init", 1)[1]
     initialization = initialization.split("end subroutine actual_eos_init", 1)[0]
-    allocation = initialization.index("!$omp target enter data")
-    update = initialization.index("!$omp target update")
-    assert allocation < update
-    assert "map(alloc:itmax, jtmax, d, t)" in initialization
-    assert "to(itmax, jtmax, d, t)" in initialization
+    assert "!$omp target enter data" in initialization
+    assert "map(to:itmax, jtmax, d, t)" in initialization
+    assert "!$omp target update" not in initialization
+    assert "map(alloc:" not in initialization
     assert "always" not in initialization
 
     finalization = completed.stdout.split("subroutine actual_eos_finalize", 1)[1]

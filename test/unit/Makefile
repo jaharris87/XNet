@@ -5,6 +5,7 @@ XNET_DIR := $(ROOT_DIR)/source
 NETLIB_DIR := $(ROOT_DIR)/tools/LAPACK
 BUILD_NET_SOURCE_DIR := $(ROOT_DIR)/test/build_net
 HELM_TABLE := $(ROOT_DIR)/tools/starkiller-helmholtz/helm_table.dat
+STARKILLER_DIR := $(ROOT_DIR)/tools/starkiller-helmholtz
 
 include $(XNET_DIR)/Makefile.opt
 include $(XNET_DIR)/Makefile.internal
@@ -30,6 +31,11 @@ PARDISO_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/pardiso/sparse_contract_tests
 PARDISO_MKL_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/pardiso_mkl/sparse_contract_tests
 SPARSE_CONTRACT_EXES := $(DENSE_CONTRACT_EXE) $(MA48_CONTRACT_EXE) \
   $(PARDISO_CONTRACT_EXE) $(PARDISO_MKL_CONTRACT_EXE)
+EOS_BUILD_DIR := $(BUILD_DIR)/eos
+EOS_WORK_DIR := $(abspath $(BUILD_DIR)/eos-work)
+STARKILLER_EOS_EXE := $(EOS_BUILD_DIR)/starkiller/eos_contract_tests
+BAHCALL_EOS_EXE := $(EOS_BUILD_DIR)/bahcall/eos_contract_tests
+EOS_CONTRACT_EXES := $(STARKILLER_EOS_EXE) $(BAHCALL_EOS_EXE)
 BUILD_NET_BUILD_DIR := $(BUILD_DIR)/build-net
 BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
 BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
@@ -82,9 +88,9 @@ BUILD_NET_OBJECTS := \
 
 .DEFAULT_GOAL := test
 
-.PHONY: test clean production-xnet
+.PHONY: test eos-test clean production-xnet
 
-test: $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
+test: eos-test $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
     $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) production-xnet
 	@$(TEST_EXE)
 	@bash run_preprocess_contracts.sh $(PREPROCESS_FIXTURE_DIR) $(PREPROCESS_WORK_DIR) \
@@ -96,6 +102,10 @@ test: $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROC
 	@python3 run_build_net_contracts.py $(BUILD_NET_WORK_DIR) $(abspath $(BUILD_NET_EXE)) \
 	  $(abspath $(PREPROCESS_NET_SETUP_EXE)) $(abspath $(BUILD_NET_READER_EXE)) \
 	  $(abspath $(PRODUCTION_XNET_EXE)) $(abspath $(HELM_TABLE))
+
+eos-test: $(EOS_CONTRACT_EXES)
+	@bash run_eos_contracts.sh $(EOS_WORK_DIR) $(abspath $(STARKILLER_EOS_EXE)) \
+	  $(abspath $(BAHCALL_EOS_EXE)) $(abspath $(HELM_TABLE))
 
 $(TEST_EXE): $(OBJECTS)
 	$(LDR) -o $@ $(OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
@@ -321,6 +331,92 @@ $(eval $(call sparse_provider_rules,dense,support/dense_component_stubs.F90,$(XN
 $(eval $(call sparse_provider_rules,ma48,support/ma48_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_MA48.F90,TEST_MA48))
 $(eval $(call sparse_provider_rules,pardiso,support/pardiso_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO.F90,TEST_PARDISO))
 $(eval $(call sparse_provider_rules,pardiso_mkl,support/pardiso_mkl_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL))
+
+define eos_provider_rules
+$(EOS_BUILD_DIR)/$(1):
+	mkdir -p $$@
+
+$(EOS_BUILD_DIR)/$(1)/testdrive.o: vendor/test-drive/testdrive.F90 | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/xnet_types.o: $$(XNET_DIR)/xnet_types.F90 | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/xnet_constants.o: $$(XNET_DIR)/xnet_constants.F90 \
+    $(EOS_BUILD_DIR)/$(1)/xnet_types.o | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/xnet_parallel_stubs.o: $$(XNET_DIR)/xnet_parallel_stubs.F90 \
+    $(EOS_BUILD_DIR)/$(1)/xnet_types.o | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/eos_component_stubs.o: support/eos_component_stubs.F90 \
+    $(EOS_BUILD_DIR)/$(1)/xnet_types.o | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/xnet_util.o: $$(XNET_DIR)/xnet_util.F90 \
+    $(EOS_BUILD_DIR)/$(1)/xnet_constants.o $(EOS_BUILD_DIR)/$(1)/xnet_parallel_stubs.o \
+    | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -I$$(XNET_DIR) -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/xnet_abundances.o: $$(XNET_DIR)/xnet_abundances.F90 \
+    $(EOS_BUILD_DIR)/$(1)/xnet_constants.o $(EOS_BUILD_DIR)/$(1)/eos_component_stubs.o \
+    | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -I$$(XNET_DIR) -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/xnet_fd.o: $$(XNET_DIR)/xnet_fd.F90 \
+    $(EOS_BUILD_DIR)/$(1)/xnet_types.o | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/xnet_eos.o: $(2) $(4) \
+    $(EOS_BUILD_DIR)/$(1)/xnet_abundances.o $(EOS_BUILD_DIR)/$(1)/xnet_fd.o \
+    $(EOS_BUILD_DIR)/$(1)/xnet_util.o | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
+	  -I$$(XNET_DIR) -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/test_eos_contracts.o: test_eos_contracts.F90 \
+    $(EOS_BUILD_DIR)/$(1)/testdrive.o $(EOS_BUILD_DIR)/$(1)/xnet_eos.o \
+    | $(EOS_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -D$(3) -J$(EOS_BUILD_DIR)/$(1) \
+	  -I$(EOS_BUILD_DIR)/$(1) -c $$< -o $$@
+
+$(EOS_BUILD_DIR)/$(1)/eos_contract_tests: \
+    $(EOS_BUILD_DIR)/$(1)/testdrive.o \
+    $(EOS_BUILD_DIR)/$(1)/xnet_types.o \
+    $(EOS_BUILD_DIR)/$(1)/xnet_constants.o \
+    $(EOS_BUILD_DIR)/$(1)/xnet_parallel_stubs.o \
+    $(EOS_BUILD_DIR)/$(1)/eos_component_stubs.o \
+    $(EOS_BUILD_DIR)/$(1)/xnet_util.o \
+    $(EOS_BUILD_DIR)/$(1)/xnet_abundances.o \
+    $(EOS_BUILD_DIR)/$(1)/xnet_fd.o \
+    $(4) \
+    $(EOS_BUILD_DIR)/$(1)/xnet_eos.o \
+    $(EOS_BUILD_DIR)/$(1)/test_eos_contracts.o
+	$$(LDR) -o $$@ $$^ $$(LDFLAGS)
+endef
+
+$(EOS_BUILD_DIR)/starkiller/eos_type.o: $(STARKILLER_DIR)/eos_type.F90 \
+    $(EOS_BUILD_DIR)/starkiller/xnet_types.o $(EOS_BUILD_DIR)/starkiller/xnet_util.o \
+    | $(EOS_BUILD_DIR)/starkiller
+	$(FC) $(FFLAGS) $(F90FLAGS) -J$(EOS_BUILD_DIR)/starkiller -I$(EOS_BUILD_DIR)/starkiller \
+	  -I$(XNET_DIR) -c $< -o $@
+
+$(EOS_BUILD_DIR)/starkiller/actual_eos.o: $(STARKILLER_DIR)/actual_eos.F90 \
+    $(EOS_BUILD_DIR)/starkiller/eos_type.o $(EOS_BUILD_DIR)/starkiller/xnet_util.o \
+    $(EOS_BUILD_DIR)/starkiller/xnet_parallel_stubs.o | $(EOS_BUILD_DIR)/starkiller
+	$(FC) $(FFLAGS) $(F90FLAGS) -J$(EOS_BUILD_DIR)/starkiller -I$(EOS_BUILD_DIR)/starkiller \
+	  -I$(XNET_DIR) -c $< -o $@
+
+$(eval $(call eos_provider_rules,starkiller,$(XNET_DIR)/xnet_eos_starkiller.F90,TEST_STARKILLER,$(EOS_BUILD_DIR)/starkiller/eos_type.o $(EOS_BUILD_DIR)/starkiller/actual_eos.o))
+$(eval $(call eos_provider_rules,bahcall,$(XNET_DIR)/xnet_eos_bahcall.F90,TEST_BAHCALL,))
 
 $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o: support/verify_build_net_readers.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o $(PREPROCESS_BUILD_DIR)/xnet_match.o \

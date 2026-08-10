@@ -23,10 +23,12 @@ compiles the production network preprocessing, data, match, and PARDISO
 sparse-reader modules. Backend-isolated executables compile the production
 dense, MA48, standalone PARDISO, and MKL PARDISO Jacobian providers in separate
 module directories because those sources intentionally provide the same
-`xnet_jacobian` module name. The build-net interoperability component cleans
-and rebuilds the tracked `source/xnet` configuration because its final check is
-a real one-zone executable smoke; production objects and executables therefore
-remain in the ignored in-place `source/` build location.
+`xnet_jacobian` module name. Provider-isolated EOS executables likewise compile
+the production STARKILLER and Bahcall implementations in separate module
+directories because both provide `xnet_eos`. The build-net interoperability
+component cleans and rebuilds the tracked `source/xnet` configuration because
+its final check is a real one-zone executable smoke; production objects and
+executables therefore remain in the ignored in-place `source/` build location.
 
 ## Bounded support and coverage
 
@@ -65,6 +67,13 @@ The suite checks:
 - repeatability between the default NSE roots and a materially different
   supplied initial guess; and
 - screened NSE execution through a deterministic software-only EOS seam;
+- STARKILLER and Bahcall initialization, scalar/vector equivalence, argument
+  order, finite/sign/range invariants, repeatability, and masked-lane
+  preservation for the EOS and screening interfaces;
+- STARKILLER failure with a missing `helm_table.dat` and agreement of its
+  table-based Helmholtz EOS at five density, temperature, and composition
+  states with direct Timmes EOS values independently generated from the
+  authoritative Cococubed source documented under `fixtures/eos/`;
 - direct `net_preprocess` and standalone `net_setup` semantic equivalence for
   the synthetic fixture described under `fixtures/preprocess/`;
 - nuclear/reaction translation, weak/reverse flags, repeated-participant
@@ -326,3 +335,48 @@ successfully with its ordinary sequential `make` invocation. These checks cover 
 serial GNU CPU configuration and synthetic source formats only; they do not
 validate production nuclear-data quality, private neutrino data, MPI,
 accelerators, other compilers, or a long scientific result.
+
+## Issue 42 effectiveness record
+
+The EOS-only command is:
+
+```text
+make -C test/unit clean eos-test
+make -C test/unit clean eos-test CMODE=DEBUG
+```
+
+The tracked GNU configuration uses `PE_ENV=GNU`, `FC=gfortran`,
+`LDR=gfortran`, serial CPU execution, the in-tree NETLIB objects, and either
+`CMODE=OPT` or bounds-checking `CMODE=DEBUG`. Both providers are compiled with
+the same selected variables in their isolated module directories.
+
+Both provider executables compile production sources behind their shared
+`xnet_eos` module name. The STARKILLER run exercises the table-based Helmholtz
+EOS and compares its XNet fields at five states with values from a separate,
+direct Timmes EOS calculation. The Cococubed archive provenance, exact
+relationship between the implementations, and field mappings are documented
+in `fixtures/eos/README.md`. The Bahcall run is an interface and anti-bit-rot
+component; it is not an independent scientific qualification.
+
+Before the production correction, Bahcall failed scalar/vector agreement
+because its scalar procedure declared `(rho,t9,...)` while the generic call
+contract and vector procedure use `(t9,rho,...)`. The masked vector result
+arguments were also `Intent(out)`, which made inactive-lane preservation
+undefined on procedure entry even when a host compiler happened to retain the
+incoming bits. They now use `Intent(inout)`; the STARKILLER accelerator data
+regions copy those incoming values before active lanes are updated.
+
+Four test-only effectiveness mutations return nonzero status through
+`XNET_EOS_MUTATION`: `mask` executes the nominally inactive lane,
+`argument_swap` reverses the scalar state inputs, `unit_conversion` omits the
+GK factor from the independent `cv` mapping, and `reference` perturbs one eta
+value by one percent. Missing-table initialization also returns nonzero and
+names `helm_table.dat`.
+
+`EOS=HELMHOLTZ` is explicitly unqualified and unsupported by this repository
+state. This separate build choice requires source through `HELMHOLTZ_PATH`;
+the source is not tracked and the Cococubed archive was used here only as the
+authoritative upstream reference, not added as a production dependency. The
+component therefore does not stub that provider or claim qualification. A
+future support decision requires an approved maintained integration and a real
+provider-isolated run of the shared contract.

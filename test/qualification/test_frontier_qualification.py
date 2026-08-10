@@ -239,13 +239,18 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     compiler.write_text(
         "#!/bin/bash\n"
         "for argument in \"$@\"; do source_file=$argument; done\n"
-        "cp \"${source_file}\" \"${XNET_CAPTURE}\"\n",
+        "cp \"${source_file}\" \"${XNET_CAPTURE}\"\n"
+        "printf '%s\\n' \"${source_file##*/}\" > \"${XNET_CAPTURE_NAME}\"\n",
         encoding="utf-8",
     )
     compiler.chmod(0o755)
     environment = os.environ.copy()
     environment.update(
-        {"XNET_CRAY_FTN": str(compiler), "XNET_CAPTURE": str(capture)}
+        {
+            "XNET_CRAY_FTN": str(compiler),
+            "XNET_CAPTURE": str(capture),
+            "XNET_CAPTURE_NAME": str(tmp_path / "source-name.txt"),
+        }
     )
     wrapper = FRONTIER_DIRECTORY.parents[2] / "source" / "crayftn_cpp.sh"
     completed = subprocess.run(
@@ -265,6 +270,7 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
+    assert (tmp_path / "source-name.txt").read_text(encoding="utf-8") == "probe.f90\n"
     preprocessed = capture.read_text(encoding="utf-8")
     normalized = "\n".join(" ".join(line.split()) for line in preprocessed.splitlines())
     assert 'joined = "a" // "b"' in preprocessed

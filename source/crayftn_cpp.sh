@@ -50,11 +50,13 @@ fi
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/xnet-crayftn-cpp.XXXXXX")
 trap 'rm -rf -- "${temporary_directory}"' EXIT HUP INT TERM
-preprocessed_source="${temporary_directory}/source.f90"
-raw_preprocessed_source="${temporary_directory}/raw-source.f90"
+source_basename=${source_file##*/}
+source_stem=${source_basename%.*}
+preprocessed_source="${temporary_directory}/${source_stem}.f90"
+raw_preprocessed_source="${temporary_directory}/raw-${source_stem}.f90"
 if [[ ${source_form} == fixed ]]; then
-  preprocessed_source="${temporary_directory}/source.f"
-  raw_preprocessed_source="${temporary_directory}/raw-source.f"
+  preprocessed_source="${temporary_directory}/${source_stem}.f"
+  raw_preprocessed_source="${temporary_directory}/raw-${source_stem}.f"
 fi
 
 if ! "${preprocessor}" "${preprocessor_arguments[@]}" \

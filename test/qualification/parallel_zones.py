@@ -490,7 +490,7 @@ def validate_ascii_association(
     return tuple(endpoints)
 
 
-def _run_success(
+def run_configuration(
     label: str,
     command: Sequence[Path | str],
     work_directory: Path,
@@ -532,7 +532,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
     else:
         work_root.mkdir(parents=True)
 
-    serial_result = _run_success(
+    serial_result = run_configuration(
         "serial", (serial,), work_root / "serial", arguments.timeout
     )
     mpi_command = (
@@ -542,7 +542,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
         "2",
         mpi,
     )
-    mpi_result = _run_success(
+    mpi_result = run_configuration(
         "MPI",
         mpi_command,
         work_root / "mpi",
@@ -565,7 +565,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
     openmp_environment.update({"OMP_NUM_THREADS": "2", "OMP_DYNAMIC": "FALSE"})
     openmp_results: list[ConfigurationResult] = []
     for repetition in range(1, 4):
-        result = _run_success(
+        result = run_configuration(
             f"OpenMP repetition {repetition}",
             (openmp,),
             work_root / f"openmp-{repetition}",

@@ -7,15 +7,18 @@
 #-------------------------------------------------------------------------------
 
 ## GPU Runtime
+ifdef OLCF_HIPFORT_ROOT
+    HIPFORT_DIR ?= $(OLCF_HIPFORT_ROOT)
+endif
+ifdef ROCM_PATH
+    ROCM_DIR ?= $(ROCM_PATH)
+endif
+
 ifeq (,$(filter $(MACHINE),$(CRAY_MACHINE)))
     ifdef OLCF_CUDA_ROOT
         CUDA_DIR ?= $(OLCF_CUDA_ROOT)
     else
         CUDA_DIR ?= /usr/local/cuda
-    endif
-    ifdef OLCF_HIPFORT_ROOT
-        HIPFORT_DIR ?= $(OLCF_HIPFORT_ROOT)
-        ROCM_DIR ?= $(ROCM_PATH)
     endif
 else
     ifdef CUDATOOLKIT_HOME
@@ -61,10 +64,10 @@ HIP_SRC    = hipf.F90
 HIP_OBJ    = $(addsuffix .o,$(basename $(HIP_SRC)))
 
 ROCM_DEF    = -DXNET_LA_ROCM
-ROCM_INC    = -I$(ROCM_DIR)/include
+ROCM_INC    = $(HIP_INC) -I$(ROCM_DIR)/include
 ROCM_LIBDIR = -L$(ROCM_DIR)/lib
-ROCM_LIBS   = -lrocsparse -lrocsolver -lrocblas -lhipblas -lhipsparse -lamdhip6
-ROCM_SRC    = hipblasf.F90 hipsparsef.F90 rocblasf.F90 rocsparsef.F90 rocsolverf.F90
+ROCM_LIBS   = -lrocsparse -lrocsolver -lrocblas -lhipblas -lhipsparse -lamdhip64
+ROCM_SRC    = hipblasf.F90 rocblasf.F90 rocsparsef.F90 rocsolverf.F90
 ROCM_OBJ    = $(addsuffix .o,$(basename $(ROCM_SRC)))
 
 ## MAGMA
@@ -172,11 +175,12 @@ ifeq ($(GPU_MODE),ON)
         FLAGS   += $(OPENMP_OL)
     endif
     FLAGS   += $(GPU_DEF) $(GPU_LAPACK_DEF)
+    FFLAGS  += $(GPU_INC)
     BASE    += $(GPU_OBJ)
 
-    LAPACK_INC    += $(GPU_LAPACK_INC)
-    LAPACK_LIBDIR += $(GPU_LAPACK_LIBDIR)
-    LAPACK_LIBS   += $(GPU_LAPACK_LIBS)
+    LAPACK_INC    += $(GPU_INC) $(GPU_LAPACK_INC)
+    LAPACK_LIBDIR += $(GPU_LIBDIR) $(GPU_LAPACK_LIBDIR)
+    LAPACK_LIBS   += $(GPU_LIBS) $(GPU_LAPACK_LIBS)
     LAPACK_OBJ    += $(GPU_LAPACK_OBJ)
 endif
 
@@ -188,6 +192,15 @@ xnet_gpu: $(BASE) xnet_jacobian_dense.o $(CUBLAS_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnet_gpu$(MPI_SFX) \
 	    $(BASE) xnet_jacobian_dense.o $(notdir $(CUBLAS_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(CUBLAS_LIBDIR) $(CUBLAS_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+
+frontier_gpu_linalg_probe: $(BASE) xnet_jacobian_dense.o $(LAPACK_OBJ) frontier_gpu_linalg_probe.o
+	$(LDR) $(LDFLAGS) -o $@ \
+	    $(BASE) xnet_jacobian_dense.o $(notdir $(LAPACK_OBJ)) frontier_gpu_linalg_probe.o \
+	    $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+
+frontier_gpu_linalg_probe.o: $(XNET_TEST_DIR)/qualification/frontier/gpu_linalg_probe.F90 \
+                             xnet_controls.o xnet_gpu.o xnet_linalg.o xnet_types.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $@
 
 $(GPU_LAPACK_OBJ_f90): %.o: %.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
@@ -206,4 +219,3 @@ $(GPU_LAPACK_OBJ_CU): %.o: %.cu
 
 %.o: %.cu
 	$(NVCC) $(NVCCFLAGS) $(CUDA_INC) -c $< -o $@
-

@@ -79,9 +79,7 @@ Module xnet_linalg
     rocsolver_handle, &
     rocsolver_dgeqrf, &
     rocsolver_dormqr, &
-    rocsolver_dgetrf, &
     rocsolver_dgetrf_batched, &
-    rocsolver_dgetrs, &
     rocsolver_dgetrs_batched
   Use rocsparsef, Only: &
     rocsparse_handle, &
@@ -106,10 +104,6 @@ Module xnet_linalg
     HIPBLAS_SIDE_LEFT, &
     HIPBLAS_FILL_MODE_UPPER, &
     HIPBLAS_DIAG_NON_UNIT
-  Use hipsparsef, Only: &
-    hipsparse_handle, &
-    hipsparseDgthr, &
-    HIPSPARSE_INDEX_BASE_ONE
 #elif defined(XNET_LA_ONEMKL)
   Use onemkl_blas_omp_offload_lp64
 #elif defined(XNET_LA_MAGMA)

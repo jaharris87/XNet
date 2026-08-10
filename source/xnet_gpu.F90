@@ -44,7 +44,7 @@ Module xnet_gpu
     hipGetDeviceCount, &
     hipSetDevice, &
     hipStreamCreate, &
-    hipStreamDestroy &
+    hipStreamDestroy, &
     hipStreamSynchronize, &
     hipCheck, &
     hipblasCheck, &
@@ -252,7 +252,7 @@ Contains
 #elif defined(XNET_HIP)
     Call hipCheck( hipStreamDestroy( stream ) )
     Call hipblasCheck( hipblasDestroy( hipblas_handle ) )
-    Call rocblasCheck( rocblas_destroy_handle( rocsolver_handle )
+    Call rocblasCheck( rocblas_destroy_handle( rocsolver_handle ) )
 #endif
     !$omp end parallel
 #endif

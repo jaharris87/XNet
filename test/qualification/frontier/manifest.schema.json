@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jaharris87/XNet/test/qualification/frontier/manifest.schema.json",
+  "title": "XNet Frontier qualification manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "failure",
+    "source",
+    "environment",
+    "slurm",
+    "builds",
+    "inputs",
+    "checks",
+    "artifact_inventory",
+    "started_at_utc",
+    "finished_at_utc",
+    "runtime_seconds"
+  ],
+  "properties": {
+    "schema": {"const": "xnet-frontier-qualification-v1"},
+    "status": {"enum": ["passed", "failed"]},
+    "failure": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category", "phase", "message"],
+          "properties": {
+            "category": {
+              "enum": [
+                "source",
+                "environment",
+                "submission",
+                "queue",
+                "allocation",
+                "facility",
+                "build",
+                "test",
+                "comparison"
+              ]
+            },
+            "phase": {"type": "string", "minLength": 1},
+            "message": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "worktree_clean", "archive_sha256"],
+      "properties": {
+        "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "worktree_clean": {"const": true},
+        "archive_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "environment": {"type": "object"},
+    "slurm": {"type": "object"},
+    "builds": {"type": "object"},
+    "inputs": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "checks": {"type": "object"},
+    "artifact_inventory": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "started_at_utc": {"type": "string", "format": "date-time"},
+    "finished_at_utc": {"type": "string", "format": "date-time"},
+    "runtime_seconds": {"type": "number", "minimum": 0}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "size": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

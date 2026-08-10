@@ -22,7 +22,9 @@ module hipblasf
     hipblasDaxpy, &
     hipblasDgemm, &
     hipblasDgemmStridedBatched, &
+    hipblasDgetrf, &
     hipblasDgetrfBatched, &
+    hipblasDgetrs, &
     hipblasDgetrsBatched, &
     hipblasDgemv, &
     hipblasDtrsv, &

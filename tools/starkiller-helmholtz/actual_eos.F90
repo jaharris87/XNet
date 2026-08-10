@@ -1698,20 +1698,6 @@ contains
         mindens = 10.d0**dlo
         maxdens = 10.d0**dhi
 
-#if defined(XNET_OMP_OL)
-        ! The declare-target allocatables are registered before their host allocation. Remap them
-        ! after initialization so the device allocation status, shape, and values are all current.
-        !$omp target enter data &
-        !$omp& map(always, to: mintemp, maxtemp, mindens, maxdens) &
-        !$omp& map(always, to: tlo, thi, dlo, dhi, tstp, tstpi, dstp, dstpi) &
-        !$omp& map(always, to: itmax, jtmax, d, t) &
-        !$omp& map(always, to: f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
-        !$omp& map(always, to: dpdf, dpdfd, dpdft, dpdfdt) &
-        !$omp& map(always, to: ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
-        !$omp& map(always, to: dt_sav, dt2_sav, dti_sav, dt2i_sav) &
-        !$omp& map(always, to: dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
-        !$omp& map(always, to: do_coulomb, input_is_constant)
-#else
         !XDIR XUPDATE &
         !XDIR XDEVICE(mintemp, maxtemp, mindens, maxdens) &
         !XDIR XDEVICE(tlo, thi, dlo, dhi) &
@@ -1723,7 +1709,6 @@ contains
         !XDIR XDEVICE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
         !XDIR XDEVICE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
         !XDIR XDEVICE(do_coulomb, input_is_constant)
-#endif
 
     end subroutine actual_eos_init
 

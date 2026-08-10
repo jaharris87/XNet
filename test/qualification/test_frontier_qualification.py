@@ -350,7 +350,7 @@ def test_openmp_device_pointer_helpers_query_mapped_addresses() -> None:
     assert "use_device_ptr" not in completed.stdout
 
 
-def test_openmp_rocm_batched_factor_and_solve_use_contiguous_strides() -> None:
+def test_supported_gpu_batched_factor_and_solve_paths() -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")
     repository = FRONTIER_DIRECTORY.parents[2]
@@ -415,16 +415,16 @@ def test_openmp_rocm_batched_factor_and_solve_use_contiguous_strides() -> None:
     assert "hipblasDgetrsBatched" not in bksub
     assert "dev_ptr( da(1) )" not in bksub
 
-    openacc = subprocess.run(
+    openacc_cuda = subprocess.run(
         [
             "cpp",
             "-P",
             "-C",
             "-nostdinc",
             "-DXNET_GPU",
-            "-DXNET_HIP",
+            "-DXNET_CUDA",
             "-DXNET_OACC",
-            "-DXNET_LA_ROCM",
+            "-DXNET_LA_CUBLAS",
             f"-I{repository / 'source'}",
             str(repository / "source" / "xnet_linalg.F90"),
         ],
@@ -432,15 +432,15 @@ def test_openmp_rocm_batched_factor_and_solve_use_contiguous_strides() -> None:
         text=True,
         check=False,
     )
-    assert openacc.returncode == 0, openacc.stderr
-    factor = openacc.stdout.split("Subroutine LUDecompBatched_GPU", 1)[1]
+    assert openacc_cuda.returncode == 0, openacc_cuda.stderr
+    factor = openacc_cuda.stdout.split("Subroutine LUDecompBatched_GPU", 1)[1]
     factor = factor.split("End Subroutine LUDecompBatched_GPU", 1)[0]
-    assert "hipblasDgetrfBatched" in factor
+    assert "cublasDgetrfBatched" in factor
     assert "dev_ptr( da(1) )" in factor
 
-    bksub = openacc.stdout.split("Subroutine LUBksubBatched_GPU", 1)[1]
+    bksub = openacc_cuda.stdout.split("Subroutine LUBksubBatched_GPU", 1)[1]
     bksub = bksub.split("End Subroutine LUBksubBatched_GPU", 1)[0]
-    assert "hipblasDgetrsBatched" in bksub
+    assert "cublasDgetrsBatched" in bksub
     assert "dev_ptr( da(1) )" in bksub
 
 

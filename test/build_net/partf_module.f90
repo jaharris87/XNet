@@ -192,6 +192,7 @@ MODULE partf_module
     ! Local variables
     INTEGER :: iz_read, ia_read
     CHARACTER(LEN=15) :: eval_read
+    CHARACTER(LEN=256) :: line_read
     REAL(8) :: mex_read
 
     INTEGER :: i, ierr
@@ -208,11 +209,18 @@ MODULE partf_module
       END IF
     END DO
 
-    DO 
-!     READ(lun_mass,'(2(1x,i3),1x,a15,1x,f12.5)',IOSTAT=ierr) &
-      READ(lun_mass,*,IOSTAT=ierr) iz_read, ia_read, eval_read, mex_read
+    DO
+      READ(lun_mass,'(a)',IOSTAT=ierr) line_read
       IF ( ierr < 0 ) EXIT
       IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Cannot read mass source record'
+        STOP 1
+      END IF
+      IF ( LEN_TRIM(line_read) == 0 ) CYCLE
+
+      READ(line_read,*,IOSTAT=ierr) iz_read, ia_read, eval_read, mex_read
+      IF ( ierr /= 0 ) THEN
+        IF ( INDEX(line_read,'#') > 0 ) CYCLE
         WRITE(*,'(a)') 'ERROR: Cannot read mass source record'
         STOP 1
       END IF

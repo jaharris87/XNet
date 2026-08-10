@@ -114,10 +114,16 @@ def write_partition_source(path: Path) -> None:
 
 def write_mass_source(path: Path) -> None:
     lines = [f"synthetic mass header {index:02d}" for index in range(1, 16)]
+    first_data_index = len(lines)
     lines.extend(
         f"{zz:d} {int(aa):d} synthetic {mass * 1.0e3:.8f}"
         for _, aa, zz, _, _, mass in MASTER_SPECIES
     )
+    # A missing uncertainty after a valid mass must not discard that mass.
+    lines[first_data_index] += " #"
+    # The repository's JINA-derived mass tables use '#' for unavailable
+    # evaluations.  Unselected missing records must not make the reader fail.
+    lines.append("75 203 synthetic #")
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
 
 

@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Focused tests for the independent reference and its retained inputs."""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import math
+import unittest
+from decimal import Decimal, localcontext
+from pathlib import Path
+
+from extract_inputs import REPOSITORY_ROOT, extract, sha256
+from generate_reference import scientific_dataset_hash
+from reference_solver import (
+    Species,
+    State,
+    build_species,
+    composition_norms,
+    evaluate,
+    solve,
+)
+
+
+DIRECTORY = Path(__file__).resolve().parent
+NETWORK_DIRECTORY = DIRECTORY / "network"
+REFERENCE_JSON = DIRECTORY / "reference.json"
+REFERENCE_DATA = DIRECTORY / "reference.dat"
+
+
+class ReferenceToolingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.payload = json.loads(REFERENCE_JSON.read_text(encoding="utf-8"))
+        cls.manifest = extract(NETWORK_DIRECTORY, REPOSITORY_ROOT)
+
+    def test_network_and_generator_identity(self) -> None:
+        selected = REPOSITORY_ROOT / "test/build_net/sunet.torch489"
+        self.assertEqual(
+            (NETWORK_DIRECTORY / "sunet").read_bytes(), selected.read_bytes()
+        )
+        self.assertEqual(
+            self.payload["network"]["canonical_input_sha256"],
+            self.manifest["canonical_input_sha256"],
+        )
+        self.assertEqual(
+            self.payload["network"]["sunet_sha256"],
+            sha256(NETWORK_DIRECTORY / "sunet"),
+        )
+        self.assertEqual(
+            self.payload["network"]["netwinv_sha256"],
+            sha256(NETWORK_DIRECTORY / "netwinv"),
+        )
+        self.assertEqual(
+            self.payload["network"]["build_input_sha256"],
+            sha256(NETWORK_DIRECTORY / "build_input.namelist"),
+        )
+        for name, expected in self.payload["generator"]["files"].items():
+            self.assertEqual(expected, sha256(DIRECTORY / name))
+        for name, expected in self.payload["network"][
+            "network_builder_source_hashes"
+        ].items():
+            self.assertEqual(expected, sha256(REPOSITORY_ROOT / name))
+
+    def test_complete_dataset_identity_and_hashes(self) -> None:
+        expected_names = [item["name"] for item in self.manifest["species"]]
+        self.assertEqual(len(expected_names), 489)
+        self.assertEqual(len(set(expected_names)), len(expected_names))
+        for state in self.payload["states"]:
+            names = [item["name"] for item in state["composition"]]
+            self.assertEqual(names, expected_names)
+            self.assertEqual(len(set(names)), len(names))
+            numeric_tolerances = [
+                float(state["tolerances"][name])
+                for name in (
+                    "mass_normalization_absolute",
+                    "xnet_charge_residual_absolute",
+                    "reconstructed_ye_absolute",
+                    "composition_l1_absolute",
+                    "composition_linf_absolute",
+                )
+            ]
+            self.assertTrue(
+                all(math.isfinite(value) and value > 0.0 for value in numeric_tolerances)
+            )
+            values = [float(item["mass_fraction"]) for item in state["composition"]]
+            self.assertTrue(all(math.isfinite(value) for value in values))
+            self.assertTrue(all(value >= 0.0 for value in values))
+            self.assertLess(abs(math.fsum(values) - 1.0), 5.0e-15)
+            reconstructed_ye = math.fsum(
+                value * item["z"] / item["a"]
+                for value, item in zip(
+                    values, self.manifest["species"], strict=True
+                )
+            )
+            self.assertLess(
+                abs(reconstructed_ye - float(state["inputs"]["ye"])), 5.0e-15
+            )
+        self.assertEqual(
+            self.payload["scientific_dataset_sha256"],
+            scientific_dataset_hash(self.payload),
+        )
+        self.assertEqual(
+            self.payload["reference_data_sha256"],
+            hashlib.sha256(REFERENCE_DATA.read_bytes()).hexdigest(),
+        )
+
+    def test_fortran_data_has_complete_stable_order(self) -> None:
+        lines = REFERENCE_DATA.read_text(encoding="ascii").splitlines()
+        self.assertEqual(lines[0], "XNET_NSE_REFERENCE_V1")
+        species_count, state_count = (int(value) for value in lines[1].split())
+        self.assertEqual((species_count, state_count), (489, 3))
+        self.assertEqual(lines[2], self.manifest["network"]["order_sha256"])
+        cursor = 3
+        expected_names = [item["name"] for item in self.manifest["species"]]
+        for expected_state in self.payload["states"]:
+            self.assertEqual(lines[cursor], f"STATE {expected_state['id']}")
+            self.assertEqual(
+                lines[cursor + 1].split(),
+                [
+                    expected_state["inputs"]["rho_g_cm3"],
+                    expected_state["inputs"]["t9_gk"],
+                    expected_state["inputs"]["ye"],
+                ],
+            )
+            self.assertEqual(
+                lines[cursor + 2].split(),
+                [
+                    expected_state["tolerances"][name]
+                    for name in (
+                        "mass_normalization_absolute",
+                        "xnet_charge_residual_absolute",
+                        "reconstructed_ye_absolute",
+                        "composition_l1_absolute",
+                        "composition_linf_absolute",
+                    )
+                ],
+            )
+            cursor += 3
+            names = []
+            values = []
+            for _ in range(species_count):
+                name, value = lines[cursor].split()
+                names.append(name)
+                values.append(value)
+                cursor += 1
+            self.assertEqual(names, expected_names)
+            self.assertEqual(
+                values,
+                [item["mass_fraction"] for item in expected_state["composition"]],
+            )
+        self.assertEqual(cursor, len(lines))
+
+    def test_two_species_constraints_have_closed_form_solution(self) -> None:
+        with localcontext() as context:
+            context.prec = 80
+            ye = Decimal("0.4")
+            species = (
+                Species("n", 1, 0, 1, Decimal(0)),
+                Species("p", 1, 1, 0, Decimal(0)),
+            )
+            result = evaluate(species, (Decimal(1) - ye).ln(), ye.ln(), ye)
+        self.assertLess(max(abs(value) for value in result.residual), Decimal("1e-70"))
+        self.assertLess(
+            abs(result.normalized_composition[0] - (Decimal(1) - ye)),
+            Decimal("1e-70"),
+        )
+        self.assertLess(
+            abs(result.normalized_composition[1] - ye), Decimal("1e-70")
+        )
+
+    def test_analytic_jacobian_matches_independent_finite_difference(self) -> None:
+        record = self.payload["states"][0]
+        state = State.from_strings(
+            record["id"],
+            record["inputs"]["rho_g_cm3"],
+            record["inputs"]["t9_gk"],
+            record["inputs"]["ye"],
+        )
+        with localcontext() as context:
+            context.prec = 80
+            species = build_species(self.manifest, state, 60)
+            eta_n = Decimal(record["reference"]["eta_n"])
+            eta_p = Decimal(record["reference"]["eta_p"])
+            analytic = evaluate(species, eta_n, eta_p, state.ye).jacobian
+            step = Decimal("1e-20")
+            n_plus = evaluate(species, eta_n + step, eta_p, state.ye).residual
+            n_minus = evaluate(species, eta_n - step, eta_p, state.ye).residual
+            p_plus = evaluate(species, eta_n, eta_p + step, state.ye).residual
+            p_minus = evaluate(species, eta_n, eta_p - step, state.ye).residual
+            numeric = (
+                (
+                    (n_plus[0] - n_minus[0]) / (2 * step),
+                    (p_plus[0] - p_minus[0]) / (2 * step),
+                ),
+                (
+                    (n_plus[1] - n_minus[1]) / (2 * step),
+                    (p_plus[1] - p_minus[1]) / (2 * step),
+                ),
+            )
+        for analytic_row, numeric_row in zip(analytic, numeric, strict=True):
+            for analytic_value, numeric_value in zip(
+                analytic_row, numeric_row, strict=True
+            ):
+                self.assertLess(
+                    abs(analytic_value - numeric_value), Decimal("1e-35")
+                )
+
+    def test_mass_input_perturbation_changes_independent_result(self) -> None:
+        record = self.payload["states"][0]
+        state = State.from_strings(
+            record["id"],
+            record["inputs"]["rho_g_cm3"],
+            record["inputs"]["t9_gk"],
+            record["inputs"]["ye"],
+        )
+        nominal = solve(self.manifest, state, 35)
+        perturbed_manifest = copy.deepcopy(self.manifest)
+        target = next(
+            item for item in perturbed_manifest["species"] if item["name"] == "co55"
+        )
+        changed = float.fromhex(target["binding_energy_mev"]["hex"]) + 0.010
+        target["binding_energy_mev"] = {
+            "decimal": format(changed, ".17g"),
+            "hex": changed.hex(),
+        }
+        perturbed = solve(perturbed_manifest, state, 35)
+        l1, linf = composition_norms(nominal.composition, perturbed.composition)
+        self.assertGreater(
+            l1, Decimal(record["tolerances"]["composition_l1_absolute"])
+        )
+        self.assertGreater(
+            linf, Decimal(record["tolerances"]["composition_linf_absolute"])
+        )
+
+    def test_precision_checks_are_binary64_stable(self) -> None:
+        for state in self.payload["states"]:
+            checks = state["reference"]["precision_checks"]
+            self.assertEqual(
+                [item["precision_decimal_digits"] for item in checks], [35, 65]
+            )
+            self.assertTrue(
+                all(item["stored_binary64_identical"] for item in checks)
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

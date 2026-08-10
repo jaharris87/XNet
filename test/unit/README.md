@@ -41,6 +41,13 @@ a production algorithm or provide a generic mock framework. The runner explicitl
 parallelism because the component fixtures intentionally share this small
 module state; production code still compiles with the selected OpenMP flags.
 
+The issue #41 scientific NSE executable is separate from that eight-species
+software fixture.  It loads the retained 489-species `torch489` network and
+independently generated complete compositions under `test/nse_validation/`,
+then calls the same production `nse_initialize`/`nse_solve` seam.  Its
+scientific authority, exact inputs, tolerance derivation, reproduction steps,
+and limitations are documented in `test/nse_validation/README.md`.
+
 The solver-adapter executables use a three-equation nonsymmetric fixture in two
 zones, with an optional fourth temperature equation. Test-only MA48 and
 PARDISO external symbols record ABI arguments, phases, controls, and zone
@@ -67,6 +74,10 @@ The suite checks:
 - repeatability between the default NSE roots and a materially different
   supplied initial guess; and
 - screened NSE execution through a deterministic software-only EOS seam;
+- complete unscreened 489-species NSE compositions at symmetric,
+  neutron-rich, and proton-rich/lower-density states against the independent
+  issue #41 reference, including conservation, identity, invalid-value,
+  supplied-guess, binding-input, and tolerance-boundary effectiveness checks;
 - STARKILLER and Bahcall initialization, scalar/vector equivalence, argument
   order, finite/sign/range invariants, repeatability, and masked-lane
   preservation for the EOS and screening interfaces;
@@ -147,7 +158,9 @@ weak source. No private neutrino data is used.
 
 The runner executes identical positive construction twice and compares parsed
 semantics, then checks every expected output field rather than comparing raw
-files. It requires nonzero status and an error diagnostic for a normalized
+files.  Its mass catalog includes both a valid selected mass with an unavailable
+`#` uncertainty and an unselected unavailable `#` mass, so the reader must
+distinguish the required field.  It requires nonzero status and an error diagnostic for a normalized
 duplicate, blank or unavailable requested species, malformed namelist,
 malformed initial or later REACLIB data, missing required mass input, and
 missing explicitly enabled weak input. Controlled output

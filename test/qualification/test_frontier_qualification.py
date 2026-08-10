@@ -308,6 +308,25 @@ def test_accelerator_routine_directives_follow_ordered_specification_statements(
                 break
 
 
+def test_accelerator_clauses_use_backend_macros() -> None:
+    repository = FRONTIER_DIRECTORY.parents[2]
+    source_files = list((repository / "source").glob("*.F90"))
+    source_files.extend((repository / "tools" / "starkiller-helmholtz").glob("*.F90"))
+
+    for source_file in source_files:
+        for line_number, line in enumerate(
+            source_file.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            directive = line.strip()
+            if not directive.startswith("!XDIR"):
+                continue
+            clause = directive.removeprefix("!XDIR").lstrip()
+            assert not clause.startswith(("ASYNC(", "HOST(", "PRIVATE(")), (
+                f"{source_file}:{line_number}: accelerator clause bypasses its "
+                "backend macro"
+            )
+
+
 def test_openmp_device_pointer_helpers_query_mapped_addresses() -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")

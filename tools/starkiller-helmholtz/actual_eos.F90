@@ -100,16 +100,16 @@ module actual_eos_module
     real(dp), parameter :: onethird = 1.0_dp/3.0_dp
     real(dp), parameter :: esqu = qe * qe
 
-    !XDIR XDECLARE_VAR(tlo, thi, dlo, dhi)
-    !XDIR XDECLARE_VAR(tstp, tstpi, dstp, dstpi)
+    !XDIR XDECLARE_ALLOC(tlo, thi, dlo, dhi)
+    !XDIR XDECLARE_ALLOC(tstp, tstpi, dstp, dstpi)
     !XDIR XDECLARE_VAR(ttol, dtol)
-    !XDIR XDECLARE_VAR(itmax, jtmax, d, t)
-    !XDIR XDECLARE_VAR(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
-    !XDIR XDECLARE_VAR(dpdf, dpdfd, dpdft, dpdfdt)
-    !XDIR XDECLARE_VAR(ef, efd, eft, efdt, xf, xfd, xft, xfdt)
-    !XDIR XDECLARE_VAR(dt_sav, dt2_sav, dti_sav, dt2i_sav)
-    !XDIR XDECLARE_VAR(dd_sav, dd2_sav, ddi_sav, dd2i_sav)
-    !XDIR XDECLARE_VAR(do_coulomb, input_is_constant)
+    !XDIR XDECLARE_ALLOC(itmax, jtmax, d, t)
+    !XDIR XDECLARE_ALLOC(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
+    !XDIR XDECLARE_ALLOC(dpdf, dpdfd, dpdft, dpdfdt)
+    !XDIR XDECLARE_ALLOC(ef, efd, eft, efdt, xf, xfd, xft, xfdt)
+    !XDIR XDECLARE_ALLOC(dt_sav, dt2_sav, dti_sav, dt2i_sav)
+    !XDIR XDECLARE_ALLOC(dd_sav, dd2_sav, ddi_sav, dd2i_sav)
+    !XDIR XDECLARE_ALLOC(do_coulomb, input_is_constant)
 
     public :: actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
     public :: xnet_actual_eos, actual_eos_eta, actual_eos_cv
@@ -1698,18 +1698,33 @@ contains
         mindens = 10.d0**dlo
         maxdens = 10.d0**dhi
 
-        ! Refresh allocatable storage and values after host initialization.
-        !XDIR XUPDATE_ALLOC &
-        !XDIR XDEVICE_ALLOC(mintemp, maxtemp, mindens, maxdens) &
-        !XDIR XDEVICE_ALLOC(tlo, thi, dlo, dhi) &
-        !XDIR XDEVICE_ALLOC(tstp, tstpi, dstp, dstpi) &
-        !XDIR XDEVICE_ALLOC(itmax, jtmax, d, t) &
-        !XDIR XDEVICE_ALLOC(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
-        !XDIR XDEVICE_ALLOC(dpdf, dpdfd, dpdft, dpdfdt) &
-        !XDIR XDEVICE_ALLOC(ef, efd, eft, efdt, xf, xfd, xft, xfdt)  &
-        !XDIR XDEVICE_ALLOC(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
-        !XDIR XDEVICE_ALLOC(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
-        !XDIR XDEVICE_ALLOC(do_coulomb, input_is_constant)
+#if defined(XNET_OMP_OL)
+        ! Establish the initialized allocatable storage before the existing update
+        ! copies its values.
+        !XDIR XENTER_DATA &
+        !XDIR XCREATE(mintemp, maxtemp, mindens, maxdens) &
+        !XDIR XCREATE(tlo, thi, dlo, dhi) &
+        !XDIR XCREATE(tstp, tstpi, dstp, dstpi) &
+        !XDIR XCREATE(itmax, jtmax, d, t) &
+        !XDIR XCREATE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+        !XDIR XCREATE(dpdf, dpdfd, dpdft, dpdfdt) &
+        !XDIR XCREATE(ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
+        !XDIR XCREATE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+        !XDIR XCREATE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+        !XDIR XCREATE(do_coulomb, input_is_constant)
+#endif
+
+        !XDIR XUPDATE &
+        !XDIR XDEVICE(mintemp, maxtemp, mindens, maxdens) &
+        !XDIR XDEVICE(tlo, thi, dlo, dhi) &
+        !XDIR XDEVICE(tstp, tstpi, dstp, dstpi) &
+        !XDIR XDEVICE(itmax, jtmax, d, t) &
+        !XDIR XDEVICE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+        !XDIR XDEVICE(dpdf, dpdfd, dpdft, dpdfdt) &
+        !XDIR XDEVICE(ef, efd, eft, efdt, xf, xfd, xft, xfdt)  &
+        !XDIR XDEVICE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+        !XDIR XDEVICE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+        !XDIR XDEVICE(do_coulomb, input_is_constant)
 
     end subroutine actual_eos_init
 
@@ -1862,6 +1877,21 @@ contains
     subroutine actual_eos_finalize
 
       implicit none
+
+#if defined(XNET_OMP_OL)
+      ! Release device mappings before deallocating their host storage.
+      !XDIR XEXIT_DATA &
+      !XDIR XDELETE(mintemp, maxtemp, mindens, maxdens) &
+      !XDIR XDELETE(tlo, thi, dlo, dhi) &
+      !XDIR XDELETE(tstp, tstpi, dstp, dstpi) &
+      !XDIR XDELETE(itmax, jtmax, d, t) &
+      !XDIR XDELETE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+      !XDIR XDELETE(dpdf, dpdfd, dpdft, dpdfdt) &
+      !XDIR XDELETE(ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
+      !XDIR XDELETE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+      !XDIR XDELETE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+      !XDIR XDELETE(do_coulomb, input_is_constant)
+#endif
 
       ! Deallocate managed module variables
 

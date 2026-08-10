@@ -387,7 +387,7 @@ def test_openmp_rocm_batched_solve_uses_contiguous_strides() -> None:
     assert "hipblasDgetrsStridedBatched" in strided_solve
 
 
-def test_helmholtz_allocatable_update_matches_accelerator_model() -> None:
+def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")
     repository = FRONTIER_DIRECTORY.parents[2]
@@ -408,13 +408,43 @@ def test_helmholtz_allocatable_update_matches_accelerator_model() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     declarations = completed.stdout.split("contains", 1)[0]
-    assert "!$omp declare target to(itmax, jtmax, d, t)" in declarations
+    assert "!$omp declare target link(itmax, jtmax, d, t)" in declarations
+
+    omp_eos_type = subprocess.run(
+        [
+            "cpp",
+            "-P",
+            "-C",
+            "-nostdinc",
+            "-DXNET_GPU",
+            "-DXNET_OMP_OL",
+            f"-I{repository / 'source'}",
+            str(repository / "tools" / "starkiller-helmholtz" / "eos_type.F90"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert omp_eos_type.returncode == 0, omp_eos_type.stderr
+    declarations = omp_eos_type.stdout.split("contains", 1)[0]
+    assert (
+        "!$omp declare target link(mintemp, maxtemp, mindens, maxdens)"
+        in declarations
+    )
 
     initialization = completed.stdout.split("subroutine actual_eos_init", 1)[1]
     initialization = initialization.split("end subroutine actual_eos_init", 1)[0]
-    assert "!$omp target enter data" in initialization
-    assert "map(always,to:itmax, jtmax, d, t)" in initialization
-    assert "!$omp target update" not in initialization
+    allocation = initialization.index("!$omp target enter data")
+    update = initialization.index("!$omp target update")
+    assert allocation < update
+    assert "map(alloc:itmax, jtmax, d, t)" in initialization
+    assert "to(itmax, jtmax, d, t)" in initialization
+    assert "always" not in initialization
+
+    finalization = completed.stdout.split("subroutine actual_eos_finalize", 1)[1]
+    finalization = finalization.split("end subroutine actual_eos_finalize", 1)[0]
+    assert "!$omp target exit data" in finalization
+    assert "map(release:itmax, jtmax, d, t)" in finalization
 
     openacc = subprocess.run(
         [
@@ -432,8 +462,36 @@ def test_helmholtz_allocatable_update_matches_accelerator_model() -> None:
         check=False,
     )
     assert openacc.returncode == 0, openacc.stderr
+    declarations = openacc.stdout.split("contains", 1)[0]
+    assert "!$acc declare create(itmax, jtmax, d, t)" in declarations
+
+    openacc_eos_type = subprocess.run(
+        [
+            "cpp",
+            "-P",
+            "-C",
+            "-nostdinc",
+            "-DXNET_GPU",
+            "-DXNET_OACC",
+            f"-I{repository / 'source'}",
+            str(repository / "tools" / "starkiller-helmholtz" / "eos_type.F90"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert openacc_eos_type.returncode == 0, openacc_eos_type.stderr
+    declarations = openacc_eos_type.stdout.split("contains", 1)[0]
+    assert (
+        "!$acc declare create(mintemp, maxtemp, mindens, maxdens)" in declarations
+    )
+
     initialization = openacc.stdout.split("subroutine actual_eos_init", 1)[1]
     initialization = initialization.split("end subroutine actual_eos_init", 1)[0]
     assert "!$acc update" in initialization
     assert "!$acc device(itmax, jtmax, d, t)" in initialization
-    assert "always" not in initialization
+    assert "!$acc enter data" not in initialization
+
+    finalization = openacc.stdout.split("subroutine actual_eos_finalize", 1)[1]
+    finalization = finalization.split("end subroutine actual_eos_finalize", 1)[0]
+    assert "!$acc exit data" not in finalization

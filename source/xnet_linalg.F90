@@ -1772,29 +1772,72 @@ Contains
     Real(dp), Dimension(ldb,*), Target, Intent(inout) :: b
     Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
 
+    Call LUDecompBatched_ROCM_Strided &
+      & ( n, n, a, lda, ipiv, info, batchcount )
+    Call LUBksubBatched_ROCM_Strided &
+      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+
+    Return
+  End Subroutine LinearSolveBatched_ROCM_Strided
+
+
+  Subroutine LUDecompBatched_ROCM_Strided &
+    & ( m, n, a, lda, ipiv, info, batchcount )
+    !-----------------------------------------------------------------------------------------------
+    ! Factor a contiguous batch through device base addresses and element strides.
+    !-----------------------------------------------------------------------------------------------
+    Integer, Intent(in)                               :: m, n, lda, batchcount
+    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
+    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
+
+    Integer(C_INT64_T) :: stridea, stridep
+    Type(C_PTR) :: da, dipiv, dinfo
+
+    stridea = Int( lda * n, C_INT64_T )
+    stridep = Int( n, C_INT64_T )
+
+    da = dev_ptr( a(1,1) )
+    dipiv = dev_ptr( ipiv(1) )
+    dinfo = dev_ptr( info(1) )
+
+    Call hipblasCheck( hipblasDgetrfStridedBatched &
+      & ( hipblas_handle, n, da, lda, stridea, dipiv, stridep, dinfo, batchcount ) )
+
+    Return
+  End Subroutine LUDecompBatched_ROCM_Strided
+
+
+  Subroutine LUBksubBatched_ROCM_Strided &
+    & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+    !-----------------------------------------------------------------------------------------------
+    ! Back-substitute a contiguous batch through device base addresses and element strides.
+    !-----------------------------------------------------------------------------------------------
+    Character, Intent(in)                             :: trans
+    Integer, Intent(in)                               :: n, nrhs, lda, ldb, batchcount
+    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
+    Real(dp), Dimension(ldb,*), Target, Intent(inout) :: b
+    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
+
     Integer(C_INT) :: itrans
     Integer(C_INT64_T) :: stridea, strideb, stridep
-    Type(C_PTR) :: da, db, dipiv, dinfo, hinfo
+    Type(C_PTR) :: da, db, dipiv, hinfo
 
-    stridea = Int( n * n, C_INT64_T )
-    strideb = Int( n * nrhs, C_INT64_T )
+    stridea = Int( lda * n, C_INT64_T )
+    strideb = Int( ldb * nrhs, C_INT64_T )
     stridep = Int( n, C_INT64_T )
     itrans = itrans_from_char( trans )
 
     da = dev_ptr( a(1,1) )
     db = dev_ptr( b(1,1) )
     dipiv = dev_ptr( ipiv(1) )
-    dinfo = dev_ptr( info(1) )
     hinfo = C_LOC( info(1) )
 
-    Call hipblasCheck( hipblasDgetrfStridedBatched &
-      & ( hipblas_handle, n, da, lda, stridea, dipiv, stridep, dinfo, batchcount ) )
     Call hipblasCheck( hipblasDgetrsStridedBatched &
       & ( hipblas_handle, itrans, n, nrhs, da, lda, stridea, dipiv, stridep, db, ldb, strideb, &
       & hinfo, batchcount ) )
 
     Return
-  End Subroutine LinearSolveBatched_ROCM_Strided
+  End Subroutine LUBksubBatched_ROCM_Strided
 #endif
 
 
@@ -1880,9 +1923,11 @@ Contains
 
     pinfo => info(1:batchcount)
 
+#if !defined(XNET_LA_ROCM) || !defined(XNET_OMP_OL)
     da_array = dev_ptr( da(1) )
     dipiv_array = dev_ptr( dipiv(1) )
     dinfo = dev_ptr( pinfo(1) )
+#endif
 
 #if defined(XNET_LA_CUBLAS)
     If ( lpiv ) Then
@@ -1893,6 +1938,9 @@ Contains
       ierr = cublasDgetrfBatched &
              ( cublas_handle, n, da_array, lda, dipiv0, dinfo, batchcount )
     EndIf
+#elif defined(XNET_LA_ROCM) && defined(XNET_OMP_OL)
+    Call LUDecompBatched_ROCM_Strided &
+      & ( m, n, a, lda, ipiv, info, batchcount )
 #elif defined(XNET_LA_ROCM)
     !strideP_64 = n
     !Call rocsolverCheck( rocsolver_dgetrf_batched &
@@ -1968,10 +2016,12 @@ Contains
 
     hinfo = C_LOC( pinfo )
 
+#if !defined(XNET_LA_ROCM) || !defined(XNET_OMP_OL)
     da_array = dev_ptr( da(1) )
     db_array = dev_ptr( db(1) )
     dipiv_array = dev_ptr( dipiv(1) )
     dinfo = dev_ptr( pinfo(1) )
+#endif
 
     itrans = itrans_from_char( trans )
 
@@ -1984,6 +2034,10 @@ Contains
       ierr = cublasDgetrsBatched &
              ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv0, db_array, ldb, hinfo, batchcount )
     EndIf
+#elif defined(XNET_LA_ROCM) && defined(XNET_OMP_OL)
+    Call LUBksubBatched_ROCM_Strided &
+      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+    Call stream_sync( stream )
 #elif defined(XNET_LA_ROCM)
     !strideP_64 = n
     !Call rocsolverCheck( rocsolver_dgetrs_batched &

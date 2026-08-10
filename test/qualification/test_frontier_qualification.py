@@ -350,7 +350,7 @@ def test_openmp_device_pointer_helpers_query_mapped_addresses() -> None:
     assert "use_device_ptr" not in completed.stdout
 
 
-def test_openmp_rocm_batched_solve_uses_contiguous_strides() -> None:
+def test_openmp_rocm_batched_factor_and_solve_use_contiguous_strides() -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")
     repository = FRONTIER_DIRECTORY.parents[2]
@@ -383,8 +383,65 @@ def test_openmp_rocm_batched_solve_uses_contiguous_strides() -> None:
     strided_solve = strided_solve.split(
         "End Subroutine LinearSolveBatched_ROCM_Strided", 1
     )[0]
-    assert "hipblasDgetrfStridedBatched" in strided_solve
-    assert "hipblasDgetrsStridedBatched" in strided_solve
+    assert "Call LUDecompBatched_ROCM_Strided" in strided_solve
+    assert "Call LUBksubBatched_ROCM_Strided" in strided_solve
+
+    strided_factor = completed.stdout.split(
+        "Subroutine LUDecompBatched_ROCM_Strided", 1
+    )[1]
+    strided_factor = strided_factor.split(
+        "End Subroutine LUDecompBatched_ROCM_Strided", 1
+    )[0]
+    assert "hipblasDgetrfStridedBatched" in strided_factor
+
+    strided_bksub = completed.stdout.split(
+        "Subroutine LUBksubBatched_ROCM_Strided", 1
+    )[1]
+    strided_bksub = strided_bksub.split(
+        "End Subroutine LUBksubBatched_ROCM_Strided", 1
+    )[0]
+    assert "hipblasDgetrsStridedBatched" in strided_bksub
+
+    factor = completed.stdout.split("Subroutine LUDecompBatched_GPU", 1)[1]
+    factor = factor.split("End Subroutine LUDecompBatched_GPU", 1)[0]
+    assert "Call LUDecompBatched_ROCM_Strided" in factor
+    assert "hipblasDgetrfBatched" not in factor
+    assert "dev_ptr( da(1) )" not in factor
+
+    bksub = completed.stdout.split("Subroutine LUBksubBatched_GPU", 1)[1]
+    bksub = bksub.split("End Subroutine LUBksubBatched_GPU", 1)[0]
+    assert "Call LUBksubBatched_ROCM_Strided" in bksub
+    assert "Call stream_sync( stream )" in bksub
+    assert "hipblasDgetrsBatched" not in bksub
+    assert "dev_ptr( da(1) )" not in bksub
+
+    openacc = subprocess.run(
+        [
+            "cpp",
+            "-P",
+            "-C",
+            "-nostdinc",
+            "-DXNET_GPU",
+            "-DXNET_HIP",
+            "-DXNET_OACC",
+            "-DXNET_LA_ROCM",
+            f"-I{repository / 'source'}",
+            str(repository / "source" / "xnet_linalg.F90"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert openacc.returncode == 0, openacc.stderr
+    factor = openacc.stdout.split("Subroutine LUDecompBatched_GPU", 1)[1]
+    factor = factor.split("End Subroutine LUDecompBatched_GPU", 1)[0]
+    assert "hipblasDgetrfBatched" in factor
+    assert "dev_ptr( da(1) )" in factor
+
+    bksub = openacc.stdout.split("Subroutine LUBksubBatched_GPU", 1)[1]
+    bksub = bksub.split("End Subroutine LUBksubBatched_GPU", 1)[0]
+    assert "hipblasDgetrsBatched" in bksub
+    assert "dev_ptr( da(1) )" in bksub
 
 
 def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:

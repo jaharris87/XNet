@@ -59,8 +59,7 @@ module eos_type_module
   real(dp), allocatable, public :: minh
   real(dp), allocatable, public :: maxh
 
-  !XDIR XDECLARE_ALLOC(mintemp, maxtemp, mindens, maxdens)
-  !XDIR XDECLARE_VAR(minx, maxx, minye, maxye)
+  !XDIR XDECLARE_VAR(mintemp, maxtemp, mindens, maxdens, minx, maxx, minye, maxye)
   !XDIR XDECLARE_VAR(mine, maxe, minp, maxp, mins, maxs, minh, maxh)
 
   public :: clean_state, print_state, eos_get_small_temp, eos_get_small_dens

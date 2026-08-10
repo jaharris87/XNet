@@ -9,12 +9,13 @@ import json
 import math
 import tempfile
 import unittest
+from unittest.mock import patch
 from decimal import Decimal, localcontext
 from pathlib import Path
 
 from extract_inputs import REPOSITORY_ROOT, extract, sha256
 from generate_reference import scientific_dataset_hash
-from preflight_states import compare_pair
+from preflight_states import analyze, compare_pair
 from reference_solver import (
     Species,
     State,
@@ -317,17 +318,35 @@ class ReferenceToolingTests(unittest.TestCase):
             result = {
                 "network": left["network"],
                 "manifest": str(left_path),
+                "manifest_sha256": hashlib.sha256(left_path.read_bytes()).hexdigest(),
+                "_manifest_snapshot": left,
                 "states": [],
             }
             changed = {
                 "network": right["network"],
                 "manifest": str(right_path),
+                "manifest_sha256": hashlib.sha256(right_path.read_bytes()).hexdigest(),
+                "_manifest_snapshot": right,
                 "states": [],
             }
             with self.assertRaisesRegex(
                 RuntimeError, "scientific inputs differ for shared species n"
             ):
                 compare_pair(result, changed)
+
+    def test_preflight_rejects_manifest_rewritten_after_analysis(self) -> None:
+        manifest = copy.deepcopy(self.manifest)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            manifest_path = Path(temporary_directory) / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with patch("preflight_states.CANDIDATE_STATES", ()):
+                result = analyze(manifest_path, 35)
+            manifest["species"][0]["mass_excess_mev"]["hex"] = "0x1.0p+99"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(
+                RuntimeError, "preflight manifest changed after analysis"
+            ):
+                compare_pair(result, result)
 
 
 if __name__ == "__main__":

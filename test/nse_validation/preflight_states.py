@@ -121,7 +121,8 @@ def solve_attempts(
 
 
 def analyze(manifest_path: Path, precision: int) -> dict[str, Any]:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_bytes = manifest_path.read_bytes()
+    manifest = json.loads(manifest_bytes.decode("utf-8"))
     states = []
     for state_id, rho, t9, ye in CANDIDATE_STATES:
         state = State.from_strings(state_id, rho, t9, ye)
@@ -182,9 +183,12 @@ def analyze(manifest_path: Path, precision: int) -> dict[str, Any]:
         )
     return {
         "manifest": str(manifest_path),
+        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "canonical_input_sha256": manifest["canonical_input_sha256"],
         "network": manifest["network"],
         "precision_decimal_digits": precision,
         "states": states,
+        "_manifest_snapshot": manifest,
     }
 
 
@@ -233,8 +237,12 @@ def verify_shared_scientific_inputs(
 
 
 def compare_pair(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
-    left_manifest = json.loads(Path(left["manifest"]).read_text(encoding="utf-8"))
-    right_manifest = json.loads(Path(right["manifest"]).read_text(encoding="utf-8"))
+    for result in (left, right):
+        current_hash = hashlib.sha256(Path(result["manifest"]).read_bytes()).hexdigest()
+        if current_hash != result["manifest_sha256"]:
+            raise RuntimeError("preflight manifest changed after analysis")
+    left_manifest = left["_manifest_snapshot"]
+    right_manifest = right["_manifest_snapshot"]
     left_species, right_species, shared_input_sha256 = verify_shared_scientific_inputs(
         left_manifest, right_manifest
     )
@@ -314,7 +322,10 @@ def main() -> int:
     payload = {
         "schema": "xnet-independent-nse-preflight-v1",
         "xnet_executed": False,
-        "results": results,
+        "results": [
+            {key: value for key, value in result.items() if not key.startswith("_")}
+            for result in results
+        ],
         "pairwise_network_comparisons": compare_networks(results),
     }
     print(json.dumps(payload, indent=2, sort_keys=True))

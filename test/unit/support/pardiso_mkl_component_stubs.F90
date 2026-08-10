@@ -6,6 +6,7 @@ Module solver_probe
   Integer :: call_count = 0
   Integer :: init_abi = 0
   Integer :: init_calls = 0
+  Integer :: handle_history(max_calls) = 0
   Integer :: mnum_history(max_calls) = 0
   Integer :: phase_history(max_calls) = 0
   Logical :: index_base_valid = .True.
@@ -17,6 +18,7 @@ Contains
     Implicit None
 
     call_count = 0
+    handle_history = 0
     mnum_history = 0
     phase_history = 0
     index_base_valid = .True.
@@ -91,8 +93,8 @@ Subroutine pardisoinit(pt,mtype,iparm)
 End Subroutine pardisoinit
 
 Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b,x,error)
-  Use solver_probe, Only: call_count, failure_is, index_base_valid, max_calls, mnum_history, &
-    & options_valid, phase_history, solve_crs
+  Use solver_probe, Only: call_count, failure_is, handle_history, index_base_valid, max_calls, &
+    & mnum_history, options_valid, phase_history, solve_crs
   Use xnet_types, Only: dp, i8
   Implicit None
 
@@ -106,15 +108,17 @@ Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b
 
   call_count = call_count + 1
   If ( call_count <= max_calls ) Then
+    handle_history(call_count) = pt(1)
     phase_history(call_count) = phase
     mnum_history(call_count) = mnum
   EndIf
+  pt(1) = call_count
   index_base_valid = index_base_valid .and. ia(1) == 1 .and. ia(n+1) > ia(1)
-  options_valid = options_valid .and. maxfct == 2 .and. mnum >= 1 .and. mnum <= 2 .and. &
+  options_valid = options_valid .and. maxfct == 1 .and. mnum == 1 .and. &
     & mtype == 11 .and. nrhs == 1 .and. iparm(3) == 0 .and. &
     & iparm(5) == 0 .and. iparm(6) == 0 .and. iparm(12) == 0 .and. &
     & iparm(31) == 0 .and. iparm(35) == 0 .and. iparm(36) == 0 .and. &
-    & (iparm(7) == 77 .or. iparm(7) == 7) .and. &
+    & (iparm(8) == 0 .or. iparm(8) == 3) .and. &
     & msglvl == 1 .and. all(perm(1:n) == 0)
 
   If ( .not. index_base_valid ) Then

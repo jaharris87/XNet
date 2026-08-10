@@ -44,13 +44,13 @@ Module xnet_jacobian
   Integer, Parameter :: solver = 0 ! Solver method (0 = sparse direct)
 
   ! Solver controls
-  Integer(i8) :: pt(64)            ! PARDISO internal data address pointers
+  Integer(i8), Allocatable :: pt(:,:) ! PARDISO internal data pointers, one handle per zone
   Integer     :: iparm(64)         ! PARDISO solver parameters
   Real(dp)    :: dparm(64)         ! PARDISO solver parameters for iterative solver
   Integer     :: phase             ! PARDISO execution mode
   Integer     :: msglvl            ! Verbosity of PARDISO diagnostics
-  Integer     :: maxfct            ! Maximal number of factors with identical nonzero sparsity structure to keep in memory
-  !$omp threadprivate(pt,iparm,dparm,phase)
+  Integer     :: maxfct            ! Number of factors stored by each PARDISO handle
+  !$omp threadprivate(iparm,dparm,phase)
   Namelist /pardiso_controls/ iparm, dparm
 
   Interface xnet_pardiso
@@ -75,16 +75,16 @@ Contains
         Integer, Intent(inout) :: iparm(*)
       End Subroutine pardisoinit
     End Interface
-    Call pardisoinit(pt,mtype,iparm)
+    Call pardisoinit(pt(:,1),mtype,iparm)
     dparm = 0.0_dp
     error = 0
     Return
   End Subroutine mkl_pardisoinit
 
-  Subroutine mkl_pardiso(mnum,a,b,x,error)
+  Subroutine mkl_pardiso(factor,a,b,x,error)
     Use xnet_types, Only: dp
     Implicit None
-    Integer, Intent(in) :: mnum
+    Integer, Intent(in) :: factor
     Real(dp), Intent(in) :: a(:)
     Real(dp), Intent(inout) :: b(:)
     Real(dp), Intent(out) :: x(:)
@@ -111,7 +111,8 @@ Contains
         Integer, Intent(out) :: error
       End Subroutine pardiso
     End Interface
-    Call pardiso(pt,maxfct,mnum,mtype,phase,msize,a,pb,cidx,perm,nrhs,iparm,msglvl,b,x,error)
+    Call pardiso(pt(:,factor),maxfct,1,mtype,phase,msize,a,pb,cidx,perm,nrhs,iparm, &
+      & msglvl,b,x,error)
     Return
   End Subroutine mkl_pardiso
 
@@ -121,7 +122,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use reaction_data, Only: la, le, n11, n21, n22, n31, n32, n33, n41, n42, n43, n44
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, nzevolve, zb_lo, zb_hi
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -279,6 +280,7 @@ Contains
     ! Read and broadcast user-defined PARDISO controls
     If ( parallel_IOProcessor() ) Then
 
+      Allocate (pt(64,nzevolve),source=0_i8)
       Call xnet_pardisoinit(ierr)
       If ( ierr /= 0 ) Call xnet_terminate('PARDISO initialization failed',ierr)
 
@@ -299,6 +301,7 @@ Contains
       iparm(35) = 0
       iparm(36) = 0
     EndIf
+    If ( .not. allocated(pt) ) Allocate (pt(64,nzevolve),source=0_i8)
     Call parallel_bcast(iparm)
     Call parallel_bcast(dparm)
 
@@ -309,12 +312,13 @@ Contains
       msglvl = 0
     EndIf
 
-    ! Set number of factorizations for PARDISO to store with identical sparsity structure
-    maxfct = nzbatchmx
+    ! Each zone has an independent PARDISO handle so analysis and refactorization for one zone do
+    ! not invalidate another zone's stored factors.
+    maxfct = 1
 
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))
 
-    !$omp parallel default(shared) copyin(pt,iparm,dparm)
+    !$omp parallel default(shared) copyin(iparm,dparm)
 
     ! Initialize work arrays
     Allocate (perm(msize))

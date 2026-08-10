@@ -385,3 +385,36 @@ def test_openmp_rocm_batched_solve_uses_contiguous_strides() -> None:
     )[0]
     assert "hipblasDgetrfStridedBatched" in strided_solve
     assert "hipblasDgetrsStridedBatched" in strided_solve
+
+
+def test_openmp_helmholtz_initialization_remaps_allocatable_tables() -> None:
+    if shutil.which("cpp") is None:
+        pytest.skip("system C preprocessor is unavailable")
+    repository = FRONTIER_DIRECTORY.parents[2]
+    completed = subprocess.run(
+        [
+            "cpp",
+            "-P",
+            "-C",
+            "-nostdinc",
+            "-DXNET_OMP_OL",
+            f"-I{repository / 'source'}",
+            str(
+                repository
+                / "tools"
+                / "starkiller-helmholtz"
+                / "actual_eos.F90"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    initialization = completed.stdout.split("subroutine actual_eos_init", 1)[1]
+    initialization = initialization.split("end subroutine actual_eos_init", 1)[0]
+    normalized = " ".join(initialization.split())
+    assert "!$omp target enter data & !$omp& map(always, to:" in normalized
+    for table in ("f", "ef", "xf", "dt_sav", "dd_sav"):
+        assert table in initialization
+    assert "!$omp target update" not in initialization

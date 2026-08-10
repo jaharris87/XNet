@@ -348,3 +348,40 @@ def test_openmp_device_pointer_helpers_query_mapped_addresses() -> None:
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.count("omp_get_mapped_ptr( C_LOC( a )") == 3
     assert "use_device_ptr" not in completed.stdout
+
+
+def test_openmp_rocm_batched_solve_uses_contiguous_strides() -> None:
+    if shutil.which("cpp") is None:
+        pytest.skip("system C preprocessor is unavailable")
+    repository = FRONTIER_DIRECTORY.parents[2]
+    completed = subprocess.run(
+        [
+            "cpp",
+            "-P",
+            "-C",
+            "-nostdinc",
+            "-DXNET_GPU",
+            "-DXNET_HIP",
+            "-DXNET_OMP_OL",
+            "-DXNET_LA_ROCM",
+            f"-I{repository / 'source'}",
+            str(repository / "source" / "xnet_linalg.F90"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    batched_solve = completed.stdout.split("Subroutine LinearSolveBatched(", 1)[1]
+    batched_solve = batched_solve.split("End Subroutine LinearSolveBatched", 1)[0]
+    assert "Call LinearSolveBatched_ROCM_Strided" in batched_solve
+    assert "Call LinearSolveBatched_GPU" not in batched_solve
+    assert "target enter data" not in batched_solve
+    strided_solve = completed.stdout.split(
+        "Subroutine LinearSolveBatched_ROCM_Strided", 1
+    )[1]
+    strided_solve = strided_solve.split(
+        "End Subroutine LinearSolveBatched_ROCM_Strided", 1
+    )[0]
+    assert "hipblasDgetrfStridedBatched" in strided_solve
+    assert "hipblasDgetrsStridedBatched" in strided_solve

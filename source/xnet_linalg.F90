@@ -93,8 +93,10 @@ Module xnet_linalg
     hipblasDgemmStridedBatched, &
     hipblasDgetrf, &
     hipblasDgetrfBatched, &
+    hipblasDgetrfStridedBatched, &
     hipblasDgetrs, &
     hipblasDgetrsBatched, &
+    hipblasDgetrsStridedBatched, &
     hipblasDgemv, &
     hipblasDtrsv, &
     hipblasDtrsm, &
@@ -1708,6 +1710,10 @@ Contains
 
     If ( data_on_device ) Then
 
+#if defined(XNET_LA_ROCM) && defined(XNET_OMP_OL)
+      Call LinearSolveBatched_ROCM_Strided &
+        & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+#else
       Do i = 1, batchcount
         osa = (i-1) * n + 1
         osb = (i-1) * nrhs + 1
@@ -1720,12 +1726,15 @@ Contains
 
       Call LinearSolveBatched_GPU &
         &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
+#endif
 #if defined(XNET_OMP_OL)
       Call stream_sync( stream )
 #endif
 
+#if !defined(XNET_LA_ROCM) || !defined(XNET_OMP_OL)
       !XDIR XEXIT_DATA XASYNC(tid) &
       !XDIR XDELETE(da,db,dipiv)
+#endif
 
     Else
 
@@ -1748,6 +1757,45 @@ Contains
     End If
 
   End Subroutine LinearSolveBatched
+
+
+#if defined(XNET_LA_ROCM) && defined(XNET_OMP_OL)
+  Subroutine LinearSolveBatched_ROCM_Strided &
+    & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+    !-----------------------------------------------------------------------------------------------
+    ! Solve a contiguous batch through explicit device base addresses and element strides. This
+    ! avoids constructing device arrays of pointers from OpenMP-mapped host stack storage.
+    !-----------------------------------------------------------------------------------------------
+    Character, Intent(in)                             :: trans
+    Integer, Intent(in)                               :: n, nrhs, lda, ldb, batchcount
+    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
+    Real(dp), Dimension(ldb,*), Target, Intent(inout) :: b
+    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
+
+    Integer(C_INT) :: itrans
+    Integer(C_INT64_T) :: stridea, strideb, stridep
+    Type(C_PTR) :: da, db, dipiv, dinfo, hinfo
+
+    stridea = Int( n * n, C_INT64_T )
+    strideb = Int( n * nrhs, C_INT64_T )
+    stridep = Int( n, C_INT64_T )
+    itrans = itrans_from_char( trans )
+
+    da = dev_ptr( a(1,1) )
+    db = dev_ptr( b(1,1) )
+    dipiv = dev_ptr( ipiv(1) )
+    dinfo = dev_ptr( info(1) )
+    hinfo = C_LOC( info(1) )
+
+    Call hipblasCheck( hipblasDgetrfStridedBatched &
+      & ( hipblas_handle, n, da, lda, stridea, dipiv, stridep, dinfo, batchcount ) )
+    Call hipblasCheck( hipblasDgetrsStridedBatched &
+      & ( hipblas_handle, itrans, n, nrhs, da, lda, stridea, dipiv, stridep, db, ldb, strideb, &
+      & hinfo, batchcount ) )
+
+    Return
+  End Subroutine LinearSolveBatched_ROCM_Strided
+#endif
 
 
   Subroutine LinearSolveBatched_CPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )

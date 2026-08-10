@@ -55,7 +55,7 @@
 #define XDECLARE_VAR(...)  declare target to(__VA_ARGS__)
 #define XROUTINE_SEQ       declare target
 #define XROUTINE_VECTOR    declare target
-#define XASYNC(N)          nowait
-#define XWAIT(N)           barrier
+#define XASYNC(N)
+#define XWAIT(N)
 #define XATOMIC            atomic
 #endif

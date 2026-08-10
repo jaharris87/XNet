@@ -212,13 +212,24 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
         pytest.skip("system C preprocessor is unavailable")
     source = tmp_path / "probe.F90"
     source.write_text(
-        "#define XDIR $omp\n"
-        "#define XPRIVATE(...) private(__VA_ARGS__)\n"
+        '#include "xnet_macros.fh"\n'
         "Integer Function probe()\n"
         "Implicit None\n"
         "!XDIR declare target\n"
         'character(len=*), parameter :: joined = "a" // "b"\n'
-        "!XDIR parallel XPRIVATE(first,second)\n"
+        "integer :: first, second\n"
+        "!XDIR XENTER_DATA XASYNC(1) &\n"
+        "!XDIR XCOPYIN(probe)\n"
+        "!XDIR XUPDATE XWAIT(1) &\n"
+        "!XDIR XHOST(probe)\n"
+        "!XDIR XWAIT(1)\n"
+        "!XDIR parallel &\n"
+        "!XDIR XPRESENT(probe) &\n"
+        "!XDIR XPRIVATE(first,second)\n"
+        "!XDIR XLOOP(1) XASYNC(1) &\n"
+        "!XDIR XPRESENT(probe)\n"
+        "Do first = 1, 1\n"
+        "EndDo\n"
         "probe = 0\n"
         "End Function probe\n",
         encoding="utf-8",
@@ -238,7 +249,16 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     )
     wrapper = FRONTIER_DIRECTORY.parents[2] / "source" / "crayftn_cpp.sh"
     completed = subprocess.run(
-        [str(wrapper), "-eZ", "-c", str(source), "-o", str(tmp_path / "probe.o")],
+        [
+            str(wrapper),
+            "-DXNET_OMP_OL",
+            f"-I{FRONTIER_DIRECTORY.parents[2] / 'source'}",
+            "-eZ",
+            "-c",
+            str(source),
+            "-o",
+            str(tmp_path / "probe.o"),
+        ],
         capture_output=True,
         text=True,
         env=environment,
@@ -246,9 +266,19 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     )
     assert completed.returncode == 0, completed.stderr
     preprocessed = capture.read_text(encoding="utf-8")
+    normalized = "\n".join(" ".join(line.split()) for line in preprocessed.splitlines())
     assert 'joined = "a" // "b"' in preprocessed
     assert preprocessed.index("Implicit None") < preprocessed.index("!$omp declare target")
-    assert "!$omp parallel private(first,second)" in preprocessed
+    assert "!$omp target enter data &" in normalized
+    assert "!$omp target update &" in normalized
+    assert "!$omp from(probe)" in preprocessed
+    assert "!$omp parallel &" in normalized
+    assert "!$omp private(first,second)" in preprocessed
+    assert "!$omp target teams distribute parallel do simd collapse(1)" in normalized
+    assert "!present" not in preprocessed
+    assert "nowait" not in preprocessed
+    assert "barrier" not in preprocessed
+    assert "\n!$omp\n" not in preprocessed
 
 
 def test_accelerator_routine_directives_follow_ordered_specification_statements() -> None:
@@ -270,3 +300,26 @@ def test_accelerator_routine_directives_follow_ordered_specification_statements(
                     f"precedes {statement!r}"
                 )
                 break
+
+
+def test_openmp_device_pointer_helpers_query_mapped_addresses() -> None:
+    if shutil.which("cpp") is None:
+        pytest.skip("system C preprocessor is unavailable")
+    repository = FRONTIER_DIRECTORY.parents[2]
+    completed = subprocess.run(
+        [
+            "cpp",
+            "-P",
+            "-C",
+            "-nostdinc",
+            "-DXNET_OMP_OL",
+            f"-I{repository / 'source'}",
+            str(repository / "source" / "xnet_gpu.F90"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.count("omp_get_mapped_ptr( C_LOC( a )") == 3
+    assert "use_device_ptr" not in completed.stdout

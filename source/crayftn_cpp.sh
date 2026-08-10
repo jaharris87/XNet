@@ -51,13 +51,39 @@ fi
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/xnet-crayftn-cpp.XXXXXX")
 trap 'rm -rf -- "${temporary_directory}"' EXIT HUP INT TERM
 preprocessed_source="${temporary_directory}/source.f90"
+raw_preprocessed_source="${temporary_directory}/raw-source.f90"
 if [[ ${source_form} == fixed ]]; then
   preprocessed_source="${temporary_directory}/source.f"
+  raw_preprocessed_source="${temporary_directory}/raw-source.f"
 fi
 
 if ! "${preprocessor}" "${preprocessor_arguments[@]}" \
-    "${source_file}" > "${preprocessed_source}"; then
+    "${source_file}" > "${raw_preprocessed_source}"; then
   echo "crayftn_cpp.sh: preprocessing failed for ${source_file}" >&2
+  exit 1
+fi
+
+# Drop OpenMP no-op sentinels and reconnect directives across ignored OpenACC present clauses.
+if ! awk '
+  /^[[:space:]]*!\$omp[[:space:]]*$/ {
+    next
+  }
+  /^[[:space:]]*!\$omp[[:space:]]*&[[:space:]]*!present([[:space:]]*&)?[[:space:]]*$/ {
+    if ($0 !~ /&[[:space:]]*$/) {
+      sub(/[[:space:]]*&[[:space:]]*$/, "", pending)
+    }
+    next
+  }
+  {
+    if (have_pending) print pending
+    pending = $0
+    have_pending = 1
+  }
+  END {
+    if (have_pending) print pending
+  }
+' "${raw_preprocessed_source}" > "${preprocessed_source}"; then
+  echo "crayftn_cpp.sh: OpenMP continuation filtering failed for ${source_file}" >&2
   exit 1
 fi
 

@@ -102,6 +102,10 @@ The loaded accelerator target module makes `ftn -fopenmp` target the MI250X
 `gfx90a` device. GPU runs set `OMP_TARGET_OFFLOAD=MANDATORY`, so host fallback
 is a failure rather than a misleading pass.
 
+OpenMP-offload builds currently treat the shared `XASYNC` and `XWAIT` markers
+as no-ops and execute synchronously. Mapping XNet's queue-oriented OpenACC
+behavior to OpenMP tasks and dependencies is outside this qualification.
+
 Cray's native Fortran preprocessor requires a fixed argument count for
 function-like macros, while XNet's shared accelerator-directive layer uses
 variadic macros. For Cray GPU builds, `source/crayftn_cpp.sh` therefore runs

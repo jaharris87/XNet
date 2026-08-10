@@ -86,9 +86,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Do kts = 1, ktsmx
 
-      ! Attempt Backward Euler integration over desired timestep. Pass the
-      ! current worker section explicitly to preserve zb_lo:zb_hi association.
-      Call step_be(kstep,inr(zb_lo:zb_hi))
+      ! Attempt Backward Euler integration over the current worker section of
+      ! the module-owned BE state.
+      Call step_be(kstep)
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot,lzstep)
@@ -231,7 +231,7 @@ Contains
     Return
   End Subroutine solve_be
 
-  Subroutine step_be(kstep,inr)
+  Subroutine step_be(kstep)
     !-----------------------------------------------------------------------------------------------
     ! This routine attempts to integrate a single Backward Euler step for the timestep tdel.
     ! If successful, inr = 1
@@ -250,11 +250,6 @@ Contains
     ! Input variables
     Integer, Intent(in) :: kstep
 
-    ! Input/Output variables
-    Integer, Intent(inout) :: inr(zb_lo:zb_hi) ! On input,  = 0 indicates active zone
-                                               !            =-1 indicates inactive zone
-                                               ! On output, > 0 indicates # NR iterations if converged
-
     ! Local variables
     Integer :: irdymx, idymx
     Integer :: i, k, kit, izb, izone
@@ -263,8 +258,10 @@ Contains
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
+#if defined(XNET_OACC)
     !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(inr)
+#endif
 
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
@@ -477,8 +474,10 @@ Contains
       EndDo
     EndIf
 
+#if defined(XNET_OACC)
     !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(inr)
+#endif
 
     stop_timer = xnet_wtime()
     timer_nraph = timer_nraph + stop_timer

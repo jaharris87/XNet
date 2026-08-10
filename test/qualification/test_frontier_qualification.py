@@ -494,3 +494,49 @@ def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     finalization = openacc.stdout.split("subroutine actual_eos_finalize", 1)[1]
     finalization = finalization.split("end subroutine actual_eos_finalize", 1)[0]
     assert "!$acc exit data" not in finalization
+
+
+def test_openmp_be_step_reuses_lifetime_mapped_module_state() -> None:
+    if shutil.which("cpp") is None:
+        pytest.skip("system C preprocessor is unavailable")
+    repository = FRONTIER_DIRECTORY.parents[2]
+
+    def preprocess(model: str) -> str:
+        completed = subprocess.run(
+            [
+                "cpp",
+                "-P",
+                "-C",
+                "-nostdinc",
+                model,
+                f"-I{repository / 'source'}",
+                str(repository / "source" / "xnet_integrate_be.F90"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        return completed.stdout
+
+    openmp = preprocess("-DXNET_OMP_OL")
+    initialization = openmp.split("Subroutine be_init", 1)[1]
+    initialization = initialization.split("End Subroutine be_init", 1)[0]
+    assert "!$omp target enter data" in initialization
+    assert "map(to:inr,mykts,lzstep)" in initialization
+
+    step = openmp.split("Subroutine step_be(kstep)", 1)[1]
+    step = step.split("End Subroutine step_be", 1)[0]
+    assert "inr(izb)" in step
+    assert "target enter data" not in step
+    assert "target exit data" not in step
+    assert "map(to:inr)" not in step
+    assert "map(from:inr)" not in step
+
+    openacc = preprocess("-DXNET_OACC")
+    step = openacc.split("Subroutine step_be(kstep)", 1)[1]
+    step = step.split("End Subroutine step_be", 1)[0]
+    assert "!$acc enter data" in step
+    assert "copyin(inr)" in step
+    assert "!$acc exit data" in step
+    assert "copyout(inr)" in step

@@ -9,7 +9,7 @@ preprocessor=${XNET_CPP:-cpp}
 source_file=
 source_form=
 compiler_arguments=()
-preprocessor_arguments=(-P -traditional-cpp)
+preprocessor_arguments=(-P -C -nostdinc)
 
 for argument in "$@"; do
   case "${argument}" in

@@ -105,9 +105,10 @@ is a failure rather than a misleading pass.
 Cray's native Fortran preprocessor requires a fixed argument count for
 function-like macros, while XNet's shared accelerator-directive layer uses
 variadic macros. For Cray GPU builds, `source/crayftn_cpp.sh` therefore runs
-the system `cpp -P -traditional-cpp` first and passes the resulting Fortran
-source to `ftn`. The qualification records both compiler and preprocessor
-versions.
+the system `cpp -P -C -nostdinc` first and passes the resulting Fortran
+source to `ftn`. Comment preservation retains Fortran `//` concatenation;
+disabling standard include directories avoids injecting C system-header text.
+The qualification records both compiler and preprocessor versions.
 
 ## Evidence and result review
 

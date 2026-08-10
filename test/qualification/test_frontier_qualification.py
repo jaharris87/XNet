@@ -205,7 +205,9 @@ def test_manifest_schema_file_is_versioned_and_matches_runner() -> None:
     assert schema["properties"]["schema"]["const"] == _manifest()["schema"]
 
 
-def test_cray_wrapper_expands_variadic_accelerator_macros(tmp_path: Path) -> None:
+def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
+    tmp_path: Path,
+) -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")
     source = tmp_path / "probe.F90"
@@ -213,6 +215,7 @@ def test_cray_wrapper_expands_variadic_accelerator_macros(tmp_path: Path) -> Non
         "#define XDIR $omp\n"
         "#define XPRIVATE(...) private(__VA_ARGS__)\n"
         "Program probe\n"
+        'character(len=*), parameter :: joined = "a" // "b"\n'
         "!XDIR parallel XPRIVATE(first,second)\n"
         "End Program probe\n",
         encoding="utf-8",
@@ -239,4 +242,6 @@ def test_cray_wrapper_expands_variadic_accelerator_macros(tmp_path: Path) -> Non
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "!$omp parallel private(first,second)" in capture.read_text(encoding="utf-8")
+    preprocessed = capture.read_text(encoding="utf-8")
+    assert 'joined = "a" // "b"' in preprocessed
+    assert "!$omp parallel private(first,second)" in preprocessed

@@ -493,6 +493,7 @@ context listed below.
 | EVAL-60B `SCI-001` retained evidence completeness | Merge-blocking | High | Matched high-impact retained-evidence gap for the exact repair state. | Supported by retained-manifest/source inspection. | Direct retained-manifest evidence. | Bounded and appropriate: retain candidate-bound v2 evidence. |
 | EVAL-60B `PRO-002` nested inventory mismatch | Merge-blocking | High | Matched accepted nested inventory defect. | Supported by validator/inventory inspection. | Direct nested-claim versus inventory evidence. | Bounded and appropriate: compare nested size/hash claims to authoritative inventory entries. |
 | EVAL-60B `PRO-003` schema/runtime and stream classification | Merge-blocking | High | Matched accepted failure-envelope and stream-classification defects. | Supported by schema/runtime/source inspection. | Direct schema and failure-stream evidence. | Bounded and appropriate: align schema/runtime envelopes and classify source failures from the correct stream. |
+| EVAL-66A `SCI-001` scientific identity | Not recorded | Not recorded | Not assessable for the initial invocation; superseded for scoring because it used issue #46 and a too-specific identity focus. | Not assessable. | Direct controlled-mutation evidence, but collected under mismatched issue context. | Appropriate in substance: exclude source spelling and reconciliation-only annotations from scientific identity. |
 | RERUN-52A-REPAIR `TST-001` topology evidence | Merge-blocking | High | Correct for the later RVCASE-52B defect; not a clean RVCASE-52A `PASS`. | Supported by candidate runner and diagnostics. | Direct source and diagnostic-format evidence. | Bounded and appropriate: require exact MPI/OpenMP worker diagnostics. |
 | RERUN-52A-REPAIR `TST-002` non-root failure intent | Merge-blocking | High | Correct as a later failure-probe concern; outside RVCASE-52A's original accepted finding. | Supported by static runner evidence. | Direct failure-probe source evidence. | Bounded and appropriate: validate intended missing-input reason and rank. |
 | RERUN-52B-REPAIR `BLD-001` serial-reference topology | Merge-blocking | High | Over-classified relative to accepted historical record. | Supported by source evidence, but outside preserved #52B false pass. | Specific static source evidence. | Larger than necessary for the retained case. |
@@ -539,6 +540,16 @@ Terra with high effort. The findings were preserved in the PR conversation:
 | --- | --- |
 | `RR-TST-001` the live PR record was stale and still contained invalid multi-item GitHub CLI verification commands when the reviewer inspected it. | Accepted. The PR body was updated to name `c3399437d5b3c86446026a02586b2512feeaf5b9`, use per-item loops, and record the replacement-candidate verification state. |
 | `RR-REQ-004` the finding-quality table still grouped findings and used qualitative labels instead of explicit severity and confidence values. | Accepted. The table above now splits non-`PASS` findings and records reported severity and reported confidence separately, using `not recorded` and `not assessable` where the original output did not expose those values. |
+
+Replacement candidate `d166f5c89371c51e5907fe2a684102987222921f` was then
+reviewed by fresh read-only internal subagents. The findings were preserved in
+the PR conversation:
+[second replacement review comment](https://github.com/jaharris87/XNet/pull/75#issuecomment-5258719715).
+
+| Finding | Disposition |
+| --- | --- |
+| `RR-REQ-004-R1` / `RR-REQ-005` the table still omitted the initial wrong-issue `EVAL-66A SCI-001` quality row. | Accepted. The quality table now records `EVAL-66A SCI-001` separately with `not recorded`/`not assessable` severity and confidence metadata and notes that the corrected issue #41 rerun supersedes it for scoring. |
+| `RR-PRO-002` the PR-body comment validation loop omitted replacement review comment `5258618001`. | Accepted. The live PR body is updated outside this repository file when the final replacement SHA is known, and final handoff verification includes that comment id. |
 
 ## Playbook correction decision
 

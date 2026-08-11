@@ -35,6 +35,13 @@ PARDISO_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/pardiso/sparse_contract_tests
 PARDISO_MKL_CONTRACT_EXE := $(SPARSE_BUILD_DIR)/pardiso_mkl/sparse_contract_tests
 SPARSE_CONTRACT_EXES := $(DENSE_CONTRACT_EXE) $(MA48_CONTRACT_EXE) \
   $(PARDISO_CONTRACT_EXE) $(PARDISO_MKL_CONTRACT_EXE)
+REAL_SPARSE_BUILD_DIR := $(BUILD_DIR)/real-sparse
+REAL_SPARSE_WORK_DIR := $(abspath $(BUILD_DIR)/real-sparse-work)
+REAL_MA48_CONTRACT_EXE := $(REAL_SPARSE_BUILD_DIR)/ma48/sparse_contract_tests
+REAL_PARDISO_MKL_CONTRACT_EXE := $(REAL_SPARSE_BUILD_DIR)/pardiso_mkl/sparse_contract_tests
+HSL_MA48_SOURCE ?= $(MA48_DIR)/MA48.f
+REAL_MA48_OBJECT := $(REAL_SPARSE_BUILD_DIR)/ma48/MA48.o
+REAL_MA48_DTRSV_OBJECT := $(REAL_SPARSE_BUILD_DIR)/ma48/dtrsv.o
 EOS_BUILD_DIR := $(BUILD_DIR)/eos
 EOS_WORK_DIR := $(abspath $(BUILD_DIR)/eos-work)
 STARKILLER_EOS_EXE := $(EOS_BUILD_DIR)/starkiller/eos_contract_tests
@@ -97,7 +104,7 @@ BUILD_NET_OBJECTS := \
 
 .DEFAULT_GOAL := test
 
-.PHONY: test eos-test clean production-xnet
+.PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet
 
 test: eos-test $(TEST_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
     $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) production-xnet
@@ -117,6 +124,14 @@ test: eos-test $(TEST_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) $(PREP
 eos-test: $(EOS_CONTRACT_EXES)
 	@bash run_eos_contracts.sh $(EOS_WORK_DIR) $(abspath $(STARKILLER_EOS_EXE)) \
 	  $(abspath $(BAHCALL_EOS_EXE)) $(abspath $(HELM_TABLE))
+
+real-ma48-test: $(REAL_MA48_CONTRACT_EXE)
+	@bash run_real_sparse_contracts.sh ma48 $(REAL_SPARSE_WORK_DIR)/ma48 \
+	  $(abspath $(REAL_MA48_CONTRACT_EXE)) $(abspath $(XNET_DIR)/sparse_controls.nml)
+
+real-pardiso-mkl-test: $(REAL_PARDISO_MKL_CONTRACT_EXE)
+	@bash run_real_sparse_contracts.sh pardiso-mkl $(REAL_SPARSE_WORK_DIR)/pardiso-mkl \
+	  $(abspath $(REAL_PARDISO_MKL_CONTRACT_EXE)) $(abspath $(XNET_DIR)/sparse_controls.nml)
 
 $(TEST_EXE): $(OBJECTS)
 	$(LDR) -o $@ $(OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
@@ -354,6 +369,61 @@ $(eval $(call sparse_provider_rules,dense,support/dense_component_stubs.F90,$(XN
 $(eval $(call sparse_provider_rules,ma48,support/ma48_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_MA48.F90,TEST_MA48))
 $(eval $(call sparse_provider_rules,pardiso,support/pardiso_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO.F90,TEST_PARDISO))
 $(eval $(call sparse_provider_rules,pardiso_mkl,support/pardiso_mkl_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL))
+
+define real_sparse_provider_rules
+$(REAL_SPARSE_BUILD_DIR)/$(1):
+	mkdir -p $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/testdrive.o: vendor/test-drive/testdrive.F90 | $(REAL_SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(REAL_SPARSE_BUILD_DIR)/$(1) \
+	  -I$(REAL_SPARSE_BUILD_DIR)/$(1) -c $$< -o $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_types.o: $$(XNET_DIR)/xnet_types.F90 | $(REAL_SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(REAL_SPARSE_BUILD_DIR)/$(1) \
+	  -I$(REAL_SPARSE_BUILD_DIR)/$(1) -c $$< -o $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/sparse_component_stubs.o: support/sparse_component_stubs.F90 \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_types.o | $(REAL_SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(REAL_SPARSE_BUILD_DIR)/$(1) \
+	  -I$(REAL_SPARSE_BUILD_DIR)/$(1) -c $$< -o $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_macros.fh: $$(XNET_DIR)/xnet_macros.fh | $(REAL_SPARSE_BUILD_DIR)/$(1)
+	cp $$< $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.F90: $(2) | $(REAL_SPARSE_BUILD_DIR)/$(1)
+	cp $$< $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.o: \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.F90 \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_macros.fh \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/sparse_component_stubs.o | $(REAL_SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(REAL_SPARSE_BUILD_DIR)/$(1) \
+	  -I$(REAL_SPARSE_BUILD_DIR)/$(1) -c $$< -o $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/test_sparse_contracts.o: test_sparse_contracts.F90 \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/testdrive.o \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.o | $(REAL_SPARSE_BUILD_DIR)/$(1)
+	$$(FC) $$(FFLAGS) $$(F90FLAGS) -D$(3) -DTEST_REAL_SOLVER \
+	  -J$(REAL_SPARSE_BUILD_DIR)/$(1) -I$(REAL_SPARSE_BUILD_DIR)/$(1) -c $$< -o $$@
+
+$(REAL_SPARSE_BUILD_DIR)/$(1)/sparse_contract_tests: \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/testdrive.o \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_types.o \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/sparse_component_stubs.o \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/xnet_jacobian.o \
+    $(REAL_SPARSE_BUILD_DIR)/$(1)/test_sparse_contracts.o \
+    $(4) $$(LAPACK_OBJECTS)
+	$$(LDR) -o $$@ $$^ $$(LDFLAGS) $$(LAPACK_LIBDIR) $$(LAPACK_LIBS)
+endef
+
+$(REAL_MA48_OBJECT): $(HSL_MA48_SOURCE) | $(REAL_SPARSE_BUILD_DIR)/ma48
+	$(FC) $(FFLAGS) $(F77FLAGS) -c $< -o $@
+
+$(REAL_MA48_DTRSV_OBJECT): $(NETLIB_DIR)/dtrsv.f | $(REAL_SPARSE_BUILD_DIR)/ma48
+	$(FC) $(FFLAGS) $(F77FLAGS) -c $< -o $@
+
+$(eval $(call real_sparse_provider_rules,ma48,$(XNET_DIR)/xnet_jacobian_MA48.F90,TEST_MA48,$(REAL_MA48_OBJECT) $(REAL_MA48_DTRSV_OBJECT)))
+$(eval $(call real_sparse_provider_rules,pardiso_mkl,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL,))
 
 define eos_provider_rules
 $(EOS_BUILD_DIR)/$(1):

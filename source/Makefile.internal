@@ -407,19 +407,20 @@ else
     MKL_OS = lnx
 endif
 MKLROOT    ?= $(INTEL_PATH)/mkl
-ifneq ("$(wildcard ${MKLROOT}/tools/mkl_link_tool)","")
+MKL_LINK_TOOL := $(firstword $(wildcard ${MKLROOT}/tools/mkl_link_tool ${MKLROOT}/bin/mkl_link_tool))
+ifneq ("$(MKL_LINK_TOOL)","")
     ifeq ($(PE_ENV),INTEL)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),PGI)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),GNU)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),CRAY)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
     endif
 endif
 

@@ -32,8 +32,8 @@ Contains
     Character(*), Intent(in) :: mode, data_dir
 
     heat_mode = trim(mode) == 'heat'
-    If ( trim(mode) /= 'base' .and. .not. heat_mode ) Then
-      Write(*,*) 'mode must be base or heat'
+    If ( trim(mode) /= 'base' .and. trim(mode) /= 'failure' .and. .not. heat_mode ) Then
+      Write(*,*) 'mode must be base, heat, or failure'
       Stop 1
     EndIf
 
@@ -195,7 +195,7 @@ Contains
     Write(lun_solver,'(a)') '&pardiso_controls'
     Write(lun_solver,'(a)') '  iparm(3) = 1, iparm(5) = 1, iparm(6) = 1, iparm(12) = 1'
     Write(lun_solver,'(a)') '  iparm(31) = 1, iparm(35) = 1, iparm(36) = 1'
-    Write(lun_solver,'(a)') '  iparm(7) = 77'
+    Write(lun_solver,'(a)') '  iparm(8) = 3'
 #endif
     Write(lun_solver,'(a)') '/'
     Close(lun_solver)
@@ -254,7 +254,7 @@ Module test_sparse_contracts
   Use xnet_controls, Only: lun_diag
   Use xnet_jacobian
   Use xnet_types, Only: dp
-#if !defined(TEST_DENSE)
+#if !defined(TEST_DENSE) && !defined(TEST_REAL_SOLVER)
   Use solver_probe
 #endif
   Implicit None
@@ -264,6 +264,7 @@ Module test_sparse_contracts
   Real(dp), Parameter :: tolerance = 1.0e-12_dp
 
   Public :: collect_sparse_contracts
+  Public :: run_real_failure_probe
 
 Contains
 
@@ -412,8 +413,10 @@ Contains
     Type(error_type), Allocatable, Intent(out) :: error
 
 #if defined(TEST_MA48)
+#if !defined(TEST_REAL_SOLVER)
     Call check(error,init_abi == 48 .and. init_calls == 1)
     If ( allocated(error) ) Return
+#endif
     Call check(error,lun_diag < 0)
     If ( allocated(error) ) Return
     If ( tracked_controls ) Then
@@ -422,7 +425,11 @@ Contains
       Call check(error,icntl(1) == 0 .and. icntl(2) == 44 .and. icntl(3) == 3)
     EndIf
     If ( allocated(error) ) Return
+#if defined(TEST_REAL_SOLVER)
+    Call check(error,icntl(5) == msize .and. icntl(6) == 1 .and. icntl(8) == 0)
+#else
     Call check(error,icntl(5) == msize .and. icntl(6) == 2 .and. icntl(8) == 0)
+#endif
     If ( allocated(error) ) Return
     If ( tracked_controls ) Then
       Call check(error,abs(cntl(2)-0.1_dp) <= tolerance .and. abs(maxerr-1.0e-11_dp) <= tolerance)
@@ -432,8 +439,10 @@ Contains
     If ( allocated(error) ) Return
     Call check(error,all(jobA == 3) .and. all(jobB == 1) .and. all(jobC == 1))
 #elif defined(TEST_PARDISO)
+#if !defined(TEST_REAL_SOLVER)
     Call check(error,init_abi == 61 .and. init_calls == 1)
     If ( allocated(error) ) Return
+#endif
     If ( tracked_controls ) Then
       Call check(error,iparm(3) == 1 .and. iparm(7) == 7 .and. abs(dparm(8)-0.8_dp) <= tolerance)
     Else
@@ -447,12 +456,14 @@ Contains
     If ( allocated(error) ) Return
     Call check(error,maxfct == 2 .and. msglvl == 1 .and. all(perm == 0))
 #else
+#if !defined(TEST_REAL_SOLVER)
     Call check(error,init_abi == 64 .and. init_calls == 1)
     If ( allocated(error) ) Return
+#endif
     If ( tracked_controls ) Then
-      Call check(error,iparm(3) == 0 .and. iparm(7) == 7 .and. abs(dparm(8)) <= tolerance)
+      Call check(error,iparm(3) == 0 .and. abs(dparm(8)) <= tolerance)
     Else
-      Call check(error,iparm(3) == 0 .and. iparm(7) == 77 .and. abs(dparm(8)) <= tolerance)
+      Call check(error,iparm(3) == 0 .and. iparm(8) == 3 .and. abs(dparm(8)) <= tolerance)
     EndIf
     If ( allocated(error) ) Return
     Call check(error,iparm(1) == 1 .and. iparm(5) == 0 .and. iparm(6) == 0)
@@ -460,7 +471,7 @@ Contains
     Call check(error,iparm(12) == 0 .and. iparm(31) == 0 .and. iparm(35) == 0 .and. &
       & iparm(36) == 0 .and. abs(dparm(1)) <= tolerance)
     If ( allocated(error) ) Return
-    Call check(error,maxfct == 2 .and. msglvl == 1 .and. all(perm == 0))
+    Call check(error,maxfct == 1 .and. msglvl == 1 .and. all(perm == 0))
 #endif
 
     Return
@@ -487,12 +498,15 @@ Contains
     t9rhs = 0.0_dp
     If ( msize == 4 ) t9rhs = rhs(4,:)
 
-#if !defined(TEST_DENSE)
+#if !defined(TEST_DENSE) && !defined(TEST_REAL_SOLVER)
     Call reset_solver_probe
 #endif
     Call jacobian_solve(1,yrhs,dy,t9rhs,dt9)
     actual(1:3,:) = dy
     If ( msize == 4 ) actual(4,:) = dt9
+#if defined(TEST_REAL_SOLVER)
+    Call apply_real_result_mutation(actual)
+#endif
     Call check_solutions(error,matrix,rhs,solution,actual)
     If ( allocated(error) ) Return
 
@@ -508,12 +522,19 @@ Contains
     Call check_solutions(error,matrix,rhs,solution,actual)
     If ( allocated(error) ) Return
 
+#if !defined(TEST_REAL_SOLVER)
 #if defined(TEST_PARDISO) || defined(TEST_PARDISO_MKL)
     Call check(error,call_count == 8)
     If ( allocated(error) ) Return
     Call check(error,all(phase_history(1:8) == (/ 12, 12, 33, 33, 22, 22, 33, 33 /)))
     If ( allocated(error) ) Return
+#if defined(TEST_PARDISO_MKL)
+    Call check(error,all(mnum_history(1:8) == 1))
+    If ( allocated(error) ) Return
+    Call check(error,all(handle_history(1:8) == (/ 0, 0, 1, 2, 3, 4, 5, 6 /)))
+#else
     Call check(error,all(mnum_history(1:8) == (/ 1, 2, 1, 2, 1, 2, 1, 2 /)))
+#endif
     If ( allocated(error) ) Return
     Call check(error,index_base_valid .and. options_valid)
 #elif defined(TEST_MA48)
@@ -539,9 +560,56 @@ Contains
     If ( allocated(error) ) Return
     Call check(error,coordinate_valid .and. options_valid)
 #endif
+#endif
 
     Return
   End Subroutine test_known_system_solve
+
+#if defined(TEST_REAL_SOLVER)
+  Subroutine apply_real_result_mutation(actual)
+    Implicit None
+
+    Real(dp), Intent(inout) :: actual(msize,2)
+
+    Character(80) :: mutation
+    Integer :: length, status
+
+    mutation = ''
+    Call get_environment_variable('XNET_SPARSE_REAL_MUTATION',mutation, &
+      & length=length,status=status)
+    If ( status == 0 .and. mutation(1:length) == 'excessive_residual' ) Then
+      actual(1,1) = actual(1,1) + 1.0e-11_dp
+    EndIf
+
+    Return
+  End Subroutine apply_real_result_mutation
+#endif
+
+  Subroutine run_real_failure_probe
+    Use, Intrinsic :: iso_fortran_env, Only: error_unit
+    Implicit None
+
+    Real(dp) :: diag(2), dt9(2), dy(3,2), matrix(msize,msize), mult(2)
+    Real(dp) :: t9rhs(2), yrhs(3,2)
+
+#if defined(TEST_PARDISO_MKL)
+    Call expected_matrix(matrix)
+#else
+    matrix = 0.0_dp
+#endif
+    diag = 0.0_dp
+    mult = 1.0_dp
+    yrhs = 1.0_dp
+    t9rhs = 1.0_dp
+    Call install_matrix(matrix,diag,mult)
+#if defined(TEST_PARDISO_MKL)
+    cidx(1) = 0
+    iparm(27) = 1
+#endif
+    Call jacobian_solve(1,yrhs,dy,t9rhs,dt9)
+    Write(error_unit,'(a)') 'real sparse backend accepted controlled failure input'
+    Stop 1
+  End Subroutine run_real_failure_probe
 
   Subroutine install_matrix(matrix,diag,mult)
     Implicit None
@@ -607,16 +675,21 @@ Contains
     Real(dp), Intent(in) :: expected(msize,2), actual(msize,2)
 
     Integer :: zone
-    Real(dp) :: residual
+    Real(dp) :: maximum_residual, residual
 
     ! Keep the copy-back association check independent of the stricter residual contract.
     Call check(error,all(abs(actual-expected) <= association_tolerance))
     If ( allocated(error) ) Return
+    maximum_residual = 0.0_dp
     Do zone = 1, 2
       residual = maxval(abs(matmul(matrix,actual(:,zone))-rhs(:,zone)))
+      maximum_residual = max(maximum_residual,residual)
       Call check(error,residual <= tolerance*(1.0_dp+maxval(abs(rhs(:,zone)))))
       If ( allocated(error) ) Return
     EndDo
+#if defined(TEST_REAL_SOLVER)
+    Write(*,'(a,es12.5)') 'maximum real-solver residual=',maximum_residual
+#endif
 
     Return
   End Subroutine check_solutions
@@ -626,7 +699,7 @@ End Module test_sparse_contracts
 Program sparse_contract_test_runner
   Use, Intrinsic :: iso_fortran_env, Only: error_unit
   Use sparse_component_fixture, Only: initialize_component
-  Use test_sparse_contracts, Only: collect_sparse_contracts
+  Use test_sparse_contracts, Only: collect_sparse_contracts, run_real_failure_probe
   Use testdrive, Only: new_testsuite, run_testsuite, testsuite_type
   Implicit None
 
@@ -643,6 +716,9 @@ Program sparse_contract_test_runner
   Call get_command_argument(1,mode)
   Call get_command_argument(2,data_dir)
   Call initialize_component(trim(mode),trim(data_dir))
+#if defined(TEST_REAL_SOLVER)
+  If ( trim(mode) == 'failure' ) Call run_real_failure_probe
+#endif
 
 #if defined(TEST_DENSE)
   suite_name = 'dense Jacobian '//trim(mode)

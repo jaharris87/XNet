@@ -55,6 +55,22 @@ association. The dense linear-algebra stub and sparse solver stubs pass the
 received dense or reconstructed matrix to the vendored NETLIB `dgesv`; they do
 not represent or qualify any licensed solver implementation.
 
+Issue #44 adds two opt-in real-library targets that reuse the same production
+providers and known-system fixture without entering the dependency-free default
+suite:
+
+```text
+make -C test/unit clean real-ma48-test HSL_MA48_SOURCE=/approved/path/MA48.f
+make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
+```
+
+The first requires maintainer-licensed HSL source outside the repository; the
+second requires an initialized oneMKL environment. Each runs base and
+self-heating residual checks, tracked controls, a real solver-error status path,
+and a controlled result-perturbation effectiveness check. Provider support
+status, complete build/run commands, and license limits are documented under
+`test/qualification/sparse_backends/`.
+
 The suite checks:
 
 - ordinary, vector, and upper/lower-clamped `safe_exp` results;

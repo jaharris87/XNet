@@ -51,6 +51,25 @@ These values describe configuration selection. Record actual validation in the
 governing issue or PR with the compiler version, command, machine, relevant
 environment, result, and date.
 
+## Optional sparse-backend status
+
+A named Make target records a build recipe, not a support claim. The current
+serial CPU support dispositions are:
+
+| Provider | Selection | Status and limit |
+| --- | --- | --- |
+| HSL MA48 2.2.0 | `MATRIX_SOLVER=MA48` with external `MA48.f` | Qualified on macOS arm64 with GNU Fortran 16.1.0. The maintainer-supplied source is used under a maintainer-held non-redistributable HSL licence and must remain outside the repository. Other HSL versions, compilers, and platforms are unqualified. |
+| Standalone PARDISO | `MATRIX_SOLVER=PARDISO` with `LAPACK_VER` other than `MKL` | Unsupported and unqualified. No approved compatible standalone dependency is maintained, and the legacy `/usr/local/pardiso` library-name defaults are not evidence of support. |
+| Intel oneMKL PARDISO | `MATRIX_SOLVER=PARDISO LAPACK_VER=MKL` | Qualified on the `etacar` Linux x86_64 host with GNU Fortran 11.4.0 and oneMKL 2026.1. Other oneMKL versions, compilers, platforms, and parallel modes are unqualified. |
+
+MA48 source must not be copied, committed, archived, or attached to an issue or
+pull request. HSL describes MA48 2.2.0 and its licensing restrictions in the
+[official catalogue](https://www.hsl.rl.ac.uk/catalogue/ma48.html) and
+[licensing overview](https://www.hsl.rl.ac.uk/). oneMKL is distributed under
+Intel's [Simplified Software License](https://www.intel.com/content/www/us/en/developer/articles/tool/onemkl-license-faq.html).
+The exact opt-in component and same-source dense comparison commands are in
+[`test/qualification/sparse_backends/README.md`](../../test/qualification/sparse_backends/README.md).
+
 Make can display resolved values through the existing `print-%` target. For
 example:
 

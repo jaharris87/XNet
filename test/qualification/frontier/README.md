@@ -7,8 +7,9 @@ performance benchmark, a scaling claim, or a permanent GPU endpoint baseline.
 A human completes Frontier's interactive RSA authentication and starts the
 submission. No credential, token, account name, reservation name, or private
 path belongs in the repository. The submitter supplies allocation values on
-the command line, and the runner records only that an account or reservation
-was supplied. The raw artifact directory remains outside the checkout.
+the command line, and the retained manifest records only whether an account,
+QoS, or reservation was supplied. The raw artifact directory remains outside
+the checkout.
 
 The package exercises three independent requirements:
 
@@ -39,7 +40,8 @@ review disposition before issue #46 is complete.
 
 - `submit_frontier.py` verifies a clean commit, creates and hashes a `git
   archive`, stages it outside the checkout, submits one bounded Slurm job, and
-  waits for the returned report.
+  waits for the returned report. After Slurm closes the job logs, it finalizes
+  the redacted resource evidence and complete artifact inventory.
 - `frontier_job.sh` starts one GPU-bound Slurm step.
 - `frontier_qualification.py` captures the environment, builds CPU and GPU
   configurations from the archive, runs the three checks, compares results,

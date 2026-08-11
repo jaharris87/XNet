@@ -25,7 +25,10 @@ from frontier_qualification import (  # noqa: E402
     parse_linalg_probe,
     validate_manifest,
 )
-from submit_frontier import classify_submission_failure  # noqa: E402
+from submit_frontier import (  # noqa: E402
+    classify_submission_failure,
+    finalize_submission_manifest,
+)
 from parallel_zones import AsciiEndpoint  # noqa: E402
 from xnet_regression import ALPHA_SPECIES, FinalState, SolverCounters  # noqa: E402
 
@@ -77,7 +80,18 @@ def _manifest() -> dict[str, object]:
             ],
             "gpu_model": "AMD Instinct MI250X",
         },
-        "slurm": {"job_id": "123"},
+        "slurm": {
+            "job_id": "123",
+            "account_supplied": True,
+            "partition": "batch",
+            "qos_supplied": False,
+            "reservation_supplied": False,
+            "nodes": 1,
+            "tasks": 1,
+            "cpus_per_task": 7,
+            "gpus_per_task": 1,
+            "time_limit": "00:20:00",
+        },
         "builds": {
             "cpu": {
                 "status": "passed",
@@ -184,6 +198,50 @@ def test_manifest_validator_requires_complete_success_evidence() -> None:
     del manifest["checks"]["gpu_linalg"]["data_present"]
     with pytest.raises(FrontierFailure, match="linear-algebra evidence"):
         validate_manifest(manifest)
+
+    manifest = _manifest()
+    manifest["slurm"]["time_limit"] = "unknown"
+    with pytest.raises(FrontierFailure, match="Slurm evidence"):
+        validate_manifest(manifest)
+
+
+def test_submission_finalizes_redacted_resources_and_complete_inventory(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "qualification_manifest.json").write_text("intermediate\n")
+    (tmp_path / "submission.json").write_text("submitted\n")
+    (tmp_path / "slurm.stdout.txt").write_text("complete\n")
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ignored.o").write_text("object\n")
+
+    finalized = finalize_submission_manifest(
+        _manifest(),
+        tmp_path,
+        job_id="456",
+        partition="batch",
+        qos_supplied=False,
+        reservation_supplied=True,
+        cpus_per_task=7,
+        time_limit="00:20:00",
+    )
+
+    assert finalized["slurm"] == {
+        "job_id": "456",
+        "account_supplied": True,
+        "partition": "batch",
+        "qos_supplied": False,
+        "reservation_supplied": True,
+        "nodes": 1,
+        "tasks": 1,
+        "cpus_per_task": 7,
+        "gpus_per_task": 1,
+        "time_limit": "00:20:00",
+    }
+    assert [item["path"] for item in finalized["artifact_inventory"]] == [
+        "slurm.stdout.txt",
+        "submission.json",
+    ]
 
 
 def test_failed_manifest_retains_classification_without_false_success() -> None:

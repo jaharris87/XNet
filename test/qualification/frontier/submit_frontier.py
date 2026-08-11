@@ -14,7 +14,11 @@ import subprocess
 import sys
 from typing import Sequence
 
-from frontier_qualification import FrontierFailure, validate_manifest
+from frontier_qualification import (
+    FrontierFailure,
+    inventory_regular_files,
+    validate_manifest,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -158,6 +162,40 @@ def classify_submission_failure(text: str) -> str:
     return "submission"
 
 
+def finalize_submission_manifest(
+    document: dict[str, object],
+    artifact_root: Path,
+    *,
+    job_id: str | None,
+    partition: str,
+    qos_supplied: bool,
+    reservation_supplied: bool,
+    cpus_per_task: int,
+    time_limit: str,
+) -> dict[str, object]:
+    """Add redacted submission evidence after Slurm has finalized every artifact."""
+
+    finalized = dict(document)
+    finalized["slurm"] = {
+        "job_id": job_id or "unknown",
+        "account_supplied": True,
+        "partition": partition,
+        "qos_supplied": qos_supplied,
+        "reservation_supplied": reservation_supplied,
+        "nodes": 1,
+        "tasks": 1,
+        "cpus_per_task": cpus_per_task,
+        "gpus_per_task": 1,
+        "time_limit": time_limit,
+    }
+    finalized["artifact_inventory"] = inventory_regular_files(
+        artifact_root,
+        exclude=(Path("qualification_manifest.json"), Path("source.tar")),
+        exclude_trees=(Path("source"),),
+    )
+    return finalized
+
+
 def submit(arguments: argparse.Namespace) -> Path:
     source_root = arguments.source_root.resolve()
     artifact_root = arguments.artifact_root.resolve()
@@ -207,6 +245,7 @@ def submit(arguments: argparse.Namespace) -> Path:
             source_sha,
             archive_sha256,
             str(arguments.build_jobs),
+            arguments.time,
         )
     )
     (artifact_root / "sbatch.command.json").write_text(
@@ -247,6 +286,20 @@ def submit(arguments: argparse.Namespace) -> Path:
     if manifest_path.is_file():
         try:
             document = json.loads(manifest_path.read_text(encoding="utf-8"))
+            validate_manifest(document, require_pass=False)
+            document = finalize_submission_manifest(
+                document,
+                artifact_root,
+                job_id=job_id,
+                partition=arguments.partition,
+                qos_supplied=arguments.qos is not None,
+                reservation_supplied=arguments.reservation is not None,
+                cpus_per_task=arguments.cpus_per_task,
+                time_limit=arguments.time,
+            )
+            manifest_path.write_text(
+                json.dumps(document, indent=2) + "\n", encoding="utf-8"
+            )
             validate_manifest(document, require_pass=False)
         except (OSError, UnicodeError, json.JSONDecodeError, FrontierFailure) as error:
             raise SubmissionFailure(

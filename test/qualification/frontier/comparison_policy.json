@@ -1,6 +1,6 @@
 {
   "schema": "xnet-frontier-comparison-v1",
-  "status": "candidate pending measured Frontier evidence and review",
+  "status": "accepted after review of Frontier job 5230609",
   "target_time_exact": true,
   "scalar_fields": {
     "achieved_time": {"atol": 5e-12, "rtol": 5e-8},

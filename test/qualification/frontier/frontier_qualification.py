@@ -43,6 +43,7 @@ MANIFEST_SCHEMA = "xnet-frontier-qualification-v1"
 POLICY_SCHEMA = "xnet-frontier-comparison-v1"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SOURCE_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+SLURM_TIME_PATTERN = re.compile(r"^(?:\d+-)?\d{1,2}:\d{2}:\d{2}$")
 LINALG_BATCH_PATTERN = re.compile(
     r"^XNET_GPU_LINALG batch\s+(\d+)\s+info\s+(-?\d+)\s+"
     r"relative_residual\s+([^\s]+)$"
@@ -887,15 +888,18 @@ def _run_heat_sn160(
     }
 
 
-def _slurm_manifest() -> dict[str, object]:
+def _slurm_manifest(time_limit: str) -> dict[str, object]:
     return {
         "job_id": os.environ.get("SLURM_JOB_ID", "unknown"),
+        "account_supplied": True,
         "partition": os.environ.get("SLURM_JOB_PARTITION", "unknown"),
+        "qos_supplied": bool(os.environ.get("SLURM_JOB_QOS")),
+        "reservation_supplied": bool(os.environ.get("SLURM_JOB_RESERVATION")),
         "nodes": int(os.environ.get("SLURM_JOB_NUM_NODES", "1")),
         "tasks": int(os.environ.get("SLURM_NTASKS", "1")),
         "cpus_per_task": int(os.environ.get("SLURM_CPUS_PER_TASK", "1")),
         "gpus_per_task": 1,
-        "time_limit": os.environ.get("SLURM_TIMELIMIT", "unknown"),
+        "time_limit": time_limit,
     }
 
 
@@ -915,7 +919,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
             "archive_sha256": arguments.archive_sha256,
         },
         "environment": {},
-        "slurm": _slurm_manifest(),
+        "slurm": _slurm_manifest(arguments.time_limit),
         "builds": {},
         "inputs": [],
         "checks": {},
@@ -1014,7 +1018,7 @@ def write_failure_manifest(arguments: argparse.Namespace) -> Path:
             "archive_sha256": arguments.archive_sha256,
         },
         "environment": {},
-        "slurm": _slurm_manifest(),
+        "slurm": _slurm_manifest(arguments.time_limit),
         "builds": {},
         "inputs": [],
         "checks": {},
@@ -1080,7 +1084,41 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
     if any(not any(marker in item for item in modules) for marker in REQUIRED_MODULE_MARKERS):
         raise FrontierFailure("environment", "manifest", "module evidence is incomplete")
     slurm = document["slurm"]
-    if not isinstance(slurm, dict) or str(slurm.get("job_id", "unknown")) == "unknown":
+    slurm_fields = {
+        "job_id",
+        "account_supplied",
+        "partition",
+        "qos_supplied",
+        "reservation_supplied",
+        "nodes",
+        "tasks",
+        "cpus_per_task",
+        "gpus_per_task",
+        "time_limit",
+    }
+    if not isinstance(slurm, dict) or set(slurm) != slurm_fields:
+        raise FrontierFailure("allocation", "manifest", "Slurm evidence is incomplete")
+    if (
+        not isinstance(slurm["job_id"], str)
+        or not slurm["job_id"]
+        or slurm["job_id"] == "unknown"
+        or slurm["account_supplied"] is not True
+        or not isinstance(slurm["partition"], str)
+        or not slurm["partition"]
+        or slurm["partition"] == "unknown"
+        or not isinstance(slurm["qos_supplied"], bool)
+        or not isinstance(slurm["reservation_supplied"], bool)
+        or type(slurm["nodes"]) is not int
+        or slurm["nodes"] != 1
+        or type(slurm["tasks"]) is not int
+        or slurm["tasks"] != 1
+        or type(slurm["cpus_per_task"]) is not int
+        or slurm["cpus_per_task"] < 1
+        or type(slurm["gpus_per_task"]) is not int
+        or slurm["gpus_per_task"] != 1
+        or not isinstance(slurm["time_limit"], str)
+        or not SLURM_TIME_PATTERN.fullmatch(slurm["time_limit"])
+    ):
         raise FrontierFailure("allocation", "manifest", "Slurm evidence is incomplete")
     builds = document["builds"]
     if not isinstance(builds, dict) or set(builds) != {"cpu", "gpu"}:
@@ -1132,6 +1170,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     run.add_argument("--source-sha", required=True)
     run.add_argument("--archive-sha256", required=True)
     run.add_argument("--build-jobs", type=int, default=8)
+    run.add_argument("--time-limit", required=True)
     validate = subparsers.add_parser("validate", help="validate a retained manifest")
     validate.add_argument("manifest", type=Path)
     validate.add_argument("--allow-failure", action="store_true")
@@ -1139,6 +1178,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     failure.add_argument("--artifact-root", type=Path, required=True)
     failure.add_argument("--source-sha", required=True)
     failure.add_argument("--archive-sha256", required=True)
+    failure.add_argument("--time-limit", required=True)
     failure.add_argument("--category", required=True)
     failure.add_argument("--phase", required=True)
     failure.add_argument("--message", required=True)

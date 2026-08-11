@@ -492,7 +492,8 @@ context listed below.
 | EVAL-60B `PRO-001` self-authorizing numerical limits | Merge-blocking | High | Matched accepted numerical-limit validation defect. | Supported by static validator/policy inspection. | Direct schema, validator, and retained-manifest evidence. | Bounded and appropriate: recompute limits from tracked policy and raw observations. |
 | EVAL-60B `SCI-001` retained evidence completeness | Merge-blocking | High | Matched high-impact retained-evidence gap for the exact repair state. | Supported by retained-manifest/source inspection. | Direct retained-manifest evidence. | Bounded and appropriate: retain candidate-bound v2 evidence. |
 | EVAL-60B `PRO-002` nested inventory mismatch | Merge-blocking | High | Matched accepted nested inventory defect. | Supported by validator/inventory inspection. | Direct nested-claim versus inventory evidence. | Bounded and appropriate: compare nested size/hash claims to authoritative inventory entries. |
-| EVAL-60B `PRO-003` schema/runtime and stream classification | Merge-blocking | High | Matched accepted failure-envelope and stream-classification defects. | Supported by schema/runtime/source inspection. | Direct schema and failure-stream evidence. | Bounded and appropriate: align schema/runtime envelopes and classify source failures from the correct stream. |
+| EVAL-60B `PRO-003A` schema/runtime failure envelope | Merge-blocking | High | Matched accepted schema/runtime failure-envelope defect. | Supported by schema and runtime-validator inspection. | Direct schema/runtime validation evidence. | Bounded and appropriate: align schema and runtime failure envelopes. |
+| EVAL-60B `PRO-003B` source-failure stream classification | Merge-blocking | High | Matched accepted pre-extraction source-failure stream defect. | Supported by source-failure path inspection. | Direct failure-stream evidence. | Bounded and appropriate: classify source failures from the correct stream. |
 | EVAL-66A `SCI-001` scientific identity | Not recorded | Not recorded | Not assessable for the initial invocation; superseded for scoring because it used issue #46 and a too-specific identity focus. | Not assessable. | Direct controlled-mutation evidence, but collected under mismatched issue context. | Appropriate in substance: exclude source spelling and reconciliation-only annotations from scientific identity. |
 | RERUN-52A-REPAIR `TST-001` topology evidence | Merge-blocking | High | Correct for the later RVCASE-52B defect; not a clean RVCASE-52A `PASS`. | Supported by candidate runner and diagnostics. | Direct source and diagnostic-format evidence. | Bounded and appropriate: require exact MPI/OpenMP worker diagnostics. |
 | RERUN-52A-REPAIR `TST-002` non-root failure intent | Merge-blocking | High | Correct as a later failure-probe concern; outside RVCASE-52A's original accepted finding. | Supported by static runner evidence. | Direct failure-probe source evidence. | Bounded and appropriate: validate intended missing-input reason and rank. |
@@ -550,6 +551,16 @@ the PR conversation:
 | --- | --- |
 | `RR-REQ-004-R1` / `RR-REQ-005` the table still omitted the initial wrong-issue `EVAL-66A SCI-001` quality row. | Accepted. The quality table now records `EVAL-66A SCI-001` separately with `not recorded`/`not assessable` severity and confidence metadata and notes that the corrected issue #41 rerun supersedes it for scoring. |
 | `RR-PRO-002` the PR-body comment validation loop omitted replacement review comment `5258618001`. | Accepted. The live PR body is updated outside this repository file when the final replacement SHA is known, and final handoff verification includes that comment id. |
+
+Replacement candidate `bb9246b5a78ecf163579556540b9e1af974fb8c4` was then
+reviewed by fresh read-only internal subagents. The findings were preserved in
+the PR conversation:
+[third replacement review comment](https://github.com/jaharris87/XNet/pull/75#issuecomment-5258781873).
+
+| Finding | Disposition |
+| --- | --- |
+| `RR-REQ-005` the table still grouped distinct `EVAL-60B PRO-003` sub-findings for schema/runtime envelope and source-failure stream classification. | Accepted. The quality table now splits these into `EVAL-60B PRO-003A` and `EVAL-60B PRO-003B` with separate severity, confidence, evidence quality, and smallest-fix quality. |
+| `RR-PRO-003` the PR body recorded `612 insertions` for the exact `5d71ae2..bb9246b` diff, but the actual result was `623 insertions`. | Accepted. The live PR body is updated outside this repository file when the final replacement SHA is known and records the final exact diff stat. |
 
 ## Playbook correction decision
 

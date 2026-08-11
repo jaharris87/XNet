@@ -444,6 +444,35 @@ def test_supported_gpu_batched_factor_and_solve_paths() -> None:
     assert "dev_ptr( da(1) )" in bksub
 
 
+def test_timestep_output_updates_all_device_computed_fields() -> None:
+    if shutil.which("cpp") is None:
+        pytest.skip("system C preprocessor is unavailable")
+    repository = FRONTIER_DIRECTORY.parents[2]
+    for backend, expected_update in (
+        ("XNET_OMP_OL", "!$omp from(t,t9,rho,tdel,edot,sqnu,y,kmon)"),
+        ("XNET_OACC", "!$acc host(t,t9,rho,tdel,edot,sqnu,y,kmon)"),
+    ):
+        completed = subprocess.run(
+            [
+                "cpp",
+                "-P",
+                "-C",
+                "-nostdinc",
+                "-DXNET_GPU",
+                f"-D{backend}",
+                f"-I{repository / 'source'}",
+                str(repository / "source" / "xnet_output.F90"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        timestep_output = completed.stdout.split("Subroutine ts_output", 1)[1]
+        timestep_output = timestep_output.split("End Subroutine ts_output", 1)[0]
+        assert expected_update in timestep_output
+
+
 def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")

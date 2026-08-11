@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -35,6 +36,9 @@ PROCESS_ARTIFACTS = (
     "xnet.stdout.txt",
     "xnet.stderr.txt",
     "xnet.status.txt",
+)
+FORTRAN_OMITTED_EXPONENT = re.compile(
+    r"^([+-]?(?:\d+(?:\.\d*)?|\.\d+))([+-]\d{3,})$"
 )
 
 
@@ -422,6 +426,17 @@ def _close(actual: float, expected: float, relative: float) -> bool:
     return math.isclose(actual, expected, rel_tol=relative, abs_tol=5.0e-99)
 
 
+def _parse_fortran_float(token: str) -> float:
+    """Parse Fortran real output, including a three-digit exponent without E."""
+
+    normalized = token.replace("D", "E").replace("d", "e")
+    if "e" not in normalized.lower():
+        match = FORTRAN_OMITTED_EXPONENT.fullmatch(normalized)
+        if match:
+            normalized = f"{match.group(1)}E{match.group(2)}"
+    return float(normalized)
+
+
 def validate_ascii_association(
     work_directory: Path, states: Sequence[FinalState]
 ) -> tuple[AsciiEndpoint, ...]:
@@ -439,14 +454,14 @@ def validate_ascii_association(
             raise QualificationFailure(f"malformed final ASCII row in {path}: {lines[-1]}")
         try:
             step = int(fields[0])
-            time = float(fields[1].replace("D", "E"))
-            temperature = float(fields[2].replace("D", "E"))
-            density = float(fields[3].replace("D", "E"))
-            energy_generation_rate = float(fields[4].replace("D", "E"))
-            neutrino_loss_rate = float(fields[5].replace("D", "E"))
-            timestep = float(fields[6].replace("D", "E"))
+            time = _parse_fortran_float(fields[1])
+            temperature = _parse_fortran_float(fields[2])
+            density = _parse_fortran_float(fields[3])
+            energy_generation_rate = _parse_fortran_float(fields[4])
+            neutrino_loss_rate = _parse_fortran_float(fields[5])
+            timestep = _parse_fortran_float(fields[6])
             mass_fractions = tuple(
-                float(token.replace("D", "E"))
+                _parse_fortran_float(token)
                 for token in fields[7 : 7 + len(ALPHA_SPECIES)]
             )
         except ValueError as error:

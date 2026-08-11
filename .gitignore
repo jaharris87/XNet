@@ -47,6 +47,8 @@ sparse_ind
 # xnet output files
 ts*
 ev*
+!test/qualification/frontier/evidence/
+!test/qualification/frontier/evidence/**
 net_diag*
 nse_diag*
 

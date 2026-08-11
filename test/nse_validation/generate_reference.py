@@ -319,6 +319,13 @@ def scientific_dataset_hash(payload: dict[str, Any]) -> str:
         for key, value in payload.items()
         if key not in ("scientific_dataset_sha256", "reference_data_sha256")
     }
+    # This independently checked identity is provenance for the unchanged
+    # numerical dataset, so adding it must not relabel the accepted results.
+    scientific["network"] = {
+        key: value
+        for key, value in scientific["network"].items()
+        if key != "scientific_input_sha256"
+    }
     return hashlib.sha256(canonical_bytes(scientific)).hexdigest()
 
 
@@ -433,6 +440,7 @@ def generate(network_directory: Path) -> tuple[dict[str, Any], str]:
                 )
             },
             "canonical_input_sha256": manifest["canonical_input_sha256"],
+            "scientific_input_sha256": manifest["scientific_input_sha256"],
         },
         "conventions": manifest["conventions"],
         "constants": manifest["constants"],

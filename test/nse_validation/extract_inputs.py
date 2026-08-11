@@ -55,6 +55,27 @@ def canonical_bytes(payload: dict[str, Any]) -> bytes:
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def scientific_input_sha256(payload: dict[str, Any]) -> str:
+    """Identify the retained calculation inputs, independent of source bytes."""
+    scientific_inputs = {
+        "schema": payload["schema"],
+        "network": {
+            key: payload["network"][key]
+            for key in (
+                "species_count",
+                "sunet_sha256",
+                "netwinv_sha256",
+                "order_sha256",
+            )
+        },
+        "conventions": payload["conventions"],
+        "constants": payload["constants"],
+        "temperature_grid_gk": payload["temperature_grid_gk"],
+        "species": payload["species"],
+    }
+    return hashlib.sha256(canonical_bytes(scientific_inputs)).hexdigest()
+
+
 def parse_constants(path: Path) -> dict[str, dict[str, str]]:
     text = path.read_text(encoding="utf-8")
     constants: dict[str, dict[str, str]] = {}
@@ -377,6 +398,7 @@ def extract(
         },
     }
     payload["canonical_input_sha256"] = hashlib.sha256(canonical_bytes(payload)).hexdigest()
+    payload["scientific_input_sha256"] = scientific_input_sha256(payload)
     return payload
 
 

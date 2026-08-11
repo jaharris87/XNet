@@ -180,6 +180,17 @@ eight-decimal MeV storage rounding.  This reconciles the exact retained input
 bytes; it does not claim that those nuclear inputs are exact measurements or
 that every mass table belongs to REACLIB v2.2.
 
+The retained scientific-input identity covers the network bytes and species
+order, extracted constants, temperature grid, complete per-species nuclear
+inputs, and stated conventions.  It deliberately excludes Git commits, paths,
+raw production-source hashes, the top-level raw-data provenance record, and
+generator provenance.  The older `canonical_input_sha256` and those source
+hashes remain frozen historical metadata describing how the reference was
+generated; they are not compared with the current implementation during an
+ordinary test.  Production changes remain covered by compiling and running the
+current `xnet_nse` calculation against the independently retained compositions
+and unchanged numerical gates.
+
 The public `jaharris87/build_net` archive fixes both central raw inputs at its
 initial database commit `77141ca2a3dfc9fa9fd52ef0fcf39a49d74c08e1`
 (2017-01-24).  At that commit, `mass_reac1.dat` has Git blob

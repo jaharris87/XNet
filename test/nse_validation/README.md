@@ -180,6 +180,18 @@ eight-decimal MeV storage rounding.  This reconciles the exact retained input
 bytes; it does not claim that those nuclear inputs are exact measurements or
 that every mass table belongs to REACLIB v2.2.
 
+The retained scientific-input identity covers the network bytes and species
+order, effective binary64 constants and temperature grid, effective
+per-species nuclear inputs, and stated conventions.  It deliberately excludes
+equivalent source-literal spellings, Git commits, paths, raw production-source
+hashes, reconciliation annotations, the top-level raw-data provenance record,
+and generator provenance.  The older `canonical_input_sha256` and those source
+hashes remain frozen historical metadata describing how the reference was
+generated; they are not compared with the current implementation during an
+ordinary test.  Production changes remain covered by compiling and running the
+current `xnet_nse` calculation against the independently retained compositions
+and unchanged numerical gates.
+
 The public `jaharris87/build_net` archive fixes both central raw inputs at its
 initial database commit `77141ca2a3dfc9fa9fd52ef0fcf39a49d74c08e1`
 (2017-01-24).  At that commit, `mass_reac1.dat` has Git blob
@@ -336,7 +348,8 @@ The Fortran-facing `reference.dat` SHA-256 is
 `reference.json` records the generator/source hashes, exact binary64 state
 inputs and constants, residuals, starts, precision checks, complete vectors,
 and derivation details.  The scientific hash covers that complete durable
-record except its two derived hash fields, so changing a residual or other
+record except its two derived hash fields and the separately checked,
+provenance-only scientific-input identity, so changing a residual or other
 numerical-quality diagnostic changes the fingerprint.
 
 The residual gate starts from XNet's configured `1e-8` function tolerance.
@@ -369,15 +382,39 @@ renormalized.
 
 ### Reproduction and ordinary test separation
 
-Reference generation is a manual, reviewable operation:
+The retained JSON's generator/source payload was frozen at commit
+`66e3ee7399e522011aae17fc714a942511f47041`; the later
+`scientific_input_sha256` field is the separately checked preservation identity
+documented above.  Reproducing the historical payload and `reference.dat`
+requires that snapshot and the recorded CPython and libmpdec versions:
 
 ```bash
+mkdir /tmp/xnet-nse-reference-snapshot
+git archive 66e3ee7399e522011aae17fc714a942511f47041 | \
+  tar -x -C /tmp/xnet-nse-reference-snapshot
+cd /tmp/xnet-nse-reference-snapshot
 PYTHONDONTWRITEBYTECODE=1 python3 test/nse_validation/generate_reference.py \
   test/nse_validation/network /tmp/reference.json /tmp/reference.dat
 shasum -a 256 /tmp/reference.json /tmp/reference.dat
-cmp /tmp/reference.json test/nse_validation/reference.json
-cmp /tmp/reference.dat test/nse_validation/reference.dat
+cmp /tmp/reference.dat /path/to/current/XNet/test/nse_validation/reference.dat
+python3 - /path/to/current/XNet/test/nse_validation/reference.json \
+  /tmp/reference.json <<'PY'
+import json
+import sys
+
+retained = json.load(open(sys.argv[1], encoding="utf-8"))
+generated = json.load(open(sys.argv[2], encoding="utf-8"))
+retained["network"].pop("scientific_input_sha256")
+if retained != generated:
+    raise SystemExit("retained historical payload differs from generation snapshot")
+PY
 ```
+
+Running the generator from a later checkout is a manual scientific-result
+recalculation, not a byte reproduction of historical provenance.  Its
+`reference.dat` may be compared with the retained data, but its JSON records
+the later generator and production-source hashes and must not replace the
+retained JSON merely to make those provenance fields current.
 
 The ordinary test target only verifies the retained hashes/data and runs the
 XNet comparator.  It has no rule that invokes `generate_reference.py`, no

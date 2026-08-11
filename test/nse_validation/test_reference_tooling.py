@@ -13,7 +13,7 @@ from unittest.mock import patch
 from decimal import Decimal, localcontext
 from pathlib import Path
 
-from extract_inputs import REPOSITORY_ROOT, extract, sha256
+from extract_inputs import REPOSITORY_ROOT, extract, scientific_input_sha256, sha256
 from generate_reference import scientific_dataset_hash
 from preflight_states import analyze, compare_pair
 from reference_solver import (
@@ -38,14 +38,14 @@ class ReferenceToolingTests(unittest.TestCase):
         cls.payload = json.loads(REFERENCE_JSON.read_text(encoding="utf-8"))
         cls.manifest = extract(NETWORK_DIRECTORY, REPOSITORY_ROOT)
 
-    def test_network_and_generator_identity(self) -> None:
+    def test_retained_network_and_provenance(self) -> None:
         selected = REPOSITORY_ROOT / "test/build_net/sunet.torch489"
         self.assertEqual(
             (NETWORK_DIRECTORY / "sunet").read_bytes(), selected.read_bytes()
         )
         self.assertEqual(
-            self.payload["network"]["canonical_input_sha256"],
-            self.manifest["canonical_input_sha256"],
+            self.payload["network"]["scientific_input_sha256"],
+            self.manifest["scientific_input_sha256"],
         )
         self.assertEqual(
             self.payload["network"]["sunet_sha256"],
@@ -59,12 +59,14 @@ class ReferenceToolingTests(unittest.TestCase):
             self.payload["network"]["build_input_sha256"],
             sha256(NETWORK_DIRECTORY / "build_input.namelist"),
         )
-        for name, expected in self.payload["generator"]["files"].items():
-            self.assertEqual(expected, sha256(DIRECTORY / name))
-        for name, expected in self.payload["network"][
-            "network_builder_source_hashes"
-        ].items():
-            self.assertEqual(expected, sha256(REPOSITORY_ROOT / name))
+        historical_hashes = (
+            self.payload["generator"]["files"],
+            self.payload["network"]["network_builder_source_hashes"],
+            self.payload["source_hashes"],
+        )
+        for hashes in historical_hashes:
+            for value in hashes.values():
+                self.assertRegex(value, r"^[0-9a-f]{64}$")
         self.assertEqual(
             self.payload["generator"]["runtime"],
             {
@@ -151,12 +153,67 @@ class ReferenceToolingTests(unittest.TestCase):
             hashlib.sha256(REFERENCE_DATA.read_bytes()).hexdigest(),
         )
 
-    def test_scientific_hash_covers_numerical_quality_record(self) -> None:
+    def test_source_byte_change_does_not_change_scientific_input_identity(self) -> None:
+        util_path = REPOSITORY_ROOT / "source/xnet_util.F90"
+
+        def changed_source_hash(path: Path) -> str:
+            if path.resolve() == util_path.resolve():
+                return "0" * 64
+            return sha256(path)
+
+        with patch("extract_inputs.sha256", side_effect=changed_source_hash):
+            changed = extract(NETWORK_DIRECTORY, REPOSITORY_ROOT)
+        self.assertNotEqual(
+            self.manifest["source_hashes"]["source/xnet_util.F90"],
+            changed["source_hashes"]["source/xnet_util.F90"],
+        )
+        self.assertNotEqual(
+            self.manifest["canonical_input_sha256"],
+            changed["canonical_input_sha256"],
+        )
+        self.assertEqual(
+            self.manifest["scientific_input_sha256"],
+            changed["scientific_input_sha256"],
+        )
+        equivalent_literal = copy.deepcopy(self.manifest)
+        equivalent_literal["constants"]["bok"]["source_lexeme"] = "0.086173303"
+        self.assertEqual(
+            self.manifest["scientific_input_sha256"],
+            scientific_input_sha256(equivalent_literal),
+        )
+
+    def test_scientific_identity_ignores_reconciliation_provenance(self) -> None:
+        unreconciled = extract(
+            NETWORK_DIRECTORY, REPOSITORY_ROOT, reconcile_provenance=False
+        )
+        self.assertNotEqual(
+            self.manifest["raw_data_provenance"],
+            unreconciled["raw_data_provenance"],
+        )
+        self.assertEqual(
+            self.manifest["scientific_input_sha256"],
+            unreconciled["scientific_input_sha256"],
+        )
+
+    def test_scientific_identity_rejects_extracted_constant_change(self) -> None:
+        mutated = copy.deepcopy(self.manifest)
+        mutated["constants"]["bok"]["hex"] = "0x1.0p-3"
+        self.assertNotEqual(
+            self.payload["network"]["scientific_input_sha256"],
+            scientific_input_sha256(mutated),
+        )
+
+    def test_reference_integrity_rejects_data_and_result_changes(self) -> None:
         mutated = copy.deepcopy(self.payload)
         mutated["states"][0]["reference"]["mass_residual"] = "9.99"
         self.assertNotEqual(
             self.payload["scientific_dataset_sha256"],
             scientific_dataset_hash(mutated),
+        )
+        mutated_data = REFERENCE_DATA.read_bytes() + b"\n"
+        self.assertNotEqual(
+            self.payload["reference_data_sha256"],
+            hashlib.sha256(mutated_data).hexdigest(),
         )
 
     def test_fortran_data_has_complete_stable_order(self) -> None:

@@ -55,6 +55,53 @@ def canonical_bytes(payload: dict[str, Any]) -> bytes:
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def scientific_input_sha256(payload: dict[str, Any]) -> str:
+    """Identify the retained calculation inputs, independent of source bytes."""
+    constants = {
+        name: {"hex": record["hex"], "units": record["units"]}
+        for name, record in payload["constants"].items()
+    }
+    species = [
+        {
+            "index": record["index"],
+            "name": record["name"],
+            "a": record["a"],
+            "z": record["z"],
+            "n": record["n"],
+            "spin_hex": record["spin"]["hex"],
+            "ground_state_degeneracy_hex": record[
+                "ground_state_degeneracy"
+            ]["hex"],
+            "mass_excess_mev_hex": record["mass_excess_mev"]["hex"],
+            "partition_factor_hexes": [
+                value["hex"] for value in record["partition_factors"]
+            ],
+            "binding_energy_mev_hex": record["binding_energy_mev"]["hex"],
+            "translational_mass_g_hex": record["translational_mass_g"]["hex"],
+        }
+        for record in payload["species"]
+    ]
+    scientific_inputs = {
+        "schema": payload["schema"],
+        "network": {
+            key: payload["network"][key]
+            for key in (
+                "species_count",
+                "sunet_sha256",
+                "netwinv_sha256",
+                "order_sha256",
+            )
+        },
+        "conventions": payload["conventions"],
+        "constants": constants,
+        "temperature_grid_gk_hexes": [
+            value["hex"] for value in payload["temperature_grid_gk"]
+        ],
+        "species": species,
+    }
+    return hashlib.sha256(canonical_bytes(scientific_inputs)).hexdigest()
+
+
 def parse_constants(path: Path) -> dict[str, dict[str, str]]:
     text = path.read_text(encoding="utf-8")
     constants: dict[str, dict[str, str]] = {}
@@ -377,6 +424,7 @@ def extract(
         },
     }
     payload["canonical_input_sha256"] = hashlib.sha256(canonical_bytes(payload)).hexdigest()
+    payload["scientific_input_sha256"] = scientific_input_sha256(payload)
     return payload
 
 

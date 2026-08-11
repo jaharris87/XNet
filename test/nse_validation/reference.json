@@ -89,6 +89,7 @@
       "test/build_net/reaclib_reader.f90": "a9a4c07ba4acfa306e70a1e34e00af8a4b91f4b90f06e7da6b736cbb93acf55f"
     },
     "order_sha256": "8620804c59002cad785f539d1beeddcc13e4ec5aa3b77fb7fd0d223120795038",
+    "scientific_input_sha256": "364b406c3af35e17f109ad893eba41bafb7c5e172b09dbecc131369394666332",
     "source_selection": "test/build_net/sunet.torch489",
     "source_selection_sha256": "930fcd3e43b9fbbac1ce2441b69368b341baf488e29edff53935d9f3cbf05d1f",
     "species_count": 489,

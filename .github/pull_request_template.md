@@ -6,9 +6,10 @@ What does this change do, and why?
 
 Issue: #
 
-Feature PRs target `development`; do not use an issue-closing keyword here.
-After merge, confirm completion and close the issue through the documented
-closeout record when authorized.
+For a feature PR targeting `development`, do not use an issue-closing keyword
+here. After merge, confirm completion and close the issue through the
+documented closeout record when authorized. For a PR targeting `main`, use a
+closing keyword only when the authorized closeout intends to close the issue.
 
 ## Scope
 

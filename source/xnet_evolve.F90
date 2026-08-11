@@ -22,11 +22,12 @@ Contains
     ! timestep determined by the integration scheme and the changing thermodynamic conditions.
     ! Integration is performed by a choice of methods controlled by the isolv flag.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, nname, aa, benuc
+    Use nuclear_data, Only: ny, nname, aa, zz, be, mex_n, mex_p, benuc
     Use reaction_data, Only: enudot
     Use xnet_abundances, Only: yo, y, yt, ystart, ydot, xext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart
+    Use xnet_constants, Only: epmev, avn
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
       & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id, tid
     Use xnet_integrate, Only: timestep
@@ -45,8 +46,9 @@ Contains
     ! Local variables
     !Integer, Parameter :: kstep_output = 10
     Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
-    Real(dp) :: enold(zb_lo:zb_hi), en0(zb_lo:zb_hi)
+    Real(dp) :: en0(zb_lo:zb_hi)
     Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
+    Real(dp) :: delta_enm
     Real(dp) :: sqnu(zb_lo:zb_hi)
     Real(dp) :: yout(ny+1)
     Integer :: k, izb, izone, nstep_est, idiag0
@@ -77,7 +79,7 @@ Contains
 
     !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(its,mykstep,lzsolve,lzoutput) &
-    !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
+    !XDIR XCREATE(enm,enb,en0,delta_en,edot,denu,sqnu)
 
     ! Calculate the total energy of the nuclei. The module abundance array
     ! needs the explicit current-worker section in the bounded dummy.
@@ -87,7 +89,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
-    !XDIR XPRESENT(enm,enb,enold,en0,delta_en,edot)
+    !XDIR XPRESENT(enm,enb,en0,delta_en,edot)
     Do izb = zb_lo, zb_hi
       tdel_old(izb) = tdel(izb)
       tdel_next(izb) = tdel(izb)
@@ -112,7 +114,6 @@ Contains
         ktot(k,izb) = 0
       EndDo
       enb(izb) = 0.0
-      enold(izb) = 0.0
       en0(izb) = enm(izb)
       delta_en(izb) = 0.0
       edot(izb) = 0.0
@@ -176,13 +177,9 @@ Contains
       EndIf
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
-      !XDIR XPRESENT(enm,enold) &
       !XDIR XPRESENT(its,t,tstop,mykstep,lzsolve,lzoutput)
       Do izb = zb_lo, zb_hi
         If ( its(izb) == 0 ) Then
-
-          enold(izb) = enm(izb)
-
           ! If this zone reaches the stop time, flag it to remove from loop
           If ( t(izb) >= tstop(izb) ) Then
             mykstep(izb) = kstep
@@ -205,11 +202,23 @@ Contains
       Call enudot(yt(:,zb_lo:zb_hi),sqnu,mask_in = lzoutput)
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
-      !XDIR XPRESENT(its,enm,enold,en0,delta_en,edot,denu,sqnu,tdel)
+      !XDIR XPRESENT(its,enm,en0,delta_en,edot,denu,sqnu,tdel,yo,yt,zz,be) &
+      !XDIR XPRIVATE(delta_enm)
       Do izb = zb_lo, zb_hi
         If ( lzoutput(izb) ) Then
           delta_en(izb) = enm(izb) - en0(izb)
-          edot(izb) = -(enm(izb)-enold(izb)) / tdel(izb)
+
+          ! Calculate the mass-excess change from the per-species abundance
+          ! changes. This avoids cancellation between two large, independently
+          ! rounded total mass-excess energies.
+          delta_enm = 0.0_dp
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XREDUCTION(+,delta_enm)
+          Do k = 1, ny
+            delta_enm = delta_enm + (yt(k,izb)-yo(k,izb)) * &
+              & ((mex_p-mex_n)*zz(k)-be(k))
+          EndDo
+          edot(izb) = -epmev * avn * delta_enm / tdel(izb)
           denu(izb) = denu(izb) + sqnu(izb) * tdel(izb)
         EndIf
       EndDo
@@ -255,7 +264,7 @@ Contains
 
     !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(denu) &
-    !XDIR XDELETE(enm,enb,enold,en0,delta_en,edot,sqnu) &
+    !XDIR XDELETE(enm,enb,en0,delta_en,edot,sqnu) &
     !XDIR XDELETE(its,mykstep,lzsolve,lzoutput)
 
     !XDIR XWAIT(tid)

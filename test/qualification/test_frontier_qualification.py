@@ -18,6 +18,7 @@ from frontier_qualification import (  # noqa: E402
     CPU_BUILD_VARIABLES,
     GPU_BUILD_VARIABLES,
     FrontierFailure,
+    compare_ascii_endpoints,
     compare_endpoint_states,
     inventory_regular_files,
     load_policy,
@@ -25,6 +26,7 @@ from frontier_qualification import (  # noqa: E402
     validate_manifest,
 )
 from submit_frontier import classify_submission_failure  # noqa: E402
+from parallel_zones import AsciiEndpoint  # noqa: E402
 from xnet_regression import ALPHA_SPECIES, FinalState, SolverCounters  # noqa: E402
 
 
@@ -117,6 +119,24 @@ def test_policy_accepts_identity_and_rejects_material_endpoint_perturbation() ->
     perturbed = (replace(reference[0], mass_fractions=fractions),)
     with pytest.raises(FrontierFailure, match="endpoint comparison failed"):
         compare_endpoint_states(perturbed, reference, policy, "perturbed")
+
+
+def test_ascii_policy_reports_values_and_rejects_out_of_bounds_difference() -> None:
+    policy = load_policy(POLICY)
+    reference = (AsciiEndpoint(1, 1.0, 2.0, 3.0),)
+    result = compare_ascii_endpoints(reference, reference, policy, "identity")
+    energy = result["zones"][0]["field_differences"]["energy_generation_rate"]
+    assert energy["observed"] == 1.0
+    assert energy["expected"] == 1.0
+    assert energy["difference"] == 0.0
+    assert energy["allowed"] == pytest.approx(5.0005e-6)
+
+    perturbed = (replace(reference[0], energy_generation_rate=2.0),)
+    with pytest.raises(
+        FrontierFailure,
+        match=r"observed 2\.00000000e\+00, expected 1\.00000000e\+00",
+    ):
+        compare_ascii_endpoints(perturbed, reference, policy, "perturbed")
 
 
 def test_linalg_report_requires_device_offload_success_and_small_residuals() -> None:

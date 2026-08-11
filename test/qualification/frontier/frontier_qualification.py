@@ -359,25 +359,40 @@ def compare_ascii_endpoints(
         raise FrontierFailure("test", label, "ASCII endpoint zone inventory differs")
     failures: list[str] = []
     maximum_ratio = 0.0
+    observations: list[dict[str, object]] = []
     for zone in sorted(reference_by_zone):
+        field_differences: dict[str, dict[str, float]] = {}
         for field in policy.ascii_fields:
             observed = getattr(actual_by_zone[zone], field)
             expected = getattr(reference_by_zone[zone], field)
             passed, difference, allowed = _difference(
                 observed, expected, policy.ascii_fields[field]
             )
+            field_differences[field] = {
+                "observed": observed,
+                "expected": expected,
+                "difference": difference,
+                "allowed": allowed,
+            }
             maximum_ratio = max(
                 maximum_ratio, difference / allowed if allowed > 0.0 else math.inf
             )
             if not passed:
                 failures.append(
-                    f"zone {zone} {field} difference {difference:.3e} exceeds {allowed:.3e}"
+                    f"zone {zone} {field}: observed {observed:.8e}, "
+                    f"expected {expected:.8e}, difference {difference:.3e} "
+                    f"exceeds {allowed:.3e}"
                 )
+        observations.append({"zone": zone, "field_differences": field_differences})
     if failures:
         raise FrontierFailure(
             "comparison", label, "CPU/GPU ASCII comparison failed:\n  " + "\n  ".join(failures)
         )
-    return {"status": "passed", "maximum_fraction_of_allowed": maximum_ratio}
+    return {
+        "status": "passed",
+        "maximum_fraction_of_allowed": maximum_ratio,
+        "zones": observations,
+    }
 
 
 def parse_linalg_probe(text: str, residual_limit: float = 1.0e-12) -> dict[str, object]:

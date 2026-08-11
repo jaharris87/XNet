@@ -27,10 +27,13 @@ The package exercises three independent requirements:
 Both XNet comparisons normalize diagnostic endpoints by global zone and use
 the CPU result from the same source archive as the reference. The tracked
 `comparison_policy.json` supplies bounded scalar, selected material-species,
-complete-vector, normalization, and partial-fixture ASCII limits. It never
-creates or updates a canonical GPU result. Its `status` must be updated with
-the retained measured Frontier evidence and review disposition before issue
-#46 is complete.
+complete-vector, normalization, neutrino-loss, and timestep limits. The final
+ASCII energy-generation rate is required to be finite and is retained with
+its CPU/GPU difference, but it is report-only: it is a last-step derivative
+of the already-compared composition and can be ill-conditioned when the true
+rate is near zero. The policy never creates or updates a canonical GPU result.
+Its `status` must be updated with the retained measured Frontier evidence and
+review disposition before issue #46 is complete.
 
 ## Package contents
 
@@ -139,10 +142,11 @@ The manifest records:
   source archive/build tree.
 
 Review the observed scalar differences, selected-species fraction of allowed,
-and complete-vector `L1`/`L-infinity` values before accepting the policy. A
-policy change requires a numerical explanation, a controlled perturbation
-that the new bound still rejects, and a final rerun from the exact candidate
-commit. Do not derive limits automatically from the current output.
+complete-vector `L1`/`L-infinity` values, and the report-only final
+energy-generation-rate difference before accepting the policy. A policy
+change requires a numerical explanation, a controlled perturbation that the
+new bound still rejects, and a final rerun from the exact candidate commit.
+Do not derive limits automatically from the current output.
 
 To retain a successful run, copy only the validated, path-neutral manifest and
 concise review note into a dated directory below `evidence/`. Do not copy raw

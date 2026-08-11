@@ -102,6 +102,7 @@ class NumericalPolicy:
     target_time_exact: bool
     scalar_fields: Mapping[str, Bounds]
     ascii_fields: Mapping[str, Bounds]
+    reported_ascii_fields: tuple[str, ...]
     material_threshold: float
     anchors: tuple[str, ...]
     selected: Bounds
@@ -147,6 +148,7 @@ def load_policy(path: Path) -> NumericalPolicy:
         "target_time_exact",
         "scalar_fields",
         "ascii_fields",
+        "reported_ascii_fields",
         "mass_fractions",
     }
     if not isinstance(document, dict) or set(document) != required:
@@ -161,13 +163,22 @@ def load_policy(path: Path) -> NumericalPolicy:
         "density",
         "electron_fraction",
     }
-    ascii_names = {"energy_generation_rate", "neutrino_loss_rate", "timestep"}
+    ascii_names = {"neutrino_loss_rate", "timestep"}
+    reported_ascii_names = ["energy_generation_rate"]
     scalar_document = document["scalar_fields"]
     ascii_document = document["ascii_fields"]
     if not isinstance(scalar_document, dict) or set(scalar_document) != scalar_names:
         raise FrontierFailure("source", "comparison-policy", "scalar field policy is incomplete")
     if not isinstance(ascii_document, dict) or set(ascii_document) != ascii_names:
         raise FrontierFailure("source", "comparison-policy", "ASCII field policy is incomplete")
+    reported_ascii_fields = document["reported_ascii_fields"]
+    if (
+        not isinstance(reported_ascii_fields, list)
+        or reported_ascii_fields != reported_ascii_names
+    ):
+        raise FrontierFailure(
+            "source", "comparison-policy", "reported ASCII field policy is incomplete"
+        )
     mass = document["mass_fractions"]
     mass_names = {
         "material_threshold",
@@ -202,6 +213,7 @@ def load_policy(path: Path) -> NumericalPolicy:
             name: _load_bounds(ascii_document[name], f"ascii_fields.{name}")
             for name in sorted(ascii_names)
         },
+        reported_ascii_fields=tuple(reported_ascii_fields),
         material_threshold=_finite_nonnegative(
             mass["material_threshold"], "mass_fractions.material_threshold"
         ),
@@ -361,7 +373,7 @@ def compare_ascii_endpoints(
     maximum_ratio = 0.0
     observations: list[dict[str, object]] = []
     for zone in sorted(reference_by_zone):
-        field_differences: dict[str, dict[str, float]] = {}
+        field_differences: dict[str, dict[str, object]] = {}
         for field in policy.ascii_fields:
             observed = getattr(actual_by_zone[zone], field)
             expected = getattr(reference_by_zone[zone], field)
@@ -369,6 +381,7 @@ def compare_ascii_endpoints(
                 observed, expected, policy.ascii_fields[field]
             )
             field_differences[field] = {
+                "comparison": "bounded",
                 "observed": observed,
                 "expected": expected,
                 "difference": difference,
@@ -383,6 +396,15 @@ def compare_ascii_endpoints(
                     f"expected {expected:.8e}, difference {difference:.3e} "
                     f"exceeds {allowed:.3e}"
                 )
+        for field in policy.reported_ascii_fields:
+            observed = getattr(actual_by_zone[zone], field)
+            expected = getattr(reference_by_zone[zone], field)
+            field_differences[field] = {
+                "comparison": "reported_only",
+                "observed": observed,
+                "expected": expected,
+                "difference": abs(observed - expected),
+            }
         observations.append({"zone": zone, "field_differences": field_differences})
     if failures:
         raise FrontierFailure(
@@ -391,6 +413,7 @@ def compare_ascii_endpoints(
     return {
         "status": "passed",
         "maximum_fraction_of_allowed": maximum_ratio,
+        "reported_only_fields": list(policy.reported_ascii_fields),
         "zones": observations,
     }
 

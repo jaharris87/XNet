@@ -121,20 +121,22 @@ def test_policy_accepts_identity_and_rejects_material_endpoint_perturbation() ->
         compare_endpoint_states(perturbed, reference, policy, "perturbed")
 
 
-def test_ascii_policy_reports_values_and_rejects_out_of_bounds_difference() -> None:
+def test_ascii_policy_reports_energy_and_rejects_bounded_field_difference() -> None:
     policy = load_policy(POLICY)
     reference = (AsciiEndpoint(1, 1.0, 2.0, 3.0),)
-    result = compare_ascii_endpoints(reference, reference, policy, "identity")
+    energy_difference = (replace(reference[0], energy_generation_rate=2.0),)
+    result = compare_ascii_endpoints(energy_difference, reference, policy, "reported")
     energy = result["zones"][0]["field_differences"]["energy_generation_rate"]
-    assert energy["observed"] == 1.0
+    assert energy["comparison"] == "reported_only"
+    assert energy["observed"] == 2.0
     assert energy["expected"] == 1.0
-    assert energy["difference"] == 0.0
-    assert energy["allowed"] == pytest.approx(5.0005e-6)
+    assert energy["difference"] == 1.0
+    assert result["reported_only_fields"] == ["energy_generation_rate"]
 
-    perturbed = (replace(reference[0], energy_generation_rate=2.0),)
+    perturbed = (replace(reference[0], timestep=4.0),)
     with pytest.raises(
         FrontierFailure,
-        match=r"observed 2\.00000000e\+00, expected 1\.00000000e\+00",
+        match=r"timestep: observed 4\.00000000e\+00, expected 3\.00000000e\+00",
     ):
         compare_ascii_endpoints(perturbed, reference, policy, "perturbed")
 

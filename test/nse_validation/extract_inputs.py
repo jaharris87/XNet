@@ -57,6 +57,30 @@ def canonical_bytes(payload: dict[str, Any]) -> bytes:
 
 def scientific_input_sha256(payload: dict[str, Any]) -> str:
     """Identify the retained calculation inputs, independent of source bytes."""
+    constants = {
+        name: {"hex": record["hex"], "units": record["units"]}
+        for name, record in payload["constants"].items()
+    }
+    species = [
+        {
+            "index": record["index"],
+            "name": record["name"],
+            "a": record["a"],
+            "z": record["z"],
+            "n": record["n"],
+            "spin_hex": record["spin"]["hex"],
+            "ground_state_degeneracy_hex": record[
+                "ground_state_degeneracy"
+            ]["hex"],
+            "mass_excess_mev_hex": record["mass_excess_mev"]["hex"],
+            "partition_factor_hexes": [
+                value["hex"] for value in record["partition_factors"]
+            ],
+            "binding_energy_mev_hex": record["binding_energy_mev"]["hex"],
+            "translational_mass_g_hex": record["translational_mass_g"]["hex"],
+        }
+        for record in payload["species"]
+    ]
     scientific_inputs = {
         "schema": payload["schema"],
         "network": {
@@ -69,9 +93,11 @@ def scientific_input_sha256(payload: dict[str, Any]) -> str:
             )
         },
         "conventions": payload["conventions"],
-        "constants": payload["constants"],
-        "temperature_grid_gk": payload["temperature_grid_gk"],
-        "species": payload["species"],
+        "constants": constants,
+        "temperature_grid_gk_hexes": [
+            value["hex"] for value in payload["temperature_grid_gk"]
+        ],
+        "species": species,
     }
     return hashlib.sha256(canonical_bytes(scientific_inputs)).hexdigest()
 

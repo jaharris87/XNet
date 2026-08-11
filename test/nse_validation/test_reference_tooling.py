@@ -38,7 +38,7 @@ class ReferenceToolingTests(unittest.TestCase):
         cls.payload = json.loads(REFERENCE_JSON.read_text(encoding="utf-8"))
         cls.manifest = extract(NETWORK_DIRECTORY, REPOSITORY_ROOT)
 
-    def test_network_and_generator_identity(self) -> None:
+    def test_retained_network_and_provenance(self) -> None:
         selected = REPOSITORY_ROOT / "test/build_net/sunet.torch489"
         self.assertEqual(
             (NETWORK_DIRECTORY / "sunet").read_bytes(), selected.read_bytes()
@@ -174,6 +174,25 @@ class ReferenceToolingTests(unittest.TestCase):
         self.assertEqual(
             self.manifest["scientific_input_sha256"],
             changed["scientific_input_sha256"],
+        )
+        equivalent_literal = copy.deepcopy(self.manifest)
+        equivalent_literal["constants"]["bok"]["source_lexeme"] = "0.086173303"
+        self.assertEqual(
+            self.manifest["scientific_input_sha256"],
+            scientific_input_sha256(equivalent_literal),
+        )
+
+    def test_scientific_identity_ignores_reconciliation_provenance(self) -> None:
+        unreconciled = extract(
+            NETWORK_DIRECTORY, REPOSITORY_ROOT, reconcile_provenance=False
+        )
+        self.assertNotEqual(
+            self.manifest["raw_data_provenance"],
+            unreconciled["raw_data_provenance"],
+        )
+        self.assertEqual(
+            self.manifest["scientific_input_sha256"],
+            unreconciled["scientific_input_sha256"],
         )
 
     def test_scientific_identity_rejects_extracted_constant_change(self) -> None:

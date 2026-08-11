@@ -1,0 +1,3117 @@
+{
+  "schema": "xnet-frontier-qualification-v1",
+  "status": "passed",
+  "failure": null,
+  "source": {
+    "sha": "c6f0eb685ae7c78c38de582e92dfe48765c02fe7",
+    "worktree_clean": true,
+    "archive_sha256": "486348393a76b43e6f281f96b7699b7885a9da69e8217150af2b126aa0bdc41e"
+  },
+  "environment": {
+    "modules": [
+      "craype-x86-trento",
+      "libfabric/2.3.1",
+      "craype-network-ofi",
+      "xpmem/1.0.1-1.5_1_gfb6998056825",
+      "Core/25.03",
+      "tmux/3.4",
+      "hsi/default",
+      "lfs-wrapper/0.0.1",
+      "DefApps",
+      "craype-accel-amd-gfx90a",
+      "git/2.47.0",
+      "subversion/1.14.2",
+      "python/3.13.0",
+      "vim/9.1.0437",
+      "PrgEnv-cray/8.6.0",
+      "cray-dsmml/0.3.1",
+      "cray-pmi/6.1.16",
+      "craype/2.7.35",
+      "perftools-base/25.09.0",
+      "rocm/6.4.2",
+      "cpe/25.09",
+      "cce/20.0.2",
+      "cray-libsci/25.09.0",
+      "cray-mpich/9.0.1",
+      "darshan-runtime/3.4.7-mpi",
+      "hipfort/6.4.2"
+    ],
+    "compiler": {
+      "artifact": "environment/compiler.stdout.txt",
+      "sha256": "edee434c7b8d13f08b37b6d3e1f38f4a23716f54a79bea47ba4f3277ac3aaecc",
+      "runtime_seconds": 0.1428880882449448
+    },
+    "preprocessor": {
+      "artifact": "environment/preprocessor.stdout.txt",
+      "sha256": "7fe8f551c282d1a6e4a76920057ca321aab2a951f46514043a4d628da4014f0c",
+      "runtime_seconds": 0.031106319278478622
+    },
+    "rocm": {
+      "artifact": "environment/rocm.stdout.txt",
+      "sha256": "80919f7880d521d266a8281b7a7ddfdd677095e2a9c631e80eb4a4206cc7f5aa",
+      "runtime_seconds": 0.17697769170626998
+    },
+    "gpu": {
+      "artifact": "environment/gpu.stdout.txt",
+      "sha256": "a2dad7e967965907f650c66bc13fd04241eff26d77b1a2995198d01fe772ae41",
+      "runtime_seconds": 0.29694095300510526
+    },
+    "gpu_model": "GPU[0]\t\t: Card Series: \t\tAMD Instinct MI250X",
+    "rocm_version": "rocm-6.4.2",
+    "hipfort_module": "hipfort/6.4.2"
+  },
+  "slurm": {
+    "job_id": "5230728",
+    "account_supplied": true,
+    "partition": "batch",
+    "qos_supplied": false,
+    "reservation_supplied": false,
+    "nodes": 1,
+    "tasks": 1,
+    "cpus_per_task": 7,
+    "gpus_per_task": 1,
+    "time_limit": "00:20:00"
+  },
+  "builds": {
+    "cpu": {
+      "status": "passed",
+      "variables": {
+        "CMODE": "OPT",
+        "PE_ENV": "CRAY",
+        "MPI_MODE": "OFF",
+        "OPENMP_MODE": "OFF",
+        "GPU_MODE": "OFF",
+        "OPENACC_MODE": "OFF",
+        "OPENMP_OL_MODE": "OFF",
+        "EOS": "STARKILLER",
+        "MATRIX_SOLVER": "dense",
+        "LAPACK_VER": "LIBSCI"
+      },
+      "resolved_variables": "build/cpu/resolved-variables.stdout.txt",
+      "timeout_seconds": 1800.0,
+      "runtime_seconds": 37.34414627822116,
+      "executables": {
+        "xnet": {
+          "artifact": "bin/xnet-cpu",
+          "size": 2007768,
+          "sha256": "8bd0503b799a8faad77c774c940622c01342112d1c8ce7483c8164793040ac28",
+          "link_evidence": "build/cpu/xnet-link.stdout.txt"
+        }
+      }
+    },
+    "gpu": {
+      "status": "passed",
+      "variables": {
+        "CMODE": "OPT",
+        "PE_ENV": "CRAY",
+        "MPI_MODE": "OFF",
+        "OPENMP_MODE": "OFF",
+        "GPU_MODE": "ON",
+        "GPU_BACKEND": "HIP",
+        "OPENACC_MODE": "OFF",
+        "OPENMP_OL_MODE": "ON",
+        "GPU_LAPACK_VER": "ROCM",
+        "EOS": "STARKILLER",
+        "MATRIX_SOLVER": "dense",
+        "LAPACK_VER": "LIBSCI"
+      },
+      "resolved_variables": "build/gpu/resolved-variables.stdout.txt",
+      "timeout_seconds": 1800.0,
+      "runtime_seconds": 135.6051049050875,
+      "executables": {
+        "xnet": {
+          "artifact": "bin/xnet-gpu",
+          "size": 8335472,
+          "sha256": "5a78cd1ab381c330d0837605460d8faea2f96950d79bfddd3bccbf8c13e77cc4",
+          "link_evidence": "build/gpu/xnet-link.stdout.txt"
+        },
+        "frontier_gpu_linalg_probe": {
+          "artifact": "bin/frontier_gpu_linalg_probe-gpu",
+          "size": 8239352,
+          "sha256": "3d7efdec48bdd0f66bbdc1a37c411550f7316d3fe6943a0154f16bb9a335254f",
+          "link_evidence": "build/gpu/frontier_gpu_linalg_probe-link.stdout.txt"
+        }
+      }
+    }
+  },
+  "inputs": [
+    {
+      "path": "test/Data_SN160/ab_co",
+      "size": 3238,
+      "sha256": "bea9615dfea8d5a5dbea529db64e10c1b20012b29b755c1ed3e537cbe7a2f7b3"
+    },
+    {
+      "path": "test/Data_SN160/netsu",
+      "size": 325333,
+      "sha256": "9dca0e4ae011f9ef3de4090f512ad9b6b31e70454e897e60506cdb75a9867b48"
+    },
+    {
+      "path": "test/Data_SN160/netweak",
+      "size": 419760,
+      "sha256": "a374458b8b9439ab6c00d71292b89216d08a98c09dd0104f4046e93f28a4ae0f"
+    },
+    {
+      "path": "test/Data_SN160/netwinv",
+      "size": 55119,
+      "sha256": "af69be084dc05bfd27643696ff6213fd08c085afefb6ce4032a5d04e5fe4a2b2"
+    },
+    {
+      "path": "test/Data_SN160/sunet",
+      "size": 960,
+      "sha256": "d20da4d9fae2b4093e67d258530c5506cc44b50775b09b797893a1c41effdaac"
+    },
+    {
+      "path": "test/Data_alpha/netsu",
+      "size": 9965,
+      "sha256": "d8db4febcd495b29075039deabd84217d962cf11b868aac68f9e43ac7e716131"
+    },
+    {
+      "path": "test/Data_alpha/netweak",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "test/Data_alpha/netwinv",
+      "size": 4895,
+      "sha256": "679b59567a95076ba771e38b0bff999ca94c21f8b1784025748197774c93cf95"
+    },
+    {
+      "path": "test/Data_alpha/sunet",
+      "size": 84,
+      "sha256": "cee68d91608fbe3212b177c13c0a89cf003f158044a35e78b009b4db12efb4b1"
+    },
+    {
+      "path": "test/Test_Problems/th_co_burn_1",
+      "size": 200,
+      "sha256": "ff2d529b177da2ab67dc417b20fb667a9f9e66fffada03c4c461e6d941bc280e"
+    },
+    {
+      "path": "test/Test_Problems/th_co_burn_2",
+      "size": 214,
+      "sha256": "60e210d0f26882374f07ebab2dee668864202f59ba639ec949758dcfd6d73f72"
+    },
+    {
+      "path": "test/Test_Problems/th_co_burn_3",
+      "size": 200,
+      "sha256": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e"
+    },
+    {
+      "path": "test/Test_Problems/th_co_burn_4",
+      "size": 214,
+      "sha256": "231985efc59022d17434c2213c5e331f22b7a9859e8e43e7c04b07cdb2228023"
+    },
+    {
+      "path": "test/Test_Problems/th_co_burn_5",
+      "size": 200,
+      "sha256": "7a4382eddb16962dcae56d22dd7167e40282d26b814a77c0b1f100da660bf9c7"
+    },
+    {
+      "path": "test/Test_Problems/th_co_burn_6",
+      "size": 214,
+      "sha256": "3c5ec71350581ae36a4ced096220fef661779f04efe98fd9666f6e360a5e5554"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_01",
+      "size": 342,
+      "sha256": "2954758aa2d504ce80b631ef55301695cee3f9f35754e688c3d399f847f79455"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_02",
+      "size": 342,
+      "sha256": "d47640a4e77720b40fdd6c00adb580af2d9666b8c44c71ac5a898b004003ff77"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_03",
+      "size": 342,
+      "sha256": "64025031ee19328b37d07e2b73669f138235770e564490aa63887b8449bc61a3"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_04",
+      "size": 340,
+      "sha256": "90339859e851bda2e65afaca80da4dd94abedc1fdad86c62d9d046dcb3e9b171"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_05",
+      "size": 345,
+      "sha256": "958d4f6ff90d5236072f2dac36f1e8a506b5eb75346a2a501b9966b16a4a9b8d"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_06",
+      "size": 343,
+      "sha256": "2df4451d5973c1c9dcecf5da624b6b0aa6214a69706059ad125a42a91b8102e0"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_07",
+      "size": 342,
+      "sha256": "9d93d2e253b231450d4da61cccee65c2c28182c24763b71d9819fe43fab14a61"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_08",
+      "size": 348,
+      "sha256": "297623f4dc21b70f26f631171cda9428b0b7b13dd123e19bcdce27adb38e4dbd"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_09",
+      "size": 348,
+      "sha256": "ccec78440b717117c64504eaefa2555e249d8f752c0f8f8d91407f0ebb883296"
+    },
+    {
+      "path": "test/qualification/parallel_zones/abundance_10",
+      "size": 356,
+      "sha256": "a1e6aedbe29ec0e9db3b4217610735a4cb628b961680323253f59cb596be6a67"
+    },
+    {
+      "path": "test/qualification/parallel_zones/control",
+      "size": 1840,
+      "sha256": "35dc82d9e17a6851f91e92f46264de1f46260f78d8c28e6c946034b9f62db3e0"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_01",
+      "size": 149,
+      "sha256": "fc1bcc1fe590cb45fe481a5f15915db9434197252bf749ae3ce78a942c1334b0"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_02",
+      "size": 149,
+      "sha256": "b4f5aa0e01db8c9c3161347d99f840cf17c1e637fc4f595c3499ca1953095cd0"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_03",
+      "size": 149,
+      "sha256": "a8ad13c59abe325c0ab722083f38fc4d0ab3f6909b183a2a5f943cd15a722a36"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_04",
+      "size": 149,
+      "sha256": "8626968a115e950b3fb15eeda485f911134759dd5c9c48f157d3c537d21d5e33"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_05",
+      "size": 149,
+      "sha256": "3833c19de4a78b7acf1408ba6f13c356b302e3a7bd8c4ccf0ef195b405c25699"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_06",
+      "size": 149,
+      "sha256": "0186b2ca373c83233610d6c604710abeb11e79ab898a89818f714d265794b073"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_07",
+      "size": 149,
+      "sha256": "982c1650de2b677d2c5e4eafd88bac5ee96b4a52d33120adf174848da305c7ed"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_08",
+      "size": 149,
+      "sha256": "588a1b7e78cb60d8d30811e722401fa5ce1df2cf426611b1f0d9bb9767d591cd"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_09",
+      "size": 149,
+      "sha256": "70c4900c64a69cedcd5e3a8b3d152d21270752df94b062f5a4ef4f4d91ad7f80"
+    },
+    {
+      "path": "test/qualification/parallel_zones/thermo_10",
+      "size": 149,
+      "sha256": "964340baf75bf71f96b820b18ec215e2a8b30c49c35bada864d55e6488c99b6a"
+    },
+    {
+      "path": "test/regression/cases/heat_sn160/control",
+      "size": 1916,
+      "sha256": "03b92a13ad4750c9c69c5eeaeca85948d0b1b296c173a13d7d444600e973e6f5"
+    },
+    {
+      "path": "tools/starkiller-helmholtz/helm_table.dat",
+      "size": 60242514,
+      "sha256": "c9a57c26c6fd2b2b378b9d5295ca1214022f6fec6289d038b47bf8c8938881a1"
+    }
+  ],
+  "checks": {
+    "gpu_linalg": {
+      "status": "passed",
+      "device_count": 1,
+      "offloaded": true,
+      "data_present": true,
+      "residual_limit": 1e-12,
+      "batches": [
+        {
+          "batch": 1,
+          "info": 0,
+          "relative_residual": 0.0
+        },
+        {
+          "batch": 2,
+          "info": 0,
+          "relative_residual": 3.552713678800501e-17
+        }
+      ],
+      "timeout_seconds": 60.0,
+      "runtime_seconds": 16.17373436782509,
+      "output_inventory": [
+        {
+          "path": "probe.command.json",
+          "size": 102,
+          "sha256": "91b28c4702a60c207f70aacc4e793eb51e99192053e59a9de33e873a5e5f992c"
+        },
+        {
+          "path": "probe.status.json",
+          "size": 72,
+          "sha256": "5e93fb3bc51fbfe97e8ec4cc0d9dc2463d4d034ebcae074e5ab5730477a31333"
+        },
+        {
+          "path": "probe.stderr.txt",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "probe.stdout.txt",
+          "size": 311,
+          "sha256": "29565a7cf4f6d03306d6f45faa20e7ea2f92f310e214ffd6e1f8fc278e7e9a5e"
+        }
+      ]
+    },
+    "partial_batch": {
+      "status": "passed",
+      "fixture": "ten distinguishable zones, nzbatchmx=4",
+      "zones": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "inactive_final_batch_lanes": 2,
+      "timeout_seconds": 180.0,
+      "cpu_runtime_seconds": 0.9285092912614346,
+      "gpu_runtime_seconds": 18.575030150823295,
+      "endpoint_comparison": {
+        "status": "passed",
+        "policy_status": "accepted after review of Frontier job 5230609",
+        "maximum_selected_fraction_of_allowed": 0.0,
+        "zones": [
+          {
+            "zone": 1,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 5.5000000000000004e-11
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 2.3530536499999998e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 5.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "he4",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56",
+              "zn60"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 2,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 1.05e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 6.5071975e-07
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 10.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "c12",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 3,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 1.55e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 7.005e-07
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 15.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "o16",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 4,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 2.0500000000000002e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 7.505000000000001e-07
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 20.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "ne20",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 5,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 2.55e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 8.005e-07
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 25.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "mg24",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 6,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 3.05e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 8.504999999999999e-07
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 30.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 7,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 3.5499999999999996e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 9.005e-07
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 35.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 8,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 4.05e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 3.1827113999999995e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 40.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "he4",
+              "mg24",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56",
+              "zn60"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 9,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 4.5499999999999993e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 3.4322336999999998e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 45.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "he4",
+              "mg24",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56",
+              "zn60"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 10,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 5.05e-10
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 1.05343305e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 50.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.5049999999999997e-07
+              }
+            },
+            "selected_species": [
+              "o16",
+              "ne20",
+              "mg24",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "fe52",
+              "ni56"
+            ],
+            "composition_l1": 0.0,
+            "composition_linf": 0.0,
+            "composition_linf_species": "he4"
+          }
+        ]
+      },
+      "ascii_comparison": {
+        "status": "passed",
+        "maximum_fraction_of_allowed": 0.0,
+        "reported_only_fields": [
+          "energy_generation_rate"
+        ],
+        "zones": [
+          {
+            "zone": 1,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 2.46e-05,
+                "expected": 2.46e-05,
+                "difference": 0.0,
+                "allowed": 1.2800000000000002e-10
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": 2.25e+20,
+                "expected": 2.25e+20,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 2,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 7.31e-06,
+                "expected": 7.31e-06,
+                "difference": 0.0,
+                "allowed": 4.155000000000001e-11
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": 1.41e+16,
+                "expected": 1.41e+16,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 3,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.003,
+                "expected": 0.003,
+                "difference": 0.0,
+                "allowed": 1.5005e-08
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": 20000000.0,
+                "expected": 20000000.0,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 4,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.004,
+                "expected": 0.004,
+                "difference": 0.0,
+                "allowed": 2.0005e-08
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": 271000000000.0,
+                "expected": 271000000000.0,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 5,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.005,
+                "expected": 0.005,
+                "difference": 0.0,
+                "allowed": 2.5005e-08
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": -0.0,
+                "expected": -0.0,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 6,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.006,
+                "expected": 0.006,
+                "difference": 0.0,
+                "allowed": 3.0005e-08
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": -0.0,
+                "expected": -0.0,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 7,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.007,
+                "expected": 0.007,
+                "difference": 0.0,
+                "allowed": 3.5005e-08
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": -2940000.0,
+                "expected": -2940000.0,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 8,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.00097,
+                "expected": 0.00097,
+                "difference": 0.0,
+                "allowed": 4.855e-09
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": -91100000000000.0,
+                "expected": -91100000000000.0,
+                "difference": 0.0
+              }
+            }
+          },
+          {
+            "zone": 9,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.00342,
+                "expected": 0.00342,
+                "difference": 0.0,
+                "allowed": 1.7105e-08
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": -2510000000.0,
+                "expected": 54800000000.0,
+                "difference": 57310000000.0
+              }
+            }
+          },
+          {
+            "zone": 10,
+            "field_differences": {
+              "neutrino_loss_rate": {
+                "comparison": "bounded",
+                "observed": 0.0,
+                "expected": 0.0,
+                "difference": 0.0,
+                "allowed": 5e-10
+              },
+              "timestep": {
+                "comparison": "bounded",
+                "observed": 0.000238,
+                "expected": 0.000238,
+                "difference": 0.0,
+                "allowed": 1.1950000000000003e-09
+              },
+              "energy_generation_rate": {
+                "comparison": "reported_only",
+                "observed": 2.96e+16,
+                "expected": 2.96e+16,
+                "difference": 0.0
+              }
+            }
+          }
+        ]
+      },
+      "cpu_output_inventory": [
+        {
+          "path": "Data_alpha/ab_blank",
+          "size": 302,
+          "sha256": "3f33993f3a4eb66888b4178ce432d3ea0b88346b9bd4227eaf3070b09b88a2fe"
+        },
+        {
+          "path": "Data_alpha/match_data",
+          "size": 1068,
+          "sha256": "d0b31b1d84d45ac6fc5e43e6a7dc1b957b418d57cdc32ac5d77cc7b3c468ab10"
+        },
+        {
+          "path": "Data_alpha/match_read",
+          "size": 1853,
+          "sha256": "e4333d8ded0c1eddcd3ac1a785fb5024fabd8a8c4e462f87dcbadbe8cbfc31b9"
+        },
+        {
+          "path": "Data_alpha/matr_shape",
+          "size": 1822,
+          "sha256": "0d490a5928a125f9921d94f3bc9162db86f5b9fd0ad1135bef047dc0c14e32cd"
+        },
+        {
+          "path": "Data_alpha/net_desc",
+          "size": 777,
+          "sha256": "a617182b2e3f5504b195cb1180208993af557aa4543faf9409ad185ffcf3e639"
+        },
+        {
+          "path": "Data_alpha/net_diag",
+          "size": 3952,
+          "sha256": "4ab2136101ee866218d3110eb937594d921953979db6d00c770cbb222e9acbbe"
+        },
+        {
+          "path": "Data_alpha/nets3",
+          "size": 8816,
+          "sha256": "223c1c714fde3fdbd40c4cf657cfac9ed3796eabb535c2357aa29c5f2956cca6"
+        },
+        {
+          "path": "Data_alpha/nets4",
+          "size": 774,
+          "sha256": "3118344707a2ccd28ec4274773fac730e2a88943328cb2c050cad18ea5cb387e"
+        },
+        {
+          "path": "Data_alpha/nuc_data",
+          "size": 3538,
+          "sha256": "463b1aca5d4afa679537661fa33617a29608bfa6062f810b8adbd12b59d7641f"
+        },
+        {
+          "path": "Data_alpha/sparse_ind",
+          "size": 1780,
+          "sha256": "0758fff67eff67dd3e9025ad040b12fd98921592b576dfec01b850b8b5ca5cab"
+        },
+        {
+          "path": "ev_parallel_zones_01",
+          "size": 120600,
+          "sha256": "82d72d71e40439b3b2b18937d4b8a302dc6b14dd9b4fd4e7987306fe8f259600"
+        },
+        {
+          "path": "ev_parallel_zones_02",
+          "size": 3600,
+          "sha256": "30b2f1a227680fe0734cd1c7357964ab5c8b15fa16f7a42480533dd41fb23e39"
+        },
+        {
+          "path": "ev_parallel_zones_03",
+          "size": 600,
+          "sha256": "572212e146d5f5ea76b905b6c94b163d0c8c5d8d1f31a4b34dc93aaf99b8ed46"
+        },
+        {
+          "path": "ev_parallel_zones_04",
+          "size": 600,
+          "sha256": "494d245d010674f179614ae49274b63b63254d5fbde741ae1d7781af4f8af843"
+        },
+        {
+          "path": "ev_parallel_zones_05",
+          "size": 600,
+          "sha256": "61cea45d419168782c3c0b1105d030bde78c94ad488041c9d26c64a5e8c5ed58"
+        },
+        {
+          "path": "ev_parallel_zones_06",
+          "size": 600,
+          "sha256": "c9465608161e7d93a13b76e21bedb3239c33a591dae8f2ff02ffef4d8ceb5166"
+        },
+        {
+          "path": "ev_parallel_zones_07",
+          "size": 600,
+          "sha256": "2a0864bc68310951ffea6dcf14aa4cedccc2b38e85af6b2b30fd3bcfdaa86ab2"
+        },
+        {
+          "path": "ev_parallel_zones_08",
+          "size": 110400,
+          "sha256": "cdd6a71e0801f7e2557f4023770c17019cee1e750c830313320d5e140c4ba4f9"
+        },
+        {
+          "path": "ev_parallel_zones_09",
+          "size": 106200,
+          "sha256": "1584af20630c9b77716b0b473ee066ed3ff6df527da80e12cc473990183c0d82"
+        },
+        {
+          "path": "ev_parallel_zones_10",
+          "size": 8000,
+          "sha256": "9c68cf659f15f21e7bdaf5271ea37a0120b2f6db67fa91b0c1af02662d301a38"
+        },
+        {
+          "path": "net_diag01",
+          "size": 16693,
+          "sha256": "b22222fc0533dc29936920419987ff13667654b6dbfa5baff748bf1c5c6b2f08"
+        },
+        {
+          "path": "ts_parallel_zones_01",
+          "size": 186548,
+          "sha256": "f080e60189d27f5d983949ea2456ffe772fe6e7789de7d5066dfdbb0f638121c"
+        },
+        {
+          "path": "ts_parallel_zones_02",
+          "size": 6368,
+          "sha256": "4b31fe542ff8e24cdc53cc73b4b3359b9b49b7784e3787ee6e1b82e1af262d4e"
+        },
+        {
+          "path": "ts_parallel_zones_03",
+          "size": 1748,
+          "sha256": "ed0cd57c97ce7ec3050545b24c329c8234489b175720c7e850a29a4b9db10c75"
+        },
+        {
+          "path": "ts_parallel_zones_04",
+          "size": 1748,
+          "sha256": "b19a19774037f1bd5dc8d2a87a6e71a4ad6fe46ce67b37f4b0009fe5c036bf68"
+        },
+        {
+          "path": "ts_parallel_zones_05",
+          "size": 1748,
+          "sha256": "ab5ac6ae023f30c0c9ca055c4b5989c89409a412085250c48e65df958268c6db"
+        },
+        {
+          "path": "ts_parallel_zones_06",
+          "size": 1748,
+          "sha256": "cd605bb94ffbabbe98165a37fb76d61f19fea15122000e417b1e4d63de3d68f1"
+        },
+        {
+          "path": "ts_parallel_zones_07",
+          "size": 1748,
+          "sha256": "d69e8efb081ac2c30de4f27fe1487be8e2c40201a490561780b96822d6a21b74"
+        },
+        {
+          "path": "ts_parallel_zones_08",
+          "size": 170840,
+          "sha256": "a41bbec1290f9d06b196a66adb3d44a52ff95598796df76e481cbab852277e6b"
+        },
+        {
+          "path": "ts_parallel_zones_09",
+          "size": 164372,
+          "sha256": "a0665e78c5d9ff1aecc37b94d86a0cc3fc99d626cce37028fc519b57fbdcb6cf"
+        },
+        {
+          "path": "ts_parallel_zones_10",
+          "size": 13144,
+          "sha256": "acb5bd670755deb472ecbf0411c37196126ddaab3659e9b6339e6c0390b1fefb"
+        },
+        {
+          "path": "xnet.command.json",
+          "size": 81,
+          "sha256": "08d00f5b7b8ce000f3464f5027296948e28c1a25e48e8107467a8e6bae0d718a"
+        },
+        {
+          "path": "xnet.status.txt",
+          "size": 14,
+          "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+        },
+        {
+          "path": "xnet.stderr.txt",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "xnet.stdout.txt",
+          "size": 1903,
+          "sha256": "40fe230528f5cba574a4caaaae46d8410293ae1b07160b470e90a0ff4466b6d7"
+        }
+      ],
+      "gpu_output_inventory": [
+        {
+          "path": "Data_alpha/ab_blank",
+          "size": 302,
+          "sha256": "3f33993f3a4eb66888b4178ce432d3ea0b88346b9bd4227eaf3070b09b88a2fe"
+        },
+        {
+          "path": "Data_alpha/match_data",
+          "size": 1068,
+          "sha256": "d0b31b1d84d45ac6fc5e43e6a7dc1b957b418d57cdc32ac5d77cc7b3c468ab10"
+        },
+        {
+          "path": "Data_alpha/match_read",
+          "size": 1853,
+          "sha256": "e4333d8ded0c1eddcd3ac1a785fb5024fabd8a8c4e462f87dcbadbe8cbfc31b9"
+        },
+        {
+          "path": "Data_alpha/matr_shape",
+          "size": 1822,
+          "sha256": "0d490a5928a125f9921d94f3bc9162db86f5b9fd0ad1135bef047dc0c14e32cd"
+        },
+        {
+          "path": "Data_alpha/net_desc",
+          "size": 777,
+          "sha256": "a617182b2e3f5504b195cb1180208993af557aa4543faf9409ad185ffcf3e639"
+        },
+        {
+          "path": "Data_alpha/net_diag",
+          "size": 3952,
+          "sha256": "4ab2136101ee866218d3110eb937594d921953979db6d00c770cbb222e9acbbe"
+        },
+        {
+          "path": "Data_alpha/nets3",
+          "size": 8816,
+          "sha256": "223c1c714fde3fdbd40c4cf657cfac9ed3796eabb535c2357aa29c5f2956cca6"
+        },
+        {
+          "path": "Data_alpha/nets4",
+          "size": 774,
+          "sha256": "3118344707a2ccd28ec4274773fac730e2a88943328cb2c050cad18ea5cb387e"
+        },
+        {
+          "path": "Data_alpha/nuc_data",
+          "size": 3538,
+          "sha256": "463b1aca5d4afa679537661fa33617a29608bfa6062f810b8adbd12b59d7641f"
+        },
+        {
+          "path": "Data_alpha/sparse_ind",
+          "size": 1780,
+          "sha256": "0758fff67eff67dd3e9025ad040b12fd98921592b576dfec01b850b8b5ca5cab"
+        },
+        {
+          "path": "ev_parallel_zones_01",
+          "size": 120600,
+          "sha256": "82d72d71e40439b3b2b18937d4b8a302dc6b14dd9b4fd4e7987306fe8f259600"
+        },
+        {
+          "path": "ev_parallel_zones_02",
+          "size": 3600,
+          "sha256": "30b2f1a227680fe0734cd1c7357964ab5c8b15fa16f7a42480533dd41fb23e39"
+        },
+        {
+          "path": "ev_parallel_zones_03",
+          "size": 600,
+          "sha256": "572212e146d5f5ea76b905b6c94b163d0c8c5d8d1f31a4b34dc93aaf99b8ed46"
+        },
+        {
+          "path": "ev_parallel_zones_04",
+          "size": 600,
+          "sha256": "494d245d010674f179614ae49274b63b63254d5fbde741ae1d7781af4f8af843"
+        },
+        {
+          "path": "ev_parallel_zones_05",
+          "size": 600,
+          "sha256": "61cea45d419168782c3c0b1105d030bde78c94ad488041c9d26c64a5e8c5ed58"
+        },
+        {
+          "path": "ev_parallel_zones_06",
+          "size": 600,
+          "sha256": "c9465608161e7d93a13b76e21bedb3239c33a591dae8f2ff02ffef4d8ceb5166"
+        },
+        {
+          "path": "ev_parallel_zones_07",
+          "size": 600,
+          "sha256": "2a0864bc68310951ffea6dcf14aa4cedccc2b38e85af6b2b30fd3bcfdaa86ab2"
+        },
+        {
+          "path": "ev_parallel_zones_08",
+          "size": 110400,
+          "sha256": "cdd6a71e0801f7e2557f4023770c17019cee1e750c830313320d5e140c4ba4f9"
+        },
+        {
+          "path": "ev_parallel_zones_09",
+          "size": 106200,
+          "sha256": "0faeae0cfe7b7382be1db2a7ae1970c2b0aecd8bc5e82b6bc083ec2cfa2ceb0b"
+        },
+        {
+          "path": "ev_parallel_zones_10",
+          "size": 8000,
+          "sha256": "9c68cf659f15f21e7bdaf5271ea37a0120b2f6db67fa91b0c1af02662d301a38"
+        },
+        {
+          "path": "net_diag01",
+          "size": 16713,
+          "sha256": "8ecb54447f83c5fbd6eb4cbc4b9ba014547480e377768bfb594c64d88fc22c15"
+        },
+        {
+          "path": "ts_parallel_zones_01",
+          "size": 186548,
+          "sha256": "5c0d36e4dc5b9dad1c7b754dac57aefab70c9d81674a42f890dfb9f8d52bf349"
+        },
+        {
+          "path": "ts_parallel_zones_02",
+          "size": 6368,
+          "sha256": "2d9bdac474fe2a73ba322d10eb72de422c8b0824640c721bf5f2850afbaea318"
+        },
+        {
+          "path": "ts_parallel_zones_03",
+          "size": 1748,
+          "sha256": "7dcf869d29244a9895db4c4362f9c9ee0a86f51a4c34ffd6657e122f4fb5b2ad"
+        },
+        {
+          "path": "ts_parallel_zones_04",
+          "size": 1748,
+          "sha256": "0ebd1cdf8279c2affdfe1bc0fca221375ca4c12d0117b4dbcb76521cd592f99e"
+        },
+        {
+          "path": "ts_parallel_zones_05",
+          "size": 1748,
+          "sha256": "df23c3c28640c23f9a62e5acb330aedf24ab5ca821bbdeff5fe79ebb8774d0e1"
+        },
+        {
+          "path": "ts_parallel_zones_06",
+          "size": 1748,
+          "sha256": "44dcf2150717ea81d2c4ff40f4fba2241d627e7be3d78a9ba6ad696939bcfbf7"
+        },
+        {
+          "path": "ts_parallel_zones_07",
+          "size": 1748,
+          "sha256": "ae70dfd8ee96701d86ae73830380162a4d17b8b7c0bc1f56d66f4dcf9b654dc6"
+        },
+        {
+          "path": "ts_parallel_zones_08",
+          "size": 170840,
+          "sha256": "c048ca665b64bdb91635cdf29fec574eeb42c611f5be0964b2aab61e466a3206"
+        },
+        {
+          "path": "ts_parallel_zones_09",
+          "size": 164372,
+          "sha256": "73dcd5c97a9f09c867a0854b85302ee2b9bb3e685d110acf3a9bf963d6749a63"
+        },
+        {
+          "path": "ts_parallel_zones_10",
+          "size": 13144,
+          "sha256": "a32e609f8f483868d08c7d7441f64a4293ce59c0fb75bbae5c4b2feef361880e"
+        },
+        {
+          "path": "xnet.command.json",
+          "size": 81,
+          "sha256": "6ad77c3a867fcf93772fdccd4631cc0f461e7b43f57de18c589493539e6fb8e9"
+        },
+        {
+          "path": "xnet.status.txt",
+          "size": 14,
+          "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+        },
+        {
+          "path": "xnet.stderr.txt",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "xnet.stdout.txt",
+          "size": 1903,
+          "sha256": "40fe230528f5cba574a4caaaae46d8410293ae1b07160b470e90a0ff4466b6d7"
+        }
+      ]
+    },
+    "heat_sn160": {
+      "status": "passed",
+      "case": "heat_sn160",
+      "zones": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "timeout_seconds": 600.0,
+      "cpu_runtime_seconds": 3.243397458922118,
+      "gpu_runtime_seconds": 47.252182899042964,
+      "endpoint_comparison": {
+        "status": "passed",
+        "policy_status": "accepted after review of Frontier job 5230609",
+        "maximum_selected_fraction_of_allowed": 0.04386182854532165,
+        "zones": [
+          {
+            "zone": 1,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 5.00005e-07
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 2.2686048499999994e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 5.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.49933725e-07
+              }
+            },
+            "selected_species": [
+              "p",
+              "he4",
+              "si28",
+              "s32",
+              "ar36",
+              "ca40",
+              "ti44",
+              "cr48",
+              "cr49",
+              "cr50",
+              "mn51",
+              "mn52",
+              "mn53",
+              "fe52",
+              "fe53",
+              "fe54",
+              "fe55",
+              "co54",
+              "co55",
+              "co56",
+              "co57",
+              "ni56",
+              "ni57",
+              "ni58",
+              "ni59",
+              "cu59"
+            ],
+            "composition_l1": 5.3759626018434514e-08,
+            "composition_linf": 2.000000000335067e-08,
+            "composition_linf_species": "fe54"
+          },
+          {
+            "zone": 2,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 5.0005e-08
+              },
+              "temperature_gk": {
+                "absolute": 1.9999999967268423e-07,
+                "allowed": 2.7426460499999998e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 15.8163885
+              },
+              "electron_fraction": {
+                "absolute": 1.9999999989472883e-08,
+                "allowed": 2.5006101999999995e-07
+              }
+            },
+            "selected_species": [
+              "p",
+              "he4",
+              "si28",
+              "s32",
+              "cl35",
+              "ar36",
+              "k39",
+              "ca40",
+              "ti44",
+              "ti46",
+              "v47",
+              "cr48",
+              "cr49",
+              "cr50",
+              "cr51",
+              "cr52",
+              "mn50",
+              "mn51",
+              "mn52",
+              "mn53",
+              "fe52",
+              "fe53",
+              "fe54",
+              "fe55",
+              "fe56",
+              "co54",
+              "co55",
+              "co56",
+              "co57",
+              "ni56",
+              "ni57",
+              "ni58",
+              "ni59",
+              "ni60",
+              "cu58",
+              "cu59",
+              "cu60",
+              "cu61"
+            ],
+            "composition_l1": 8.167628687212956e-07,
+            "composition_linf": 2.9000000001389026e-07,
+            "composition_linf_species": "ni56"
+          },
+          {
+            "zone": 3,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 5.005e-09
+              },
+              "temperature_gk": {
+                "absolute": 2.0000000056086265e-07,
+                "allowed": 3.1717527499999993e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 50.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.50140945e-07
+              }
+            },
+            "selected_species": [
+              "p",
+              "he4",
+              "si28",
+              "si29",
+              "p31",
+              "s32",
+              "s33",
+              "s34",
+              "cl35",
+              "ar36",
+              "ar37",
+              "ar38",
+              "k39",
+              "ca40",
+              "ca41",
+              "ti44",
+              "ti45",
+              "ti46",
+              "v47",
+              "v48",
+              "v49",
+              "cr48",
+              "cr49",
+              "cr50",
+              "cr51",
+              "cr52",
+              "mn50",
+              "mn51",
+              "mn52",
+              "mn53",
+              "mn54",
+              "fe52",
+              "fe53",
+              "fe54",
+              "fe55",
+              "fe56",
+              "co54",
+              "co55",
+              "co56",
+              "co57",
+              "co58",
+              "ni56",
+              "ni57",
+              "ni58",
+              "ni59",
+              "ni60",
+              "cu58",
+              "cu59",
+              "cu60",
+              "cu61",
+              "zn61",
+              "zn62"
+            ],
+            "composition_l1": 5.675820223632959e-07,
+            "composition_linf": 1.0699999999919108e-07,
+            "composition_linf_species": "ni56"
+          },
+          {
+            "zone": 4,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 5.5000000000000004e-11
+              },
+              "temperature_gk": {
+                "absolute": 1.0000000028043132e-07,
+                "allowed": 3.58826815e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 158.11888499999998
+              },
+              "electron_fraction": {
+                "absolute": 9.999999994736442e-09,
+                "allowed": 2.5026599499999995e-07
+              }
+            },
+            "selected_species": [
+              "p",
+              "he4",
+              "si28",
+              "si29",
+              "p30",
+              "p31",
+              "s32",
+              "s33",
+              "s34",
+              "cl34",
+              "cl35",
+              "ar36",
+              "ar37",
+              "ar38",
+              "k38",
+              "k39",
+              "ca40",
+              "ca41",
+              "ca42",
+              "sc43",
+              "ti44",
+              "ti45",
+              "ti46",
+              "ti47",
+              "v47",
+              "v48",
+              "v49",
+              "v50",
+              "cr48",
+              "cr49",
+              "cr50",
+              "cr51",
+              "cr52",
+              "mn50",
+              "mn51",
+              "mn52",
+              "mn53",
+              "mn54",
+              "mn55",
+              "fe52",
+              "fe53",
+              "fe54",
+              "fe55",
+              "fe56",
+              "fe57",
+              "co54",
+              "co55",
+              "co56",
+              "co57",
+              "co58",
+              "co59",
+              "ni56",
+              "ni57",
+              "ni58",
+              "ni59",
+              "ni60",
+              "ni61",
+              "cu58",
+              "cu59",
+              "cu60",
+              "cu61",
+              "cu62",
+              "zn61",
+              "zn62",
+              "zn63"
+            ],
+            "composition_l1": 1.608172769102914e-07,
+            "composition_linf": 2.000000001722846e-08,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 5,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 1e-11
+              },
+              "temperature_gk": {
+                "absolute": 1.0000000116860974e-07,
+                "allowed": 4.0548362e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 500.005
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.50269015e-07
+              }
+            },
+            "selected_species": [
+              "p",
+              "he4",
+              "mg24",
+              "si28",
+              "si29",
+              "si30",
+              "p30",
+              "p31",
+              "s32",
+              "s33",
+              "s34",
+              "cl34",
+              "cl35",
+              "ar36",
+              "ar37",
+              "ar38",
+              "k38",
+              "k39",
+              "ca40",
+              "ca41",
+              "ca42",
+              "sc43",
+              "sc44",
+              "sc45",
+              "ti44",
+              "ti45",
+              "ti46",
+              "ti47",
+              "ti48",
+              "v46",
+              "v47",
+              "v48",
+              "v49",
+              "v50",
+              "v51",
+              "cr48",
+              "cr49",
+              "cr50",
+              "cr51",
+              "cr52",
+              "cr53",
+              "mn50",
+              "mn51",
+              "mn52",
+              "mn53",
+              "mn54",
+              "mn55",
+              "fe52",
+              "fe53",
+              "fe54",
+              "fe55",
+              "fe56",
+              "fe57",
+              "co54",
+              "co55",
+              "co56",
+              "co57",
+              "co58",
+              "co59",
+              "ni56",
+              "ni57",
+              "ni58",
+              "ni59",
+              "ni60",
+              "ni61",
+              "cu58",
+              "cu59",
+              "cu60",
+              "cu61",
+              "cu62",
+              "cu63",
+              "zn60",
+              "zn61",
+              "zn62",
+              "zn63",
+              "zn64"
+            ],
+            "composition_l1": 4.058260557968568e-08,
+            "composition_linf": 1.0000000022492017e-08,
+            "composition_linf_species": "he4"
+          },
+          {
+            "zone": 6,
+            "scalar_differences": {
+              "achieved_time": {
+                "absolute": 0.0,
+                "allowed": 5.4999999999999996e-12
+              },
+              "temperature_gk": {
+                "absolute": 0.0,
+                "allowed": 4.61824685e-06
+              },
+              "density": {
+                "absolute": 0.0,
+                "allowed": 1581.14385
+              },
+              "electron_fraction": {
+                "absolute": 0.0,
+                "allowed": 2.50269245e-07
+              }
+            },
+            "selected_species": [
+              "n",
+              "p",
+              "he4",
+              "c12",
+              "o16",
+              "mg24",
+              "si28",
+              "si29",
+              "si30",
+              "p29",
+              "p30",
+              "p31",
+              "s32",
+              "s33",
+              "s34",
+              "cl33",
+              "cl34",
+              "cl35",
+              "cl36",
+              "ar36",
+              "ar37",
+              "ar38",
+              "k38",
+              "k39",
+              "k40",
+              "ca40",
+              "ca41",
+              "ca42",
+              "sc43",
+              "sc44",
+              "sc45",
+              "ti44",
+              "ti45",
+              "ti46",
+              "ti47",
+              "ti48",
+              "v46",
+              "v47",
+              "v48",
+              "v49",
+              "v50",
+              "v51",
+              "cr48",
+              "cr49",
+              "cr50",
+              "cr51",
+              "cr52",
+              "cr53",
+              "mn50",
+              "mn51",
+              "mn52",
+              "mn53",
+              "mn54",
+              "mn55",
+              "fe52",
+              "fe53",
+              "fe54",
+              "fe55",
+              "fe56",
+              "fe57",
+              "fe58",
+              "co54",
+              "co55",
+              "co56",
+              "co57",
+              "co58",
+              "co59",
+              "ni56",
+              "ni57",
+              "ni58",
+              "ni59",
+              "ni60",
+              "ni61",
+              "cu58",
+              "cu59",
+              "cu60",
+              "cu61",
+              "cu62",
+              "cu63",
+              "zn60",
+              "zn61",
+              "zn62",
+              "zn63",
+              "zn64"
+            ],
+            "composition_l1": 2.804585888961531e-08,
+            "composition_linf": 9.999999994736442e-09,
+            "composition_linf_species": "he4"
+          }
+        ]
+      },
+      "cpu_output_inventory": [
+        {
+          "path": "Data_SN160/ab_blank",
+          "size": 3222,
+          "sha256": "0a14541268720764203099a6f738fd38e4e4561554f03031cd75d40df9eb7828"
+        },
+        {
+          "path": "Data_SN160/match_data",
+          "size": 51868,
+          "sha256": "f53e8e251474ad1a0e512e8c867cfaa79d7595333eb4e32e16f524a5cb99b86b"
+        },
+        {
+          "path": "Data_SN160/match_read",
+          "size": 99081,
+          "sha256": "2e046866c1ad9556b350e79d8e5dfe214658350c1f0a2536e34be067142e464b"
+        },
+        {
+          "path": "Data_SN160/matr_shape",
+          "size": 57178,
+          "sha256": "fe955269abbf090e547d890df49212da896df59764ef9c69f2dab944ca3232cd"
+        },
+        {
+          "path": "Data_SN160/net_desc",
+          "size": 777,
+          "sha256": "c65310ff6f1896b0625c4a92234280d537572938fd81382ec5cbbdde48197a40"
+        },
+        {
+          "path": "Data_SN160/net_diag",
+          "size": 157607,
+          "sha256": "78e15927ac4c9890d53c2f28730e4dc83c2fe49211aaad35ca50bea088c3f8e8"
+        },
+        {
+          "path": "Data_SN160/nets3",
+          "size": 362524,
+          "sha256": "9c1edccbf4ed8433a7642905bf172eb26119126fadf69ea3f9b491cf6d0c0b6c"
+        },
+        {
+          "path": "Data_SN160/nets4",
+          "size": 7928,
+          "sha256": "26dd713a9193265f70639d24eb7125b6d300672a69aa1e3f2c417b56004cf6c6"
+        },
+        {
+          "path": "Data_SN160/nuc_data",
+          "size": 38140,
+          "sha256": "e1657d8a8c71b49982f69d200e9513fa05fa9026bf4cf63885452baeb09fe296"
+        },
+        {
+          "path": "Data_SN160/sparse_ind",
+          "size": 68220,
+          "sha256": "44f32c350674c6efb3f4c6444331e34629c0280dedbff5b1457b62b2f1c7e844"
+        },
+        {
+          "path": "ev_heat_sn160_1",
+          "size": 134000,
+          "sha256": "cf1ac3005dbc53daaef66a3c6d35eadc2d2d3cee1f5adee02b7b0835bca32278"
+        },
+        {
+          "path": "ev_heat_sn160_2",
+          "size": 120800,
+          "sha256": "b4f334a6c179e95b5ff0e32f8ed5ff4ba8b9688187bfe7104bb374ee0ee8149e"
+        },
+        {
+          "path": "ev_heat_sn160_3",
+          "size": 110000,
+          "sha256": "bfbcbc84298f66fd2940075fc1e4bc64b805c8c7e76f7f8260fd835e76b557fa"
+        },
+        {
+          "path": "ev_heat_sn160_4",
+          "size": 106600,
+          "sha256": "defa76a2061ef63f792cd97e6fc07b313e3f1cfa4a793d75b86459ca16e24f85"
+        },
+        {
+          "path": "ev_heat_sn160_5",
+          "size": 110000,
+          "sha256": "29c8db3f1d9f1672f95ac261731d6d93b632a01b83541df8556eeae0ae80e1d3"
+        },
+        {
+          "path": "ev_heat_sn160_6",
+          "size": 113200,
+          "sha256": "eb789a796a5f48284e67d97d71f0ff8beb25ea839a62368f8454af40c8035ca9"
+        },
+        {
+          "path": "net_diag01",
+          "size": 47891,
+          "sha256": "31fe3e727c66f84162a867f4d7a3992413f051eb1c0daef15931ac773fff5f4b"
+        },
+        {
+          "path": "ts_heat_sn160_1",
+          "size": 5772032,
+          "sha256": "63c63fc86398391ad471498dffc0963be7d5d5766e527b6920fcf476bf378112"
+        },
+        {
+          "path": "ts_heat_sn160_2",
+          "size": 5203640,
+          "sha256": "c6ca6ba4f768fc187584e629d3876b79e2a3eeba1b166b3389b8c4903bd5d3fe"
+        },
+        {
+          "path": "ts_heat_sn160_3",
+          "size": 4738592,
+          "sha256": "d0ca10841978fa2fa94b581c304db4ceb8de38c7ff08c7dccf3c0c8b2aa832f7"
+        },
+        {
+          "path": "ts_heat_sn160_4",
+          "size": 4592188,
+          "sha256": "74b41b3ff935e66bff802acfccf879c6509e2b775310164ab2d1188ba70b93d6"
+        },
+        {
+          "path": "ts_heat_sn160_5",
+          "size": 4738592,
+          "sha256": "4999cf9afc074e38c5356dca85e26ffe2f9661a33849fe3c5d3b7ba7607cee89"
+        },
+        {
+          "path": "ts_heat_sn160_6",
+          "size": 4876384,
+          "sha256": "c034c4709f3e39950b5845a522c7962992fd7e1aa4511627009e10d70451886e"
+        },
+        {
+          "path": "xnet.status.txt",
+          "size": 14,
+          "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+        },
+        {
+          "path": "xnet.stderr.txt",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "xnet.stdout.txt",
+          "size": 2428,
+          "sha256": "63bd9dc33e0c2d7e833e76ddb34f21567f87dff6596a12845e5dcea4b633d64e"
+        }
+      ],
+      "gpu_output_inventory": [
+        {
+          "path": "Data_SN160/ab_blank",
+          "size": 3222,
+          "sha256": "0a14541268720764203099a6f738fd38e4e4561554f03031cd75d40df9eb7828"
+        },
+        {
+          "path": "Data_SN160/match_data",
+          "size": 51868,
+          "sha256": "f53e8e251474ad1a0e512e8c867cfaa79d7595333eb4e32e16f524a5cb99b86b"
+        },
+        {
+          "path": "Data_SN160/match_read",
+          "size": 99081,
+          "sha256": "2e046866c1ad9556b350e79d8e5dfe214658350c1f0a2536e34be067142e464b"
+        },
+        {
+          "path": "Data_SN160/matr_shape",
+          "size": 57178,
+          "sha256": "fe955269abbf090e547d890df49212da896df59764ef9c69f2dab944ca3232cd"
+        },
+        {
+          "path": "Data_SN160/net_desc",
+          "size": 777,
+          "sha256": "c65310ff6f1896b0625c4a92234280d537572938fd81382ec5cbbdde48197a40"
+        },
+        {
+          "path": "Data_SN160/net_diag",
+          "size": 157607,
+          "sha256": "78e15927ac4c9890d53c2f28730e4dc83c2fe49211aaad35ca50bea088c3f8e8"
+        },
+        {
+          "path": "Data_SN160/nets3",
+          "size": 362524,
+          "sha256": "9c1edccbf4ed8433a7642905bf172eb26119126fadf69ea3f9b491cf6d0c0b6c"
+        },
+        {
+          "path": "Data_SN160/nets4",
+          "size": 7928,
+          "sha256": "26dd713a9193265f70639d24eb7125b6d300672a69aa1e3f2c417b56004cf6c6"
+        },
+        {
+          "path": "Data_SN160/nuc_data",
+          "size": 38140,
+          "sha256": "e1657d8a8c71b49982f69d200e9513fa05fa9026bf4cf63885452baeb09fe296"
+        },
+        {
+          "path": "Data_SN160/sparse_ind",
+          "size": 68220,
+          "sha256": "44f32c350674c6efb3f4c6444331e34629c0280dedbff5b1457b62b2f1c7e844"
+        },
+        {
+          "path": "ev_heat_sn160_1",
+          "size": 134000,
+          "sha256": "fe9718d6e75f1afb1385d6f9083a66feeff02ef78546a958d31fbbad6aac617c"
+        },
+        {
+          "path": "ev_heat_sn160_2",
+          "size": 120800,
+          "sha256": "6c8fdc09b140841e64fb0b95c6a92a385cecf3333c12456c393be540fde3ff61"
+        },
+        {
+          "path": "ev_heat_sn160_3",
+          "size": 110000,
+          "sha256": "156409dde27d2229744f22aba6df4ad7feb9fa09c556f41a64b877ca61e87583"
+        },
+        {
+          "path": "ev_heat_sn160_4",
+          "size": 106600,
+          "sha256": "a7cd51a7007a8548203e9be9a3dd4fb8214e32d82596649d4dd381ca9a05d6b1"
+        },
+        {
+          "path": "ev_heat_sn160_5",
+          "size": 110000,
+          "sha256": "abc9ebaccb3f0e5261bc5c4a1a41d7ee2f68b00d570567c699a1a37ef6d59b3f"
+        },
+        {
+          "path": "ev_heat_sn160_6",
+          "size": 113200,
+          "sha256": "414279074703c8c14d0a243e2f65e902d083cdd3a72eb7ad6a34d8afca64c4fc"
+        },
+        {
+          "path": "net_diag01",
+          "size": 47911,
+          "sha256": "ad3fc6f3aa046011260bccec9f8d854af535ba890b7b2b564a6f629c4ee9a095"
+        },
+        {
+          "path": "ts_heat_sn160_1",
+          "size": 5772032,
+          "sha256": "b3e1556be680dbe448013d79159a76eb798f855b127051ea49032c68124e857a"
+        },
+        {
+          "path": "ts_heat_sn160_2",
+          "size": 5203640,
+          "sha256": "ca67cc066e6cf4e27e97df143335249404e716d30721573aba195b02af67e541"
+        },
+        {
+          "path": "ts_heat_sn160_3",
+          "size": 4738592,
+          "sha256": "29835c214d2a9375d97d1a4ed157ce21dc8b0619b1fad5890af5ab558e837781"
+        },
+        {
+          "path": "ts_heat_sn160_4",
+          "size": 4592188,
+          "sha256": "24b2a40117f31f5555a13e90d3638fd6cb8e3043c05e7baa0932f93c953900eb"
+        },
+        {
+          "path": "ts_heat_sn160_5",
+          "size": 4738592,
+          "sha256": "1a612311538b8badf0413b35e77796205d16cc6d13d20d206174cacd79f86628"
+        },
+        {
+          "path": "ts_heat_sn160_6",
+          "size": 4876384,
+          "sha256": "14ec1efb8240e7234d5044c59d722d74f45e1b388adf463616772fcabe69a76d"
+        },
+        {
+          "path": "xnet.status.txt",
+          "size": 14,
+          "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+        },
+        {
+          "path": "xnet.stderr.txt",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "xnet.stdout.txt",
+          "size": 2428,
+          "sha256": "63bd9dc33e0c2d7e833e76ddb34f21567f87dff6596a12845e5dcea4b633d64e"
+        }
+      ]
+    }
+  },
+  "artifact_inventory": [
+    {
+      "path": "bin/frontier_gpu_linalg_probe-gpu",
+      "size": 8239352,
+      "sha256": "3d7efdec48bdd0f66bbdc1a37c411550f7316d3fe6943a0154f16bb9a335254f"
+    },
+    {
+      "path": "bin/xnet-cpu",
+      "size": 2007768,
+      "sha256": "8bd0503b799a8faad77c774c940622c01342112d1c8ce7483c8164793040ac28"
+    },
+    {
+      "path": "bin/xnet-gpu",
+      "size": 8335472,
+      "sha256": "5a78cd1ab381c330d0837605460d8faea2f96950d79bfddd3bccbf8c13e77cc4"
+    },
+    {
+      "path": "build/cpu/build.command.json",
+      "size": 322,
+      "sha256": "4deb3c1e682da2f3737fe6a9f1658b494af1412b0173c0910ec1119cb4cb8136"
+    },
+    {
+      "path": "build/cpu/build.status.json",
+      "size": 72,
+      "sha256": "bfca9af0a3be4f36a317daca3ac0146a9d711e7f6f4e5acc564c56a5051f691b"
+    },
+    {
+      "path": "build/cpu/build.stderr.txt",
+      "size": 4448,
+      "sha256": "1095b1351887690ad4e41af1facf0b15dab2877c764bac4d83e076656bebb4cb"
+    },
+    {
+      "path": "build/cpu/build.stdout.txt",
+      "size": 3125,
+      "sha256": "960198b0c9a2227ae80495e73bd24c36a8ec3f74a9c391f6481f035c0db03038"
+    },
+    {
+      "path": "build/cpu/clean.command.json",
+      "size": 111,
+      "sha256": "16ec7655053031757673f405a2a27d0fae1fff547daa8a0aa114a870892b8d01"
+    },
+    {
+      "path": "build/cpu/clean.status.json",
+      "size": 74,
+      "sha256": "104bb51833cba760ce55dbaafea58719989e1a874a26067d6e00ceec8bf3b06e"
+    },
+    {
+      "path": "build/cpu/clean.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build/cpu/clean.stdout.txt",
+      "size": 296,
+      "sha256": "eb228ea96f1bdd28c71f95e135989c3108b8682e399ca3522528e6e18f2dd477"
+    },
+    {
+      "path": "build/cpu/resolved-variables.command.json",
+      "size": 522,
+      "sha256": "31c67d555a82697a9e4f68e76b3a5b14a635a44026b9bd5f515c58fdc692af1e"
+    },
+    {
+      "path": "build/cpu/resolved-variables.status.json",
+      "size": 74,
+      "sha256": "3e1299ec1df8ece4ff89fe605e871fb61bb31ea0c48ae67590feaaf142fd645c"
+    },
+    {
+      "path": "build/cpu/resolved-variables.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build/cpu/resolved-variables.stdout.txt",
+      "size": 374,
+      "sha256": "be0ac90939065ce7658a0a2b4f10581107c34e373e1ac3eaeb6994e830b094fa"
+    },
+    {
+      "path": "build/cpu/xnet-link.command.json",
+      "size": 90,
+      "sha256": "0a167a14cbfcdbaf38a809e90f017385994317921e23b9ba13f0b582e47fa2e4"
+    },
+    {
+      "path": "build/cpu/xnet-link.status.json",
+      "size": 74,
+      "sha256": "6b194721d448ea2a20c6a956dea2eca1f9a551c4cd7c3e40dc8b70ef177a27a7"
+    },
+    {
+      "path": "build/cpu/xnet-link.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build/cpu/xnet-link.stdout.txt",
+      "size": 5031,
+      "sha256": "52980ebf74e198c657482d90a46678f5ed28fcee78542d86eca99652b0df025a"
+    },
+    {
+      "path": "build/gpu/build.command.json",
+      "size": 397,
+      "sha256": "93fc5aebe14bbd06de0b137a9d65c1e65b56e03c27d94acdef1251803e22a905"
+    },
+    {
+      "path": "build/gpu/build.status.json",
+      "size": 72,
+      "sha256": "d6f6299745b07d6fc99ae3a78939ba3365e9da2b65fd70e4d9f35b5354a4cd1f"
+    },
+    {
+      "path": "build/gpu/build.stderr.txt",
+      "size": 7837,
+      "sha256": "0f85155547d72547ca7454232d1e4a8ef12ec2881a00c65bbf3e7c9335e122c5"
+    },
+    {
+      "path": "build/gpu/build.stdout.txt",
+      "size": 18780,
+      "sha256": "ec47b41a6f9553a1726262b97b9828569169be74d39c8f397dab09b851f6591e"
+    },
+    {
+      "path": "build/gpu/clean.command.json",
+      "size": 111,
+      "sha256": "16ec7655053031757673f405a2a27d0fae1fff547daa8a0aa114a870892b8d01"
+    },
+    {
+      "path": "build/gpu/clean.status.json",
+      "size": 74,
+      "sha256": "be166223a2b57524242ff2814613b2d184c68c48b1b8079343588ae8ff3c0f65"
+    },
+    {
+      "path": "build/gpu/clean.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build/gpu/clean.stdout.txt",
+      "size": 296,
+      "sha256": "eb228ea96f1bdd28c71f95e135989c3108b8682e399ca3522528e6e18f2dd477"
+    },
+    {
+      "path": "build/gpu/frontier_gpu_linalg_probe-link.command.json",
+      "size": 111,
+      "sha256": "c0276f2e900d02d0d965f5608fcbcbdcb504dac3acbdf9080cdddf6096ebcac4"
+    },
+    {
+      "path": "build/gpu/frontier_gpu_linalg_probe-link.status.json",
+      "size": 74,
+      "sha256": "c427844a946d8ce90b44799c8fd894f5d1da4d7dec8568a05e8ede6256786d51"
+    },
+    {
+      "path": "build/gpu/frontier_gpu_linalg_probe-link.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build/gpu/frontier_gpu_linalg_probe-link.stdout.txt",
+      "size": 5592,
+      "sha256": "e71ecbf52ecb57f097624e314f34133bba84f83365f4d1f96080c9abdd7a40e5"
+    },
+    {
+      "path": "build/gpu/resolved-variables.command.json",
+      "size": 615,
+      "sha256": "53c0e294390dfc435e46dceea1a385e75f0d14a2bd6baf0866c6760d9f511d25"
+    },
+    {
+      "path": "build/gpu/resolved-variables.status.json",
+      "size": 73,
+      "sha256": "1a95689e9cb3bd50d6be9e4b55a4ada312aff6abb18938b780cd3d82fbce9f5b"
+    },
+    {
+      "path": "build/gpu/resolved-variables.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build/gpu/resolved-variables.stdout.txt",
+      "size": 412,
+      "sha256": "24383a4262cb6ea2c411ca22452a59591353da3e14b6266ff53e185c8799dd9d"
+    },
+    {
+      "path": "build/gpu/xnet-link.command.json",
+      "size": 90,
+      "sha256": "c84f4ebba222f9a46148e2fdde049a32951eba519f25fe89d93a7ccf3d52d110"
+    },
+    {
+      "path": "build/gpu/xnet-link.status.json",
+      "size": 74,
+      "sha256": "d5a4c4e332278d171e3498e871fdbb4201d6ab11de63e2bb51b1c1c64110a4c7"
+    },
+    {
+      "path": "build/gpu/xnet-link.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build/gpu/xnet-link.stdout.txt",
+      "size": 5592,
+      "sha256": "e71ecbf52ecb57f097624e314f34133bba84f83365f4d1f96080c9abdd7a40e5"
+    },
+    {
+      "path": "environment/compiler.command.json",
+      "size": 27,
+      "sha256": "a901d3903f502267ab7bda26dfaa8af0c9348358a223680e01fad8a1b7ed56d1"
+    },
+    {
+      "path": "environment/compiler.status.json",
+      "size": 73,
+      "sha256": "10cd6dc82f2b354450818d18ba2bc1d3046a3679b82d832f389fa047a3cc76ea"
+    },
+    {
+      "path": "environment/compiler.stderr.txt",
+      "size": 68,
+      "sha256": "8b6e075d15619cc8a91e59cfb679e6003f98bfec72bfa12561d453f72e851817"
+    },
+    {
+      "path": "environment/compiler.stdout.txt",
+      "size": 88,
+      "sha256": "edee434c7b8d13f08b37b6d3e1f38f4a23716f54a79bea47ba4f3277ac3aaecc"
+    },
+    {
+      "path": "environment/gpu.command.json",
+      "size": 40,
+      "sha256": "d9ef5d2368c041f1d4c43c4a161291976aa6f67c2b8f3a9b2d798650ed300aa8"
+    },
+    {
+      "path": "environment/gpu.status.json",
+      "size": 74,
+      "sha256": "73e60b951a13c7a264ff4ce995ca97229d2431642639834c42d81c86c96c1a65"
+    },
+    {
+      "path": "environment/gpu.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "environment/gpu.stdout.txt",
+      "size": 2838,
+      "sha256": "a2dad7e967965907f650c66bc13fd04241eff26d77b1a2995198d01fe772ae41"
+    },
+    {
+      "path": "environment/preprocessor.command.json",
+      "size": 27,
+      "sha256": "efa358a314f63fded5e09098be5696352805682bc792faed2862496134b3b32d"
+    },
+    {
+      "path": "environment/preprocessor.status.json",
+      "size": 75,
+      "sha256": "450d5d77977566c29121fcd1d600e7ea660f8c7736614476d7244367ae43ac1f"
+    },
+    {
+      "path": "environment/preprocessor.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "environment/preprocessor.stdout.txt",
+      "size": 225,
+      "sha256": "7fe8f551c282d1a6e4a76920057ca321aab2a951f46514043a4d628da4014f0c"
+    },
+    {
+      "path": "environment/rocm.command.json",
+      "size": 17,
+      "sha256": "afcaefda60e92f6ad42d5dbd017ffc68349145aec14a1b1b0736aadbf3f738a0"
+    },
+    {
+      "path": "environment/rocm.status.json",
+      "size": 74,
+      "sha256": "36ac473a246e48f511f790f8688669bfde4dd0fde5c3a22f2c90ab22bfb8bd7d"
+    },
+    {
+      "path": "environment/rocm.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "environment/rocm.stdout.txt",
+      "size": 22015,
+      "sha256": "80919f7880d521d266a8281b7a7ddfdd677095e2a9c631e80eb4a4206cc7f5aa"
+    },
+    {
+      "path": "runs/gpu-linalg/probe.command.json",
+      "size": 102,
+      "sha256": "91b28c4702a60c207f70aacc4e793eb51e99192053e59a9de33e873a5e5f992c"
+    },
+    {
+      "path": "runs/gpu-linalg/probe.status.json",
+      "size": 72,
+      "sha256": "5e93fb3bc51fbfe97e8ec4cc0d9dc2463d4d034ebcae074e5ab5730477a31333"
+    },
+    {
+      "path": "runs/gpu-linalg/probe.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "runs/gpu-linalg/probe.stdout.txt",
+      "size": 311,
+      "sha256": "29565a7cf4f6d03306d6f45faa20e7ea2f92f310e214ffd6e1f8fc278e7e9a5e"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/ab_blank",
+      "size": 3222,
+      "sha256": "0a14541268720764203099a6f738fd38e4e4561554f03031cd75d40df9eb7828"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/match_data",
+      "size": 51868,
+      "sha256": "f53e8e251474ad1a0e512e8c867cfaa79d7595333eb4e32e16f524a5cb99b86b"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/match_read",
+      "size": 99081,
+      "sha256": "2e046866c1ad9556b350e79d8e5dfe214658350c1f0a2536e34be067142e464b"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/matr_shape",
+      "size": 57178,
+      "sha256": "fe955269abbf090e547d890df49212da896df59764ef9c69f2dab944ca3232cd"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/net_desc",
+      "size": 777,
+      "sha256": "c65310ff6f1896b0625c4a92234280d537572938fd81382ec5cbbdde48197a40"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/net_diag",
+      "size": 157607,
+      "sha256": "78e15927ac4c9890d53c2f28730e4dc83c2fe49211aaad35ca50bea088c3f8e8"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/nets3",
+      "size": 362524,
+      "sha256": "9c1edccbf4ed8433a7642905bf172eb26119126fadf69ea3f9b491cf6d0c0b6c"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/nets4",
+      "size": 7928,
+      "sha256": "26dd713a9193265f70639d24eb7125b6d300672a69aa1e3f2c417b56004cf6c6"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/nuc_data",
+      "size": 38140,
+      "sha256": "e1657d8a8c71b49982f69d200e9513fa05fa9026bf4cf63885452baeb09fe296"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/Data_SN160/sparse_ind",
+      "size": 68220,
+      "sha256": "44f32c350674c6efb3f4c6444331e34629c0280dedbff5b1457b62b2f1c7e844"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/control",
+      "size": 1916,
+      "sha256": "03b92a13ad4750c9c69c5eeaeca85948d0b1b296c173a13d7d444600e973e6f5"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ev_heat_sn160_1",
+      "size": 134000,
+      "sha256": "cf1ac3005dbc53daaef66a3c6d35eadc2d2d3cee1f5adee02b7b0835bca32278"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ev_heat_sn160_2",
+      "size": 120800,
+      "sha256": "b4f334a6c179e95b5ff0e32f8ed5ff4ba8b9688187bfe7104bb374ee0ee8149e"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ev_heat_sn160_3",
+      "size": 110000,
+      "sha256": "bfbcbc84298f66fd2940075fc1e4bc64b805c8c7e76f7f8260fd835e76b557fa"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ev_heat_sn160_4",
+      "size": 106600,
+      "sha256": "defa76a2061ef63f792cd97e6fc07b313e3f1cfa4a793d75b86459ca16e24f85"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ev_heat_sn160_5",
+      "size": 110000,
+      "sha256": "29c8db3f1d9f1672f95ac261731d6d93b632a01b83541df8556eeae0ae80e1d3"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ev_heat_sn160_6",
+      "size": 113200,
+      "sha256": "eb789a796a5f48284e67d97d71f0ff8beb25ea839a62368f8454af40c8035ca9"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/net_diag01",
+      "size": 47891,
+      "sha256": "31fe3e727c66f84162a867f4d7a3992413f051eb1c0daef15931ac773fff5f4b"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ts_heat_sn160_1",
+      "size": 5772032,
+      "sha256": "63c63fc86398391ad471498dffc0963be7d5d5766e527b6920fcf476bf378112"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ts_heat_sn160_2",
+      "size": 5203640,
+      "sha256": "c6ca6ba4f768fc187584e629d3876b79e2a3eeba1b166b3389b8c4903bd5d3fe"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ts_heat_sn160_3",
+      "size": 4738592,
+      "sha256": "d0ca10841978fa2fa94b581c304db4ceb8de38c7ff08c7dccf3c0c8b2aa832f7"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ts_heat_sn160_4",
+      "size": 4592188,
+      "sha256": "74b41b3ff935e66bff802acfccf879c6509e2b775310164ab2d1188ba70b93d6"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ts_heat_sn160_5",
+      "size": 4738592,
+      "sha256": "4999cf9afc074e38c5356dca85e26ffe2f9661a33849fe3c5d3b7ba7607cee89"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/ts_heat_sn160_6",
+      "size": 4876384,
+      "sha256": "c034c4709f3e39950b5845a522c7962992fd7e1aa4511627009e10d70451886e"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/xnet.status.txt",
+      "size": 14,
+      "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/xnet.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "runs/heat-sn160/cpu/xnet.stdout.txt",
+      "size": 2428,
+      "sha256": "63bd9dc33e0c2d7e833e76ddb34f21567f87dff6596a12845e5dcea4b633d64e"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/ab_blank",
+      "size": 3222,
+      "sha256": "0a14541268720764203099a6f738fd38e4e4561554f03031cd75d40df9eb7828"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/match_data",
+      "size": 51868,
+      "sha256": "f53e8e251474ad1a0e512e8c867cfaa79d7595333eb4e32e16f524a5cb99b86b"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/match_read",
+      "size": 99081,
+      "sha256": "2e046866c1ad9556b350e79d8e5dfe214658350c1f0a2536e34be067142e464b"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/matr_shape",
+      "size": 57178,
+      "sha256": "fe955269abbf090e547d890df49212da896df59764ef9c69f2dab944ca3232cd"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/net_desc",
+      "size": 777,
+      "sha256": "c65310ff6f1896b0625c4a92234280d537572938fd81382ec5cbbdde48197a40"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/net_diag",
+      "size": 157607,
+      "sha256": "78e15927ac4c9890d53c2f28730e4dc83c2fe49211aaad35ca50bea088c3f8e8"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/nets3",
+      "size": 362524,
+      "sha256": "9c1edccbf4ed8433a7642905bf172eb26119126fadf69ea3f9b491cf6d0c0b6c"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/nets4",
+      "size": 7928,
+      "sha256": "26dd713a9193265f70639d24eb7125b6d300672a69aa1e3f2c417b56004cf6c6"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/nuc_data",
+      "size": 38140,
+      "sha256": "e1657d8a8c71b49982f69d200e9513fa05fa9026bf4cf63885452baeb09fe296"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/Data_SN160/sparse_ind",
+      "size": 68220,
+      "sha256": "44f32c350674c6efb3f4c6444331e34629c0280dedbff5b1457b62b2f1c7e844"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/control",
+      "size": 1916,
+      "sha256": "03b92a13ad4750c9c69c5eeaeca85948d0b1b296c173a13d7d444600e973e6f5"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ev_heat_sn160_1",
+      "size": 134000,
+      "sha256": "fe9718d6e75f1afb1385d6f9083a66feeff02ef78546a958d31fbbad6aac617c"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ev_heat_sn160_2",
+      "size": 120800,
+      "sha256": "6c8fdc09b140841e64fb0b95c6a92a385cecf3333c12456c393be540fde3ff61"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ev_heat_sn160_3",
+      "size": 110000,
+      "sha256": "156409dde27d2229744f22aba6df4ad7feb9fa09c556f41a64b877ca61e87583"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ev_heat_sn160_4",
+      "size": 106600,
+      "sha256": "a7cd51a7007a8548203e9be9a3dd4fb8214e32d82596649d4dd381ca9a05d6b1"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ev_heat_sn160_5",
+      "size": 110000,
+      "sha256": "abc9ebaccb3f0e5261bc5c4a1a41d7ee2f68b00d570567c699a1a37ef6d59b3f"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ev_heat_sn160_6",
+      "size": 113200,
+      "sha256": "414279074703c8c14d0a243e2f65e902d083cdd3a72eb7ad6a34d8afca64c4fc"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/net_diag01",
+      "size": 47911,
+      "sha256": "ad3fc6f3aa046011260bccec9f8d854af535ba890b7b2b564a6f629c4ee9a095"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ts_heat_sn160_1",
+      "size": 5772032,
+      "sha256": "b3e1556be680dbe448013d79159a76eb798f855b127051ea49032c68124e857a"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ts_heat_sn160_2",
+      "size": 5203640,
+      "sha256": "ca67cc066e6cf4e27e97df143335249404e716d30721573aba195b02af67e541"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ts_heat_sn160_3",
+      "size": 4738592,
+      "sha256": "29835c214d2a9375d97d1a4ed157ce21dc8b0619b1fad5890af5ab558e837781"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ts_heat_sn160_4",
+      "size": 4592188,
+      "sha256": "24b2a40117f31f5555a13e90d3638fd6cb8e3043c05e7baa0932f93c953900eb"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ts_heat_sn160_5",
+      "size": 4738592,
+      "sha256": "1a612311538b8badf0413b35e77796205d16cc6d13d20d206174cacd79f86628"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/ts_heat_sn160_6",
+      "size": 4876384,
+      "sha256": "14ec1efb8240e7234d5044c59d722d74f45e1b388adf463616772fcabe69a76d"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/xnet.status.txt",
+      "size": 14,
+      "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/xnet.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "runs/heat-sn160/gpu/xnet.stdout.txt",
+      "size": 2428,
+      "sha256": "63bd9dc33e0c2d7e833e76ddb34f21567f87dff6596a12845e5dcea4b633d64e"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/ab_blank",
+      "size": 302,
+      "sha256": "3f33993f3a4eb66888b4178ce432d3ea0b88346b9bd4227eaf3070b09b88a2fe"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/match_data",
+      "size": 1068,
+      "sha256": "d0b31b1d84d45ac6fc5e43e6a7dc1b957b418d57cdc32ac5d77cc7b3c468ab10"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/match_read",
+      "size": 1853,
+      "sha256": "e4333d8ded0c1eddcd3ac1a785fb5024fabd8a8c4e462f87dcbadbe8cbfc31b9"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/matr_shape",
+      "size": 1822,
+      "sha256": "0d490a5928a125f9921d94f3bc9162db86f5b9fd0ad1135bef047dc0c14e32cd"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/net_desc",
+      "size": 777,
+      "sha256": "a617182b2e3f5504b195cb1180208993af557aa4543faf9409ad185ffcf3e639"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/net_diag",
+      "size": 3952,
+      "sha256": "4ab2136101ee866218d3110eb937594d921953979db6d00c770cbb222e9acbbe"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/nets3",
+      "size": 8816,
+      "sha256": "223c1c714fde3fdbd40c4cf657cfac9ed3796eabb535c2357aa29c5f2956cca6"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/nets4",
+      "size": 774,
+      "sha256": "3118344707a2ccd28ec4274773fac730e2a88943328cb2c050cad18ea5cb387e"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/nuc_data",
+      "size": 3538,
+      "sha256": "463b1aca5d4afa679537661fa33617a29608bfa6062f810b8adbd12b59d7641f"
+    },
+    {
+      "path": "runs/partial-batch/cpu/Data_alpha/sparse_ind",
+      "size": 1780,
+      "sha256": "0758fff67eff67dd3e9025ad040b12fd98921592b576dfec01b850b8b5ca5cab"
+    },
+    {
+      "path": "runs/partial-batch/cpu/control",
+      "size": 1840,
+      "sha256": "35dc82d9e17a6851f91e92f46264de1f46260f78d8c28e6c946034b9f62db3e0"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_01",
+      "size": 120600,
+      "sha256": "82d72d71e40439b3b2b18937d4b8a302dc6b14dd9b4fd4e7987306fe8f259600"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_02",
+      "size": 3600,
+      "sha256": "30b2f1a227680fe0734cd1c7357964ab5c8b15fa16f7a42480533dd41fb23e39"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_03",
+      "size": 600,
+      "sha256": "572212e146d5f5ea76b905b6c94b163d0c8c5d8d1f31a4b34dc93aaf99b8ed46"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_04",
+      "size": 600,
+      "sha256": "494d245d010674f179614ae49274b63b63254d5fbde741ae1d7781af4f8af843"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_05",
+      "size": 600,
+      "sha256": "61cea45d419168782c3c0b1105d030bde78c94ad488041c9d26c64a5e8c5ed58"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_06",
+      "size": 600,
+      "sha256": "c9465608161e7d93a13b76e21bedb3239c33a591dae8f2ff02ffef4d8ceb5166"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_07",
+      "size": 600,
+      "sha256": "2a0864bc68310951ffea6dcf14aa4cedccc2b38e85af6b2b30fd3bcfdaa86ab2"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_08",
+      "size": 110400,
+      "sha256": "cdd6a71e0801f7e2557f4023770c17019cee1e750c830313320d5e140c4ba4f9"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_09",
+      "size": 106200,
+      "sha256": "1584af20630c9b77716b0b473ee066ed3ff6df527da80e12cc473990183c0d82"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ev_parallel_zones_10",
+      "size": 8000,
+      "sha256": "9c68cf659f15f21e7bdaf5271ea37a0120b2f6db67fa91b0c1af02662d301a38"
+    },
+    {
+      "path": "runs/partial-batch/cpu/net_diag01",
+      "size": 16693,
+      "sha256": "b22222fc0533dc29936920419987ff13667654b6dbfa5baff748bf1c5c6b2f08"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_01",
+      "size": 186548,
+      "sha256": "f080e60189d27f5d983949ea2456ffe772fe6e7789de7d5066dfdbb0f638121c"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_02",
+      "size": 6368,
+      "sha256": "4b31fe542ff8e24cdc53cc73b4b3359b9b49b7784e3787ee6e1b82e1af262d4e"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_03",
+      "size": 1748,
+      "sha256": "ed0cd57c97ce7ec3050545b24c329c8234489b175720c7e850a29a4b9db10c75"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_04",
+      "size": 1748,
+      "sha256": "b19a19774037f1bd5dc8d2a87a6e71a4ad6fe46ce67b37f4b0009fe5c036bf68"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_05",
+      "size": 1748,
+      "sha256": "ab5ac6ae023f30c0c9ca055c4b5989c89409a412085250c48e65df958268c6db"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_06",
+      "size": 1748,
+      "sha256": "cd605bb94ffbabbe98165a37fb76d61f19fea15122000e417b1e4d63de3d68f1"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_07",
+      "size": 1748,
+      "sha256": "d69e8efb081ac2c30de4f27fe1487be8e2c40201a490561780b96822d6a21b74"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_08",
+      "size": 170840,
+      "sha256": "a41bbec1290f9d06b196a66adb3d44a52ff95598796df76e481cbab852277e6b"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_09",
+      "size": 164372,
+      "sha256": "a0665e78c5d9ff1aecc37b94d86a0cc3fc99d626cce37028fc519b57fbdcb6cf"
+    },
+    {
+      "path": "runs/partial-batch/cpu/ts_parallel_zones_10",
+      "size": 13144,
+      "sha256": "acb5bd670755deb472ecbf0411c37196126ddaab3659e9b6339e6c0390b1fefb"
+    },
+    {
+      "path": "runs/partial-batch/cpu/xnet.command.json",
+      "size": 81,
+      "sha256": "08d00f5b7b8ce000f3464f5027296948e28c1a25e48e8107467a8e6bae0d718a"
+    },
+    {
+      "path": "runs/partial-batch/cpu/xnet.status.txt",
+      "size": 14,
+      "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+    },
+    {
+      "path": "runs/partial-batch/cpu/xnet.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "runs/partial-batch/cpu/xnet.stdout.txt",
+      "size": 1903,
+      "sha256": "40fe230528f5cba574a4caaaae46d8410293ae1b07160b470e90a0ff4466b6d7"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/ab_blank",
+      "size": 302,
+      "sha256": "3f33993f3a4eb66888b4178ce432d3ea0b88346b9bd4227eaf3070b09b88a2fe"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/match_data",
+      "size": 1068,
+      "sha256": "d0b31b1d84d45ac6fc5e43e6a7dc1b957b418d57cdc32ac5d77cc7b3c468ab10"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/match_read",
+      "size": 1853,
+      "sha256": "e4333d8ded0c1eddcd3ac1a785fb5024fabd8a8c4e462f87dcbadbe8cbfc31b9"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/matr_shape",
+      "size": 1822,
+      "sha256": "0d490a5928a125f9921d94f3bc9162db86f5b9fd0ad1135bef047dc0c14e32cd"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/net_desc",
+      "size": 777,
+      "sha256": "a617182b2e3f5504b195cb1180208993af557aa4543faf9409ad185ffcf3e639"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/net_diag",
+      "size": 3952,
+      "sha256": "4ab2136101ee866218d3110eb937594d921953979db6d00c770cbb222e9acbbe"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/nets3",
+      "size": 8816,
+      "sha256": "223c1c714fde3fdbd40c4cf657cfac9ed3796eabb535c2357aa29c5f2956cca6"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/nets4",
+      "size": 774,
+      "sha256": "3118344707a2ccd28ec4274773fac730e2a88943328cb2c050cad18ea5cb387e"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/nuc_data",
+      "size": 3538,
+      "sha256": "463b1aca5d4afa679537661fa33617a29608bfa6062f810b8adbd12b59d7641f"
+    },
+    {
+      "path": "runs/partial-batch/gpu/Data_alpha/sparse_ind",
+      "size": 1780,
+      "sha256": "0758fff67eff67dd3e9025ad040b12fd98921592b576dfec01b850b8b5ca5cab"
+    },
+    {
+      "path": "runs/partial-batch/gpu/control",
+      "size": 1840,
+      "sha256": "35dc82d9e17a6851f91e92f46264de1f46260f78d8c28e6c946034b9f62db3e0"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_01",
+      "size": 120600,
+      "sha256": "82d72d71e40439b3b2b18937d4b8a302dc6b14dd9b4fd4e7987306fe8f259600"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_02",
+      "size": 3600,
+      "sha256": "30b2f1a227680fe0734cd1c7357964ab5c8b15fa16f7a42480533dd41fb23e39"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_03",
+      "size": 600,
+      "sha256": "572212e146d5f5ea76b905b6c94b163d0c8c5d8d1f31a4b34dc93aaf99b8ed46"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_04",
+      "size": 600,
+      "sha256": "494d245d010674f179614ae49274b63b63254d5fbde741ae1d7781af4f8af843"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_05",
+      "size": 600,
+      "sha256": "61cea45d419168782c3c0b1105d030bde78c94ad488041c9d26c64a5e8c5ed58"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_06",
+      "size": 600,
+      "sha256": "c9465608161e7d93a13b76e21bedb3239c33a591dae8f2ff02ffef4d8ceb5166"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_07",
+      "size": 600,
+      "sha256": "2a0864bc68310951ffea6dcf14aa4cedccc2b38e85af6b2b30fd3bcfdaa86ab2"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_08",
+      "size": 110400,
+      "sha256": "cdd6a71e0801f7e2557f4023770c17019cee1e750c830313320d5e140c4ba4f9"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_09",
+      "size": 106200,
+      "sha256": "0faeae0cfe7b7382be1db2a7ae1970c2b0aecd8bc5e82b6bc083ec2cfa2ceb0b"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ev_parallel_zones_10",
+      "size": 8000,
+      "sha256": "9c68cf659f15f21e7bdaf5271ea37a0120b2f6db67fa91b0c1af02662d301a38"
+    },
+    {
+      "path": "runs/partial-batch/gpu/net_diag01",
+      "size": 16713,
+      "sha256": "8ecb54447f83c5fbd6eb4cbc4b9ba014547480e377768bfb594c64d88fc22c15"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_01",
+      "size": 186548,
+      "sha256": "5c0d36e4dc5b9dad1c7b754dac57aefab70c9d81674a42f890dfb9f8d52bf349"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_02",
+      "size": 6368,
+      "sha256": "2d9bdac474fe2a73ba322d10eb72de422c8b0824640c721bf5f2850afbaea318"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_03",
+      "size": 1748,
+      "sha256": "7dcf869d29244a9895db4c4362f9c9ee0a86f51a4c34ffd6657e122f4fb5b2ad"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_04",
+      "size": 1748,
+      "sha256": "0ebd1cdf8279c2affdfe1bc0fca221375ca4c12d0117b4dbcb76521cd592f99e"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_05",
+      "size": 1748,
+      "sha256": "df23c3c28640c23f9a62e5acb330aedf24ab5ca821bbdeff5fe79ebb8774d0e1"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_06",
+      "size": 1748,
+      "sha256": "44dcf2150717ea81d2c4ff40f4fba2241d627e7be3d78a9ba6ad696939bcfbf7"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_07",
+      "size": 1748,
+      "sha256": "ae70dfd8ee96701d86ae73830380162a4d17b8b7c0bc1f56d66f4dcf9b654dc6"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_08",
+      "size": 170840,
+      "sha256": "c048ca665b64bdb91635cdf29fec574eeb42c611f5be0964b2aab61e466a3206"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_09",
+      "size": 164372,
+      "sha256": "73dcd5c97a9f09c867a0854b85302ee2b9bb3e685d110acf3a9bf963d6749a63"
+    },
+    {
+      "path": "runs/partial-batch/gpu/ts_parallel_zones_10",
+      "size": 13144,
+      "sha256": "a32e609f8f483868d08c7d7441f64a4293ce59c0fb75bbae5c4b2feef361880e"
+    },
+    {
+      "path": "runs/partial-batch/gpu/xnet.command.json",
+      "size": 81,
+      "sha256": "6ad77c3a867fcf93772fdccd4631cc0f461e7b43f57de18c589493539e6fb8e9"
+    },
+    {
+      "path": "runs/partial-batch/gpu/xnet.status.txt",
+      "size": 14,
+      "sha256": "6939bd8f3fa5b8bb68f4fd1f5a5ac3dc6d9284efb2c3caf071933235c8e8a8e7"
+    },
+    {
+      "path": "runs/partial-batch/gpu/xnet.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "runs/partial-batch/gpu/xnet.stdout.txt",
+      "size": 1903,
+      "sha256": "40fe230528f5cba574a4caaaae46d8410293ae1b07160b470e90a0ff4466b6d7"
+    },
+    {
+      "path": "sbatch.command.json",
+      "size": 757,
+      "sha256": "6e35b25699f23803cb733c524307e9d81e5d1a5ba65eb9304f2d7ec083aef416"
+    },
+    {
+      "path": "sbatch.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "sbatch.stdout.txt",
+      "size": 8,
+      "sha256": "422a4847f8fa87d074ae38b93a3def3932ff0710c2b844edd70917e6fa0f0398"
+    },
+    {
+      "path": "slurm.stderr.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "slurm.stdout.txt",
+      "size": 129,
+      "sha256": "0f75bb3b0200161ca09784dfc18ac8be8440d1ff4594bf84b4984764c8699580"
+    },
+    {
+      "path": "srun.status.txt",
+      "size": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "submission.json",
+      "size": 466,
+      "sha256": "a9661f823c7f54cb5a62034e8013166ea469af24b057ab46b0ac713c1d53454b"
+    }
+  ],
+  "started_at_utc": "2026-08-11T01:42:12.994024+00:00",
+  "finished_at_utc": "2026-08-11T01:46:34.570708+00:00",
+  "runtime_seconds": 261.57666668016464
+}

@@ -68,6 +68,12 @@ body:
         - label: Dependencies or language requirements
 
   - type: textarea
+    id: review_risk
+    attributes:
+      label: Independent review risks
+      description: Select the applicable risk classes from docs/development/review-playbook.md, the likely review roles and evidence, and any human-only decision. Multiple classes may apply; use D, T, P, S, B, or H.
+
+  - type: textarea
     id: test_effectiveness
     attributes:
       label: Test effectiveness

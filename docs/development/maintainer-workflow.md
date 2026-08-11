@@ -158,42 +158,18 @@ brief or review record must identify the PR and exact candidate commit. The
 open PR state is the review source of record; a local diff may supplement it
 but does not replace it.
 
-Use a fresh-context reviewer agent for each review role activated by the issue
-or maintainer. Select roles from the actual risks of the change. The role set
-can evolve as recurring XNet work establishes useful specialties.
+Use [the independent review playbook](review-playbook.md) to declare all
+applicable risk classes, select the minimum credible set of composable roles,
+prepare read-only fresh-context briefs, challenge XNet-specific false passes,
+and record invocations. `PASS` is valid when a reviewer cannot establish a
+consequential issue. Record limitations even when the result is `PASS`.
 
-Provide each reviewer with:
-
-- the governing issue and acceptance criteria;
-- the draft PR and exact pushed candidate commit;
-- any supplementary local diff needed to clarify the open PR state;
-- relevant current documentation;
-- build, test, numerical, and performance evidence.
-
-Keep the review context free of implementation discussion so reviewers reach
-their own conclusions. Ask reviewers to:
-
-- check requirements and claims directly against code;
-- seek counterexamples and relevant limiting cases;
-- inspect whether tests can expose the defect or missing behavior;
-- identify unintended changes and compatibility effects;
-- distinguish confirmed defects, likely defects, and speculative concerns;
-- flag missing evidence and questions requiring scientific judgment;
-- state consequence and confidence clearly.
-
-Useful finding categories include:
-
-- merge-blocking defect;
-- likely defect;
-- missing evidence;
-- maintainability concern;
-- scientific or domain question;
-- non-blocking suggestion.
-
-Preserve the independent reviewer's original findings before implementation
-responses materially alter the reviewed code. Post confirmed or potentially
-consequential findings to the PR. Summarize low-value duplicates and clearly
-inapplicable findings so the review record stays useful.
+Preserve each original consequential finding under a stable ID before
+implementation responses materially alter the reviewed code. Post confirmed
+or potentially consequential findings to the PR. Summarize low-value
+duplicates and clearly inapplicable findings so the review record stays
+useful; do not use finding quotas or arbitrary style, size, or complexity
+thresholds.
 
 ## Findings disposition
 
@@ -205,15 +181,19 @@ Give every consequential finding one disposition:
   numerical results, or authoritative references.
 - **Defer with reason:** explain why the work is outside the PR, record the
   consequence, and create or identify an appropriate follow-up location.
+- **Accepted limitation:** preserve the bounded gap and identify the human
+  authority accepting it. This does not silently waive an acceptance
+  criterion.
 
 Post a disposition summary after each substantive review round. Include
 non-blocking findings in the summary when they affect future maintenance or
 scientific understanding.
 
 Commit and push substantive review fixes. When the changes can introduce new
-defects or materially change the reviewed solution, repeat independent review
-and identify the new pushed commit used for re-review. Review is complete
-when:
+defects or materially change the reviewed solution, repeat independent review.
+Identify both the prior and replacement pushed commits, verify accepted
+findings, and inspect material repair risk as specified by the playbook. Review
+is complete when:
 
 - merge-blocking findings are resolved;
 - remaining findings have documented dispositions;
@@ -282,7 +262,6 @@ The orchestrator:
 Component agents remain within their sub-issue and leave cross-component
 scope and merge decisions to the orchestrator.
 
-Review roles, issue/PR templates, labels, and automation can be introduced as
-real workflow experience establishes a recurring need. The current process can
-operate through ordinary GitHub issues, branches, PRs, comments, and manually
-selected fresh-context reviews.
+Review records use ordinary GitHub issues, draft PRs, and comments. The
+playbook defines the current role and risk terminology; labels and automation
+are not required.

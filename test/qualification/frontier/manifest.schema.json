@@ -19,6 +19,25 @@
     "finished_at_utc",
     "runtime_seconds"
   ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "passed"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "failure": {"type": "null"},
+          "environment": {"minProperties": 1},
+          "builds": {"minProperties": 1},
+          "checks": {"minProperties": 1}
+        }
+      },
+      "else": {
+        "properties": {"failure": {"type": "object"}}
+      }
+    }
+  ],
   "properties": {
     "schema": {"const": "xnet-frontier-qualification-v2"},
     "status": {"enum": ["passed", "failed"]},

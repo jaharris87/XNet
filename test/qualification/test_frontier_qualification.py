@@ -30,6 +30,8 @@ from frontier_qualification import (  # noqa: E402
 from submit_frontier import (  # noqa: E402
     _stage_source,
     classify_submission_failure,
+    collect_submission_diagnostics,
+    failed_submission_manifest,
     finalize_submission_manifest,
 )
 from parallel_zones import AsciiEndpoint  # noqa: E402
@@ -39,6 +41,7 @@ from xnet_regression import ALPHA_SPECIES, FinalState, SolverCounters  # noqa: E
 POLICY = FRONTIER_DIRECTORY / "comparison_policy.json"
 HASH = "a" * 64
 SOURCE_SHA = "b" * 40
+TEST_POLICY = load_policy(POLICY)
 
 
 def _state(zone: int) -> FinalState:
@@ -61,6 +64,16 @@ def _artifact(path: str) -> dict[str, object]:
     return {"path": path, "size": 1, "sha256": HASH}
 
 
+def _bounded(value: float, bounds: object) -> dict[str, float]:
+    allowed = bounds.atol + bounds.rtol * abs(value)
+    return {
+        "observed": value,
+        "expected": value,
+        "difference": 0.0,
+        "allowed": allowed,
+    }
+
+
 def _endpoint_evidence(zones: range) -> dict[str, object]:
     return {
         "status": "passed",
@@ -70,18 +83,38 @@ def _endpoint_evidence(zones: range) -> dict[str, object]:
             {
                 "zone": zone,
                 "scalar_differences": {
-                    name: {"absolute": 0.0, "allowed": 1.0}
-                    for name in (
-                        "achieved_time",
-                        "temperature_gk",
-                        "density",
-                        "electron_fraction",
-                    )
+                    "achieved_time": _bounded(
+                        1.0, TEST_POLICY.scalar_fields["achieved_time"]
+                    ),
+                    "temperature_gk": _bounded(
+                        5.0, TEST_POLICY.scalar_fields["temperature_gk"]
+                    ),
+                    "density": _bounded(
+                        1.0e8, TEST_POLICY.scalar_fields["density"]
+                    ),
+                    "electron_fraction": _bounded(
+                        0.5, TEST_POLICY.scalar_fields["electron_fraction"]
+                    ),
                 },
-                "selected_species": ["si28"],
+                "selected_species": [
+                    name
+                    for name, value in _state(zone).mass_fractions.items()
+                    if name in TEST_POLICY.anchors
+                    or value >= TEST_POLICY.material_threshold
+                ],
+                "selected_differences": {
+                    name: _bounded(value, TEST_POLICY.selected)
+                    for name, value in _state(zone).mass_fractions.items()
+                    if name in TEST_POLICY.anchors
+                    or value >= TEST_POLICY.material_threshold
+                },
+                "observed_mass_fractions": dict(_state(zone).mass_fractions),
+                "reference_mass_fractions": dict(_state(zone).mass_fractions),
                 "composition_l1": 0.0,
                 "composition_linf": 0.0,
-                "composition_linf_species": "si28",
+                "composition_linf_species": next(
+                    iter(_state(zone).mass_fractions)
+                ),
             }
             for zone in zones
         ],
@@ -99,17 +132,16 @@ def _ascii_evidence(zones: range, *, nonzero_neutrino: bool = False) -> dict[str
                 "field_differences": {
                     "neutrino_loss_rate": {
                         "comparison": "bounded",
-                        "observed": 1.0 if nonzero_neutrino else 0.0,
-                        "expected": 1.0 if nonzero_neutrino else 0.0,
-                        "difference": 0.0,
-                        "allowed": 1.0,
+                        **_bounded(
+                            1.0 if nonzero_neutrino else 0.0,
+                            TEST_POLICY.ascii_fields["neutrino_loss_rate"],
+                        ),
                     },
                     "timestep": {
                         "comparison": "bounded",
-                        "observed": 1.0,
-                        "expected": 1.0,
-                        "difference": 0.0,
-                        "allowed": 1.0,
+                        **_bounded(
+                            1.0, TEST_POLICY.ascii_fields["timestep"]
+                        ),
                     },
                     "energy_generation_rate": {
                         "comparison": "reported_only",
@@ -387,6 +419,31 @@ def test_manifest_validator_rejects_controlled_false_success_mutants() -> None:
         lambda manifest: manifest["checks"]["heat_sn160"].update(
             {"status": "failed"}
         ),
+        lambda manifest: manifest["checks"]["heat_sn160"]["ascii_comparison"][
+            "zones"
+        ][0]["field_differences"]["neutrino_loss_rate"].update(
+            {"observed": 100.0, "expected": 1.0, "difference": 99.0, "allowed": 99.0}
+        ),
+        lambda manifest: manifest["checks"]["heat_sn160"]["ascii_comparison"].update(
+            {"maximum_fraction_of_allowed": 0.5}
+        ),
+        lambda manifest: manifest["checks"]["partial_batch"]["endpoint_comparison"][
+            "zones"
+        ][0]["scalar_differences"]["density"].update(
+            {"observed": 1.0e99, "expected": 1.0e8, "difference": 1.0e99, "allowed": 1.0e99}
+        ),
+        lambda manifest: manifest["checks"]["partial_batch"]["endpoint_comparison"].update(
+            {"maximum_selected_fraction_of_allowed": 0.5}
+        ),
+        lambda manifest: manifest["checks"]["partial_batch"]["endpoint_comparison"][
+            "zones"
+        ][0].update({"selected_species": ["bogus"]}),
+        lambda manifest: manifest["environment"]["compiler"].update(
+            {"sha256": "c" * 64}
+        ),
+        lambda manifest: manifest["builds"]["cpu"]["executables"]["xnet"].update(
+            {"size": 2}
+        ),
         lambda manifest: manifest["artifact_inventory"][0].update(
             {"path": "../outside"}
         ),
@@ -522,6 +579,10 @@ def test_failed_manifest_retains_classification_without_false_success() -> None:
     with pytest.raises(FrontierFailure, match="status is not passed"):
         validate_manifest(manifest)
 
+    manifest["failure"]["category"] = "invented"
+    with pytest.raises(FrontierFailure, match="failure classification"):
+        validate_manifest(manifest, require_pass=False)
+
 
 @pytest.mark.parametrize(
     ("message", "category"),
@@ -537,11 +598,74 @@ def test_submission_failures_are_classified(message: str, category: str) -> None
     assert classify_submission_failure(message) == category
 
 
+def test_pre_run_failure_uses_slurm_stream_and_writes_structured_manifest(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "slurm.stderr.txt").write_text(
+        "source archive SHA-256 differs before extraction\n", encoding="utf-8"
+    )
+    completed = subprocess.CompletedProcess(
+        ["sbatch"], returncode=2, stdout="123\n", stderr=""
+    )
+    diagnostics = collect_submission_diagnostics(completed, tmp_path)
+    category = classify_submission_failure(diagnostics)
+    assert category == "source"
+
+    manifest = failed_submission_manifest(
+        tmp_path,
+        source_sha=SOURCE_SHA,
+        archive_sha256=HASH,
+        category=category,
+        message="runner did not start",
+        job_id="123",
+        partition="batch",
+        qos_supplied=False,
+        reservation_supplied=False,
+        cpus_per_task=7,
+        time_limit="00:20:00",
+    )
+    validate_manifest(manifest, require_pass=False)
+    assert manifest["failure"]["category"] == "source"
+
+
 def test_manifest_schema_file_is_versioned_and_matches_runner() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(
         (FRONTIER_DIRECTORY / "manifest.schema.json").read_text(encoding="utf-8")
     )
     assert schema["properties"]["schema"]["const"] == _manifest()["schema"]
+    jsonschema.Draft202012Validator(schema).validate(_manifest())
+
+    failed = _manifest()
+    failed.update(
+        {
+            "status": "failed",
+            "failure": {
+                "category": "source",
+                "phase": "pre-run",
+                "message": "archive mismatch",
+            },
+            "environment": {},
+            "builds": {},
+            "inputs": [],
+            "checks": {},
+        }
+    )
+    jsonschema.Draft202012Validator(schema).validate(failed)
+
+    contradictory_failed = dict(failed)
+    contradictory_failed["failure"] = None
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(schema).validate(contradictory_failed)
+
+    contradictory_passed = _manifest()
+    contradictory_passed["failure"] = {
+        "category": "test",
+        "phase": "manifest",
+        "message": "contradiction",
+    }
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(schema).validate(contradictory_passed)
 
 
 def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(

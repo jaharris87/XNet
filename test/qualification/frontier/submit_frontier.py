@@ -16,6 +16,7 @@ from typing import Sequence
 
 from frontier_qualification import (
     FrontierFailure,
+    MANIFEST_SCHEMA,
     inventory_regular_files,
     validate_manifest,
 )
@@ -155,6 +156,77 @@ def classify_submission_failure(text: str) -> str:
     ):
         return "queue"
     return "submission"
+
+
+def collect_submission_diagnostics(
+    completed: subprocess.CompletedProcess[str], artifact_root: Path
+) -> str:
+    """Combine sbatch client output with the Slurm job streams it redirects."""
+
+    messages = [completed.stdout, completed.stderr]
+    for name in ("slurm.stdout.txt", "slurm.stderr.txt"):
+        path = artifact_root / name
+        if path.is_file():
+            try:
+                messages.append(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError):
+                continue
+    return "\n".join(messages)
+
+
+def failed_submission_manifest(
+    artifact_root: Path,
+    *,
+    source_sha: str,
+    archive_sha256: str,
+    category: str,
+    message: str,
+    job_id: str | None,
+    partition: str,
+    qos_supplied: bool,
+    reservation_supplied: bool,
+    cpus_per_task: int,
+    time_limit: str,
+) -> dict[str, object]:
+    """Record a structured envelope when the job exits before its runner starts."""
+
+    now = datetime.now(timezone.utc).isoformat()
+    document: dict[str, object] = {
+        "schema": MANIFEST_SCHEMA,
+        "status": "failed",
+        "failure": {
+            "category": category,
+            "phase": "pre-run",
+            "message": message,
+        },
+        "source": {
+            "sha": source_sha,
+            "worktree_clean": True,
+            "archive_sha256": archive_sha256,
+            "archive_commit_sha": source_sha,
+            "tree_sha256": None,
+            "verified_before_build": False,
+        },
+        "environment": {},
+        "slurm": {},
+        "builds": {},
+        "inputs": [],
+        "checks": {},
+        "artifact_inventory": [],
+        "started_at_utc": now,
+        "finished_at_utc": now,
+        "runtime_seconds": 0.0,
+    }
+    return finalize_submission_manifest(
+        document,
+        artifact_root,
+        job_id=job_id,
+        partition=partition,
+        qos_supplied=qos_supplied,
+        reservation_supplied=reservation_supplied,
+        cpus_per_task=cpus_per_task,
+        time_limit=time_limit,
+    )
 
 
 def finalize_submission_manifest(
@@ -307,9 +379,27 @@ def submit(arguments: argparse.Namespace) -> Path:
             )
         validate_manifest(document)
     elif completed.returncode != 0:
-        combined = f"{completed.stdout}\n{completed.stderr}"
+        combined = collect_submission_diagnostics(completed, artifact_root)
+        category = classify_submission_failure(combined)
+        document = failed_submission_manifest(
+            artifact_root,
+            source_sha=source_sha,
+            archive_sha256=archive_sha256,
+            category=category,
+            message="Slurm returned before the qualification runner wrote a manifest",
+            job_id=job_id,
+            partition=arguments.partition,
+            qos_supplied=arguments.qos is not None,
+            reservation_supplied=arguments.reservation is not None,
+            cpus_per_task=arguments.cpus_per_task,
+            time_limit=arguments.time,
+        )
+        manifest_path.write_text(
+            json.dumps(document, indent=2) + "\n", encoding="utf-8"
+        )
+        validate_manifest(document, require_pass=False)
         raise SubmissionFailure(
-            classify_submission_failure(combined),
+            category,
             "Slurm returned without a qualification manifest; inspect sbatch/slurm logs",
         )
     else:

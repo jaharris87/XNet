@@ -57,6 +57,17 @@ REQUIRED_MODULE_MARKERS = (
     "craype-accel-amd-gfx90a",
     "hipfort",
 )
+FAILURE_CATEGORIES = (
+    "source",
+    "environment",
+    "submission",
+    "queue",
+    "allocation",
+    "facility",
+    "build",
+    "test",
+    "comparison",
+)
 CPU_BUILD_VARIABLES = {
     "CMODE": "OPT",
     "PE_ENV": "CRAY",
@@ -306,7 +317,9 @@ def compare_endpoint_states(
                 observed, expected, policy.scalar_fields[policy_name]
             )
             scalar_differences[policy_name] = {
-                "absolute": difference,
+                "observed": observed,
+                "expected": expected,
+                "difference": difference,
                 "allowed": allowed,
             }
             if not passed:
@@ -339,12 +352,21 @@ def compare_endpoint_states(
                 f"zone {zone} composition Linf {linf:.3e} at {linf_species} exceeds "
                 f"{policy.complete_vector_linf_limit:.3e}"
             )
+        selected_differences: dict[str, dict[str, float]] = {}
         for species in selected:
+            observed = candidate.mass_fractions[species]
+            expected = baseline.mass_fractions[species]
             passed, difference, allowed = _difference(
-                candidate.mass_fractions[species],
-                baseline.mass_fractions[species],
+                observed,
+                expected,
                 policy.selected,
             )
+            selected_differences[species] = {
+                "observed": observed,
+                "expected": expected,
+                "difference": difference,
+                "allowed": allowed,
+            }
             ratio = difference / allowed if allowed > 0.0 else math.inf
             maximum_selected_ratio = max(maximum_selected_ratio, ratio)
             if not passed:
@@ -367,6 +389,9 @@ def compare_endpoint_states(
                 "zone": zone,
                 "scalar_differences": scalar_differences,
                 "selected_species": list(selected),
+                "selected_differences": selected_differences,
+                "observed_mass_fractions": dict(candidate.mass_fractions),
+                "reference_mass_fractions": dict(baseline.mass_fractions),
                 "composition_l1": l1,
                 "composition_linf": linf,
                 "composition_linf_species": linf_species,
@@ -1299,6 +1324,38 @@ def _manifest_number(
     return normalized
 
 
+def _manifest_close(actual: float, expected: float) -> bool:
+    return math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-300)
+
+
+def _validate_bounded_values(
+    value: object,
+    bounds: Bounds,
+    context: str,
+) -> float:
+    evidence = _manifest_mapping(
+        value,
+        {"observed", "expected", "difference", "allowed"},
+        context,
+        "comparison",
+    )
+    observed = _manifest_number(evidence["observed"], f"{context} observed")
+    expected = _manifest_number(evidence["expected"], f"{context} expected")
+    difference = _manifest_number(evidence["difference"], f"{context} difference")
+    allowed = _manifest_number(evidence["allowed"], f"{context} allowed")
+    recalculated_difference = abs(observed - expected)
+    recalculated_allowed = bounds.atol + bounds.rtol * abs(expected)
+    if (
+        not _manifest_close(difference, recalculated_difference)
+        or not _manifest_close(allowed, recalculated_allowed)
+        or difference > recalculated_allowed
+    ):
+        raise FrontierFailure("comparison", "manifest", f"{context} failed")
+    if recalculated_allowed == 0.0:
+        return 0.0
+    return difference / recalculated_allowed
+
+
 def _exact_integer_sequence(value: object, expected: Sequence[int]) -> bool:
     return (
         isinstance(value, list)
@@ -1307,10 +1364,12 @@ def _exact_integer_sequence(value: object, expected: Sequence[int]) -> bool:
     )
 
 
-def _validate_inventory(value: object, context: str, *, allow_empty: bool = False) -> set[str]:
+def _validate_inventory(
+    value: object, context: str, *, allow_empty: bool = False
+) -> dict[str, tuple[int, str]]:
     if not isinstance(value, list) or (not value and not allow_empty):
         raise FrontierFailure("test", "manifest", f"{context} is empty")
-    paths: set[str] = set()
+    artifacts: dict[str, tuple[int, str]] = {}
     for item in value:
         artifact = _manifest_mapping(
             item, {"path", "size", "sha256"}, f"{context} item"
@@ -1319,14 +1378,14 @@ def _validate_inventory(value: object, context: str, *, allow_empty: bool = Fals
         if not isinstance(path, str):
             raise FrontierFailure("test", "manifest", f"invalid {context} path")
         _safe_relative_path(path, context)
-        if path in paths:
+        if path in artifacts:
             raise FrontierFailure("test", "manifest", f"duplicate {context} path")
-        paths.add(path)
         if type(artifact["size"]) is not int or artifact["size"] < 0:
             raise FrontierFailure("test", "manifest", f"invalid {context} size")
         if not SHA256_PATTERN.fullmatch(str(artifact["sha256"])):
             raise FrontierFailure("test", "manifest", f"invalid {context} hash")
-    return paths
+        artifacts[path] = (artifact["size"], str(artifact["sha256"]))
+    return artifacts
 
 
 def _validate_endpoint_evidence(
@@ -1362,6 +1421,7 @@ def _validate_endpoint_evidence(
         )
     ):
         raise FrontierFailure("comparison", "manifest", f"{context} zones are incomplete")
+    recalculated_maximum = 0.0
     for zone in zones:
         observation = _manifest_mapping(
             zone,
@@ -1369,6 +1429,9 @@ def _validate_endpoint_evidence(
                 "zone",
                 "scalar_differences",
                 "selected_species",
+                "selected_differences",
+                "observed_mass_fractions",
+                "reference_mass_fractions",
                 "composition_l1",
                 "composition_linf",
                 "composition_linf_species",
@@ -1381,27 +1444,103 @@ def _validate_endpoint_evidence(
             f"{context} scalar differences",
         )
         for name, difference in scalar.items():
-            values = _manifest_mapping(
-                difference, {"absolute", "allowed"}, f"{context} {name}"
+            _validate_bounded_values(
+                difference, policy.scalar_fields[name], f"{context} {name}"
             )
-            absolute = _manifest_number(values["absolute"], f"{context} {name} difference")
-            allowed = _manifest_number(values["allowed"], f"{context} {name} allowed")
-            if absolute > allowed:
-                raise FrontierFailure("comparison", "manifest", f"{context} {name} failed")
+        observed_fractions = observation["observed_mass_fractions"]
+        reference_fractions = observation["reference_mass_fractions"]
+        if (
+            not isinstance(observed_fractions, dict)
+            or not isinstance(reference_fractions, dict)
+            or not reference_fractions
+            or set(observed_fractions) != set(reference_fractions)
+            or any(not isinstance(name, str) or not name for name in reference_fractions)
+        ):
+            raise FrontierFailure(
+                "comparison", "manifest", f"{context} composition inventory is invalid"
+            )
+        normalized_observed = {
+            name: _manifest_number(value, f"{context} observed {name}")
+            for name, value in observed_fractions.items()
+        }
+        normalized_reference = {
+            name: _manifest_number(value, f"{context} reference {name}")
+            for name, value in reference_fractions.items()
+        }
+        expected_selected = [
+            name
+            for name, value in normalized_reference.items()
+            if name in policy.anchors or value >= policy.material_threshold
+        ]
         selected = observation["selected_species"]
         if (
             not isinstance(selected, list)
-            or not selected
-            or any(not isinstance(name, str) or not name for name in selected)
-            or len(set(selected)) != len(selected)
+            or selected != expected_selected
         ):
             raise FrontierFailure("comparison", "manifest", f"{context} species are invalid")
+        selected_differences = _manifest_mapping(
+            observation["selected_differences"],
+            set(selected),
+            f"{context} selected differences",
+            "comparison",
+        )
+        for name in selected:
+            selected_evidence = selected_differences[name]
+            values = _manifest_mapping(
+                selected_evidence,
+                {"observed", "expected", "difference", "allowed"},
+                f"{context} selected {name}",
+                "comparison",
+            )
+            observed = _manifest_number(
+                values["observed"], f"{context} selected {name} observed"
+            )
+            expected = _manifest_number(
+                values["expected"], f"{context} selected {name} expected"
+            )
+            if (
+                not _manifest_close(observed, normalized_observed[name])
+                or not _manifest_close(expected, normalized_reference[name])
+            ):
+                raise FrontierFailure(
+                    "comparison", "manifest", f"{context} selected {name} is inconsistent"
+                )
+            recalculated_maximum = max(
+                recalculated_maximum,
+                _validate_bounded_values(
+                    selected_evidence, policy.selected, f"{context} selected {name}"
+                ),
+            )
+        vector_differences = {
+            name: abs(normalized_observed[name] - expected)
+            for name, expected in normalized_reference.items()
+        }
+        recalculated_l1 = math.fsum(vector_differences.values())
+        recalculated_linf_species = max(
+            vector_differences, key=vector_differences.__getitem__
+        )
+        recalculated_linf = vector_differences[recalculated_linf_species]
         l1 = _manifest_number(observation["composition_l1"], f"{context} L1")
         linf = _manifest_number(observation["composition_linf"], f"{context} Linf")
-        if l1 > policy.complete_vector_l1_limit or linf > policy.complete_vector_linf_limit:
+        if (
+            not _manifest_close(l1, recalculated_l1)
+            or not _manifest_close(linf, recalculated_linf)
+            or observation["composition_linf_species"] != recalculated_linf_species
+            or l1 > policy.complete_vector_l1_limit
+            or linf > policy.complete_vector_linf_limit
+        ):
             raise FrontierFailure("comparison", "manifest", f"{context} composition failed")
-        if not isinstance(observation["composition_linf_species"], str) or not observation["composition_linf_species"]:
-            raise FrontierFailure("comparison", "manifest", f"{context} Linf species is invalid")
+        for label, fractions in (
+            ("observed", normalized_observed),
+            ("reference", normalized_reference),
+        ):
+            normalization_error = abs(math.fsum(fractions.values()) - 1.0)
+            if normalization_error > policy.normalization_atol:
+                raise FrontierFailure(
+                    "comparison", "manifest", f"{context} {label} normalization failed"
+                )
+    if not _manifest_close(maximum, recalculated_maximum):
+        raise FrontierFailure("comparison", "manifest", f"{context} maximum is inconsistent")
 
 
 def _validate_ascii_evidence(
@@ -1435,6 +1574,7 @@ def _validate_ascii_evidence(
     ):
         raise FrontierFailure("comparison", "manifest", f"{context} zones are incomplete")
     expected_fields = set(policy.ascii_fields) | set(policy.reported_ascii_fields)
+    recalculated_maximum = 0.0
     for zone in zones:
         observation = _manifest_mapping(zone, {"zone", "field_differences"}, f"{context} zone")
         fields = _manifest_mapping(
@@ -1446,20 +1586,16 @@ def _validate_ascii_evidence(
                 {"comparison", "observed", "expected", "difference", "allowed"},
                 f"{context} {name}",
             )
-            observed = _manifest_number(
-                bounded["observed"], f"{context} {name} observed"
-            )
-            expected = _manifest_number(
-                bounded["expected"], f"{context} {name} expected"
-            )
-            difference = _manifest_number(bounded["difference"], f"{context} {name} difference")
-            allowed = _manifest_number(bounded["allowed"], f"{context} {name} allowed")
-            if (
-                bounded["comparison"] != "bounded"
-                or not math.isclose(difference, abs(observed - expected), rel_tol=1.0e-12, abs_tol=1.0e-300)
-                or difference > allowed
-            ):
+            if bounded["comparison"] != "bounded":
                 raise FrontierFailure("comparison", "manifest", f"{context} {name} failed")
+            recalculated_maximum = max(
+                recalculated_maximum,
+                _validate_bounded_values(
+                    {key: bounded[key] for key in ("observed", "expected", "difference", "allowed")},
+                    policy.ascii_fields[name],
+                    f"{context} {name}",
+                ),
+            )
         for name in policy.reported_ascii_fields:
             reported = _manifest_mapping(
                 fields[name],
@@ -1477,9 +1613,11 @@ def _validate_ascii_evidence(
                 reported["comparison"] != "reported_only"
                 or not math.isfinite(observed)
                 or not math.isfinite(expected)
-                or not math.isclose(difference, abs(observed - expected), rel_tol=1.0e-12, abs_tol=1.0e-300)
+                or not _manifest_close(difference, abs(observed - expected))
             ):
                 raise FrontierFailure("comparison", "manifest", f"{context} {name} is invalid")
+    if not _manifest_close(maximum, recalculated_maximum):
+        raise FrontierFailure("comparison", "manifest", f"{context} maximum is inconsistent")
 
 
 def validate_manifest(document: object, *, require_pass: bool = True) -> None:
@@ -1532,7 +1670,10 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
         failure = _manifest_mapping(
             manifest["failure"], {"category", "phase", "message"}, "failure classification"
         )
-        if not all(isinstance(failure[name], str) and failure[name] for name in failure):
+        if (
+            failure["category"] not in FAILURE_CATEGORIES
+            or not all(isinstance(failure[name], str) and failure[name] for name in failure)
+        ):
             raise FrontierFailure("test", "manifest", "failure classification is incomplete")
         return
     if manifest["failure"] is not None:
@@ -1544,6 +1685,7 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
     ):
         raise FrontierFailure("source", "manifest", "source binding was not verified")
 
+    artifact_claims: list[tuple[str, int | None, str, str]] = []
     environment = _manifest_mapping(
         manifest["environment"],
         {"modules", "compiler", "preprocessor", "rocm", "gpu", "gpu_model", "rocm_version", "hipfort_module"},
@@ -1564,6 +1706,14 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
         _safe_relative_path(summary["artifact"], f"{label} evidence")
         if not SHA256_PATTERN.fullmatch(str(summary["sha256"])):
             raise FrontierFailure("environment", "manifest", f"{label} hash is incomplete")
+        artifact_claims.append(
+            (
+                summary["artifact"],
+                None,
+                str(summary["sha256"]),
+                f"{label} evidence",
+            )
+        )
         _manifest_number(summary["runtime_seconds"], f"{label} runtime")
     if not all(isinstance(environment[name], str) and environment[name] for name in ("gpu_model", "rocm_version", "hipfort_module")):
         raise FrontierFailure("environment", "manifest", "environment summary is incomplete")
@@ -1628,6 +1778,14 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
             required_artifacts.update((executable["artifact"], executable["link_evidence"]))
             if type(executable["size"]) is not int or executable["size"] <= 0 or not SHA256_PATTERN.fullmatch(str(executable["sha256"])):
                 raise FrontierFailure("build", "manifest", f"{label} executable evidence is invalid")
+            artifact_claims.append(
+                (
+                    executable["artifact"],
+                    executable["size"],
+                    str(executable["sha256"]),
+                    f"{label} {target} executable",
+                )
+            )
             libraries = executable["linked_libraries"]
             if not isinstance(libraries, list) or not libraries or any(not isinstance(name, str) or not name for name in libraries) or len(set(libraries)) != len(libraries):
                 raise FrontierFailure("build", "manifest", f"{label} link summary is incomplete")
@@ -1662,6 +1820,10 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
     _manifest_number(linalg["runtime_seconds"], "GPU probe runtime")
     probe_paths = _validate_inventory(linalg["output_inventory"], "GPU probe inventory")
     required_artifacts.update(f"runs/gpu-linalg/{path}" for path in probe_paths)
+    artifact_claims.extend(
+        (f"runs/gpu-linalg/{path}", size, sha256, "GPU probe inventory")
+        for path, (size, sha256) in probe_paths.items()
+    )
 
     policy = load_policy(REPOSITORY_ROOT / "test" / "qualification" / "frontier" / "comparison_policy.json")
     partial = _manifest_mapping(
@@ -1693,6 +1855,14 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
     )
     required_artifacts.update(
         f"runs/partial-batch/gpu/{path}" for path in partial_gpu_paths
+    )
+    artifact_claims.extend(
+        (f"runs/partial-batch/cpu/{path}", size, sha256, "partial-batch CPU inventory")
+        for path, (size, sha256) in partial_cpu_paths.items()
+    )
+    artifact_claims.extend(
+        (f"runs/partial-batch/gpu/{path}", size, sha256, "partial-batch GPU inventory")
+        for path, (size, sha256) in partial_gpu_paths.items()
     )
 
     heat_zones = list(range(1, 7))
@@ -1737,15 +1907,32 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
     required_artifacts.update(
         f"runs/heat-sn160/gpu/{path}" for path in heat_gpu_paths
     )
+    artifact_claims.extend(
+        (f"runs/heat-sn160/cpu/{path}", size, sha256, "heat_sn160 CPU inventory")
+        for path, (size, sha256) in heat_cpu_paths.items()
+    )
+    artifact_claims.extend(
+        (f"runs/heat-sn160/gpu/{path}", size, sha256, "heat_sn160 GPU inventory")
+        for path, (size, sha256) in heat_gpu_paths.items()
+    )
 
     if len(manifest["inputs"]) != 38:
         raise FrontierFailure("source", "manifest", "input inventory is incomplete")
     _validate_inventory(manifest["inputs"], "input inventory")
-    artifact_paths = _validate_inventory(manifest["artifact_inventory"], "artifact inventory")
+    artifacts = _validate_inventory(manifest["artifact_inventory"], "artifact inventory")
     for label in ("compiler", "preprocessor", "rocm", "gpu"):
         required_artifacts.add(environment[label]["artifact"])
-    if not required_artifacts.issubset(artifact_paths):
+    if not required_artifacts.issubset(artifacts):
         raise FrontierFailure("test", "manifest", "required artifacts are not inventoried")
+    for path, claimed_size, claimed_sha256, context in artifact_claims:
+        actual_size, actual_sha256 = artifacts[path]
+        if (
+            (claimed_size is not None and claimed_size != actual_size)
+            or claimed_sha256 != actual_sha256
+        ):
+            raise FrontierFailure(
+                "test", "manifest", f"{context} disagrees with artifact inventory"
+            )
 
 
 def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -1766,7 +1953,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     failure.add_argument("--source-sha", required=True)
     failure.add_argument("--archive-sha256", required=True)
     failure.add_argument("--time-limit", required=True)
-    failure.add_argument("--category", required=True)
+    failure.add_argument("--category", required=True, choices=FAILURE_CATEGORIES)
     failure.add_argument("--phase", required=True)
     failure.add_argument("--message", required=True)
     return parser.parse_args(argv)

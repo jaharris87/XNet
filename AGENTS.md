@@ -29,6 +29,7 @@ inputs that exercise it. Read additional guidance when the task calls for it:
 | --- | --- |
 | `docs/development/build-and-test.md` | Changing build logic, configurations, tests, numerical results, or performance |
 | `docs/development/maintainer-workflow.md` | Creating issues, branches, PRs, reviews, or coordinated work |
+| `docs/development/review-playbook.md` | Selecting, briefing, recording, or responding to independent review |
 | `docs/development/scientific-validation.md` | Changing physics, rates, solvers, convergence, tolerances, or numerical behavior |
 | `docs/development/architecture-overview.md` | Work spans modules or requires architectural reasoning |
 | `doc/XNet_Formatting_Guidelines.md` | Editing production Fortran |
@@ -142,9 +143,8 @@ Repository work intended for merge follows this compact flow:
 6. Open a draft PR to `development` with exact verification results and
    remaining checks.
 7. Only after the draft PR exists and the review candidate is committed and
-   pushed, obtain independent, fresh-context review for the active review
-   roles. Identify the PR and exact candidate commit in the reviewer brief or
-   review record.
+   pushed, use `docs/development/review-playbook.md` to obtain independent,
+   fresh-context review for the risk-selected roles.
 8. Give every consequential finding a documented disposition. Push
    substantive review fixes and identify the new commit in any required
    re-review.

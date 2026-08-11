@@ -85,14 +85,21 @@ For defect fixes or new behavioral checks:
 Identify assumptions, uncertain areas, consequential choices, or parts of the
 change that deserve particular attention.
 
+### Declared review risks
+
+- Applicable playbook risk classes:
+- Planned review roles and any default-role departure:
+- Human-only decisions exposed:
+
 ## Independent review record
 
 - Reviewed PR:
 - Candidate commit:
-- Review roles:
-- Finding links:
-- Disposition links:
-- Re-review commit and result, or why not required:
+- Playbook revision:
+- Invocation records (role, supplied context boundary, reviewer/session class, read-only status, independent checks, result, and limitations):
+- Stable finding IDs and original-finding links:
+- Disposition and verification links:
+- Prior and replacement SHAs for re-review, verified finding IDs, repair-risk result, or why re-review was not required:
 
 ## Checks not run
 

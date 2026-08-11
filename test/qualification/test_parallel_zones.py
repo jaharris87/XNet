@@ -52,10 +52,12 @@ def _write_ascii_state(
     filename_zone: int,
     *,
     neutrino_loss_rate: str = "0.0",
+    time_value: str | None = None,
 ) -> None:
     values = " ".join(f"{value:.8E}" for value in state.mass_fractions.values())
     row = (
-        f"{state.counters.ts} {state.time:.8E} {state.temperature_gk:.3E} "
+        f"{state.counters.ts} {time_value or f'{state.time:.8E}'} "
+        f"{state.temperature_gk:.3E} "
         f"{state.density:.3E} 0.0 {neutrino_loss_rate} 1.0E-6 {values} 1 1\n"
     )
     (directory / f"ev_parallel_zones_{filename_zone:02d}").write_text(
@@ -106,6 +108,20 @@ def test_ascii_parser_accepts_fortran_omitted_exponent_letter(tmp_path: Path) ->
     )
     endpoint = validate_ascii_association(tmp_path, (state,))[0]
     assert endpoint.neutrino_loss_rate == float("6.95e-310")
+
+
+def test_ascii_association_accepts_difference_from_documented_time_formats(
+    tmp_path: Path,
+) -> None:
+    state = replace(_state(1), time=1.2345678)
+    _write_ascii_state(
+        tmp_path,
+        state,
+        filename_zone=1,
+        time_value="1.23456784E+00",
+    )
+    endpoint = validate_ascii_association(tmp_path, (state,))[0]
+    assert endpoint.zone == 1
 
 
 def test_expected_failure_requires_nonzero_status(tmp_path: Path) -> None:

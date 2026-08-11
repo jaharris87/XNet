@@ -438,18 +438,23 @@ def _parse_fortran_float(token: str) -> float:
 
 
 def validate_ascii_association(
-    work_directory: Path, states: Sequence[FinalState]
+    work_directory: Path,
+    states: Sequence[FinalState],
+    *,
+    filename_root: str = "ev_parallel_zones_",
+    output_species: Sequence[str] = ALPHA_SPECIES,
+    zone_width: int = 2,
 ) -> tuple[AsciiEndpoint, ...]:
     """Match each filename's final ASCII row to that global zone's diagnostic state."""
 
     endpoints: list[AsciiEndpoint] = []
     for state in states:
-        path = work_directory / f"ev_parallel_zones_{state.zone:02d}"
+        path = work_directory / f"{filename_root}{state.zone:0{zone_width}d}"
         lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
         if len(lines) < 2:
             raise QualificationFailure(f"ASCII history has no final row: {path}")
         fields = lines[-1].split()
-        expected_fields = 7 + len(ALPHA_SPECIES) + 2
+        expected_fields = 7 + len(output_species) + 2
         if len(fields) != expected_fields:
             raise QualificationFailure(f"malformed final ASCII row in {path}: {lines[-1]}")
         try:
@@ -462,7 +467,7 @@ def validate_ascii_association(
             timestep = _parse_fortran_float(fields[6])
             mass_fractions = tuple(
                 _parse_fortran_float(token)
-                for token in fields[7 : 7 + len(ALPHA_SPECIES)]
+                for token in fields[7 : 7 + len(output_species)]
             )
         except ValueError as error:
             raise QualificationFailure(f"non-numeric final ASCII row in {path}") from error
@@ -481,15 +486,18 @@ def validate_ascii_association(
             raise QualificationFailure(f"non-finite final ASCII row in {path}")
         # The diagnostic End step is the batch-level maximum, while the ASCII
         # history step is the per-zone time-step counter.
-        if step != state.counters.ts or not _close(time, state.time, 5.1e-9):
+        if step != state.counters.ts or not _close(time, state.time, 5.1e-8):
             raise QualificationFailure(f"time/step association mismatch for zone {state.zone}")
         if not _close(temperature, state.temperature_gk, 5.1e-4) or not _close(
             density, state.density, 5.1e-4
         ):
             raise QualificationFailure(f"thermodynamic association mismatch for zone {state.zone}")
-        for species, actual, expected in zip(
-            ALPHA_SPECIES, mass_fractions, state.mass_fractions.values(), strict=True
-        ):
+        for species, actual in zip(output_species, mass_fractions, strict=True):
+            if species not in state.mass_fractions:
+                raise QualificationFailure(
+                    f"unknown ASCII species {species} for zone {state.zone}"
+                )
+            expected = state.mass_fractions[species]
             if not _close(actual, expected, 5.1e-3):
                 raise QualificationFailure(
                     f"composition association mismatch for zone {state.zone} species {species}"

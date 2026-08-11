@@ -20,7 +20,7 @@
     "runtime_seconds"
   ],
   "properties": {
-    "schema": {"const": "xnet-frontier-qualification-v1"},
+    "schema": {"const": "xnet-frontier-qualification-v2"},
     "status": {"enum": ["passed", "failed"]},
     "failure": {
       "oneOf": [
@@ -52,14 +52,54 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sha", "worktree_clean", "archive_sha256"],
+      "required": [
+        "sha",
+        "worktree_clean",
+        "archive_sha256",
+        "archive_commit_sha",
+        "tree_sha256",
+        "verified_before_build"
+      ],
       "properties": {
         "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "worktree_clean": {"const": true},
-        "archive_sha256": {"$ref": "#/$defs/sha256"}
+        "archive_sha256": {"$ref": "#/$defs/sha256"},
+        "archive_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "verified_before_build": {"type": "boolean"}
       }
     },
-    "environment": {"type": "object"},
+    "environment": {
+      "oneOf": [
+        {"type": "object", "maxProperties": 0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "modules",
+            "compiler",
+            "preprocessor",
+            "rocm",
+            "gpu",
+            "gpu_model",
+            "rocm_version",
+            "hipfort_module"
+          ],
+          "properties": {
+            "modules": {"type": "array", "items": {"type": "string"}},
+            "compiler": {"$ref": "#/$defs/commandEvidence"},
+            "preprocessor": {"$ref": "#/$defs/commandEvidence"},
+            "rocm": {"$ref": "#/$defs/commandEvidence"},
+            "gpu": {"$ref": "#/$defs/commandEvidence"},
+            "gpu_model": {"type": "string", "minLength": 1},
+            "rocm_version": {"type": "string", "minLength": 1},
+            "hipfort_module": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
     "slurm": {
       "type": "object",
       "additionalProperties": false,
@@ -91,9 +131,36 @@
         }
       }
     },
-    "builds": {"type": "object"},
+    "builds": {
+      "oneOf": [
+        {"type": "object", "maxProperties": 0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "gpu"],
+          "properties": {
+            "cpu": {"$ref": "#/$defs/buildEvidence"},
+            "gpu": {"$ref": "#/$defs/buildEvidence"}
+          }
+        }
+      ]
+    },
     "inputs": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
-    "checks": {"type": "object"},
+    "checks": {
+      "oneOf": [
+        {"type": "object", "maxProperties": 0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["gpu_linalg", "partial_batch", "heat_sn160"],
+          "properties": {
+            "gpu_linalg": {"type": "object"},
+            "partial_batch": {"type": "object"},
+            "heat_sn160": {"type": "object"}
+          }
+        }
+      ]
+    },
     "artifact_inventory": {
       "type": "array",
       "items": {"$ref": "#/$defs/artifact"}
@@ -112,6 +179,39 @@
         "path": {"type": "string", "minLength": 1},
         "size": {"type": "integer", "minimum": 0},
         "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "commandEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "sha256", "runtime_seconds", "summary"],
+      "properties": {
+        "artifact": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "runtime_seconds": {"type": "number", "minimum": 0},
+        "summary": {"type": "string", "minLength": 1}
+      }
+    },
+    "buildEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "variables",
+        "resolved_variables",
+        "resolved_variable_values",
+        "timeout_seconds",
+        "runtime_seconds",
+        "executables"
+      ],
+      "properties": {
+        "status": {"const": "passed"},
+        "variables": {"type": "object"},
+        "resolved_variables": {"type": "string", "minLength": 1},
+        "resolved_variable_values": {"type": "object"},
+        "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "runtime_seconds": {"type": "number", "minimum": 0},
+        "executables": {"type": "object"}
       }
     }
   }

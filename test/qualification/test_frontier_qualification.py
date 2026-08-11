@@ -17,15 +17,18 @@ sys.path.insert(0, str(FRONTIER_DIRECTORY))
 from frontier_qualification import (  # noqa: E402
     CPU_BUILD_VARIABLES,
     GPU_BUILD_VARIABLES,
+    MANIFEST_SCHEMA,
     FrontierFailure,
     compare_ascii_endpoints,
     compare_endpoint_states,
     inventory_regular_files,
     load_policy,
     parse_linalg_probe,
+    verify_source_binding,
     validate_manifest,
 )
 from submit_frontier import (  # noqa: E402
+    _stage_source,
     classify_submission_failure,
     finalize_submission_manifest,
 )
@@ -54,22 +57,141 @@ def _state(zone: int) -> FinalState:
     )
 
 
-def _manifest() -> dict[str, object]:
-    artifact = {"path": "evidence.txt", "size": 1, "sha256": HASH}
-    executable = {
-        "artifact": "bin/xnet",
+def _artifact(path: str) -> dict[str, object]:
+    return {"path": path, "size": 1, "sha256": HASH}
+
+
+def _endpoint_evidence(zones: range) -> dict[str, object]:
+    return {
+        "status": "passed",
+        "policy_status": "accepted after review of Frontier job 5230609",
+        "maximum_selected_fraction_of_allowed": 0.0,
+        "zones": [
+            {
+                "zone": zone,
+                "scalar_differences": {
+                    name: {"absolute": 0.0, "allowed": 1.0}
+                    for name in (
+                        "achieved_time",
+                        "temperature_gk",
+                        "density",
+                        "electron_fraction",
+                    )
+                },
+                "selected_species": ["si28"],
+                "composition_l1": 0.0,
+                "composition_linf": 0.0,
+                "composition_linf_species": "si28",
+            }
+            for zone in zones
+        ],
+    }
+
+
+def _ascii_evidence(zones: range, *, nonzero_neutrino: bool = False) -> dict[str, object]:
+    return {
+        "status": "passed",
+        "maximum_fraction_of_allowed": 0.0,
+        "reported_only_fields": ["energy_generation_rate"],
+        "zones": [
+            {
+                "zone": zone,
+                "field_differences": {
+                    "neutrino_loss_rate": {
+                        "comparison": "bounded",
+                        "observed": 1.0 if nonzero_neutrino else 0.0,
+                        "expected": 1.0 if nonzero_neutrino else 0.0,
+                        "difference": 0.0,
+                        "allowed": 1.0,
+                    },
+                    "timestep": {
+                        "comparison": "bounded",
+                        "observed": 1.0,
+                        "expected": 1.0,
+                        "difference": 0.0,
+                        "allowed": 1.0,
+                    },
+                    "energy_generation_rate": {
+                        "comparison": "reported_only",
+                        "observed": 1.0,
+                        "expected": 1.0,
+                        "difference": 0.0,
+                    },
+                },
+            }
+            for zone in zones
+        ],
+    }
+
+
+def _executable(artifact: str, link_evidence: str) -> dict[str, object]:
+    return {
+        "artifact": artifact,
         "size": 1,
         "sha256": HASH,
-        "link_evidence": "build/link.txt",
+        "link_evidence": link_evidence,
+        "linked_libraries": ["libc.so.6"],
+    }
+
+
+def _build(label: str, variables: dict[str, str], targets: tuple[str, ...]) -> dict[str, object]:
+    resolved = {**variables, "FC": "ftn", "LDR": "ftn", "FFLAGS": "-O2", "LDFLAGS": ""}
+    if label == "gpu":
+        resolved["FC"] = 'env XNET_CRAY_FTN="ftn" <source>/source/crayftn_cpp.sh'
+    return {
+        "status": "passed",
+        "variables": variables,
+        "resolved_variables": f"build/{label}/resolved-variables.stdout.txt",
+        "resolved_variable_values": resolved,
+        "timeout_seconds": 1800.0,
+        "runtime_seconds": 1.0,
+        "executables": {
+            target: _executable(
+                f"bin/{target}-{label}", f"build/{label}/{target}-link.stdout.txt"
+            )
+            for target in targets
+        },
+    }
+
+
+def _manifest() -> dict[str, object]:
+    required_artifacts = [
+        "source-verification.json",
+        "environment/compiler.stdout.txt",
+        "environment/preprocessor.stdout.txt",
+        "environment/rocm.stdout.txt",
+        "environment/gpu.stdout.txt",
+        "build/cpu/resolved-variables.stdout.txt",
+        "build/gpu/resolved-variables.stdout.txt",
+        "bin/xnet-cpu",
+        "build/cpu/xnet-link.stdout.txt",
+        "bin/xnet-gpu",
+        "build/gpu/xnet-link.stdout.txt",
+        "bin/frontier_gpu_linalg_probe-gpu",
+        "build/gpu/frontier_gpu_linalg_probe-link.stdout.txt",
+        "runs/gpu-linalg/probe.stdout.txt",
+        "runs/partial-batch/cpu/cpu/output",
+        "runs/partial-batch/gpu/gpu/output",
+        "runs/heat-sn160/cpu/cpu/heat-output",
+        "runs/heat-sn160/gpu/gpu/heat-output",
+    ]
+    command_evidence = {
+        "artifact": "",
+        "sha256": HASH,
+        "runtime_seconds": 1.0,
+        "summary": "version 1",
     }
     return {
-        "schema": "xnet-frontier-qualification-v1",
+        "schema": MANIFEST_SCHEMA,
         "status": "passed",
         "failure": None,
         "source": {
             "sha": SOURCE_SHA,
             "worktree_clean": True,
             "archive_sha256": HASH,
+            "archive_commit_sha": SOURCE_SHA,
+            "tree_sha256": HASH,
+            "verified_before_build": True,
         },
         "environment": {
             "modules": [
@@ -78,7 +200,13 @@ def _manifest() -> dict[str, object]:
                 "craype-accel-amd-gfx90a",
                 "hipfort/1",
             ],
+            "compiler": {**command_evidence, "artifact": "environment/compiler.stdout.txt"},
+            "preprocessor": {**command_evidence, "artifact": "environment/preprocessor.stdout.txt"},
+            "rocm": {**command_evidence, "artifact": "environment/rocm.stdout.txt"},
+            "gpu": {**command_evidence, "artifact": "environment/gpu.stdout.txt"},
             "gpu_model": "AMD Instinct MI250X",
+            "rocm_version": "rocm-1",
+            "hipfort_module": "hipfort/1",
         },
         "slurm": {
             "job_id": "123",
@@ -93,28 +221,57 @@ def _manifest() -> dict[str, object]:
             "time_limit": "00:20:00",
         },
         "builds": {
-            "cpu": {
-                "status": "passed",
-                "variables": CPU_BUILD_VARIABLES,
-                "executables": {"xnet": executable},
-            },
-            "gpu": {
-                "status": "passed",
-                "variables": GPU_BUILD_VARIABLES,
-                "executables": {"xnet": executable},
-            },
+            "cpu": _build("cpu", CPU_BUILD_VARIABLES, ("xnet",)),
+            "gpu": _build(
+                "gpu", GPU_BUILD_VARIABLES, ("xnet", "frontier_gpu_linalg_probe")
+            ),
         },
-        "inputs": [artifact],
+        "inputs": [_artifact(f"inputs/input-{index:02d}") for index in range(38)],
         "checks": {
             "gpu_linalg": {
                 "status": "passed",
+                "device_count": 1,
                 "offloaded": True,
                 "data_present": True,
+                "residual_limit": 1.0e-12,
+                "batches": [
+                    {"batch": batch, "info": 0, "relative_residual": 0.0}
+                    for batch in (1, 2)
+                ],
+                "timeout_seconds": 60.0,
+                "runtime_seconds": 1.0,
+                "output_inventory": [_artifact("probe.stdout.txt")],
             },
-            "partial_batch": {"status": "passed", "zones": list(range(1, 11))},
-            "heat_sn160": {"status": "passed", "zones": list(range(1, 7))},
+            "partial_batch": {
+                "status": "passed",
+                "fixture": "ten distinguishable zones, nzbatchmx=4",
+                "zones": list(range(1, 11)),
+                "inactive_final_batch_lanes": 2,
+                "timeout_seconds": 180.0,
+                "cpu_runtime_seconds": 1.0,
+                "gpu_runtime_seconds": 1.0,
+                "endpoint_comparison": _endpoint_evidence(range(1, 11)),
+                "ascii_comparison": _ascii_evidence(range(1, 11)),
+                "cpu_output_inventory": [_artifact("cpu/output")],
+                "gpu_output_inventory": [_artifact("gpu/output")],
+            },
+            "heat_sn160": {
+                "status": "passed",
+                "case": "heat_sn160",
+                "zones": list(range(1, 7)),
+                "timeout_seconds": 600.0,
+                "cpu_runtime_seconds": 1.0,
+                "gpu_runtime_seconds": 1.0,
+                "endpoint_comparison": _endpoint_evidence(range(1, 7)),
+                "ascii_comparison": _ascii_evidence(
+                    range(1, 7), nonzero_neutrino=True
+                ),
+                "nonzero_neutrino_loss_zones": list(range(1, 7)),
+                "cpu_output_inventory": [_artifact("cpu/heat-output")],
+                "gpu_output_inventory": [_artifact("gpu/heat-output")],
+            },
         },
-        "artifact_inventory": [artifact],
+        "artifact_inventory": [_artifact(path) for path in required_artifacts],
         "started_at_utc": "2026-08-10T00:00:00+00:00",
         "finished_at_utc": "2026-08-10T00:01:00+00:00",
         "runtime_seconds": 60.0,
@@ -191,7 +348,7 @@ def test_manifest_validator_requires_complete_success_evidence() -> None:
     manifest = _manifest()
     validate_manifest(manifest)
     manifest["checks"]["partial_batch"]["zones"] = list(range(1, 10))
-    with pytest.raises(FrontierFailure, match="partial-batch zones"):
+    with pytest.raises(FrontierFailure, match="partial-batch evidence"):
         validate_manifest(manifest)
 
     manifest = _manifest()
@@ -203,6 +360,107 @@ def test_manifest_validator_requires_complete_success_evidence() -> None:
     manifest["slurm"]["time_limit"] = "unknown"
     with pytest.raises(FrontierFailure, match="Slurm evidence"):
         validate_manifest(manifest)
+
+
+def test_manifest_validator_rejects_controlled_false_success_mutants() -> None:
+    mutations = (
+        lambda manifest: manifest["builds"]["cpu"].update({"executables": {}}),
+        lambda manifest: manifest["checks"]["gpu_linalg"].update({"device_count": 0}),
+        lambda manifest: manifest["checks"]["gpu_linalg"]["batches"][0].update(
+            {"info": 2}
+        ),
+        lambda manifest: manifest["checks"]["gpu_linalg"]["batches"][1].update(
+            {"relative_residual": 1.0}
+        ),
+        lambda manifest: manifest["checks"]["partial_batch"].update(
+            {"status": "failed"}
+        ),
+        lambda manifest: manifest["checks"]["partial_batch"].update(
+            {"inactive_final_batch_lanes": 1}
+        ),
+        lambda manifest: manifest["checks"]["partial_batch"][
+            "endpoint_comparison"
+        ].update({"zones": []}),
+        lambda manifest: manifest["checks"]["heat_sn160"].update(
+            {"nonzero_neutrino_loss_zones": []}
+        ),
+        lambda manifest: manifest["checks"]["heat_sn160"].update(
+            {"status": "failed"}
+        ),
+        lambda manifest: manifest["artifact_inventory"][0].update(
+            {"path": "../outside"}
+        ),
+        lambda manifest: manifest["artifact_inventory"][0].update({"size": -1}),
+        lambda manifest: manifest["artifact_inventory"].append(
+            dict(manifest["artifact_inventory"][0])
+        ),
+        lambda manifest: manifest["artifact_inventory"].pop(0),
+    )
+    for mutate in mutations:
+        manifest = _manifest()
+        mutate(manifest)
+        with pytest.raises(FrontierFailure):
+            validate_manifest(manifest)
+
+
+def test_staged_archive_is_verified_against_commit_and_extracted_tree(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    (repository / "source.txt").write_text("candidate\n", encoding="utf-8")
+    (repository / "nested").mkdir()
+    (repository / "nested" / "input.txt").write_text("input\n", encoding="utf-8")
+    (repository / "input-link").symlink_to("nested/input.txt")
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Qualification Test",
+            "-c",
+            "user.email=qualification@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "candidate",
+        ],
+        cwd=repository,
+        check=True,
+    )
+    source_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    archive_sha256 = _stage_source(repository, artifacts)
+    assert not (artifacts / "source").exists()
+    extracted = artifacts / "source"
+    extracted.mkdir()
+    subprocess.run(
+        ["tar", "-xf", str(artifacts / "source.tar"), "-C", str(extracted)],
+        check=True,
+    )
+
+    evidence = verify_source_binding(
+        extracted, artifacts, source_sha, archive_sha256
+    )
+    assert evidence["verified_before_build"] is True
+    assert evidence["archive_commit_sha"] == source_sha
+
+    with pytest.raises(FrontierFailure, match="archive SHA-256 differs"):
+        verify_source_binding(extracted, artifacts, source_sha, "c" * 64)
+    with pytest.raises(FrontierFailure, match="archive commit differs"):
+        verify_source_binding(extracted, artifacts, "c" * 40, archive_sha256)
+
+    (extracted / "source.txt").write_text("mutated while queued\n", encoding="utf-8")
+    with pytest.raises(FrontierFailure, match="extracted source tree differs"):
+        verify_source_binding(extracted, artifacts, source_sha, archive_sha256)
 
 
 def test_submission_finalizes_redacted_resources_and_complete_inventory(
@@ -269,6 +527,7 @@ def test_failed_manifest_retains_classification_without_false_success() -> None:
     ("message", "category"),
     (
         ("Invalid account or account/partition combination", "allocation"),
+        ("source archive SHA-256 differs before extraction", "source"),
         ("Unable to contact slurm controller", "facility"),
         ("JOB CANCELLED AT DEADLINE", "queue"),
         ("unrecognized option", "submission"),
@@ -365,6 +624,33 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     assert "nowait" not in preprocessed
     assert "barrier" not in preprocessed
     assert "\n!$omp\n" not in preprocessed
+
+
+def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override() -> None:
+    repository = FRONTIER_DIRECTORY.parents[2]
+    completed = subprocess.run(
+        [
+            "make",
+            "-C",
+            str(repository / "source"),
+            "--no-print-directory",
+            "MACHINE=frontier",
+            "PE_ENV=CRAY",
+            "GPU_MODE=ON",
+            "MPI_MODE=ON",
+            "print-FC",
+            "print-XNET_CRAY_FTN",
+            "print-LDR",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "FC = env XNET_CRAY_FTN=ftn" in completed.stdout
+    assert "crayftn_cpp.sh" in completed.stdout
+    assert "XNET_CRAY_FTN = ftn" in completed.stdout
+    assert "LDR = ftn" in completed.stdout
 
 
 def test_accelerator_routine_directives_follow_ordered_specification_statements() -> None:
@@ -575,6 +861,7 @@ def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     assert completed.returncode == 0, completed.stderr
     declarations = completed.stdout.split("contains", 1)[0]
     assert "!$omp declare target link(itmax, jtmax, d, t)" in declarations
+    assert "!$omp declare target link(ttol, dtol)" in declarations
 
     omp_eos_type = subprocess.run(
         [
@@ -602,6 +889,7 @@ def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     initialization = initialization.split("end subroutine actual_eos_init", 1)[0]
     assert "!$omp target enter data" in initialization
     assert "map(to:itmax, jtmax, d, t)" in initialization
+    assert "map(to:ttol, dtol)" in initialization
     assert "!$omp target update" not in initialization
     assert "map(alloc:" not in initialization
     assert "always" not in initialization
@@ -610,6 +898,7 @@ def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     finalization = finalization.split("end subroutine actual_eos_finalize", 1)[0]
     assert "!$omp target exit data" in finalization
     assert "map(release:itmax, jtmax, d, t)" in finalization
+    assert "map(release:ttol, dtol)" in finalization
 
     openacc = subprocess.run(
         [
@@ -629,6 +918,7 @@ def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     assert openacc.returncode == 0, openacc.stderr
     declarations = openacc.stdout.split("contains", 1)[0]
     assert "!$acc declare create(itmax, jtmax, d, t)" in declarations
+    assert "!$acc declare create(ttol, dtol)" in declarations
 
     openacc_eos_type = subprocess.run(
         [
@@ -655,6 +945,7 @@ def test_helmholtz_allocatable_lifetime_matches_accelerator_model() -> None:
     initialization = initialization.split("end subroutine actual_eos_init", 1)[0]
     assert "!$acc update" in initialization
     assert "!$acc device(itmax, jtmax, d, t)" in initialization
+    assert "!$acc device(ttol, dtol)" in initialization
     assert "!$acc enter data" not in initialization
 
     finalization = openacc.stdout.split("subroutine actual_eos_finalize", 1)[1]

@@ -102,7 +102,7 @@ module actual_eos_module
 
     !XDIR XDECLARE_ALLOC(tlo, thi, dlo, dhi)
     !XDIR XDECLARE_ALLOC(tstp, tstpi, dstp, dstpi)
-    !XDIR XDECLARE_VAR(ttol, dtol)
+    !XDIR XDECLARE_ALLOC(ttol, dtol)
     !XDIR XDECLARE_ALLOC(itmax, jtmax, d, t)
     !XDIR XDECLARE_ALLOC(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
     !XDIR XDECLARE_ALLOC(dpdf, dpdfd, dpdft, dpdfdt)
@@ -1705,6 +1705,7 @@ contains
         !XDIR XCOPYIN(mintemp, maxtemp, mindens, maxdens) &
         !XDIR XCOPYIN(tlo, thi, dlo, dhi) &
         !XDIR XCOPYIN(tstp, tstpi, dstp, dstpi) &
+        !XDIR XCOPYIN(ttol, dtol) &
         !XDIR XCOPYIN(itmax, jtmax, d, t) &
         !XDIR XCOPYIN(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
         !XDIR XCOPYIN(dpdf, dpdfd, dpdft, dpdfdt) &
@@ -1717,6 +1718,7 @@ contains
         !XDIR XDEVICE(mintemp, maxtemp, mindens, maxdens) &
         !XDIR XDEVICE(tlo, thi, dlo, dhi) &
         !XDIR XDEVICE(tstp, tstpi, dstp, dstpi) &
+        !XDIR XDEVICE(ttol, dtol) &
         !XDIR XDEVICE(itmax, jtmax, d, t) &
         !XDIR XDEVICE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
         !XDIR XDEVICE(dpdf, dpdfd, dpdft, dpdfdt) &
@@ -1884,6 +1886,7 @@ contains
       !XDIR XDELETE(mintemp, maxtemp, mindens, maxdens) &
       !XDIR XDELETE(tlo, thi, dlo, dhi) &
       !XDIR XDELETE(tstp, tstpi, dstp, dstpi) &
+      !XDIR XDELETE(ttol, dtol) &
       !XDIR XDELETE(itmax, jtmax, d, t) &
       !XDIR XDELETE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
       !XDIR XDELETE(dpdf, dpdfd, dpdft, dpdfdt) &

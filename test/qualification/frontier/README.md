@@ -23,16 +23,20 @@ The package exercises three independent requirements:
   no output for inactive lanes 11-12.
 - `heat_sn160` runs with both executables to reach the larger network,
   self-heating, screening, default Starkiller Helmholtz EOS, dense Jacobian,
-  integrator, runtime preprocessing, and accelerator data paths.
+  integrator, runtime preprocessing, and accelerator data paths. Its final
+  ASCII histories must also exercise and compare at least one nonzero
+  neutrino-loss diagnostic.
 
 Both XNet comparisons normalize diagnostic endpoints by global zone and use
 the CPU result from the same source archive as the reference. The tracked
 `comparison_policy.json` supplies bounded scalar, selected material-species,
 complete-vector, normalization, neutrino-loss, and timestep limits. The final
 ASCII energy-generation rate is required to be finite and is retained with
-its CPU/GPU difference, but it is report-only: it is a last-step derivative
-of the already-compared composition and can be ill-conditioned when the true
-rate is near zero. The policy never creates or updates a canonical GPU result.
+its CPU/GPU difference, but it is report-only because its difference of two
+accepted-step energies can be ill-conditioned when the true rate is near zero.
+This package does not qualify the correctness of that final diagnostic; the
+claimed CPU/GPU support is limited to the bounded endpoint and ASCII fields.
+The policy never creates or updates a canonical GPU result.
 Its `status` must be updated with the retained measured Frontier evidence and
 review disposition before issue #46 is complete.
 
@@ -42,7 +46,11 @@ review disposition before issue #46 is complete.
   archive`, stages it outside the checkout, submits one bounded Slurm job, and
   waits for the returned report. After Slurm closes the job logs, it finalizes
   the redacted resource evidence and complete artifact inventory.
-- `frontier_job.sh` starts one GPU-bound Slurm step.
+- `frontier_job.sh` verifies the staged archive hash and embedded Git commit,
+  extracts it only after the queued job starts, and then starts one GPU-bound
+  Slurm step. Before building, the runner independently verifies that every
+  extracted file, symlink, executable bit, and content hash matches the
+  archive.
 - `frontier_qualification.py` captures the environment, builds CPU and GPU
   configurations from the archive, runs the three checks, compares results,
   inventories every regular artifact, and writes
@@ -88,9 +96,10 @@ uses `sbatch --wait`; queue wait is not part of the runtime limit. The artifact
 root must be absent or empty and outside the repository.
 
 The source worktree must be clean because `git archive HEAD` is the executable
-source of record. The archive SHA-256 binds every build and test to that
-commit. CPU and GPU builds are clean and sequential because `source/` uses
-shared object and module names.
+source of record. The archive SHA-256, embedded archive commit, and verified
+extracted-tree hash bind every build and test to that commit. Extraction occurs
+inside the allocated job, after queue wait. CPU and GPU builds are clean and
+sequential because `source/` uses shared object and module names.
 
 The explicit build selections are:
 
@@ -115,9 +124,13 @@ Cray's native Fortran preprocessor requires a fixed argument count for
 function-like macros, while XNet's shared accelerator-directive layer uses
 variadic macros. For Cray GPU builds, `source/crayftn_cpp.sh` therefore runs
 the system `cpp -P -C -nostdinc` first and passes the resulting Fortran
-source to `ftn`. Comment preservation retains Fortran `//` concatenation;
-disabling standard include directories avoids injecting C system-header text.
-The qualification records both compiler and preprocessor versions.
+source to the selected Cray compiler wrapper. The preprocessing wrapper is
+selected after any MPI compiler override so an MPI-enabled Cray GPU build does
+not silently return to native preprocessing; issue #46 still qualifies only
+the explicit MPI-off configuration above. Comment preservation retains
+Fortran `//` concatenation; disabling standard include directories avoids
+injecting C system-header text. The qualification records both compiler and
+preprocessor versions.
 
 ## Evidence and result review
 
@@ -130,12 +143,14 @@ python3 test/qualification/frontier/frontier_qualification.py validate \
 
 The manifest records:
 
-- full source SHA, clean-worktree assertion, and source-archive hash;
-- exact loaded modules, compiler evidence, ROCm and hipfort versions, GPU model,
-  and hashes of the raw environment reports;
+- full source SHA, clean-worktree assertion, source-archive and extracted-tree
+  hashes, embedded archive commit, and pre-build verification status;
+- exact loaded modules, compiler and preprocessor summaries, ROCm and hipfort
+  versions, GPU model, and hashes of the raw environment reports;
 - Slurm job ID and account-neutral resource parameters;
-- every build variable, build status/runtime, executable size/hash, and dynamic
-  link evidence;
+- every requested and resolved build variable, path-neutral compiler/flag
+  summary, build status/runtime, executable size/hash, and dynamic-library
+  link summary;
 - hashes of every control, trajectory, abundance, network, and EOS input;
 - direct status, timeout behavior, observed residual, zone list, numerical
   differences, policy fractions, and runtime output inventories; and

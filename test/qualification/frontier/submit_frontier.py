@@ -100,7 +100,7 @@ def _preflight(source_root: Path) -> str:
     return revision.stdout.strip()
 
 
-def _stage_source(source_root: Path, artifact_root: Path) -> tuple[str, Path]:
+def _stage_source(source_root: Path, artifact_root: Path) -> str:
     archive = artifact_root / "source.tar"
     with archive.open("wb") as stream:
         try:
@@ -117,14 +117,7 @@ def _stage_source(source_root: Path, artifact_root: Path) -> tuple[str, Path]:
         raise SubmissionFailure(
             "source", f"git archive failed: {completed.stderr.decode(errors='replace').strip()}"
         )
-    extracted = artifact_root / "source"
-    extracted.mkdir()
-    unpack = _run(["tar", "-xf", str(archive), "-C", str(extracted)], source_root)
-    if unpack.returncode != 0:
-        raise SubmissionFailure(
-            "source", f"could not extract source archive: {unpack.stderr.strip()}"
-        )
-    return _sha256(archive), extracted
+    return _sha256(archive)
 
 
 def _redacted_command(command: Sequence[str]) -> list[str]:
@@ -144,6 +137,8 @@ def _redacted_command(command: Sequence[str]) -> list[str]:
 
 def classify_submission_failure(text: str) -> str:
     normalized = text.lower()
+    if "source archive" in normalized or "source tree" in normalized:
+        return "source"
     if any(
         marker in normalized
         for marker in ("invalid account", "invalid qos", "invalid partition")
@@ -209,8 +204,8 @@ def submit(arguments: argparse.Namespace) -> Path:
         raise SubmissionFailure(
             "source", f"source SHA {source_sha} differs from expected {arguments.expected_sha}"
         )
-    archive_sha256, extracted = _stage_source(source_root, artifact_root)
-    job_script = extracted / "test" / "qualification" / "frontier" / "frontier_job.sh"
+    archive_sha256 = _stage_source(source_root, artifact_root)
+    job_script = source_root / "test" / "qualification" / "frontier" / "frontier_job.sh"
     if not job_script.is_file():
         raise SubmissionFailure("source", f"job script is missing from archive: {job_script}")
 

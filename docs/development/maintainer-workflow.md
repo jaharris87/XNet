@@ -63,6 +63,40 @@ for merge. A useful issue states:
 Separate the problem and acceptance criteria from a speculative implementation
 when the solution still requires investigation.
 
+## Authority, live status, and supersession records
+
+Use the native GitHub parent/subissue relationship for every new finite
+initiative and its bounded components. A Markdown checklist may mirror the
+component set, but it does not replace the native relationship. Record the
+parent, child status, and dependencies in GitHub so the relationship remains
+queryable outside a single issue body.
+
+For a medium- or high-risk issue or PR, add a concise current-status or
+handoff record. It identifies the current status; governing and parent issue;
+authorized scope and explicit non-goals; applicable risk classes and
+risk-selected review roles from the [review playbook](review-playbook.md);
+required checks; current exact pushed candidate SHA, when one exists;
+requested decision; limitations; and blocking questions. Do not require this
+packet for trivial work, and do not replace detailed evidence or review rounds
+with it.
+
+Keep requirements, verified facts, observed results, candidate designs,
+maintainer decisions, open questions, and residual limitations visibly
+distinct. A current-status summary reports state; it does not turn a proposal,
+assumption, or unresolved question into accepted authority.
+
+At component closeout and final initiative integration, update the parent
+record with the as-of date and current `development` SHA; completed, active,
+and blocked native children; changed dependencies; and remaining closure
+gates. Keep detailed evidence in immutable issue or PR comments, or in other
+durable records linked from the summary.
+
+When an issue or PR is superseded or abandoned, make that state visible in its
+record. Name the authoritative successor, state the reason, and say explicitly
+that the superseded record is not implementation authority. Do not silently
+reinterpret a plausible-looking historical specification, and do not edit
+historical records merely to apply this convention without separate authority.
+
 An issue can add task-specific detail while repository-wide safety,
 compatibility, and evidence requirements remain in force. Report conflicts or
 ambiguous authority to the maintainer before proceeding.
@@ -189,6 +223,14 @@ Post a disposition summary after each substantive review round. Include
 non-blocking findings in the summary when they affect future maintenance or
 scientific understanding.
 
+When a disposition creates a review-generated follow-up, record the
+originating PR; reviewed exact candidate SHA and stable finding ID when known;
+the disposition; why the finding is non-blocking; effect on the accepted
+claim; bounded scope and non-goals; trigger or priority; completion evidence;
+and parent relationship. Use a native parent/subissue relationship when the
+follow-up belongs to a finite initiative. The follow-up record complements the
+preserved finding and does not replace it.
+
 Commit and push substantive review fixes. When the changes can introduce new
 defects or materially change the reviewed solution, repeat independent review.
 Identify both the prior and replacement pushed commits, verify accepted
@@ -213,6 +255,16 @@ Hand the PR to the human maintainer with:
 - the review and disposition summary;
 - remaining non-blocking work and limitations;
 - any scientific or architectural decisions requiring human judgment.
+
+Before that handoff, add a final `development` freshness record. Identify the
+reviewed exact candidate SHA, then-current `development` SHA, intervening
+changes, base-update method, checks rerun, substantive delta from the reviewed
+candidate, and whether independent re-review is required. If re-review is
+required, record the prior and replacement SHA, stable finding IDs checked,
+and repair risk as specified by the playbook. A refreshed base does not by
+itself establish that the review remains applicable; record the basis for that
+conclusion. This is a manual readiness record, not authority for an automatic
+merge or synchronization.
 
 The human maintainer owns final scientific and architectural judgment, the
 merge of ordinary feature PRs, and the final integrated umbrella result. An

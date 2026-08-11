@@ -86,6 +86,18 @@ body:
       description: List prerequisite investigations, related issues, upstream work, or deferred follow-up.
 
   - type: textarea
+    id: coordination_handoff
+    attributes:
+      label: Coordination and handoff record
+      description: For medium/high-risk work, identify current status, governing and parent issue, authorized scope, explicit non-goals, applicable playbook risk classes and risk-selected review roles, required checks, current exact pushed candidate SHA when known, requested decision, limitations, and blocking questions. Omit for trivial work.
+
+  - type: textarea
+    id: review_follow_up
+    attributes:
+      label: Review-generated follow-up record
+      description: If this issue follows a review finding, record the originating PR, reviewed exact candidate SHA and stable finding ID when known, disposition, non-blocking reason, accepted-claim effect, bounded scope, non-goals, trigger or priority, completion evidence, and parent relationship.
+
+  - type: textarea
     id: additional_context
     attributes:
       label: Additional context

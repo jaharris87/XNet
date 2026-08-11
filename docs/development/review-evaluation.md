@@ -37,11 +37,14 @@ other evaluation results.
    [#59](https://github.com/jaharris87/XNet/pull/59),
    [#60](https://github.com/jaharris87/XNet/pull/60), and
    [#66](https://github.com/jaharris87/XNet/pull/66).
-2. For each retained case, evaluate the defective candidate and the repaired
-   candidate as separate fresh-context review tasks. A reviewer may know the
-   governing issue, selected `review-playbook.md` revision, assigned risk
-   classes and role, historical base SHA, candidate SHA, and applicable
-   repository files at that candidate.
+2. For each retained case, evaluate the defective candidate and the exact
+   repair candidate as separate fresh-context review tasks. If the exact
+   repair candidate later became a defective candidate for a distinct retained
+   case, or if a later evidence-only head is the useful clean counterexample,
+   record both states instead of collapsing them into one repaired result.
+   A reviewer may know the governing issue, selected `review-playbook.md`
+   revision, assigned risk classes and role, historical base SHA, candidate
+   SHA, and applicable repository files at that candidate.
 3. The supplied context boundary is:
    - the governing issue body only, without issue comments;
    - `docs/development/review-playbook.md` at the identified playbook
@@ -62,7 +65,7 @@ other evaluation results.
    - playbook revision;
    - risk classes;
    - supplied context boundary;
-   - reviewer/session class and effort;
+   - reviewer/session class, model when exposed, and effort when exposed;
    - read-only status;
    - checks independently run;
    - result;
@@ -241,9 +244,14 @@ answer key. Do not include them in fresh-context reviewer briefs.
   - `review-playbook.md` at `5395b1e`;
   - diff `9ae2e0d..a21eeb1`;
   - `test/qualification/sparse_backends/compare_heat_sn160.py`;
-  - `test/qualification/sparse_backends/test_compare_heat_sn160.py`;
+  - `test/unit/run_real_sparse_contracts.sh`;
+  - `test/unit/test_sparse_contracts.F90`;
   - `test/regression/xnet_regression.py`; and
   - relevant sparse-backend README text.
+- Repair-candidate additional context:
+  - diff `9ae2e0d..e8a6507`; and
+  - `test/qualification/sparse_backends/test_compare_heat_sn160.py`, which is
+    present at `e8a6507` but absent at `a21eeb1`.
 - Accepted findings:
   - The same executable content could be supplied as both dense and sparse
     executables.
@@ -331,8 +339,12 @@ answer key. Do not include them in fresh-context reviewer briefs.
 
 ### RVCASE-66A: scientific identity and provenance-only inputs
 
-- Governing issue: [#46](https://github.com/jaharris87/XNet/issues/46).
+- Governing issue: [#41](https://github.com/jaharris87/XNet/issues/41).
 - Historical PR: [#66](https://github.com/jaharris87/XNet/pull/66).
+- Historical routing note: PR #66 was opened as a reopened preservation
+  repair within the #46/#36 integration path, but the candidate files identify
+  the NSE validation authority as issue #41. Fresh case reviews should use
+  issue #41, not the Frontier-qualification text from issue #46.
 - Historical base:
   `ae2197861eb4996fd6dfa283432533dcf65a07d7`.
 - Defective candidate:
@@ -345,7 +357,7 @@ answer key. Do not include them in fresh-context reviewer briefs.
 - Expected role: scientific/numerical behavior and provenance/operational
   evidence.
 - Minimum supplied context:
-  - issue #46 body;
+  - issue #41 body;
   - `review-playbook.md` at `5395b1e`;
   - diff `ae21978..d8ebc84`;
   - `test/nse_validation/README.md`;
@@ -359,6 +371,10 @@ answer key. Do not include them in fresh-context reviewer briefs.
     identity.
   - Full species records included reconciliation-only `mass_source`
     annotations, so otherwise identical calculation inputs changed identity.
+  - Current extractor/generator source hashes were allowed to remain stale
+    while tests accepted any 64-hex value, so generation provenance was not
+    exactly bound to the candidate source until the historical/current split
+    was made explicit.
   - README byte-comparison instructions and historical hash naming became
     misleading once current provenance could differ from frozen generation
     provenance.
@@ -373,8 +389,10 @@ The initial run used fresh-context internal subagents with no inherited thread
 context. Each subagent was instructed to work read-only, use only the supplied
 context boundary, and avoid PR bodies, PR comments, later commits, repair
 explanations, prior findings, disposition records, favorable summaries, and
-cross-review results. The tool exposes the session as an internal subagent;
-model and effort are recorded as inherited when not otherwise available.
+cross-review results. The tool exposes the session class as an internal
+subagent. For the initial inherited sessions it did not expose the concrete
+model or effort, so those fields are recorded as inherited/not exposed rather
+than invented.
 
 The defective-candidate and repaired-candidate summaries below are the initial
 evaluation result. Full private reasoning was not requested or retained.
@@ -387,23 +405,33 @@ evaluation result. Full private reasoning was not requested or retained.
 | EVAL-52B | `32807ca` | `BLD-001`, `PRO-001` | Detected that serial or otherwise wrong executables could pass because requested MPI/OpenMP topology was not proved. | None for the selected accepted topology case. | Reported missing candidate/executable/environment manifesting. This is plausible, but the preserved accepted finding for this seed was the topology false pass. | High-confidence source evidence. No builds or qualification runs. |
 | EVAL-54A | `61ab3c9` | `BLD-001` | Detected the missing `testdrive.mod` prerequisite through an actual clean object-build failure in a temporary candidate archive. | Missed names-only `(A,Z,N)` identity, overly broad malformed `#` row handling, and missing residuals in the scientific fingerprint. | None. | Strong build evidence. Review stopped after the reproduced build failure and did not complete all scientific/provenance false-pass probes. |
 | EVAL-54B | `66e3ee7` | `PASS` | None. | Missed mutable non-gating preflight evidence: the reviewer regenerated retained references and inspected preflight code, but did not complete the full preflight rerun or construct the post-analysis rewrite counterexample. | None. | Medium confidence for preflight because the full 7852-species rerun was interrupted after about 90 seconds. |
-| EVAL-59A | `a21eeb1` | `PRO-001`, `TST-001` | Detected duplicate executable substitution for the dense/sparse comparison. | Durable-evidence incompleteness was only partly covered through provider/executable provenance. | Reported residual-mutation intended-reason validation as a merge blocker. That was not preserved as an accepted #59 finding. | High-confidence static evidence. No real MA48/oneMKL runs. |
+| EVAL-59A | `a21eeb1` | `PRO-001`, `TST-001` | Detected duplicate executable substitution for the dense/sparse comparison. | Durable-evidence incompleteness was only partly covered through provider/executable provenance. | Reported residual-mutation intended-reason validation as a merge blocker. That was not preserved as an accepted #59 finding. | High-confidence static evidence from candidate-local files. No real MA48/oneMKL runs. The formal review found that the first catalog incorrectly listed a repair-only pytest file for this defective SHA; the corrected rerun did not use that file and reached the same two findings. |
 | EVAL-60A | `7c7ec32` | `PRO-001`, `PRO-002` | Detected false-success manifest validation. Also detected the exact-candidate/run binding gap for the retained run source. | Did not independently enumerate every accepted false-success subcase, but the validator counterexamples covered wrong source, excessive residual, missing GPU batches, failed nested endpoint, and one-item inventory. | The exact-candidate/run mismatch was an accepted pending evidence gate rather than the main preserved defect for this case. | Strong code and local validator-mutation evidence. No Frontier rerun. |
 | EVAL-60B | `f35fcc2` | `PRO-001`, `SCI-001`, `PRO-002`, `PRO-003` | Detected self-authorizing numerical limits, nested inventory hash/size mismatch, schema/runtime failure-envelope disagreement, and wrong stream for source-failure classification. | None for the selected accepted validation cases. | Reported missing v2 exact-candidate retained evidence, which was a known pending gate at `f35fcc2`, not a playbook-detection defect. | High-confidence static evidence. No Frontier rerun; one attempted checkout-based validator command was non-authoritative because the live checkout was not the candidate. |
-| EVAL-66A | `d8ebc84` | `SCI-001` | Detected scientific identity coupled to equivalent constant spelling and reconciliation-only annotations. | Documentation/reproducibility wording and historical-hash naming were not separately reported. | None. | High-confidence controlled mutation in a temporary candidate archive. The issue #46 body did not itself describe the NSE preservation diff, so the role brief carried the specific identity focus. |
+| EVAL-66A | `d8ebc84` | `SCI-001` | Detected scientific identity coupled to equivalent constant spelling and reconciliation-only annotations. | Documentation/reproducibility wording and historical-hash naming were not separately reported. | None. | High-confidence controlled mutation in a temporary candidate archive. This first run used issue #46 and a too-specific identity focus; the corrected issue #41 rerun below supersedes it for case scoring. |
 
-### Repaired-candidate results
+### Repair-SHA and repaired-PASS results
 
-| Review ID | Candidate | Result | Correct repaired `PASS`? | False positives | Quality and limitations |
+Exact repair SHAs are intentionally recorded even when they are not useful
+`PASS` counterexamples. Some historical repair commits fixed one accepted
+finding but still carried a later distinct defect, while some final accepted
+states were evidence-only heads over an already-qualified source SHA.
+
+| Review ID | Candidate | Candidate type | Result | Correct repaired `PASS`? | False positives, detection, and limitations |
 | --- | --- | --- | --- | --- | --- |
-| PASS-52A | `e11c21e` | `PASS` | Yes. It found no consequential test-effectiveness issue and noted coverage of topology, output inventory, ASCII `dE/dt`/`sqnu`/timestep fields, OpenMP repetition, and focused helper negatives. | None. | Read-only static review; no builds or MPI/OpenMP qualification run. |
-| PASS-52B | `fd56813` | `BLD-001` | No. | Reported that the serial executable lacks topology validation. The preserved final review accepted `fd56813`; this finding appears to be a false positive for the historical seed because the case's accepted false pass was serial-as-OpenMP, not OpenMP-as-serial. | Static review only. The withheld final review/disposition record explains why prior approval remained valid. |
-| PASS-54A | `147f3e6` | `PASS` | Yes. It found no consequential scientific, test, build, or provenance issue and checked retained hashes, identity uniqueness, and Python tooling tests. | None. | Did not run compiled Fortran tests in the read-only context. |
-| PASS-54B | `742b3c9` | `PASS` | Yes. It found no consequential preflight/provenance issue and confirmed immutable reference/provenance surfaces and post-analysis rewrite protection by inspection. | None. | Did not rerun full preflight, reference generation, or optional pynucastro corroboration. |
-| PASS-59A | `e8a6507` | `PASS` | Yes. It found no consequential sparse qualification issue and noted identical-executable rejection plus bounded support claims. | None. | Real MA48/oneMKL dependencies were unavailable in the read-only context. |
-| PASS-60A | `581656c` | `PRO-001` | No. | Reported that the evidence-only head was not itself the Frontier run source. The preserved historical record accepted this because `581656c` adds only retained evidence for qualified source `97174bc`. Withholding that explanation predictably caused the false positive. | Static review only; no Frontier rerun or PR discussion. |
-| PASS-60B | `581656c` | `PASS` | Yes. It distinguished the evidence-only head from the qualified run source by inspecting ancestry and found the v2 retained evidence sufficient under the assigned scientific/provenance role. | None. | No Frontier rerun; current checkout was the playbook revision. |
-| PASS-66A | `5c16d98` | `PASS` | Yes. It verified source-spelling and reconciliation annotations are excluded from scientific identity and that `reference.dat` is unchanged. | None. | The #46 issue body did not describe the NSE preservation diff; the role assignment supplied that focus. |
+| RERUN-52A-REPAIR | `32807ca` | Exact repair for RVCASE-52A; defective candidate for RVCASE-52B | `TST-001`, `TST-002` | No. It is not a clean counterexample because it correctly exposes the later topology and failure-probe issues. | Detected the RVCASE-52B topology/failure-intent class. No builds or MPI/OpenMP qualification run. |
+| PASS-52A | `e11c21e` | Useful `PASS` counterexample for RVCASE-52A | `PASS` | Yes. It found no consequential test-effectiveness issue and noted coverage of topology, output inventory, ASCII `dE/dt`/`sqnu`/timestep fields, OpenMP repetition, and focused helper negatives. | None. Read-only static review; no builds or MPI/OpenMP qualification run. |
+| RERUN-52B-REPAIR | `e11c21e` | Exact repair for RVCASE-52B | `BLD-001`, `PRO-001` | No. | Reported serial-reference topology and non-root failure-reason concerns. Those are unsupported new findings for this seed because the preserved accepted #52B defect was serial-as-OpenMP substitution, and the historical final review accepted `e11c21e` for that case. |
+| PASS-52B | `fd56813` | Later documentation-only useful counterexample for RVCASE-52B | `BLD-001` | No. | Reported the same serial-reference topology concern; treated as a repaired-candidate false positive for this seed. Static review only. |
+| PASS-54A | `147f3e6` | Exact repair and useful `PASS` counterexample for RVCASE-54A | `PASS` | Yes. It found no consequential scientific, test, build, or provenance issue and checked retained hashes, identity uniqueness, and Python tooling tests. | None. Did not run compiled Fortran tests in the read-only context. |
+| PASS-54B | `742b3c9` | Exact repair and useful `PASS` counterexample for RVCASE-54B | `PASS` | Yes. It found no consequential preflight/provenance issue and confirmed immutable reference/provenance surfaces and post-analysis rewrite protection by inspection. | None. Did not rerun full preflight, reference generation, or optional pynucastro corroboration. |
+| PASS-59A | `e8a6507` | Exact repair and historically accepted useful counterexample for RVCASE-59A | `PASS` | Yes for this invocation. | It found no consequential sparse qualification issue and noted identical-executable rejection plus bounded support claims. Real MA48/oneMKL dependencies were unavailable. |
+| RERUN-59A-REPAIR | `e8a6507` | Corrected repair rerun after fixing candidate-local context | `PRO-001`, `TST-001` | No. | Reported broader same-source manifest and residual-mutation reason checks. These are unsupported new findings for the historical seed; the preserved PR #59 record accepted `e8a6507` after documenting exact host, link, status, residual, hash, and cleanup/archive evidence. |
+| RERUN-60A-REPAIR | `f35fcc2` | Exact repair for RVCASE-60A; defective candidate for RVCASE-60B | `PRO-001`, `PRO-002`, `PRO-003` | No. | Correctly exposed stale v1 evidence and validation holes that were later part of RVCASE-60B or pending evidence gates. No Frontier rerun. |
+| RERUN-60B-REPAIR | `97174bc` | Exact repair for RVCASE-60B before final evidence-only head | `PRO-001` | No. | Correctly found the retained evidence did not validate against the exact repair candidate because the final Frontier evidence was added later at `581656c`. No Frontier rerun. |
+| PASS-60A | `581656c` | Evidence-only useful counterexample over qualified source `97174bc` | `PRO-001` | No for this invocation. | Reported that the evidence-only head was not itself the Frontier run source. The preserved historical record accepted this relationship because `581656c` adds retained evidence for qualified source `97174bc`; withholding that explanation caused the false positive. |
+| PASS-60B | `581656c` | Evidence-only useful counterexample over qualified source `97174bc` | `PASS` | Yes. It distinguished the evidence-only head from the qualified run source by inspecting ancestry and found the v2 retained evidence sufficient under the assigned scientific/provenance role. | None. No Frontier rerun; current checkout was the playbook revision. |
+| RERUN-66A-REPAIR | `5c16d98` | Exact repair and useful `PASS` counterexample for RVCASE-66A | `PASS` | Yes. | Corrected rerun used issue #41. It ran 13 candidate tooling tests in a temporary archive and confirmed scientific identity stayed stable while canonical historical provenance remained distinct. |
 
 ### Invocation details
 
@@ -429,11 +457,67 @@ playbook revision was `5395b1ed117536787d26871c3dc7d03e559aaedd`.
 | PASS-59A | Read issue #44 body and playbook; inspected sparse backend docs/tooling/tests and PARDISO adapter; ran `git diff --check`; checked oneMKL handle allocation/indexing by `git grep`. | Correct `PASS`; real-library runs unavailable. |
 | PASS-60A | Read issue #46 body and playbook; inspected Frontier retained evidence and searched for `581656c` in the retained package. | False positive on evidence-only head/run-source separation because the withheld final review record accepted that relationship. |
 | PASS-60B | Read issue #46 body and playbook; inspected v2 manifest with `jq`; checked run-source ancestry to evidence-only head; reviewed retained residuals, zone coverage, nonzero neutrino loss, build/link evidence, and inventory. | Correct `PASS`; no Frontier rerun. |
-| PASS-66A | Read issue #46 body and playbook; inspected NSE identity diff; confirmed `reference.dat` unchanged; ran 13 candidate tooling tests in a temporary archive. | Correct `PASS`; issue-body mismatch was a case-context limitation. |
+| PASS-66A | Read issue #46 body and playbook; inspected NSE identity diff; confirmed `reference.dat` unchanged; ran 13 candidate tooling tests in a temporary archive. | Correct `PASS`, but issue-body mismatch was a case-context limitation. Superseded for scoring by corrected issue #41 rerun. |
+
+Correction reruns were launched after formal draft-PR review identified
+case-context and repair-SHA gaps. They used no inherited thread context,
+read-only instructions, the same playbook revision, and the corrected supplied
+context listed below.
+
+| Review ID | Session/model/effort | Commands and output summary | Result quality notes |
+| --- | --- | --- | --- |
+| RERUN-52A-REPAIR | Fresh-context internal subagent; inherited model/effort not exposed | Read issue #45 body and playbook; inspected `c526d680..32807ca` and candidate files. | Correctly detected topology and failure-intent defects because this exact repair later became RVCASE-52B. |
+| RERUN-52B-REPAIR | Fresh-context internal subagent; inherited model/effort not exposed | Read issue #45 body and playbook; ran `git diff --stat/name-status/check`; inspected `c526d680..e11c21e`. | Reported serial-reference topology and non-root failure-reason concerns; treated as unsupported new findings for this seed. |
+| RERUN-59A-DEFECTIVE | Fresh-context internal subagent; inherited model/effort not exposed | Read issue #44 body and playbook; inspected `9ae2e0d..a21eeb1`. `git grep compare_heat_sn160 -- test` found only README references, confirming the repair-only pytest was absent. | Corrected context still detected duplicate executable substitution and the residual-mutation intended-reason concern. |
+| RERUN-59A-REPAIR | Fresh-context internal subagent; inherited model/effort not exposed | Read issue #44 body and playbook; inspected `9ae2e0d..e8a6507`; ran `git diff --check` with no output. | Reported broader same-source/provenance and mutation-reason findings; treated as unsupported new findings for this seed. |
+| RERUN-60A-REPAIR | Fresh-context internal subagent; inherited model/effort not exposed | Read issue #46 body and playbook; inspected `9ae2e0d..f35fcc2`, v1/v2 schema differences, retained manifest source fields, and validator behavior. | Correctly showed this exact repair still lacked final retained evidence and retained RVCASE-60B validation defects. |
+| RERUN-60B-REPAIR | Fresh-context internal subagent; inherited model/effort not exposed | Read issue #46 body and playbook; inspected `9ae2e0d..97174bc`, retained manifest/schema, and heat evidence keys. | Correctly showed the final evidence-only head was still needed before repaired-candidate `PASS`. |
+| RERUN-66A-WRONG-ISSUE | Fresh-context internal subagent; inherited model/effort not exposed | Read issue #46 body and playbook; inspected `ae21978..d8ebc84` and `ae21978..5c16d98`. | Not scored. The repair-side reviewer correctly rejected the mismatch because issue #46 describes Frontier qualification while the candidate files implement issue #41. |
+| RERUN-66A-DEFECTIVE | Fresh-context internal subagent; model exposed as GPT-5-based Codex; effort not exposed | Read issue #41 body and playbook; inspected `ae21978..d8ebc84`; computed candidate extractor/generator hashes and compared them to retained hashes. | Detected accepted scientific identity and stale-provenance classes with high-confidence source/hash evidence. |
+| RERUN-66A-REPAIR | Fresh-context internal subagent; model exposed as GPT-5-based Codex; effort not exposed | Read issue #41 body and playbook; inspected `ae21978..5c16d98`; archived the candidate to `/private/tmp`; ran `python3 -B test/nse_validation/test_reference_tooling.py`, 13 tests OK; compared retained/current scientific and canonical hashes. | Correct `PASS`; no false positives. |
+
+### Finding quality assessment
+
+| Finding | Severity and confidence quality | Evidence quality | Smallest-fix quality |
+| --- | --- | --- | --- |
+| EVAL-52A `TST-001` missing tracked fixture | Good. Merge-blocking/high matched the accepted ignored-fixture defect. | Direct absent-path evidence from candidate tree and runner behavior. | Good; add the fixture and require it in the staging path. |
+| EVAL-52A `TST-002` omitted ASCII fields | Good. Merge-blocking/high matched omitted claimed fields. | Direct comparator/source inspection. | Good; extend endpoint comparison to the claimed `dE/dt`, `sqnu`, and timestep fields. |
+| EVAL-52B `BLD-001` topology substitution | Good for the accepted serial-as-OpenMP false pass. | Direct runner and diagnostic-format evidence. | Good; require observed MPI/OpenMP topology and add adversarial helper tests. |
+| EVAL-52B `PRO-001` manifesting | Overbroad for this seed. | Plausible evidence gap but not preserved as the accepted #52 finding. | Broader than necessary for the selected case. |
+| EVAL-54A `BLD-001` `testdrive.mod` prerequisite | Good. Merge-blocking/high supported by reproduced clean-build failure. | Strong command evidence. | Good; add explicit Makefile prerequisite. |
+| EVAL-59A `PRO-001` duplicate executable substitution | Good. Merge-blocking/high matched the accepted finding. | Direct argument/runner/hash evidence. | Good; reject identical executable content before staging and cover it with a negative test. |
+| EVAL-59A `TST-001` residual mutation reason | Overstated for this seed. | Real static evidence, but not part of preserved #59 disposition. | Useful hardening suggestion, not required for the retained case. |
+| EVAL-60A `PRO-001` false-success manifest validation | Good. Merge-blocking/high matched accepted false-success class. | Strong validator-mutation evidence. | Good; make schema/runtime validation reject missing, failed, duplicate, unsafe, or contradictory records. |
+| EVAL-60A `PRO-002` built-source binding | Good. Merge-blocking/high matched the accepted source/run binding defect. | Direct manifest/archive/source evidence. | Good; bind the extracted tree and build/run evidence to the exact candidate. |
+| EVAL-60B `PRO-001`/`SCI-001`/`PRO-002`/`PRO-003` | Good. Merge-blocking or high-impact classifications matched selected #60B accepted classes. | Direct schema, validator, retained-manifest, and stream-classification evidence. | Good; recompute limits from tracked policy, validate nested inventory claims, align schema/runtime envelopes, and classify source failures from the correct stream. |
+| RERUN-52B-REPAIR `BLD-001`/`PRO-001` | Over-classified relative to accepted historical record. | Specific static evidence, but outside the preserved #52B false-pass. | Larger than necessary for the retained case. |
+| RERUN-59A-REPAIR `PRO-001`/`TST-001` | Over-classified relative to accepted historical record. | Specific source evidence; withheld PR evidence explains why final historical acceptance differed. | Broader than the retained #59 repair requirement. |
+| RERUN-60A/60B repair findings | Good. Exact repair SHAs correctly remained non-PASS until later distinct fixes or evidence-only head. | Direct retained-manifest, schema, and validator evidence. | Good; rerun/retain candidate-bound evidence and repair validation contracts. |
+| RERUN-66A-DEFECTIVE `PRO-001` | Good. Merge-blocking/high matched retained provenance/historical-current split problem. | Direct retained-vs-candidate SHA-256 evidence. | Good; restore exact provenance binding or explicitly split historical and current provenance. |
+| RERUN-66A-DEFECTIVE `SCI-001` | Good. Consequential/high matched effective scientific identity defect. | Direct identity-function and solver-input evidence. | Good; hash only calculation-effective fields and keep provenance in a separate identity. |
+
+### Formal draft-PR review disposition
+
+Draft PR #75 candidate `cb5d1c0b1b522449a71475030d8479bac1718c83`
+was reviewed by fresh read-only internal subagents after the draft PR was
+opened. The requirements/scope role used Sol with high effort. The
+test-effectiveness/provenance role used Terra with high effort. The original
+finding record was also preserved in the PR conversation:
+[formal review comment](https://github.com/jaharris87/XNet/pull/75#issuecomment-5258420551).
+
+| Finding | Disposition |
+| --- | --- |
+| `REQ-001` exact repair candidates were not all evaluated separately. | Accepted. Exact repair SHAs for RVCASE-52A, RVCASE-52B, RVCASE-60A, and RVCASE-60B were rerun and recorded separately from later useful `PASS` counterexamples. |
+| `REQ-002` / `TST-001` RVCASE-59A listed a repair-era pytest file that was absent at `a21eeb1`. | Accepted. The defective-candidate context now excludes that file, the repair-only context names it separately, and both #59 sides were rerun. |
+| `REQ-003` PR body listed invalid multi-item `gh issue view` and `gh pr view` commands. | Accepted. The PR body is maintained outside this repository file and uses per-item loops for reproduced link/state checks. |
+| `REQ-004` / `TST-003` result summaries lacked explicit severity/confidence/evidence/smallest-fix quality. | Accepted. The finding quality table above records those dimensions. |
+| `TST-002` #66 review used a too-specific brief and the wrong issue authority. | Accepted. #66 was rerun with issue #41 and neutral source-backed context; the issue #46 rerun is retained only as an invocation limitation. |
+| `PRO-001` invocation metadata was vague where the tool did not expose model/effort. | Accepted. Session class, no-context-fork setup, and exposed or not-exposed model/effort fields are now recorded explicitly. |
 
 ## Playbook correction decision
 
-No playbook correction is justified by the initial evaluation.
+No playbook correction is justified by the initial evaluation and correction
+reruns.
 
 The missed accepted findings are already covered by the merged playbook:
 
@@ -447,15 +531,23 @@ The missed accepted findings are already covered by the merged playbook:
   whether inputs, results, nested claims, and inventories are immutable and
   mutually bound at the point they are used.
 
-The misses are attributable to reviewer execution limits and case complexity:
-one reviewer stopped after reproducing a clean-build failure, and another did
-not complete the full preflight or construct the post-analysis rewrite
-counterexample. The two repaired-candidate false positives are also not
-playbook wording failures. They arose from deliberately withheld historical
-disposition context about an accepted final candidate relationship, or from
-asking a stricter substitution question than the preserved accepted finding.
+The misses are attributable to reviewer execution limits, case-context errors,
+and case complexity: one reviewer stopped after reproducing a clean-build
+failure, another did not complete the full preflight or construct the
+post-analysis rewrite counterexample, the first #59 catalog included a
+repair-only file for the defective SHA, and the first #66 brief used the
+Frontier issue instead of the NSE validation issue. The corrected reruns fixed
+the context errors without requiring a playbook wording change.
 
-Because the playbook was not changed, no affected-case rerun is required.
+The repaired-candidate false positives are also not playbook wording failures.
+They arose from deliberately withheld historical disposition context about an
+accepted final candidate relationship, from exact repair SHAs that were not
+yet useful `PASS` counterexamples, or from asking a stricter substitution or
+manifest-binding question than the preserved accepted finding.
+
+Because the playbook was not changed, no playbook-correction-triggered rerun
+is required. The reruns recorded above addressed formal review findings about
+case context and exact repair-SHA coverage.
 
 ## Development refresh record
 

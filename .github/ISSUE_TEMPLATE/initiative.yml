@@ -38,6 +38,14 @@ body:
       required: true
 
   - type: textarea
+    id: native_subissues
+    attributes:
+      label: Native GitHub subissues and live status
+      description: For finite component work, state the planned native parent/subissue relationships and where the live parent status will be kept. Create the native relationships after opening the initiative; a Markdown checklist may mirror them but cannot replace them.
+    validations:
+      required: true
+
+  - type: textarea
     id: dependencies
     attributes:
       label: Dependencies and ordering
@@ -72,6 +80,12 @@ body:
       description: State the clear conditions under which this umbrella issue may be closed. Do not treat the initiative as one large implementation prompt.
     validations:
       required: true
+
+  - type: textarea
+    id: status_record
+    attributes:
+      label: Parent status and closure record
+      description: For active coordination, record the as-of date, current development SHA, completed/active/blocked native children, changed dependencies, and remaining closure gates. Leave the initial record brief and update it in issue comments as work proceeds.
 
   - type: textarea
     id: additional_context

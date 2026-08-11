@@ -4,12 +4,33 @@ What does this change do, and why?
 
 ## Governing issue
 
-Closes #
+Issue: #
+
+Feature PRs target `development`; do not use an issue-closing keyword here.
+After merge, confirm completion and close the issue through the documented
+closeout record when authorized.
 
 ## Scope
 
 Describe the implemented change and any intentional departure from the issue,
 investigation findings, or implementation plan.
+
+## Live status and handoff
+
+For medium/high-risk work, record the following concise current-state packet.
+Omit it for trivial work. It complements rather than replaces detailed review
+rounds and verification evidence.
+
+- Status:
+- Governing issue and parent initiative, if any:
+- Authorized scope:
+- Explicit non-goals:
+- Applicable playbook risk classes:
+- Risk-selected review roles and required checks:
+- Current exact pushed candidate SHA:
+- Requested decision:
+- Limitations:
+- Blocking questions:
 
 ## Verification
 
@@ -100,6 +121,18 @@ change that deserve particular attention.
 - Stable finding IDs and original-finding links:
 - Disposition and verification links:
 - Prior and replacement SHAs for re-review, verified finding IDs, repair-risk result, or why re-review was not required:
+
+## Final `development` freshness
+
+Complete before ready-to-merge handoff.
+
+- Reviewed exact candidate SHA:
+- Current `development` SHA:
+- Intervening changes:
+- Base update method:
+- Checks rerun:
+- Substantive delta from the reviewed candidate:
+- Independent re-review required, with prior/replacement SHAs, stable finding IDs, and repair risk:
 
 ## Checks not run
 

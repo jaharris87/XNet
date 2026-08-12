@@ -1,0 +1,416 @@
+name: XNet GNU serial pilot
+
+on:
+  pull_request:
+    branches:
+      - development
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches:
+      - development
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  whitespace:
+    name: whitespace
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start job measurements
+        shell: bash
+        run: |
+          date +%s > "$RUNNER_TEMP/xnet-pilot-start-epoch"
+          {
+            printf 'job_started_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            df -h "$GITHUB_WORKSPACE"
+          } | tee "$RUNNER_TEMP/xnet-pilot-start.log"
+
+      - name: Check out full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record environment and tool versions
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          report_version() {
+            local label="$1"
+            shift
+            local output
+            if output=$("$@" 2>&1); then
+              printf '%s: %s\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            else
+              printf '%s: unavailable (%s)\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            fi
+          }
+          {
+            printf 'ImageOS=%s\n' "${ImageOS:-not set}"
+            printf 'ImageVersion=%s\n' "${ImageVersion:-not set}"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            uname -a
+            sed -n '1,8p' /etc/os-release
+            report_version git git --version
+            report_version gfortran gfortran --version
+            report_version mpifort mpifort --version
+            report_version make make --version
+            report_version python python3 --version
+            report_version pip python3 -m pip --version
+            report_version pytest python3 -m pytest --version
+          } 2>&1 | tee pilot-logs/tool-versions.log
+
+      - name: Check changed whitespace
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_AFTER_SHA: ${{ github.event.after }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              base_sha="$PR_BASE_SHA"
+              head_sha="$PR_HEAD_SHA"
+              ;;
+            push)
+              base_sha="$PUSH_BEFORE_SHA"
+              head_sha="$PUSH_AFTER_SHA"
+              ;;
+            *)
+              printf 'Unsupported event: %s\n' "$GITHUB_EVENT_NAME" >&2
+              exit 2
+              ;;
+          esac
+          {
+            printf 'event=%s\n' "$GITHUB_EVENT_NAME"
+            printf 'base_sha=%s\n' "$base_sha"
+            printf 'head_sha=%s\n' "$head_sha"
+            git cat-file -e "${base_sha}^{commit}"
+            git cat-file -e "${head_sha}^{commit}"
+            git diff --check "$base_sha" "$head_sha" --
+            printf 'git diff --check passed\n'
+          } 2>&1 | tee pilot-logs/whitespace.log
+
+      - name: Record final job measurements
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          cp "$RUNNER_TEMP/xnet-pilot-start.log" pilot-logs/job-start.log
+          start_epoch=$(cat "$RUNNER_TEMP/xnet-pilot-start-epoch")
+          end_epoch=$(date +%s)
+          {
+            printf 'job_finished_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
+            df -h "$GITHUB_WORKSPACE"
+            du -sh "$GITHUB_WORKSPACE" pilot-logs
+          } 2>&1 | tee pilot-logs/job-finish.log
+
+      - name: Upload failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: pilot-logs
+          retention-days: 7
+          if-no-files-found: error
+
+  regression-helpers:
+    name: regression-helpers
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start job measurements
+        shell: bash
+        run: |
+          date +%s > "$RUNNER_TEMP/xnet-pilot-start-epoch"
+          {
+            printf 'job_started_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            df -h "$GITHUB_WORKSPACE"
+          } | tee "$RUNNER_TEMP/xnet-pilot-start.log"
+
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install pytest
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          python3 -m pip install --disable-pip-version-check --no-cache-dir pytest==9.1.1 \
+            2>&1 | tee pilot-logs/pip-install.log
+
+      - name: Record environment and tool versions
+        shell: bash
+        run: |
+          report_version() {
+            local label="$1"
+            shift
+            local output
+            if output=$("$@" 2>&1); then
+              printf '%s: %s\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            else
+              printf '%s: unavailable (%s)\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            fi
+          }
+          {
+            printf 'ImageOS=%s\n' "${ImageOS:-not set}"
+            printf 'ImageVersion=%s\n' "${ImageVersion:-not set}"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            uname -a
+            sed -n '1,8p' /etc/os-release
+            report_version git git --version
+            report_version gfortran gfortran --version
+            report_version mpifort mpifort --version
+            report_version make make --version
+            report_version python python3 --version
+            report_version pip python3 -m pip --version
+            report_version pytest python3 -m pytest --version
+          } 2>&1 | tee pilot-logs/tool-versions.log
+
+      - name: Run regression helper contracts
+        shell: bash
+        run: |
+          python3 -m pytest -q test/regression/test_xnet_regression.py \
+            2>&1 | tee pilot-logs/regression-helpers.log
+
+      - name: Record final job measurements
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          cp "$RUNNER_TEMP/xnet-pilot-start.log" pilot-logs/job-start.log
+          start_epoch=$(cat "$RUNNER_TEMP/xnet-pilot-start-epoch")
+          end_epoch=$(date +%s)
+          {
+            printf 'job_finished_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
+            df -h "$GITHUB_WORKSPACE"
+            du -sh "$GITHUB_WORKSPACE" pilot-logs
+          } 2>&1 | tee pilot-logs/job-finish.log
+
+      - name: Upload failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: pilot-logs
+          retention-days: 7
+          if-no-files-found: error
+
+  unit-components:
+    name: unit-components
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start job measurements
+        shell: bash
+        run: |
+          date +%s > "$RUNNER_TEMP/xnet-pilot-start-epoch"
+          {
+            printf 'job_started_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            df -h "$GITHUB_WORKSPACE"
+          } | tee "$RUNNER_TEMP/xnet-pilot-start.log"
+
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install GNU Fortran and MPI wrapper
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          sudo apt-get update 2>&1 | tee pilot-logs/apt-update.log
+          sudo apt-get install --no-install-recommends -y gfortran libopenmpi-dev \
+            2>&1 | tee pilot-logs/apt-install.log
+
+      - name: Record environment and tool versions
+        shell: bash
+        run: |
+          report_version() {
+            local label="$1"
+            shift
+            local output
+            if output=$("$@" 2>&1); then
+              printf '%s: %s\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            else
+              printf '%s: unavailable (%s)\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            fi
+          }
+          {
+            printf 'ImageOS=%s\n' "${ImageOS:-not set}"
+            printf 'ImageVersion=%s\n' "${ImageVersion:-not set}"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            uname -a
+            sed -n '1,8p' /etc/os-release
+            report_version git git --version
+            report_version gfortran gfortran --version
+            report_version mpifort mpifort --version
+            report_version make make --version
+            report_version python python3 --version
+            report_version pip python3 -m pip --version
+            report_version pytest python3 -m pytest --version
+          } 2>&1 | tee pilot-logs/tool-versions.log
+
+      - name: Run unit and component contracts
+        shell: bash
+        run: |
+          make -C test/unit clean test 2>&1 | tee pilot-logs/unit-components.log
+          test -x source/xnet
+          ls -l source/xnet | tee -a pilot-logs/unit-components.log
+
+      - name: Record final job measurements
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          cp "$RUNNER_TEMP/xnet-pilot-start.log" pilot-logs/job-start.log
+          start_epoch=$(cat "$RUNNER_TEMP/xnet-pilot-start-epoch")
+          end_epoch=$(date +%s)
+          {
+            printf 'job_finished_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
+            df -h "$GITHUB_WORKSPACE"
+            du -sh "$GITHUB_WORKSPACE" pilot-logs test/unit/build
+          } 2>&1 | tee pilot-logs/job-finish.log
+
+      - name: Upload failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            pilot-logs
+            test/unit/build
+          retention-days: 7
+          if-no-files-found: error
+
+  serial-regression:
+    name: serial-regression
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start job measurements
+        shell: bash
+        run: |
+          date +%s > "$RUNNER_TEMP/xnet-pilot-start-epoch"
+          {
+            printf 'job_started_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            df -h "$GITHUB_WORKSPACE"
+          } | tee "$RUNNER_TEMP/xnet-pilot-start.log"
+
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install GNU Fortran and MPI wrapper
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          sudo apt-get update 2>&1 | tee pilot-logs/apt-update.log
+          sudo apt-get install --no-install-recommends -y gfortran libopenmpi-dev \
+            2>&1 | tee pilot-logs/apt-install.log
+
+      - name: Install pytest
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-cache-dir pytest==9.1.1 \
+            2>&1 | tee pilot-logs/pip-install.log
+
+      - name: Record environment and tool versions
+        shell: bash
+        run: |
+          report_version() {
+            local label="$1"
+            shift
+            local output
+            if output=$("$@" 2>&1); then
+              printf '%s: %s\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            else
+              printf '%s: unavailable (%s)\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            fi
+          }
+          {
+            printf 'ImageOS=%s\n' "${ImageOS:-not set}"
+            printf 'ImageVersion=%s\n' "${ImageVersion:-not set}"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            uname -a
+            sed -n '1,8p' /etc/os-release
+            report_version git git --version
+            report_version gfortran gfortran --version
+            report_version mpifort mpifort --version
+            report_version make make --version
+            report_version python python3 --version
+            report_version pip python3 -m pip --version
+            report_version pytest python3 -m pytest --version
+          } 2>&1 | tee pilot-logs/tool-versions.log
+
+      - name: Build serial executables
+        shell: bash
+        run: |
+          make -C source clean 2>&1 | tee pilot-logs/serial-clean.log
+          make -C source -j xnet xnse 2>&1 | tee pilot-logs/serial-build.log
+          test -x source/xnet
+          test -x source/xnse
+          ls -l source/xnet source/xnse | tee -a pilot-logs/serial-build.log
+
+      - name: Run serial regression
+        shell: bash
+        run: |
+          python3 -m pytest -q test/regression \
+            --xnet-executable="$GITHUB_WORKSPACE/source/xnet" \
+            --xnse-executable="$GITHUB_WORKSPACE/source/xnse" \
+            --basetemp="$RUNNER_TEMP/xnet-regression" \
+            2>&1 | tee pilot-logs/serial-regression.log
+
+      - name: Record final job measurements
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p pilot-logs
+          cp "$RUNNER_TEMP/xnet-pilot-start.log" pilot-logs/job-start.log
+          start_epoch=$(cat "$RUNNER_TEMP/xnet-pilot-start-epoch")
+          end_epoch=$(date +%s)
+          {
+            printf 'job_finished_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
+            df -h "$GITHUB_WORKSPACE"
+            du -sh "$GITHUB_WORKSPACE" pilot-logs
+            if [[ -d "$RUNNER_TEMP/xnet-regression" ]]; then
+              du -sh "$RUNNER_TEMP/xnet-regression"
+              find "$RUNNER_TEMP/xnet-regression" -type f | wc -l
+            fi
+          } 2>&1 | tee pilot-logs/job-finish.log
+
+      - name: Upload failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            pilot-logs
+            ${{ runner.temp }}/xnet-regression
+          retention-days: 7
+          if-no-files-found: error

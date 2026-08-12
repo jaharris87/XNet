@@ -412,35 +412,17 @@ not a stored decimal tolerance coefficient and has no practical effect away
 from a boundary.
 
 ```text
-A = base allowance + composition margin
-effective allowance = A + ulp(actual) + ulp(reference) + ulp(A), when A > 0
+effective allowance = base allowance
+    + ulp(actual) + ulp(reference) + ulp(base allowance), when base allowance > 0
 pass exactly when abs(actual - reference) <= effective allowance
 ```
 
-The composition margin is zero for ordinary scalar fields. An exact policy
-instead uses an effective allowance of exactly zero.
-
-Composition comparisons have two independently rounded observations: the
-canonical complete vector and the newly emitted complete vector. For each zone,
-the comparator derives the reference-side composition observation margin
-
-```text
-composition margin = max(
-    0,
-    mass_fraction_sum_atol - abs(canonical complete-vector sum - 1),
-)
-```
-
-and adds it once to the base allowance for non-exact selected species,
-complete-vector L1 and L-infinity, and the emitted-vector-sum comparison. It
-also adds it once to the structural normalization allowance for the newly
-emitted vector. The formula reuses the stored formatting/numerical slack after
-the canonical reference's own offset from one; it does not multiply every
-tolerance or change a reference-owned coefficient. A zone with no such slack
-adds zero. Exact selected species and zero L1/L-infinity limits remain exact.
-Every structural, association, finite, nonnegative, ordering, process, timeout,
-required-output, provenance, malformed-diagnostic, and independent-gate check
-is unchanged.
+An exact policy instead uses an effective allowance of exactly zero. Complete-
+vector L1 and L-infinity gates compare directly to their stored limits; they do
+not receive the scalar ULP guard. No selected-species, vector, printed-sum, or
+normalization gate reuses another gate's slack. Every structural, association,
+finite, nonnegative, ordering, process, timeout, required-output, provenance,
+malformed-diagnostic, and independent-gate check is unchanged.
 
 Each reference contains the final mass fraction for every case-network species
 and every zone. The separate `mass_fraction_selection` and
@@ -465,20 +447,43 @@ quantitatively justified settings, preserve exact invariants, and document
 their evidence in the governing issue or PR rather than adding study archives
 or platform branches to this tree.
 
-Issue #79 adds the generic allowance calculation above after the hosted GNU
-13.3.0 Ubuntu 24.04 pilot exposed bounded optimized-run variation outside the
-Issue #30 configurations. The preserved observations include nonzero selected
-Torch47 values near `1e-4`, complete-vector norms, a sum near one, and BDF
-printed sums and electron fraction. Zero-valued non-exact references receive
-only their absolute allowance; relative scale contributes zero. Trace values
-remain structurally required but gate as selected species only under the
-existing per-zone selection policy. Values near one use their explicit
-absolute/relative policy plus, for composition sums only, the derived
-reference-side margin. Printed precision is handled by the stored policies,
-the derived unused normalization slack for a second composition observation,
-and the boundary-only binary ULP guard. This remains empirical regression
-characterization for the recorded configurations, not scientific validation
-or a general compiler/platform support claim.
+Issue #79 extends the Issue #30 empirical envelope after the hosted GNU 13.3.0
+Ubuntu 24.04 pilot exposed bounded optimized-run variation. For each affected
+case, zone, and comparison category, the stored coefficient is derived from
+
+```text
+1.5 * max(abs(observation - canonical mac-gnu16 value))
+    + half the final printed decimal unit
+```
+
+The maximum is taken over the union of the Issue #30 observations and the
+preserved `NUM-OBS-001` observations. The resulting value is rounded upward to
+two significant decimal digits. The hosted observation controls each revised
+coefficient below; the Issue #30 maxima were smaller. The structural
+normalization row retains the canonical sum's offset from one because that gate
+compares directly with one, then adds the same cross-canonical envelope.
+
+| Policy category | Controlling maximum deviation | Half printed unit | Unrounded result | Stored coefficient |
+| --- | ---: | ---: | ---: | ---: |
+| `tnsn_torch47` z1 selected species (`co55`) | `2.800e-9` | `5e-12` | `4.2050e-9` | `4.3e-9` |
+| `tnsn_torch47` z1 L1 | `6.786e-9` | `5e-13` | `1.01795e-8` | `1.1e-8` |
+| `tnsn_torch47` z1 L-infinity (`co55`) | `2.800e-9` | `5e-13` | `4.2005e-9` | `4.3e-9` |
+| `tnsn_torch47` z1 printed sum | `3.131e-9` | `5e-13` | `4.6970e-9` | `4.7e-9` |
+| `bdf_sn160` z1 printed sum | `4.866186044e-7` | `5e-14` | `7.299279566e-7` | `7.3e-7` |
+| `bdf_sn160` z3 printed sum | `4.696526643e-7` | `5e-13` | `7.0447949645e-7` | `7.1e-7` |
+| `bdf_sn160` z3 normalization to one | canonical offset `3.01014263357e-5` plus `4.696526643e-7` | `5e-13` | `3.080590583215e-5` | `3.1e-5` |
+
+The `tnsn_torch47` selected setting remains one zone-wide `all_selected`
+coefficient because that is the existing smallest supported category. All
+unaffected BDF zones retain their prior printed-sum and normalization values.
+Canonical endpoint values, exact policies, and unrelated coefficients are
+unchanged. Zero-valued non-exact references receive only their absolute
+allowance; relative scale contributes zero. Trace values remain structurally
+required but gate as selected species only under the existing per-zone policy.
+Near-one printed sums and normalization use their independently stored
+coefficients. This remains empirical regression characterization for the
+recorded configurations, not scientific validation or a general
+compiler/platform support claim.
 
 Timer exclusion is structural rather than line-count based: only a
 `Timers Summary:` heading and immediately following timer-name/numeric-value

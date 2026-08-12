@@ -53,16 +53,26 @@ Contains
     Return
   End Function sparse_file_name
 
-  Subroutine read_fixture(mutation,data,status,io_status,message)
+  Subroutine read_fixture(mutation,data,status,io_status,message,requested_map_sizes,requested_n44)
     Implicit None
 
     Character(*), Intent(in) :: mutation
     Type(raw_sparse_ind_data), Intent(out) :: data
     Integer, Intent(out) :: status, io_status
     Character(*), Intent(out) :: message
+    Integer, Intent(in), Optional :: requested_map_sizes(4), requested_n44(:)
 
-    Call read_sparse_ind(sparse_file_name(mutation),ny,map_sizes,n10,n11,n20,n21,n22, &
-      & n30,n31,n32,n33,n40,n41,n42,n43,n44,data,status,io_status,message)
+    Integer :: effective_map_sizes(4)
+
+    effective_map_sizes = map_sizes
+    If ( present(requested_map_sizes) ) effective_map_sizes = requested_map_sizes
+    If ( present(requested_n44) ) Then
+      Call read_sparse_ind(sparse_file_name(mutation),ny,effective_map_sizes,n10,n11,n20,n21, &
+        & n22,n30,n31,n32,n33,n40,n41,n42,n43,requested_n44,data,status,io_status,message)
+    Else
+      Call read_sparse_ind(sparse_file_name(mutation),ny,effective_map_sizes,n10,n11,n20,n21, &
+        & n22,n30,n31,n32,n33,n40,n41,n42,n43,n44,data,status,io_status,message)
+    EndIf
 
     Return
   End Subroutine read_fixture
@@ -142,8 +152,26 @@ Contains
     Select Case (trim(mutation))
     Case ('map-index')
       ns11(1) = 0
-    Case ('map-coordinate')
+    Case ('map-coordinate-ns11')
       ns11(1) = 1
+    Case ('map-coordinate-ns21')
+      ns21(1) = 2
+    Case ('map-coordinate-ns22')
+      ns22(1) = 1
+    Case ('map-coordinate-ns31')
+      ns31(1) = 7
+    Case ('map-coordinate-ns32')
+      ns32(1) = 6
+    Case ('map-coordinate-ns33')
+      ns33(1) = 7
+    Case ('map-coordinate-ns41')
+      ns41(1) = 4
+    Case ('map-coordinate-ns42')
+      ns42(1) = 3
+    Case ('map-coordinate-ns43')
+      ns43(1) = 4
+    Case ('map-coordinate-ns44')
+      ns44(1) = 4
     Case ('truncated-map')
       Write(lun_sparse) ns11
       Close(lun_sparse)
@@ -284,10 +312,28 @@ Contains
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
+    Type(raw_sparse_ind_data) :: data
+    Character(256) :: message
+    Integer :: io_status, status
 
     Call expect_failure(error,'invalid-count',sparse_ind_invalid,'nonzero count')
     If ( allocated(error) ) Return
     Call expect_failure(error,'map-dimensions',sparse_ind_invalid,'map sizes')
+    If ( allocated(error) ) Return
+
+    Call read_fixture('unused',data,status,io_status,message, &
+      & requested_map_sizes=(/ 3, 2, 1, -1 /))
+    Call check(error,status,sparse_ind_invalid)
+    If ( allocated(error) ) Return
+    Call check(error,index(message,'dimensions are incompatible') > 0)
+    If ( allocated(error) ) Return
+
+    Call write_fixture('target-dimensions')
+    Call read_fixture('target-dimensions',data,status,io_status,message, &
+      & requested_n44=(/ 1, 1 /))
+    Call check(error,status,sparse_ind_invalid)
+    If ( allocated(error) ) Return
+    Call check(error,index(message,'dimensions are incompatible') > 0)
 
     Return
   End Subroutine test_invalid_dimensions
@@ -343,7 +389,35 @@ Contains
 
     Call expect_failure(error,'map-index',sparse_ind_invalid,'index is out of range')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'map-coordinate',sparse_ind_invalid,'reaction coordinate')
+    Call expect_failure(error,'map-coordinate-ns11',sparse_ind_invalid, &
+      & 'ns11 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns21',sparse_ind_invalid, &
+      & 'ns21 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns22',sparse_ind_invalid, &
+      & 'ns22 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns31',sparse_ind_invalid, &
+      & 'ns31 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns32',sparse_ind_invalid, &
+      & 'ns32 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns33',sparse_ind_invalid, &
+      & 'ns33 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns41',sparse_ind_invalid, &
+      & 'ns41 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns42',sparse_ind_invalid, &
+      & 'ns42 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns43',sparse_ind_invalid, &
+      & 'ns43 does not resolve to its reaction coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate-ns44',sparse_ind_invalid, &
+      & 'ns44 does not resolve to its reaction coordinate')
 
     Return
   End Subroutine test_invalid_maps

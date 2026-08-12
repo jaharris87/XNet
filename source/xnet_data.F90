@@ -22,6 +22,14 @@ Module nuclear_data
   Integer                   :: inmin, inmax        ! Min and max neutron numbers
   Integer                   :: izmin, izmax        ! Min and max proton numbers
 
+  Integer, Parameter, Private :: identity_ok = 0
+  Integer, Parameter, Private :: identity_open_error = 1
+  Integer, Parameter, Private :: identity_read_error = 2
+  Integer, Parameter, Private :: identity_count_mismatch = 3
+  Integer, Parameter, Private :: identity_name_mismatch = 4
+  Private :: read_sunet_file, read_netwinv_header, validate_netwinv_identity, &
+    & read_nuclear_identity
+
   ! Commonly used powers of Z (for, e.g., screening)
   Real(dp), Allocatable :: zz2(:), zz53(:), zzi(:)      ! zz^2, zz^{5/3}, and zz^{3b-1}
   Real(dp), Allocatable :: zseq(:), zseq53(:), zseqi(:) ! Sequence of numbers spanning the range of Z
@@ -282,8 +290,58 @@ Contains
     Return
   End Subroutine partf
 
-  Subroutine read_sunet(data_dir)
+  Subroutine read_sunet_file(data_dir,ny_file,nname_file,status,io_status)
     Use, Intrinsic :: iso_fortran_env, Only: iostat_end
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: data_dir
+
+    ! Output variables
+    Integer, Intent(out) :: ny_file, status, io_status
+    Character(5), Allocatable, Intent(out) :: nname_file(:)
+
+    ! Local variables
+    Character(256) :: filename
+    Integer :: lun_sunet, inuc
+
+    status = identity_ok
+    io_status = 0
+    ny_file = 0
+    filename = trim(data_dir)//'/sunet'
+    Open(newunit=lun_sunet, file=trim(filename), status='old', action='read', iostat=io_status)
+    If ( io_status /= 0 ) Then
+      status = identity_open_error
+      Return
+    EndIf
+
+    Do
+      Read(lun_sunet,*,iostat=io_status)
+      If ( io_status == iostat_end ) Then
+        Exit
+      ElseIf ( io_status /= 0 ) Then
+        status = identity_read_error
+        Close(lun_sunet)
+        Return
+      EndIf
+      ny_file = ny_file + 1
+    EndDo
+    Allocate (nname_file(ny_file))
+    Rewind(lun_sunet)
+    Do inuc = 1, ny_file
+      Read(lun_sunet,"(a5)",iostat=io_status) nname_file(inuc)
+      If ( io_status /= 0 ) Then
+        status = identity_read_error
+        Close(lun_sunet)
+        Return
+      EndIf
+    EndDo
+    Close(lun_sunet)
+
+    Return
+  End Subroutine read_sunet_file
+
+  Subroutine read_sunet(data_dir)
     Use xnet_util, Only: xnet_terminate
     Implicit None
 
@@ -291,40 +349,168 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Character(256) :: filename
-    Integer :: lun_sunet, inuc, ierr
+    Character(5), Allocatable :: nname_file(:)
+    Integer :: inuc, io_status, ny_file, status
 
-    filename = trim(data_dir)//'/sunet'
-    Open(newunit=lun_sunet, file=trim(filename), status='old', action='read', iostat=ierr)
-    If ( ierr /= 0 ) Call xnet_terminate('Failed to open sunet file',ierr)
+    Call read_sunet_file(data_dir,ny_file,nname_file,status,io_status)
+    Select Case (status)
+    Case (identity_open_error)
+      Call xnet_terminate('Failed to open sunet file',io_status)
+    Case (identity_read_error)
+      Call xnet_terminate('Error reading sunet file',io_status)
+    End Select
 
-    If ( .not. allocated(nname) ) Then
-      inuc = 1
-      Do
-        Read (lun_sunet,*,iostat=ierr)
-        If ( ierr == iostat_end ) Then
-          Exit
-        ElseIf ( ierr /= 0 ) Then
-          Call xnet_terminate('Error reading sunet file',ierr)
-        EndIf
-        inuc = inuc + 1
-      end do
-      ny = inuc - 1
+    If ( allocated(nname) ) Then
+      If ( ny_file /= ny ) Call xnet_terminate('sunet species count does not match installed network')
+      Do inuc = 1, ny
+        If ( adjustl(nname_file(inuc)) /= adjustl(nname(inuc)) ) &
+          & Call xnet_terminate('sunet species name does not match installed network for inuc=',inuc)
+      EndDo
+    Else
+      ny = ny_file
       Allocate (nname(0:ny))
-      Rewind(lun_sunet)
+      nname(0) = ' === '
+      nname(1:ny) = nname_file
     EndIf
-    nname(0) = ' === '
-    Do inuc = 1, ny
-      Read(lun_sunet,"(a5)",iostat=ierr) nname(inuc)
-      If ( ierr /= 0 ) Call xnet_terminate('Error reading sunet file',ierr)
-    EndDo
-    Close(lun_sunet)
+    Deallocate (nname_file)
 
     Return
   End Subroutine read_sunet
 
+  Subroutine read_netwinv_header(lun_winv,ny_expected,nname_expected,it9i_file, &
+    & status,mismatch_index,io_status)
+    Implicit None
+
+    ! Input variables
+    Integer, Intent(in) :: lun_winv, ny_expected
+    Character(5), Intent(in) :: nname_expected(ny_expected)
+
+    ! Output variables
+    Integer, Intent(out) :: it9i_file(ng), status, mismatch_index, io_status
+
+    ! Local variables
+    Character(5) :: nname_file
+    Integer :: inuc, ny_file
+
+    status = identity_ok
+    mismatch_index = 0
+    io_status = 0
+
+    Read(lun_winv,"(i5)",iostat=io_status) ny_file
+    If ( io_status /= 0 ) Then
+      status = identity_read_error
+      Return
+    EndIf
+    If ( ny_file /= ny_expected ) Then
+      status = identity_count_mismatch
+      Return
+    EndIf
+
+    Read(lun_winv,"(24i3)",iostat=io_status) it9i_file
+    If ( io_status /= 0 ) Then
+      status = identity_read_error
+      Return
+    EndIf
+    Do inuc = 1, ny_expected
+      Read(lun_winv,"(a5)",iostat=io_status) nname_file
+      If ( io_status /= 0 ) Then
+        status = identity_read_error
+        Return
+      EndIf
+      If ( adjustl(nname_file) /= adjustl(nname_expected(inuc)) ) Then
+        status = identity_name_mismatch
+        mismatch_index = inuc
+        Return
+      EndIf
+    EndDo
+
+    Return
+  End Subroutine read_netwinv_header
+
+  Subroutine validate_netwinv_identity(data_dir,ny_expected,nname_expected, &
+    & status,mismatch_index,io_status)
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: data_dir
+    Integer, Intent(in) :: ny_expected
+    Character(5), Intent(in) :: nname_expected(ny_expected)
+
+    ! Output variables
+    Integer, Intent(out) :: status, mismatch_index, io_status
+
+    ! Local variables
+    Character(256) :: filename
+    Integer :: it9i_file(ng)
+    Integer :: lun_winv
+
+    status = identity_ok
+    mismatch_index = 0
+    io_status = 0
+    filename = trim(data_dir)//'/netwinv'
+    Open(newunit=lun_winv, file=trim(filename), status='old', action='read', iostat=io_status)
+    If ( io_status /= 0 ) Then
+      status = identity_open_error
+      Return
+    EndIf
+
+    Call read_netwinv_header(lun_winv,ny_expected,nname_expected,it9i_file, &
+      & status,mismatch_index,io_status)
+    Close(lun_winv)
+
+    Return
+  End Subroutine validate_netwinv_identity
+
+  Subroutine read_nuclear_identity(data_dir)
+    Use xnet_util, Only: xnet_terminate
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: data_dir
+
+    ! Local variables
+    Character(5), Allocatable :: nname_file(:)
+    Integer :: inuc, io_status, mismatch_index, ny_file, status
+
+    ! Validate both generated identity headers before installing either one.
+    Call read_sunet_file(data_dir,ny_file,nname_file,status,io_status)
+    Select Case (status)
+    Case (identity_open_error)
+      Call xnet_terminate('Failed to open sunet file',io_status)
+    Case (identity_read_error)
+      Call xnet_terminate('Error reading sunet file',io_status)
+    End Select
+
+    Call validate_netwinv_identity(data_dir,ny_file,nname_file,status,mismatch_index,io_status)
+    Select Case (status)
+    Case (identity_open_error)
+      Call xnet_terminate('Failed to open netwinv file',io_status)
+    Case (identity_read_error)
+      Call xnet_terminate('Error reading netwinv file',io_status)
+    Case (identity_count_mismatch)
+      Call xnet_terminate('netwinv species count does not match sunet')
+    Case (identity_name_mismatch)
+      Call xnet_terminate('netwinv species name does not match sunet for inuc=',mismatch_index)
+    End Select
+
+    If ( allocated(nname) ) Then
+      If ( ny_file /= ny ) Call xnet_terminate('sunet species count does not match installed network')
+      Do inuc = 1, ny
+        If ( adjustl(nname_file(inuc)) /= adjustl(nname(inuc)) ) &
+          & Call xnet_terminate('sunet species name does not match installed network for inuc=',inuc)
+      EndDo
+    Else
+      ny = ny_file
+      Allocate (nname(0:ny))
+      nname(0) = ' === '
+      nname(1:ny) = nname_file
+    EndIf
+    Deallocate (nname_file)
+
+    Return
+  End Subroutine read_nuclear_identity
+
   Subroutine read_netwinv(data_dir)
-    Use, Intrinsic :: iso_fortran_env, Only: iostat_end
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -335,34 +521,36 @@ Contains
     ! Local variables
     Character(256) :: filename
     Character(5) :: nam
+    Integer :: it9i_file(ng)
     Real(dp) :: spin ! Ground state spin
-    Integer :: inuc, j, ierr, lun_winv
+    Integer :: inuc, j, io_status, lun_winv, mismatch_index, status
 
     filename = trim(data_dir)//'/netwinv'
-    Open(newunit=lun_winv, file=trim(filename), status='old', action='read', iostat=ierr)
-    If ( ierr /= 0 ) Call xnet_terminate('Failed to open netwinv file',ierr)
+    Open(newunit=lun_winv, file=trim(filename), status='old', action='read', iostat=io_status)
+    If ( io_status /= 0 ) Call xnet_terminate('Failed to open netwinv file',io_status)
 
-    Read(lun_winv,"(i5)",iostat=ierr) ny
-    If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
+    Call read_netwinv_header(lun_winv,ny,nname(1:ny),it9i_file,status,mismatch_index,io_status)
+    Select Case (status)
+    Case (identity_read_error)
+      Close(lun_winv)
+      Call xnet_terminate('Error reading netwinv file',io_status)
+    Case (identity_count_mismatch)
+      Close(lun_winv)
+      Call xnet_terminate('netwinv species count does not match sunet')
+    Case (identity_name_mismatch)
+      Close(lun_winv)
+      Call xnet_terminate('netwinv species name does not match sunet for inuc=',mismatch_index)
+    End Select
 
     ! Read in the partition function iteration grid, and fix endpoints
     If ( .not. allocated(it9i) ) Allocate (it9i(ng))
     If ( .not. allocated(t9i) )  Allocate (t9i(ng))
-    Read(lun_winv,"(24i3)",iostat=ierr) (it9i(j), j=1,ng)
-    If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
+    it9i = it9i_file
 
     ! Convert to the proper units
     t9i = real(it9i,dp)
     t9i(1:ng-1) = 0.01*t9i(1:ng-1)
     t9i(ng) = 0.1*t9i(ng)
-
-    ! Read the nuclear names
-    If ( .not. allocated(nname) ) Allocate (nname(0:ny))
-    nname(0) = ' === '
-    Do inuc = 1, ny
-      Read(lun_winv,"(a5)",iostat=ierr) nname(inuc)
-      If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
-    EndDo
 
     ! Set size of nuclear parameter arrays and read in nuclear parameters
     ! and partition function interpolation table.
@@ -374,10 +562,10 @@ Contains
     If ( .not. allocated(angm) ) Allocate (angm(0:ny))
     angm(0) = 0.0
     Do inuc = 1, ny
-      Read(lun_winv,*,iostat=ierr) nam, aa(inuc), iz(inuc), in(inuc), spin, mex(inuc)
-      If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
-      Read(lun_winv,*,iostat=ierr) (g(j,inuc), j=1,ng)
-      If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
+      Read(lun_winv,*,iostat=io_status) nam, aa(inuc), iz(inuc), in(inuc), spin, mex(inuc)
+      If ( io_status /= 0 ) Call xnet_terminate('Error reading netwinv file',io_status)
+      Read(lun_winv,*,iostat=io_status) (g(j,inuc), j=1,ng)
+      If ( io_status /= 0 ) Call xnet_terminate('Error reading netwinv file',io_status)
       angm(inuc) = 2.0*spin + 1.0
 
       ! Check that data entry name matches header
@@ -426,7 +614,7 @@ Contains
     Call parallel_bcast(data_desc)
 
     ! Read the size of the network and partition function data
-    If ( parallel_IOProcessor() ) Call read_sunet(data_dir)
+    If ( parallel_IOProcessor() ) Call read_nuclear_identity(data_dir)
     Call parallel_bcast(ny)
 
     ! Set size of nuclear data arrays and read in nuclear data and partition function interpolation table.
@@ -531,31 +719,16 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Character(5), Allocatable :: nname_test(:)
-    Integer :: ny_test
     Real(dp) :: spin ! Ground state spin
     Integer :: i, n, l, m, ntest, ierr
     Integer :: lun_data, lun_sunet, lun_winv
 
-    ! Read in sunet
-    Call read_sunet(data_dir)
+    ! Validate and install the common sunet/netwinv identity.
+    Call read_nuclear_identity(data_dir)
     Write(lun_out,*) ny
-    Allocate (nname_test(0:ny))
-    nname_test = nname
-    ny_test = ny
 
     ! Read nuclear data from netwinv and check for consistency with sunet
     Call read_netwinv(data_dir)
-    If ( ny /= ny_test ) Then
-      Write(lun_out,*) 'netwinv /= sunet',i,ny,ny_test
-      Call xnet_terminate('netwinv /= sunet')
-    EndIf
-    Do n = 1, ny
-      If ( adjustl(nname(n)) /= adjustl(nname_test(n)) ) Then
-        Write(lun_out,*) 'netwinv /= sunet',n,nname(n),nname_test(n)
-        Call xnet_terminate('netwinv /= sunet')
-      EndIf
-    EndDo
     If ( .not. allocated(zz) )   Allocate (zz(ny))
     If ( .not. allocated(nn) )   Allocate (nn(ny))
     If ( .not. allocated(be) )   Allocate (be(ny))
@@ -649,7 +822,107 @@ Module reaction_data
   ! Reaction rates after folding cross-sections in with counting factors
   Real(dp), Allocatable :: b1(:,:), b2(:,:), b3(:,:), b4(:,:) ! Coefficiencts of the Y terms in Eq. 10 of Hix & Meyer (2006)
 
+  Integer, Parameter, Private :: nets4_ok = 0
+  Integer, Parameter, Private :: nets4_open_error = 1
+  Integer, Parameter, Private :: nets4_read_error = 2
+  Integer, Parameter, Private :: nets4_count_mismatch = 3
+  Integer, Parameter, Private :: nets4_name_mismatch = 4
+  Integer, Parameter, Private :: nets4_index_mismatch = 5
+  Integer, Parameter, Private :: nets4_invalid_dimension = 6
+  Private :: read_nets4_header
+
 Contains
+
+  Subroutine read_nets4_header(data_dir,nffn_file,nnnu_file,nreac_file,la_file,le_file, &
+    & status,mismatch_index,io_status)
+    Use nuclear_data, Only: ny, nname
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: data_dir
+
+    ! Output variables
+    Integer, Intent(out) :: nffn_file, nnnu_file, nreac_file(4)
+    Integer, Intent(out) :: la_file(4,ny), le_file(4,ny)
+    Integer, Intent(out) :: status, mismatch_index, io_status
+
+    ! Local variables
+    Character(5) :: nname_file(ny)
+    Integer :: i, j, lun_s4, n, ny_file
+
+    status = nets4_ok
+    mismatch_index = 0
+    io_status = 0
+    Open(newunit=lun_s4, file=trim(data_dir)//"/nets4", form='unformatted', &
+      & status='old', action='read', iostat=io_status)
+    If ( io_status /= 0 ) Then
+      status = nets4_open_error
+      Return
+    EndIf
+
+    Read(lun_s4,iostat=io_status) ny_file
+    If ( io_status /= 0 ) Then
+      status = nets4_read_error
+      Close(lun_s4)
+      Return
+    EndIf
+    If ( ny_file /= ny ) Then
+      status = nets4_count_mismatch
+      Close(lun_s4)
+      Return
+    EndIf
+
+    Read(lun_s4,iostat=io_status) nname_file
+    If ( io_status /= 0 ) Then
+      status = nets4_read_error
+      Close(lun_s4)
+      Return
+    EndIf
+    Do i = 1, ny
+      If ( adjustl(nname_file(i)) /= adjustl(nname(i)) ) Then
+        status = nets4_name_mismatch
+        mismatch_index = i
+        Close(lun_s4)
+        Return
+      EndIf
+    EndDo
+
+    Read(lun_s4,iostat=io_status) nffn_file, nnnu_file
+    If ( io_status /= 0 ) Then
+      status = nets4_read_error
+      Close(lun_s4)
+      Return
+    EndIf
+    Read(lun_s4,iostat=io_status) nreac_file
+    If ( io_status /= 0 ) Then
+      status = nets4_read_error
+      Close(lun_s4)
+      Return
+    EndIf
+    If ( nffn_file < 0 .or. nnnu_file < 0 .or. any(nreac_file < 0) ) Then
+      status = nets4_invalid_dimension
+      Close(lun_s4)
+      Return
+    EndIf
+
+    Do i = 1, ny
+      Read(lun_s4,iostat=io_status) n, (la_file(j,i), le_file(j,i), j=1,4)
+      If ( io_status /= 0 ) Then
+        status = nets4_read_error
+        Close(lun_s4)
+        Return
+      EndIf
+      If ( n /= i ) Then
+        status = nets4_index_mismatch
+        mismatch_index = i
+        Close(lun_s4)
+        Return
+      EndIf
+    EndDo
+    Close(lun_s4)
+
+    Return
+  End Subroutine read_nets4_header
 
   Subroutine read_reaction_data(data_dir)
     !-----------------------------------------------------------------------------------------------
@@ -671,30 +944,42 @@ Contains
 
     ! Local variables
     Integer :: i, j, n, l, ierr
+    Integer :: io_status, mismatch_index, status
     Integer :: nr1, nr2, nr3, nr4
-    Integer :: lun_s3, lun_s4
+    Integer :: lun_s3
+    Integer :: nffn_file, nnnu_file, nreac_file(4)
+    Integer :: la_file(4,ny), le_file(4,ny)
 
     ! Read in nuclear set, numbers of reactions, and extents of extended reaction arrays
-    Allocate (la(4,ny),le(4,ny))
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_s4, file=trim(data_dir)//"/nets4", form='unformatted', status='old', action='read', iostat=ierr)
-      If ( ierr /= 0 ) Call xnet_terminate('Failed to open nets4 file',ierr)
-      Read(lun_s4) ny
-      Read(lun_s4) (nname(i), i=1,ny)
-      Read(lun_s4) nffn, nnnu
-      Read(lun_s4) (nreac(i), i=1,4)
-      Do i = 1, ny
-        Read(lun_s4) n, (la(j,i), le(j,i), j=1,4)
-        If ( n /= i ) Then
-          Write(lun_stderr,*) 'Error in nets4',i,n
-          Call xnet_terminate('Error in nets4')
-        EndIf
-      EndDo
-      Close(lun_s4)
+      Call read_nets4_header(data_dir,nffn_file,nnnu_file,nreac_file,la_file,le_file, &
+        & status,mismatch_index,io_status)
+      Select Case (status)
+      Case (nets4_open_error)
+        Call xnet_terminate('Failed to open nets4 file',io_status)
+      Case (nets4_read_error)
+        Call xnet_terminate('Error reading nets4 file',io_status)
+      Case (nets4_count_mismatch)
+        Call xnet_terminate('nets4 species count does not match installed network')
+      Case (nets4_name_mismatch)
+        Call xnet_terminate('nets4 species name does not match installed network for inuc=',mismatch_index)
+      Case (nets4_index_mismatch)
+        Write(lun_stderr,*) 'Error in nets4',mismatch_index
+        Call xnet_terminate('Error in nets4')
+      Case (nets4_invalid_dimension)
+        Call xnet_terminate('Invalid dimension in nets4')
+      End Select
+      nffn = nffn_file
+      nnnu = nnnu_file
+      nreac = nreac_file
+      Allocate (la(4,ny),le(4,ny))
+      la = la_file
+      le = le_file
     EndIf
     Call parallel_bcast(nffn)
     Call parallel_bcast(nnnu)
     Call parallel_bcast(nreac)
+    If ( .not. allocated(la) ) Allocate (la(4,ny),le(4,ny))
     Call parallel_bcast(la)
     Call parallel_bcast(le)
 

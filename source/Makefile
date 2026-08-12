@@ -213,7 +213,7 @@ xnet_controls.o: xnet_constants.o xnet_types.o xnet_util.o $(MPI_OBJ)
 xnet_data.o: xnet_constants.o xnet_controls.o xnet_ffn.o xnet_nnu.o xnet_types.o xnet_util.o $(MPI_OBJ)
 xnet_ffn.o: xnet_constants.o xnet_controls.o xnet_types.o xnet_conditions.o xnet_fd.o
 xnet_flux.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_match.o xnet_timers.o xnet_types.o
-xnet_match.o: xnet_controls.o xnet_data.o xnet_types.o xnet_util.o
+xnet_match.o: xnet_controls.o xnet_data.o xnet_types.o
 xnet_abundances.o: xnet_controls.o xnet_data.o xnet_types.o
 xnet_conditions.o: xnet_controls.o xnet_types.o xnet_util.o
 xnet_constants.o: xnet_types.o

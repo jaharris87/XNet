@@ -24,14 +24,16 @@ Contains
     ! This routine reads in the reaction matching data and allocates the necessary arrays.
     !-----------------------------------------------------------------------------------------------
     Use reaction_data, Only: nreac
-    Use xnet_controls, Only: idiag, lun_diag, lun_stdout
+    Use xnet_controls, Only: idiag, lun_diag
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
+    Character(128) :: diagnostic
     Integer :: i, lun_match, nr(4)
 
     ! Open and read the matching data arrays
@@ -42,7 +44,10 @@ Contains
 
       ! Make sure match_data agrees with reaction_data
       Do i = 1, 4
-        If ( nr(i) /= nreac(i) ) Write(lun_stdout,*) 'NR mismatch',i,nr(i),nreac(i)
+        If ( nr(i) /= nreac(i) ) Then
+          Write(diagnostic,'(a,i0)') 'match_data reaction count does not match nets4 for group=',i
+          Call xnet_terminate(trim(diagnostic))
+        EndIf
       EndDo
     EndIf
     Call parallel_bcast(mflx)

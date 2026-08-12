@@ -25,6 +25,7 @@ PREPROCESS_DIRECT_EXE := $(PREPROCESS_BUILD_DIR)/preprocess_direct
 PREPROCESS_NET_SETUP_EXE := $(PREPROCESS_BUILD_DIR)/net_setup
 PREPROCESS_VERIFY_EXE := $(PREPROCESS_BUILD_DIR)/verify_preprocess
 BUILD_NET_READER_EXE := $(PREPROCESS_BUILD_DIR)/verify_build_net_readers
+NETWORK_HEADER_MUTATOR_EXE := $(PREPROCESS_BUILD_DIR)/mutate_network_header
 PREPROCESS_WORK_DIR := $(abspath $(BUILD_DIR)/preprocess-work)
 PREPROCESS_FIXTURE_DIR := $(abspath fixtures/preprocess)
 SPARSE_BUILD_DIR := $(BUILD_DIR)/sparse
@@ -107,7 +108,8 @@ BUILD_NET_OBJECTS := \
 .PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet
 
 test: eos-test $(TEST_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
-    $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(BUILD_NET_EXE) production-xnet
+    $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(NETWORK_HEADER_MUTATOR_EXE) \
+    $(BUILD_NET_EXE) production-xnet
 	@$(TEST_EXE)
 	@PYTHONDONTWRITEBYTECODE=1 python3 $(NSE_VALIDATION_DIR)/test_reference_tooling.py
 	@$(NSE_VALIDATION_EXE) $(NSE_VALIDATION_NETWORK_DIR) $(NSE_VALIDATION_REFERENCE)
@@ -119,7 +121,8 @@ test: eos-test $(TEST_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) $(PREP
 	  $(abspath $(PARDISO_MKL_CONTRACT_EXE)) $(abspath $(XNET_DIR)/sparse_controls.nml)
 	@python3 run_build_net_contracts.py $(BUILD_NET_WORK_DIR) $(abspath $(BUILD_NET_EXE)) \
 	  $(abspath $(PREPROCESS_NET_SETUP_EXE)) $(abspath $(BUILD_NET_READER_EXE)) \
-	  $(abspath $(PRODUCTION_XNET_EXE)) $(abspath $(HELM_TABLE))
+	  $(abspath $(NETWORK_HEADER_MUTATOR_EXE)) $(abspath $(PRODUCTION_XNET_EXE)) \
+	  $(abspath $(HELM_TABLE))
 
 eos-test: $(EOS_CONTRACT_EXES)
 	@bash run_eos_contracts.sh $(EOS_WORK_DIR) $(abspath $(STARKILLER_EOS_EXE)) \
@@ -227,6 +230,9 @@ $(BUILD_NET_READER_EXE): $(PREPROCESS_VERIFY_OBJECTS:$(PREPROCESS_BUILD_DIR)/ver
     $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
+$(NETWORK_HEADER_MUTATOR_EXE): $(PREPROCESS_BUILD_DIR)/mutate_network_header.o
+	$(LDR) -o $@ $^ $(LDFLAGS)
+
 $(PREPROCESS_BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
@@ -278,7 +284,8 @@ $(PREPROCESS_BUILD_DIR)/xnet_preprocess.o: $(XNET_DIR)/xnet_preprocess.F90 \
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/xnet_match.o: $(XNET_DIR)/xnet_match.F90 \
-    $(PREPROCESS_BUILD_DIR)/xnet_data.o | $(PREPROCESS_BUILD_DIR)
+    $(PREPROCESS_BUILD_DIR)/xnet_data.o $(PREPROCESS_BUILD_DIR)/xnet_util.o \
+    | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/xnet_abundances.o: $(XNET_DIR)/xnet_abundances.F90 \
@@ -302,6 +309,10 @@ $(PREPROCESS_BUILD_DIR)/preprocess_direct.o: support/preprocess_direct.F90 \
 
 $(PREPROCESS_BUILD_DIR)/net_setup.o: $(XNET_DIR)/net_setup.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_preprocess.o | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/mutate_network_header.o: support/mutate_network_header.F90 \
+    | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/pardiso_test_stubs.o: support/pardiso_test_stubs.F90 \

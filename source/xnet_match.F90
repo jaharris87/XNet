@@ -17,33 +17,90 @@ Module xnet_match
   Real(dp), Allocatable     :: qflx(:)                            ! Reaction pair Q values
   Character(4), Allocatable :: descx(:)                           ! Descriptor for the reaction pair
 
+  Integer, Parameter, Private :: match_ok = 0
+  Integer, Parameter, Private :: match_open_error = 1
+  Integer, Parameter, Private :: match_read_error = 2
+  Integer, Parameter, Private :: match_count_mismatch = 3
+  Integer, Parameter, Private :: match_invalid_dimension = 4
+  Private :: read_match_header
+
 Contains
+
+  Subroutine read_match_header(data_dir,lun_match,mflx_file,status,mismatch_index,io_status)
+    Use reaction_data, Only: nreac
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: data_dir
+
+    ! Output variables
+    Integer, Intent(out) :: lun_match, mflx_file, status, mismatch_index, io_status
+
+    ! Local variables
+    Integer :: i, nr(4)
+
+    status = match_ok
+    mismatch_index = 0
+    io_status = 0
+    Open(newunit=lun_match, file=trim(data_dir)//"/match_data", form="unformatted", &
+      & status="old", action='read', iostat=io_status)
+    If ( io_status /= 0 ) Then
+      status = match_open_error
+      Return
+    EndIf
+    Read(lun_match,iostat=io_status) mflx_file, nr
+    If ( io_status /= 0 ) Then
+      status = match_read_error
+      Close(lun_match)
+      Return
+    EndIf
+    If ( mflx_file < 0 ) Then
+      status = match_invalid_dimension
+      Close(lun_match)
+      Return
+    EndIf
+    Do i = 1, 4
+      If ( nr(i) /= nreac(i) ) Then
+        status = match_count_mismatch
+        mismatch_index = i
+        Close(lun_match)
+        Return
+      EndIf
+    EndDo
+
+    Return
+  End Subroutine read_match_header
 
   Subroutine read_match_data(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads in the reaction matching data and allocates the necessary arrays.
     !-----------------------------------------------------------------------------------------------
     Use reaction_data, Only: nreac
-    Use xnet_controls, Only: idiag, lun_diag, lun_stdout
+    Use xnet_controls, Only: idiag, lun_diag
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: i, lun_match, nr(4)
+    Integer :: io_status, lun_match, mflx_file, mismatch_index, status
 
     ! Open and read the matching data arrays
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_match, file=trim(data_dir)//"/match_data", form="unformatted", status="old", &
-        & action='read')
-      Read(lun_match) mflx, nr
-
-      ! Make sure match_data agrees with reaction_data
-      Do i = 1, 4
-        If ( nr(i) /= nreac(i) ) Write(lun_stdout,*) 'NR mismatch',i,nr(i),nreac(i)
-      EndDo
+      Call read_match_header(data_dir,lun_match,mflx_file,status,mismatch_index,io_status)
+      Select Case (status)
+      Case (match_open_error)
+        Call xnet_terminate('Failed to open match_data file',io_status)
+      Case (match_read_error)
+        Call xnet_terminate('Error reading match_data file',io_status)
+      Case (match_count_mismatch)
+        Call xnet_terminate('match_data reaction count does not match reaction_data for group=',mismatch_index)
+      Case (match_invalid_dimension)
+        Call xnet_terminate('Invalid dimension in match_data')
+      End Select
+      mflx = mflx_file
     EndIf
     Call parallel_bcast(mflx)
 

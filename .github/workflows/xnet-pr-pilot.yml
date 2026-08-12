@@ -166,7 +166,7 @@ jobs:
       - name: Run unit and component contracts
         shell: bash
         run: |
-          make -C test/unit clean test 2>&1 | tee pilot-logs/unit-components.log
+          make -C test/unit clean test FC=false 2>&1 | tee pilot-logs/unit-components.log
           test -x source/xnet
           ls -l source/xnet | tee -a pilot-logs/unit-components.log
 

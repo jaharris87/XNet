@@ -2108,11 +2108,19 @@ def validate_reference_for_case(
 
 def _difference(actual: float, reference: Tolerance) -> tuple[bool, float, float]:
     absolute_difference = abs(actual - reference.value)
-    allowed = (
-        0.0
-        if reference.exact
-        else reference.atol + reference.rtol * abs(reference.value)
-    )
+    if reference.exact:
+        allowed = 0.0
+    else:
+        allowed = reference.atol + reference.rtol * abs(reference.value)
+        if allowed > 0.0:
+            # Decimal policy values and parsed endpoints are represented as
+            # binary floats.  Cover only the rounding in forming their
+            # subtraction and the allowance; a zero allowance remains exact.
+            allowed += (
+                math.ulp(actual)
+                + math.ulp(reference.value)
+                + math.ulp(allowed)
+            )
     return absolute_difference <= allowed, absolute_difference, allowed
 
 
@@ -2392,10 +2400,14 @@ def compare_final_states(
                 )
         mass_fraction_sum = math.fsum(state.mass_fractions.values())
         sum_atol = reference.mass_fraction_sum_atols[state.zone]
-        if abs(mass_fraction_sum - 1.0) > sum_atol:
+        normalization_passed, _, normalization_allowed = _difference(
+            mass_fraction_sum,
+            Tolerance(1.0, sum_atol, 0.0, exact=sum_atol == 0.0),
+        )
+        if not normalization_passed:
             failures.append(
                 f"case {reference.case_name} zone {state.zone} recomputed mass-fraction normalization={mass_fraction_sum:.12e}; "
-                f"allowed |sum - 1| <= {sum_atol:.3e}"
+                f"allowed |sum - 1| <= {normalization_allowed:.3e}"
             )
 
     if failures:

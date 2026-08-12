@@ -34,13 +34,15 @@ Contains
 
     ! Local variables
     Character(128) :: diagnostic
-    Integer :: i, lun_match, nr(4)
+    Integer :: i, ierr, lun_match, mflx_file, nr(4)
 
     ! Open and read the matching data arrays
     If ( parallel_IOProcessor() ) Then
       Open(newunit=lun_match, file=trim(data_dir)//"/match_data", form="unformatted", status="old", &
-        & action='read')
-      Read(lun_match) mflx, nr
+        & action='read', iostat=ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('Failed to open match_data file',ierr)
+      Read(lun_match,iostat=ierr) mflx_file, nr
+      If ( ierr /= 0 ) Call xnet_terminate('Error reading match_data file',ierr)
 
       ! Make sure match_data agrees with reaction_data
       Do i = 1, 4
@@ -49,6 +51,7 @@ Contains
           Call xnet_terminate(trim(diagnostic))
         EndIf
       EndDo
+      mflx = mflx_file
     EndIf
     Call parallel_bcast(mflx)
 

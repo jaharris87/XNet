@@ -128,8 +128,8 @@ The suite checks:
 - generated species order, selected mass and partition data, retained and
   excluded reactions, weak/reverse metadata, and mass-consistent Q values;
 - early production-reader rejection when `sunet` and `netwinv` disagree on
-  nuclei counts or order, or when `nets4` disagrees with installed nuclear
-  data;
+  nuclei counts or order, including the final nucleus, or when `nets4`
+  disagrees with installed nuclear data;
 - early rejection when any `match_data` reaction count disagrees with
   `nets4`;
 - nonzero `build_net` status for missing, duplicate, unavailable, malformed,
@@ -201,9 +201,10 @@ interoperability check, not a stored scientific endpoint comparison.
 
 The production-reader check also exercises isolated malformed copies of the
 same generated bundle. Data after each changed count/order boundary is removed,
-so the expected file-specific diagnostic must occur before dependent payload
-reads. A padding-only `sunet` variant remains valid and preserves the canonical
-names read from `netwinv`.
+so the expected file-specific diagnostic must reach the reader's termination
+path before dependent payload reads. Head and final-nucleus order changes check
+the complete ordered list. A padding-only `sunet` variant remains valid and
+preserves the canonical names read from `netwinv`.
 
 ## Vendored test-drive dependency
 

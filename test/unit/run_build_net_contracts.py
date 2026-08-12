@@ -305,6 +305,9 @@ def require_reader_rejection(
         fail(f"{label} unexpectedly reached dependent reader use")
     if diagnostic.lower() not in output.lower():
         fail(f"{label} failed without expected early diagnostic: {diagnostic}")
+    termination = f"parallel_abort(): {diagnostic}"
+    if termination.lower() not in output.lower():
+        fail(f"{label} did not use the expected reader termination path")
     if "build_net production reader semantics passed" in output:
         fail(f"{label} reported rejection after dependent reader use")
 
@@ -521,6 +524,13 @@ def mutate_species_order(directory: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
 
 
+def mutate_species_tail_order(directory: Path) -> None:
+    path = directory / "netwinv"
+    lines = path.read_text(encoding="ascii").splitlines()
+    lines[int(lines[0]) + 1] = f"{'ne20':>5}"
+    path.write_text("\n".join(lines) + "\n", encoding="ascii")
+
+
 def truncate_netwinv(directory: Path, *, after_names: bool) -> None:
     path = directory / "netwinv"
     lines = path.read_text(encoding="ascii").splitlines()
@@ -544,6 +554,14 @@ def mutate_sunet_order(directory: Path) -> None:
     truncate_netwinv(directory, after_names=True)
 
 
+def mutate_sunet_tail_order(directory: Path) -> None:
+    path = directory / "sunet"
+    lines = path.read_text(encoding="ascii").splitlines()
+    lines[-1] = "ne20"
+    path.write_text("\n".join(lines) + "\n", encoding="ascii")
+    truncate_netwinv(directory, after_names=True)
+
+
 def mutate_sunet_padding(directory: Path) -> None:
     path = directory / "sunet"
     lines = path.read_text(encoding="ascii").splitlines()
@@ -559,6 +577,11 @@ def mutate_netwinv_count(directory: Path) -> None:
 
 def mutate_netwinv_order(directory: Path) -> None:
     mutate_species_order(directory)
+    truncate_netwinv(directory, after_names=True)
+
+
+def mutate_netwinv_tail_order(directory: Path) -> None:
+    mutate_species_tail_order(directory)
     truncate_netwinv(directory, after_names=True)
 
 
@@ -781,7 +804,12 @@ def main(argv: list[str]) -> int:
         (
             "sunet-order",
             mutate_sunet_order,
-            "sunet and netwinv nuclei order does not match for inuc=",
+            "sunet and netwinv nuclei order does not match for inuc=1",
+        ),
+        (
+            "sunet-order-tail",
+            mutate_sunet_tail_order,
+            "sunet and netwinv nuclei order does not match for inuc=5",
         ),
         (
             "netwinv-count",
@@ -791,7 +819,12 @@ def main(argv: list[str]) -> int:
         (
             "netwinv-order",
             mutate_netwinv_order,
-            "sunet and netwinv nuclei order does not match for inuc=",
+            "sunet and netwinv nuclei order does not match for inuc=1",
+        ),
+        (
+            "netwinv-order-tail",
+            mutate_netwinv_tail_order,
+            "sunet and netwinv nuclei order does not match for inuc=5",
         ),
     )
     for name, mutation, diagnostic in ascii_mutations:
@@ -803,7 +836,12 @@ def main(argv: list[str]) -> int:
 
     binary_mutations = (
         ("nets4-count", "nets4 nuclei count does not match nuclear data"),
-        ("nets4-order", "nets4 nuclei order does not match nuclear data for inuc="),
+        ("nets4-order", "nets4 nuclei order does not match nuclear data for inuc=1"),
+        (
+            "nets4-order-tail",
+            "nets4 nuclei order does not match nuclear data for inuc=5",
+        ),
+        ("match-header", "Error reading match_data file"),
         (
             "match-count-1",
             "match_data reaction count does not match nets4 for group=1",

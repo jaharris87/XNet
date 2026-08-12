@@ -12,8 +12,10 @@ Program mutate_nuclear_input
   Call get_command_argument(2,data_dir)
 
   Select Case (trim(mode))
-  Case ('nets4-count','nets4-order')
+  Case ('nets4-count','nets4-order','nets4-order-tail')
     Call mutate_nets4(trim(data_dir),trim(mode))
+  Case ('match-header')
+    Call empty_match_data(trim(data_dir))
   Case ('match-count-1')
     Call mutate_match_data(trim(data_dir),1)
   Case ('match-count-2')
@@ -55,9 +57,13 @@ Contains
       Write(*,*) 'nets4 order mutation requires at least two nuclei'
       Stop 2
     EndIf
-    saved_name = names(1)
-    names(1) = names(2)
-    names(2) = saved_name
+    If ( mutation == 'nets4-order' ) Then
+      saved_name = names(1)
+      names(1) = names(2)
+      names(2) = saved_name
+    Else
+      names(ny_file) = 'ne20'
+    EndIf
     Open(newunit=lun,file=trim(directory)//'/nets4',form='unformatted',status='replace',action='write')
     Write(lun) ny_file
     Write(lun) names
@@ -66,6 +72,19 @@ Contains
 
     Return
   End Subroutine mutate_nets4
+
+  Subroutine empty_match_data(directory)
+    Implicit None
+
+    Character(*), Intent(in) :: directory
+
+    Integer :: lun
+
+    Open(newunit=lun,file=trim(directory)//'/match_data',form='unformatted',status='replace',action='write')
+    Close(lun)
+
+    Return
+  End Subroutine empty_match_data
 
   Subroutine mutate_match_data(directory,group)
     Implicit None

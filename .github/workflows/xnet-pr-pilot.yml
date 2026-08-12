@@ -271,8 +271,8 @@ jobs:
       - name: Run serial regression
         shell: bash
         run: |
-          python3 -m pytest -q test/regression/test_regression.py::test_tnsn_alpha \
-            --xnet-executable=/bin/false \
+          python3 -m pytest -q test/regression \
+            --xnet-executable="$GITHUB_WORKSPACE/source/xnet" \
             --xnse-executable="$GITHUB_WORKSPACE/source/xnse" \
             --basetemp="$RUNNER_TEMP/xnet-regression" \
             2>&1 | tee pilot-logs/serial-regression.log

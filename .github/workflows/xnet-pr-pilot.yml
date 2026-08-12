@@ -81,6 +81,8 @@ jobs:
         run: |
           python3 -m pytest -q test/regression/test_xnet_regression.py \
             2>&1 | tee pilot-logs/regression-helpers.log
+          python3 -c 'raise AssertionError("issue #76 controlled regression-helper assertion probe")' \
+            2>&1 | tee -a pilot-logs/regression-helpers.log
 
       - name: Record final job measurements
         if: ${{ always() }}

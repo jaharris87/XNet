@@ -121,9 +121,13 @@ Contains
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use reaction_data, Only: la, le, n11, n21, n22, n31, n32, n33, n41, n42, n43, n44
+    Use reaction_data, Only: n10, n11, n20, n21, n22, n30, n31, n32, n33, &
+      & n40, n41, n42, n43, n44, nan
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_sparse_contract, Only: augment_pardiso_crs, pardiso_heat_data, &
+      & raw_sparse_ind_data, read_sparse_ind, sparse_ind_invalid, sparse_ind_open_error, &
+      & sparse_ind_read_error
     Use xnet_util, Only: xnet_terminate
     Implicit None
 
@@ -131,14 +135,27 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer, Allocatable :: ridxo(:), cidxo(:), pbo(:)
-    Integer :: i, i0, i1, la1, le1, la2, le2, la3, le3, la4, le4, j1, l1, l2, l3, l4
-    Integer :: rstart, rstarto, rend, rendo
-    Integer :: ierr, lun_sparse, lun_solver
+    Type(raw_sparse_ind_data) :: raw
+    Type(pardiso_heat_data) :: heated
+    Character(256) :: sparse_message
+    Integer :: ierr, io_status, lun_solver, sparse_status
 
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_sparse, file=trim(data_dir)//"/sparse_ind", status='old', form='unformatted')
-      Read(lun_sparse) lval
+      Call read_sparse_ind(trim(data_dir)//'/sparse_ind',ny,nan,n10,n11,n20,n21,n22, &
+        & n30,n31,n32,n33,n40,n41,n42,n43,n44,raw,sparse_status,io_status,sparse_message)
+      Select Case (sparse_status)
+      Case (sparse_ind_open_error)
+        Call xnet_terminate('Failed to open sparse_ind file',io_status)
+      Case (sparse_ind_read_error)
+        Call xnet_terminate('Error reading sparse_ind '//trim(sparse_message),io_status)
+      Case (sparse_ind_invalid)
+        Call xnet_terminate('Invalid sparse_ind: '//trim(sparse_message))
+      End Select
+      lval = raw%lval
+      l1s = raw%l1s
+      l2s = raw%l2s
+      l3s = raw%l3s
+      l4s = raw%l4s
     EndIf
     Call parallel_bcast(lval)
 
@@ -155,44 +172,17 @@ Contains
     Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
     If ( parallel_IOProcessor() ) Then
       If ( iheat > 0 ) Then
-        Allocate (ridxo(lval),cidxo(lval),pbo(ny+1))
-        Read(lun_sparse) ridxo, cidxo, pbo
-
-        ! Add indices for self-heating
-        pb(1) = pbo(1)
-        Do i0 = 1, ny
-
-          ! Shift row pointers to adjust for additional column
-          pb(i0+1) = pbo(i0+1) + i0
-          rstarto = pbo(i0)
-          rendo = pbo(i0+1) - 1
-          rstart  = pb(i0)
-          rend  = pb(i0+1) - 1
-
-          ! Extra column indices
-          cidx(rstart:rend-1) = cidxo(rstarto:rendo)
-          cidx(rend) = ny+1
-          ridx(rstart:rend-1) = ridxo(rstarto:rendo)
-          ridx(rend) = i0
-        EndDo
-        Deallocate(ridxo,cidxo,pbo)
-
-        ! Extra row indices
-        pb(msize+1) = nnz + 1
-        rstart = pb(msize)
-        rend = pb(msize+1) - 1
-        Do i0 = 1, ny
-          cidx(rstart+i0-1) = i0
-          ridx(rstart+i0-1) = ny+1
-        EndDo
-
-        ! dT9dot/dT9 term
-        cidx(nnz) = ny + 1
-        ridx(nnz) = ny + 1
+        Call augment_pardiso_crs(raw,ny,heated,sparse_status,sparse_message)
+        If ( sparse_status == sparse_ind_invalid ) &
+          & Call xnet_terminate('Invalid PARDISO sparse transformation: '//trim(sparse_message))
+        ridx = heated%ridx
+        cidx = heated%cidx
+        pb = heated%pb
       Else
-        Read(lun_sparse) ridx, cidx, pb
+        ridx = raw%ridx
+        cidx = raw%cidx
+        pb = raw%pb
       EndIf
-      Read(lun_sparse) l1s, l2s, l3s, l4s
     EndIf
     Call parallel_bcast(ridx)
     Call parallel_bcast(cidx)
@@ -208,56 +198,30 @@ Contains
     Allocate (ns31(l3s),ns32(l3s),ns33(l3s))
     Allocate (ns41(l4s),ns42(l4s),ns43(l4s),ns44(l4s))
 
-    ! Rebuild arrays mapping reaction rates to locations in CRS Jacobian
     If ( parallel_IOProcessor() ) Then
       If ( iheat > 0 ) Then
-        ns11 = 0 ; ns21 = 0 ; ns22 = 0 ; ns31 = 0 ; ns32 = 0 ; ns33 = 0
-        ns41 = 0 ; ns42 = 0 ; ns43 = 0 ; ns44 = 0
-        Do i0 = 1, ny
-          la1 = la(1,i0) ; la2 = la(2,i0) ; la3 = la(3,i0) ; la4 = la(4,i0)
-          le1 = le(1,i0) ; le2 = le(2,i0) ; le3 = le(3,i0) ; le4 = le(4,i0)
-          Do j1 = la1, le1
-            l1 = n11(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns11(j1) = i1
-            EndDo
-          EndDo
-          Do j1 = la2, le2
-            l1 = n21(j1) ; l2 = n22(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns21(j1) = i1
-              If ( cidx(i1) == l2 .and. ridx(i1) == i0 ) ns22(j1) = i1
-            EndDo
-          EndDo
-          Do j1 = la3, le3
-            l1 = n31(j1) ; l2 = n32(j1) ; l3 = n33(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns31(j1) = i1
-              If ( cidx(i1) == l2 .and. ridx(i1) == i0 ) ns32(j1) = i1
-              If ( cidx(i1) == l3 .and. ridx(i1) == i0 ) ns33(j1) = i1
-            EndDo
-          EndDo
-          Do j1 = la4, le4
-            l1 = n41(j1) ; l2 = n42(j1) ; l3 = n43(j1) ; l4 = n44(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns41(j1) = i1
-              If ( cidx(i1) == l2 .and. ridx(i1) == i0 ) ns42(j1) = i1
-              If ( cidx(i1) == l3 .and. ridx(i1) == i0 ) ns43(j1) = i1
-              If ( cidx(i1) == l4 .and. ridx(i1) == i0 ) ns44(j1) = i1
-            EndDo
-          EndDo
-        EndDo
+        ns11 = heated%ns11
+        ns21 = heated%ns21
+        ns22 = heated%ns22
+        ns31 = heated%ns31
+        ns32 = heated%ns32
+        ns33 = heated%ns33
+        ns41 = heated%ns41
+        ns42 = heated%ns42
+        ns43 = heated%ns43
+        ns44 = heated%ns44
       Else
-        Read(lun_sparse) ns11, ns21, ns22
-        Read(lun_sparse) ns31
-        Read(lun_sparse) ns32
-        Read(lun_sparse) ns33
-        Read(lun_sparse) ns41
-        Read(lun_sparse) ns42
-        Read(lun_sparse) ns43
-        Read(lun_sparse) ns44
+        ns11 = raw%ns11
+        ns21 = raw%ns21
+        ns22 = raw%ns22
+        ns31 = raw%ns31
+        ns32 = raw%ns32
+        ns33 = raw%ns33
+        ns41 = raw%ns41
+        ns42 = raw%ns42
+        ns43 = raw%ns43
+        ns44 = raw%ns44
       EndIf
-      Close(lun_sparse)
     EndIf
     Call parallel_bcast(ns11)
     Call parallel_bcast(ns21)

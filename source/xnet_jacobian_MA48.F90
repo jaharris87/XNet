@@ -70,19 +70,39 @@ Contains
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
+    Use reaction_data, Only: n10, n11, n20, n21, n22, n30, n31, n32, n33, &
+      & n40, n41, n42, n43, n44, nan
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_sparse_contract, Only: raw_sparse_ind_data, read_sparse_ind, sparse_ind_invalid, &
+      & sparse_ind_open_error, sparse_ind_read_error
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: i, ierr, lun_sparse, lun_solver
+    Type(raw_sparse_ind_data) :: raw
+    Character(256) :: sparse_message
+    Integer :: i, ierr, io_status, lun_solver, sparse_status
 
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_sparse, file=trim(data_dir)//"/sparse_ind", status='old', form='unformatted')
-      Read(lun_sparse) lval
+      Call read_sparse_ind(trim(data_dir)//'/sparse_ind',ny,nan,n10,n11,n20,n21,n22, &
+        & n30,n31,n32,n33,n40,n41,n42,n43,n44,raw,sparse_status,io_status,sparse_message)
+      Select Case (sparse_status)
+      Case (sparse_ind_open_error)
+        Call xnet_terminate('Failed to open sparse_ind file',io_status)
+      Case (sparse_ind_read_error)
+        Call xnet_terminate('Error reading sparse_ind '//trim(sparse_message),io_status)
+      Case (sparse_ind_invalid)
+        Call xnet_terminate('Invalid sparse_ind: '//trim(sparse_message))
+      End Select
+      lval = raw%lval
+      l1s = raw%l1s
+      l2s = raw%l2s
+      l3s = raw%l3s
+      l4s = raw%l4s
     EndIf
     Call parallel_bcast(lval)
 
@@ -98,7 +118,9 @@ Contains
     ! Allocate, read, and broadcast CRS arrays
     Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
     If ( parallel_IOProcessor() ) Then
-      Read(lun_sparse) ridx(1:lval), cidx(1:lval), pb(1:ny+1)
+      ridx(1:lval) = raw%ridx
+      cidx(1:lval) = raw%cidx
+      pb(1:ny+1) = raw%pb
       If ( iheat > 0 ) Then
         ! Add indices for self-heating
         Do i = 1, ny
@@ -110,7 +132,6 @@ Contains
         cidx(nnz) = ny + 1          ! dT9dot/dT9 term
         ridx(nnz) = ny + 1
       EndIf
-      Read(lun_sparse) l1s, l2s, l3s, l4s
     EndIf
     Call parallel_bcast(ridx)
     Call parallel_bcast(cidx)
@@ -126,15 +147,20 @@ Contains
     Allocate (ns31(l3s),ns32(l3s),ns33(l3s))
     Allocate (ns41(l4s),ns42(l4s),ns43(l4s),ns44(l4s))
     If ( parallel_IOProcessor() ) Then
-      Read(lun_sparse) ns11, ns21, ns22
-      Read(lun_sparse) ns31
-      Read(lun_sparse) ns32
-      Read(lun_sparse) ns33
-      Read(lun_sparse) ns41
-      Read(lun_sparse) ns42
-      Read(lun_sparse) ns43
-      Read(lun_sparse) ns44
-      Close(lun_sparse)
+      ns11 = raw%ns11
+      ns21 = raw%ns21
+      ns22 = raw%ns22
+      ns31 = raw%ns31
+      ns32 = raw%ns32
+      ns33 = raw%ns33
+      ns41 = raw%ns41
+      ns42 = raw%ns42
+      ns43 = raw%ns43
+      ns44 = raw%ns44
+      Deallocate (raw%ridx,raw%cidx,raw%pb)
+      Deallocate (raw%ns11,raw%ns21,raw%ns22)
+      Deallocate (raw%ns31,raw%ns32,raw%ns33)
+      Deallocate (raw%ns41,raw%ns42,raw%ns43,raw%ns44)
     EndIf
     Call parallel_bcast(ns11)
     Call parallel_bcast(ns21)

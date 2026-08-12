@@ -1,0 +1,473 @@
+Module sparse_ind_contract_fixture
+  Use xnet_sparse_contract, Only: raw_sparse_ind_data, read_sparse_ind
+  Implicit None
+  Private
+
+  Integer, Parameter :: map_sizes(4) = (/ 3, 2, 1, 1 /)
+  Integer, Parameter :: n10(3) = (/ 1, 2, 3 /)
+  Integer, Parameter :: n11(3) = (/ 2, 3, 2 /)
+  Integer, Parameter :: n20(2) = (/ 1, 2 /)
+  Integer, Parameter :: n21(2) = (/ 1, 1 /)
+  Integer, Parameter :: n22(2) = (/ 2, 3 /)
+  Integer, Parameter :: n30(1) = 3
+  Integer, Parameter :: n31(1) = 2
+  Integer, Parameter :: n32(1) = 3
+  Integer, Parameter :: n33(1) = 2
+  Integer, Parameter :: n40(1) = 2
+  Integer, Parameter :: n41(1) = 1
+  Integer, Parameter :: n42(1) = 2
+  Integer, Parameter :: n43(1) = 3
+  Integer, Parameter :: n44(1) = 1
+  Integer, Parameter :: ny = 3
+
+  Character(256) :: work_directory = ''
+
+  Public :: map_sizes
+  Public :: n10, n11, n20, n21, n22, n30, n31, n32, n33
+  Public :: n40, n41, n42, n43, n44
+  Public :: ny
+  Public :: read_fixture
+  Public :: set_work_directory
+  Public :: sparse_file_name
+  Public :: write_fixture
+
+Contains
+
+  Subroutine set_work_directory(path)
+    Implicit None
+
+    Character(*), Intent(in) :: path
+
+    work_directory = trim(path)
+
+    Return
+  End Subroutine set_work_directory
+
+  Character(512) Function sparse_file_name(mutation)
+    Implicit None
+
+    Character(*), Intent(in) :: mutation
+
+    sparse_file_name = trim(work_directory)//'/sparse_ind-'//trim(mutation)
+
+    Return
+  End Function sparse_file_name
+
+  Subroutine read_fixture(mutation,data,status,io_status,message)
+    Implicit None
+
+    Character(*), Intent(in) :: mutation
+    Type(raw_sparse_ind_data), Intent(out) :: data
+    Integer, Intent(out) :: status, io_status
+    Character(*), Intent(out) :: message
+
+    Call read_sparse_ind(sparse_file_name(mutation),ny,map_sizes,n10,n11,n20,n21,n22, &
+      & n30,n31,n32,n33,n40,n41,n42,n43,n44,data,status,io_status,message)
+
+    Return
+  End Subroutine read_fixture
+
+  Subroutine write_fixture(mutation)
+    Implicit None
+
+    Character(*), Intent(in) :: mutation
+
+    Integer, Parameter :: lval = 7
+    Integer :: cidx(lval), lun_sparse, lval_out, pb(ny+1), ridx(lval)
+    Integer :: ns11(3), ns21(2), ns22(2), ns31(1), ns32(1), ns33(1)
+    Integer :: ns41(1), ns42(1), ns43(1), ns44(1)
+
+    ridx = (/ 1, 1, 2, 2, 2, 3, 3 /)
+    cidx = (/ 1, 2, 1, 2, 3, 2, 3 /)
+    pb = (/ 1, 3, 6, 8 /)
+    ns11 = (/ 2, 5, 6 /)
+    ns21 = (/ 1, 3 /)
+    ns22 = (/ 2, 5 /)
+    ns31 = 6
+    ns32 = 7
+    ns33 = 6
+    ns41 = 3
+    ns42 = 4
+    ns43 = 5
+    ns44 = 3
+    lval_out = lval
+
+    Open(newunit=lun_sparse,file=sparse_file_name(mutation),status='replace',form='unformatted')
+    Select Case (trim(mutation))
+    Case ('truncated-header')
+      Close(lun_sparse)
+      Return
+    Case ('malformed-header')
+      Write(lun_sparse) 'x'
+      Close(lun_sparse)
+      Return
+    Case ('invalid-count')
+      lval_out = ny*ny + 1
+    End Select
+    Write(lun_sparse) lval_out
+    If ( trim(mutation) == 'invalid-count' ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+
+    Select Case (trim(mutation))
+    Case ('truncated-topology')
+      Write(lun_sparse) ridx(1:lval-1), cidx, pb
+      Close(lun_sparse)
+      Return
+    Case ('pointer-start')
+      pb(1) = 0
+    Case ('pointer-terminal')
+      pb(ny+1) = lval
+    Case ('pointer-order')
+      pb(3) = pb(2)
+    Case ('coordinate-column')
+      cidx(2) = ny + 1
+    Case ('coordinate-row')
+      ridx(2) = 2
+    Case ('missing-diagonal')
+      cidx(1:2) = (/ 2, 3 /)
+    Case ('unordered-columns')
+      cidx(1:2) = (/ 2, 1 /)
+    End Select
+    Write(lun_sparse) ridx, cidx, pb
+
+    If ( trim(mutation) == 'map-dimensions' ) Then
+      Write(lun_sparse) 3, 2, 1, 0
+      Close(lun_sparse)
+      Return
+    EndIf
+    Write(lun_sparse) map_sizes
+
+    Select Case (trim(mutation))
+    Case ('map-index')
+      ns11(1) = 0
+    Case ('map-coordinate')
+      ns11(1) = 1
+    Case ('truncated-map')
+      Write(lun_sparse) ns11
+      Close(lun_sparse)
+      Return
+    End Select
+    Write(lun_sparse) ns11, ns21, ns22
+    Write(lun_sparse) ns31
+    Write(lun_sparse) ns32
+    Write(lun_sparse) ns33
+    Write(lun_sparse) ns41
+    Write(lun_sparse) ns42
+    Write(lun_sparse) ns43
+    Write(lun_sparse) ns44
+    If ( trim(mutation) == 'extra-record' ) Write(lun_sparse) 1
+    Close(lun_sparse)
+
+    Return
+  End Subroutine write_fixture
+
+End Module sparse_ind_contract_fixture
+
+Module test_sparse_ind_contract
+  Use sparse_ind_contract_fixture
+  Use testdrive, Only: check, error_type, new_unittest, unittest_type
+  Use xnet_sparse_contract, Only: augment_pardiso_crs, pardiso_heat_data, raw_sparse_ind_data, &
+    & read_sparse_ind, sparse_ind_invalid, sparse_ind_ok, sparse_ind_read_error
+  Implicit None
+  Private
+
+  Public :: collect_sparse_ind_contracts
+
+Contains
+
+  Subroutine collect_sparse_ind_contracts(testsuite)
+    Implicit None
+
+    Type(unittest_type), Allocatable, Intent(out) :: testsuite(:)
+
+    testsuite = [ &
+      & new_unittest('valid raw schema',test_valid_raw_schema), &
+      & new_unittest('zero-length reaction maps',test_zero_length_maps), &
+      & new_unittest('malformed and truncated header',test_invalid_header), &
+      & new_unittest('incompatible dimensions',test_invalid_dimensions), &
+      & new_unittest('truncated topology and maps',test_truncated_records), &
+      & new_unittest('row pointer invariants',test_invalid_pointers), &
+      & new_unittest('coordinate and topology invariants',test_invalid_topology), &
+      & new_unittest('reaction-map invariants',test_invalid_maps), &
+      & new_unittest('record count',test_record_count), &
+      & new_unittest('PARDISO heat augmentation and remapping',test_pardiso_heat), &
+      & new_unittest('PARDISO transformation rejects invalid input',test_pardiso_rejection) ]
+
+    Return
+  End Subroutine collect_sparse_ind_contracts
+
+  Subroutine test_valid_raw_schema(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Type(raw_sparse_ind_data) :: data
+    Character(256) :: message
+    Integer :: io_status, status
+
+    Call write_fixture('valid')
+    Call read_fixture('valid',data,status,io_status,message)
+    Call check(error,status,sparse_ind_ok)
+    If ( allocated(error) ) Return
+    Call check(error,io_status,0)
+    If ( allocated(error) ) Return
+    Call check(error,data%lval == 7 .and. &
+      & all((/ data%l1s, data%l2s, data%l3s, data%l4s /) == map_sizes))
+    If ( allocated(error) ) Return
+    Call check(error,all(data%ridx == (/ 1, 1, 2, 2, 2, 3, 3 /)) .and. &
+      & all(data%cidx == (/ 1, 2, 1, 2, 3, 2, 3 /)))
+    If ( allocated(error) ) Return
+    Call check(error,all(data%pb == (/ 1, 3, 6, 8 /)))
+    If ( allocated(error) ) Return
+    Call check(error,all(data%ns11 == (/ 2, 5, 6 /)) .and. &
+      & all(data%ns21 == (/ 1, 3 /)) .and. all(data%ns22 == (/ 2, 5 /)))
+    If ( allocated(error) ) Return
+    Call check(error,data%ns31(1) == 6 .and. data%ns32(1) == 7 .and. data%ns33(1) == 6)
+    If ( allocated(error) ) Return
+    Call check(error,data%ns41(1) == 3 .and. data%ns42(1) == 4 .and. &
+      & data%ns43(1) == 5 .and. data%ns44(1) == 3)
+
+    Return
+  End Subroutine test_valid_raw_schema
+
+  Subroutine test_zero_length_maps(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Type(raw_sparse_ind_data) :: data
+    Character(512) :: file_name
+    Character(256) :: message
+    Integer, Allocatable :: empty(:)
+    Integer :: io_status, lun_sparse, status
+
+    Allocate (empty(0))
+    file_name = sparse_file_name('zero-maps')
+    Open(newunit=lun_sparse,file=trim(file_name),status='replace',form='unformatted')
+    Write(lun_sparse) 2
+    Write(lun_sparse) (/ 1, 2 /), (/ 1, 2 /), (/ 1, 2, 3 /)
+    Write(lun_sparse) 0, 0, 0, 0
+    Write(lun_sparse) empty, empty, empty
+    Write(lun_sparse) empty
+    Write(lun_sparse) empty
+    Write(lun_sparse) empty
+    Write(lun_sparse) empty
+    Write(lun_sparse) empty
+    Write(lun_sparse) empty
+    Write(lun_sparse) empty
+    Close(lun_sparse)
+    Call read_sparse_ind(trim(file_name),2,(/ 0, 0, 0, 0 /),empty,empty,empty,empty,empty, &
+      & empty,empty,empty,empty,empty,empty,empty,empty,empty,data,status,io_status,message)
+    Call check(error,status,sparse_ind_ok)
+    If ( allocated(error) ) Return
+    Call check(error,data%lval == 2 .and. all(data%pb == (/ 1, 2, 3 /)))
+    If ( allocated(error) ) Return
+    Call check(error,size(data%ns11) == 0 .and. size(data%ns44) == 0)
+    Deallocate (empty)
+
+    Return
+  End Subroutine test_zero_length_maps
+
+  Subroutine test_invalid_header(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call expect_failure(error,'truncated-header',sparse_ind_read_error,'header record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'malformed-header',sparse_ind_read_error,'header record')
+
+    Return
+  End Subroutine test_invalid_header
+
+  Subroutine test_invalid_dimensions(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call expect_failure(error,'invalid-count',sparse_ind_invalid,'nonzero count')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-dimensions',sparse_ind_invalid,'map sizes')
+
+    Return
+  End Subroutine test_invalid_dimensions
+
+  Subroutine test_truncated_records(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call expect_failure(error,'truncated-topology',sparse_ind_read_error,'topology record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'truncated-map',sparse_ind_read_error,'reactant map record')
+
+    Return
+  End Subroutine test_truncated_records
+
+  Subroutine test_invalid_pointers(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call expect_failure(error,'pointer-start',sparse_ind_invalid,'pointer')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'pointer-terminal',sparse_ind_invalid,'pointer')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'pointer-order',sparse_ind_invalid, &
+      & 'pointers are not strictly ordered')
+
+    Return
+  End Subroutine test_invalid_pointers
+
+  Subroutine test_invalid_topology(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call expect_failure(error,'coordinate-column',sparse_ind_invalid,'coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'coordinate-row',sparse_ind_invalid,'coordinate')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'missing-diagonal',sparse_ind_invalid,'diagonal')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'unordered-columns',sparse_ind_invalid, &
+      & 'columns are not strictly ordered')
+
+    Return
+  End Subroutine test_invalid_topology
+
+  Subroutine test_invalid_maps(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call expect_failure(error,'map-index',sparse_ind_invalid,'index is out of range')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'map-coordinate',sparse_ind_invalid,'reaction coordinate')
+
+    Return
+  End Subroutine test_invalid_maps
+
+  Subroutine test_record_count(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call expect_failure(error,'extra-record',sparse_ind_invalid,'trailing record')
+
+    Return
+  End Subroutine test_record_count
+
+  Subroutine test_pardiso_heat(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Type(raw_sparse_ind_data) :: raw
+    Type(pardiso_heat_data) :: heated
+    Character(256) :: message, mutation
+    Integer :: io_status, length, status, variable_status
+
+    Call write_fixture('heat')
+    Call read_fixture('heat',raw,status,io_status,message)
+    Call check(error,status,sparse_ind_ok)
+    If ( allocated(error) ) Return
+    Call augment_pardiso_crs(raw,ny,heated,status,message)
+    Call check(error,status,sparse_ind_ok)
+    If ( allocated(error) ) Return
+
+    mutation = ''
+    Call get_environment_variable('XNET_PARDISO_TRANSFORM_MUTATION',mutation, &
+      & length=length,status=variable_status)
+    If ( variable_status == 0 ) Then
+      If ( mutation(1:length) == 'missing-heat-entry' ) heated%cidx(heated%pb(2)-1) = 1
+    EndIf
+
+    Call check(error,all(heated%ridx == (/ 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4 /)))
+    If ( allocated(error) ) Return
+    Call check(error,all(heated%cidx == (/ 1, 2, 4, 1, 2, 3, 4, 2, 3, 4, 1, 2, 3, 4 /)))
+    If ( allocated(error) ) Return
+    Call check(error,all(heated%pb == (/ 1, 4, 8, 11, 15 /)))
+    If ( allocated(error) ) Return
+    Call check(error,all(heated%ns11 == (/ 2, 6, 8 /)))
+    If ( allocated(error) ) Return
+    Call check(error,all(heated%ns21 == (/ 1, 4 /)) .and. all(heated%ns22 == (/ 2, 6 /)))
+    If ( allocated(error) ) Return
+    Call check(error,heated%ns31(1) == 8 .and. heated%ns32(1) == 9 .and. heated%ns33(1) == 8)
+    If ( allocated(error) ) Return
+    Call check(error,heated%ns41(1) == 4 .and. heated%ns42(1) == 5 .and. &
+      & heated%ns43(1) == 6 .and. heated%ns44(1) == 4)
+
+    Return
+  End Subroutine test_pardiso_heat
+
+  Subroutine test_pardiso_rejection(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Type(raw_sparse_ind_data) :: raw
+    Type(pardiso_heat_data) :: heated
+    Character(256) :: message
+    Integer :: io_status, status
+
+    Call write_fixture('transform-rejection')
+    Call read_fixture('transform-rejection',raw,status,io_status,message)
+    Call check(error,status,sparse_ind_ok)
+    If ( allocated(error) ) Return
+    raw%pb(2) = raw%pb(2) + 1
+    Call augment_pardiso_crs(raw,ny,heated,status,message)
+    Call check(error,status,sparse_ind_invalid)
+    If ( allocated(error) ) Return
+    Call check(error,index(message,'declared row') > 0 .or. index(message,'strictly ordered') > 0)
+
+    Return
+  End Subroutine test_pardiso_rejection
+
+  Subroutine expect_failure(error,mutation,expected_status,diagnostic)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Character(*), Intent(in) :: mutation, diagnostic
+    Integer, Intent(in) :: expected_status
+
+    Type(raw_sparse_ind_data) :: data
+    Character(256) :: message
+    Integer :: io_status, status
+
+    Call write_fixture(mutation)
+    Call read_fixture(mutation,data,status,io_status,message)
+    Call check(error,status,expected_status)
+    If ( allocated(error) ) Return
+    Call check(error,index(message,trim(diagnostic)) > 0)
+
+    Return
+  End Subroutine expect_failure
+
+End Module test_sparse_ind_contract
+
+Program sparse_ind_contract_test_runner
+  Use, Intrinsic :: iso_fortran_env, Only: error_unit
+  Use sparse_ind_contract_fixture, Only: set_work_directory
+  Use test_sparse_ind_contract, Only: collect_sparse_ind_contracts
+  Use testdrive, Only: new_testsuite, run_testsuite, testsuite_type
+  Implicit None
+
+  Character(256) :: work_directory
+  Integer :: stat
+  Type(testsuite_type), Allocatable :: testsuites(:)
+
+  If ( command_argument_count() /= 1 ) Then
+    Write(error_unit,*) 'usage: sparse_ind contract test WORK_DIRECTORY'
+    Stop 1
+  EndIf
+  Call get_command_argument(1,work_directory)
+  Call set_work_directory(trim(work_directory))
+
+  stat = 0
+  testsuites = [ new_testsuite('sparse_ind production contracts',collect_sparse_ind_contracts) ]
+  Write(error_unit,'("# Testing: ",a)') testsuites(1)%name
+  Call run_testsuite(testsuites(1)%collect,error_unit,stat,parallel=.False.)
+  If ( stat > 0 ) Then
+    Write(error_unit,'(i0,1x,a)') stat,'test(s) failed'
+    Stop 1
+  EndIf
+End Program sparse_ind_contract_test_runner

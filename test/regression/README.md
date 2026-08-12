@@ -400,8 +400,47 @@ limits. Values and limits can each be case-wide or a complete per-zone map.
 The numerical-field criterion is
 
 ```text
-abs(actual - reference) <= atol + rtol * abs(reference)
+base allowance = atol + rtol * abs(reference)
 ```
+
+Exact policies still require exact equality and receive no numerical margin.
+For non-exact scalar fields, the comparator adds only the binary ULPs involved
+in representing the actual value, reference value, and calculated allowance.
+This prevents a decimal value printed exactly at a declared boundary from
+failing because the subtraction is performed in binary floating point. It is
+not a stored decimal tolerance coefficient and has no practical effect away
+from a boundary.
+
+```text
+A = base allowance + composition margin
+effective allowance = A + ulp(actual) + ulp(reference) + ulp(A), when A > 0
+pass exactly when abs(actual - reference) <= effective allowance
+```
+
+The composition margin is zero for ordinary scalar fields. An exact policy
+instead uses an effective allowance of exactly zero.
+
+Composition comparisons have two independently rounded observations: the
+canonical complete vector and the newly emitted complete vector. For each zone,
+the comparator derives the reference-side composition observation margin
+
+```text
+composition margin = max(
+    0,
+    mass_fraction_sum_atol - abs(canonical complete-vector sum - 1),
+)
+```
+
+and adds it once to the base allowance for non-exact selected species,
+complete-vector L1 and L-infinity, and the emitted-vector-sum comparison. It
+also adds it once to the structural normalization allowance for the newly
+emitted vector. The formula reuses the stored formatting/numerical slack after
+the canonical reference's own offset from one; it does not multiply every
+tolerance or change a reference-owned coefficient. A zone with no such slack
+adds zero. Exact selected species and zero L1/L-infinity limits remain exact.
+Every structural, association, finite, nonnegative, ordering, process, timeout,
+required-output, provenance, malformed-diagnostic, and independent-gate check
+is unchanged.
 
 Each reference contains the final mass fraction for every case-network species
 and every zone. The separate `mass_fraction_selection` and
@@ -425,6 +464,21 @@ matrix. Future cases should keep one canonical endpoint, choose the coarsest
 quantitatively justified settings, preserve exact invariants, and document
 their evidence in the governing issue or PR rather than adding study archives
 or platform branches to this tree.
+
+Issue #79 adds the generic allowance calculation above after the hosted GNU
+13.3.0 Ubuntu 24.04 pilot exposed bounded optimized-run variation outside the
+Issue #30 configurations. The preserved observations include nonzero selected
+Torch47 values near `1e-4`, complete-vector norms, a sum near one, and BDF
+printed sums and electron fraction. Zero-valued non-exact references receive
+only their absolute allowance; relative scale contributes zero. Trace values
+remain structurally required but gate as selected species only under the
+existing per-zone selection policy. Values near one use their explicit
+absolute/relative policy plus, for composition sums only, the derived
+reference-side margin. Printed precision is handled by the stored policies,
+the derived unused normalization slack for a second composition observation,
+and the boundary-only binary ULP guard. This remains empirical regression
+characterization for the recorded configurations, not scientific validation
+or a general compiler/platform support claim.
 
 Timer exclusion is structural rather than line-count based: only a
 `Timers Summary:` heading and immediately following timer-name/numeric-value

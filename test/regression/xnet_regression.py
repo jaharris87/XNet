@@ -2106,14 +2106,50 @@ def validate_reference_for_case(
             )
 
 
-def _difference(actual: float, reference: Tolerance) -> tuple[bool, float, float]:
+def _difference(
+    actual: float,
+    reference: Tolerance,
+    *,
+    additional_atol: float = 0.0,
+) -> tuple[bool, float, float]:
     absolute_difference = abs(actual - reference.value)
-    allowed = (
-        0.0
-        if reference.exact
-        else reference.atol + reference.rtol * abs(reference.value)
-    )
+    if reference.exact:
+        allowed = 0.0
+    else:
+        allowed = (
+            reference.atol
+            + reference.rtol * abs(reference.value)
+            + additional_atol
+        )
+        if allowed > 0.0:
+            # Decimal policy values and parsed endpoints are represented as
+            # binary floats.  Cover only the rounding in forming their
+            # subtraction and the allowance; a zero allowance remains exact.
+            allowed += (
+                math.ulp(actual)
+                + math.ulp(reference.value)
+                + math.ulp(allowed)
+            )
     return absolute_difference <= allowed, absolute_difference, allowed
+
+
+def _composition_observation_margin(
+    reference: CharacterizationReference, zone: int
+) -> float:
+    """Return the existing reference-side slack for a second composition.
+
+    ``mass_fraction_sum_atol`` contains the canonical sum's offset from one
+    plus the zone's formatting/numerical slack.  A comparison against that
+    canonical output has two observations, so the unused reference-side slack
+    is added once to non-exact composition allowances.  Exact gates do not use
+    this margin.
+    """
+
+    canonical_sum = math.fsum(reference.mass_fractions[zone].values())
+    return max(
+        0.0,
+        reference.mass_fraction_sum_atols[zone] - abs(canonical_sum - 1.0),
+    )
 
 
 def calculate_composition_norms(
@@ -2306,6 +2342,9 @@ def compare_final_states(
             continue
 
         field_policies = reference.fields[state.zone]
+        composition_margin = _composition_observation_margin(
+            reference, state.zone
+        )
         target_policy = field_policies["target_time"]
         if "achieved_time" not in field_policies:
             completion_policy = Tolerance(
@@ -2346,28 +2385,63 @@ def compare_final_states(
                 bounds.rtol,
                 bounds.exact,
             )
-            passed, difference, allowed = _difference(actual, policy)
+            passed, difference, allowed = _difference(
+                actual, policy, additional_atol=composition_margin
+            )
             if not passed:
                 failures.append(
                     f"case {reference.case_name} zone {state.zone} {species} mass fraction: actual={actual:.9e}, "
                     f"reference={policy.value:.9e}, |difference|={difference:.3e}, "
                     f"allowed={allowed:.3e} (atol={policy.atol:.3e}, "
-                    f"rtol={policy.rtol:.3e})"
+                    f"rtol={policy.rtol:.3e}, "
+                    f"composition margin={composition_margin:.3e})"
                 )
 
         norms = calculate_composition_norms((state,), reference)[0]
         limits = reference.composition_norm_limits
         if limits is not None:
             zone_limits = limits[state.zone]
-            if zone_limits.l1 is not None and norms.l1 > zone_limits.l1:
+            l1_allowed = (
+                None
+                if zone_limits.l1 is None
+                else _difference(
+                    norms.l1,
+                    Tolerance(
+                        0.0,
+                        zone_limits.l1,
+                        0.0,
+                        exact=zone_limits.l1 == 0.0,
+                    ),
+                    additional_atol=composition_margin,
+                )[2]
+            )
+            if l1_allowed is not None and norms.l1 > l1_allowed:
                 failures.append(
                     f"case {reference.case_name} zone {state.zone} L1: "
-                    f"actual norm={norms.l1:.3e}, allowed norm={zone_limits.l1:.3e}"
+                    f"actual norm={norms.l1:.3e}, allowed norm={l1_allowed:.3e} "
+                    f"(stored limit={zone_limits.l1:.3e}, "
+                    f"composition margin={composition_margin:.3e})"
                 )
-            if zone_limits.linf is not None and norms.linf > zone_limits.linf:
+            linf_allowed = (
+                None
+                if zone_limits.linf is None
+                else _difference(
+                    norms.linf,
+                    Tolerance(
+                        0.0,
+                        zone_limits.linf,
+                        0.0,
+                        exact=zone_limits.linf == 0.0,
+                    ),
+                    additional_atol=composition_margin,
+                )[2]
+            )
+            if linf_allowed is not None and norms.linf > linf_allowed:
                 failures.append(
                     f"case {reference.case_name} zone {state.zone} L-infinity: "
-                    f"actual norm={norms.linf:.3e}, allowed norm={zone_limits.linf:.3e}, "
+                    f"actual norm={norms.linf:.3e}, allowed norm={linf_allowed:.3e}, "
+                    f"stored limit={zone_limits.linf:.3e}, "
+                    f"composition margin={composition_margin:.3e}, "
                     f"species={norms.linf_species}"
                 )
 
@@ -2382,20 +2456,30 @@ def compare_final_states(
         printed_sum_tolerances = reference.mass_fraction_printed_sum_tolerances
         if printed_sum_tolerances is not None:
             policy = printed_sum_tolerances[state.zone]
-            passed, difference, allowed = _difference(printed_sum, policy)
+            passed, difference, allowed = _difference(
+                printed_sum, policy, additional_atol=composition_margin
+            )
             if not passed:
                 failures.append(
                     f"case {reference.case_name} zone {state.zone} printed mass-fraction sum: "
                     f"actual={printed_sum:.12e}, reference={policy.value:.12e}, "
                     f"|difference|={difference:.3e}, allowed={allowed:.3e} "
-                    f"(atol={policy.atol:.3e}, rtol={policy.rtol:.3e})"
+                    f"(atol={policy.atol:.3e}, rtol={policy.rtol:.3e}, "
+                    f"composition margin={composition_margin:.3e})"
                 )
         mass_fraction_sum = math.fsum(state.mass_fractions.values())
         sum_atol = reference.mass_fraction_sum_atols[state.zone]
-        if abs(mass_fraction_sum - 1.0) > sum_atol:
+        normalization_passed, _, normalization_allowed = _difference(
+            mass_fraction_sum,
+            Tolerance(1.0, sum_atol, 0.0, exact=sum_atol == 0.0),
+            additional_atol=composition_margin,
+        )
+        if not normalization_passed:
             failures.append(
                 f"case {reference.case_name} zone {state.zone} recomputed mass-fraction normalization={mass_fraction_sum:.12e}; "
-                f"allowed |sum - 1| <= {sum_atol:.3e}"
+                f"allowed |sum - 1| <= {normalization_allowed:.3e} "
+                f"(stored limit={sum_atol:.3e}, "
+                f"composition margin={composition_margin:.3e})"
             )
 
     if failures:

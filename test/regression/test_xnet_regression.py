@@ -722,7 +722,7 @@ def test_combined_scalar_policy_honors_boundary_and_zero_reference() -> None:
     compare_final_states((replace(state, temperature_gk=2.5),), bounded_reference)
     with pytest.raises(ComparisonFailure, match="temperature_gk"):
         compare_final_states(
-            (replace(state, temperature_gk=math.nextafter(2.5, math.inf)),),
+            (replace(state, temperature_gk=2.5 + 1.0e-12),),
             bounded_reference,
         )
 
@@ -731,6 +731,112 @@ def test_combined_scalar_policy_honors_boundary_and_zero_reference() -> None:
         compare_final_states(
             (replace(state, temperature_gk=math.nextafter(0.0, math.inf)),),
             replace(reference, fields=fields),
+        )
+
+
+def test_nonexact_scalar_boundary_covers_only_binary_subtraction_roundoff() -> None:
+    reference = load_reference(bdf_sn160_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 3)
+    zone_reference = replace(reference, expected_zones=(3,))
+    policy = reference.fields[3]["electron_fraction"]
+    boundary_value = 0.49928059
+
+    # Decimal input at the intended 1e-7 boundary is slightly farther apart
+    # after conversion to binary floats.  The calculation covers that
+    # representation effect without adding a decimal tolerance coefficient.
+    assert abs(boundary_value - policy.value) > policy.atol
+    compare_final_states(
+        (replace(state, electron_fraction=boundary_value),), zone_reference
+    )
+
+    with pytest.raises(ComparisonFailure, match="electron_fraction"):
+        compare_final_states(
+            (replace(state, electron_fraction=boundary_value + 1.0e-12),),
+            zone_reference,
+        )
+
+
+def test_composition_observation_margin_boundary_and_just_beyond() -> None:
+    reference = load_reference(tnsn_torch47_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 1)
+    canonical_sum = math.fsum(reference.mass_fractions[1].values())
+    margin = reference.mass_fraction_sum_atols[1] - abs(canonical_sum - 1.0)
+    bounds = reference.mass_fraction_tolerances[1]["s31"]
+    boundary = (
+        bounds.atol
+        + bounds.rtol * abs(state.mass_fractions["s31"])
+        + margin
+        - 1.0e-15
+    )
+
+    mass_fractions = dict(state.mass_fractions)
+    mass_fractions["s31"] += boundary
+    compare_final_states((replace(state, mass_fractions=mass_fractions),), reference)
+
+    mass_fractions["s31"] += 1.0e-12
+    with pytest.raises(ComparisonFailure, match="s31 mass fraction"):
+        compare_final_states(
+            (replace(state, mass_fractions=mass_fractions),), reference
+        )
+
+
+def test_num_obs_001_old_bounds_fail_and_revised_composition_bounds_pass() -> None:
+    torch_reference = load_reference(
+        tnsn_torch47_case(REPOSITORY_ROOT).reference
+    )
+    torch_state = _state_from_reference(torch_reference, 1)
+    torch_mass_fractions = dict(torch_state.mass_fractions)
+    torch_mass_fractions["s31"] += 1.890e-9
+    torch_mass_fractions["co55"] += 2.800e-9
+    torch_mass_fractions["mn51"] -= 1.8275e-9
+    torch_mass_fractions["p30"] += 0.2685e-9
+    torch_observation = replace(
+        torch_state, mass_fractions=torch_mass_fractions
+    )
+    torch_norms = calculate_composition_norms(
+        (torch_observation,), torch_reference
+    )[0]
+
+    assert abs(
+        torch_mass_fractions["s31"]
+        - torch_reference.mass_fractions[1]["s31"]
+    ) > torch_reference.mass_fraction_tolerances[1]["s31"].atol
+    assert abs(
+        torch_mass_fractions["co55"]
+        - torch_reference.mass_fractions[1]["co55"]
+    ) > torch_reference.mass_fraction_tolerances[1]["co55"].atol
+    assert torch_norms.l1 == pytest.approx(6.786e-9, abs=1.0e-15)
+    assert torch_norms.linf == pytest.approx(2.800e-9, abs=1.0e-15)
+    assert torch_norms.l1 > torch_reference.composition_norm_limits[1].l1  # type: ignore[index,union-attr]
+    assert torch_norms.linf > torch_reference.composition_norm_limits[1].linf  # type: ignore[index,union-attr]
+    torch_printed_difference = abs(
+        math.fsum(torch_mass_fractions.values())
+        - torch_reference.mass_fraction_printed_sum_tolerances[1].value  # type: ignore[index]
+    )
+    assert torch_printed_difference == pytest.approx(3.131e-9, abs=1.0e-15)
+    assert torch_printed_difference > 1.0e-10
+    compare_final_states((torch_observation,), torch_reference)
+
+    bdf_reference = load_reference(bdf_sn160_case(REPOSITORY_ROOT).reference)
+    for zone, actual_sum in (
+        (1, 0.9999997928543),
+        (3, 1.000030571079),
+    ):
+        state = _state_from_reference(bdf_reference, zone)
+        mass_fractions = dict(state.mass_fractions)
+        species = "fe56" if zone == 1 else "fe57"
+        mass_fractions[species] += actual_sum - math.fsum(
+            mass_fractions.values()
+        )
+        if zone == 3:
+            state = replace(state, electron_fraction=0.49928059)
+        observation = replace(state, mass_fractions=mass_fractions)
+        printed_policy = bdf_reference.mass_fraction_printed_sum_tolerances[zone]  # type: ignore[index]
+        assert abs(actual_sum - printed_policy.value) > printed_policy.atol
+        if zone == 3:
+            assert abs(actual_sum - 1.0) > bdf_reference.mass_fraction_sum_atols[zone]
+        compare_final_states(
+            (observation,), replace(bdf_reference, expected_zones=(zone,))
         )
 
 
@@ -2099,6 +2205,84 @@ def _move_mass_fraction(
     return replace(state, mass_fractions=mass_fractions)
 
 
+def test_registered_num_obs_001_composition_observations_pass(
+    tmp_path: Path,
+) -> None:
+    torch_case = tnsn_torch47_case(REPOSITORY_ROOT)
+    torch_reference = load_reference(torch_case.reference)
+    torch_states = list(_reference_states(torch_reference))
+    torch_mass_fractions = dict(torch_states[0].mass_fractions)
+    torch_mass_fractions["s31"] += 1.890e-9
+    torch_mass_fractions["co55"] += 2.800e-9
+    torch_mass_fractions["mn51"] -= 1.8275e-9
+    torch_mass_fractions["p30"] += 0.2685e-9
+    torch_states[0] = replace(
+        torch_states[0], mass_fractions=torch_mass_fractions
+    )
+    torch_executable = _registered_case_executable(
+        tmp_path, torch_case, tuple(torch_states)
+    )
+    torch_completed = _run_registered_pytest(
+        tmp_path, torch_case, torch_executable
+    )
+    assert torch_completed.returncode == 0, (
+        torch_completed.stdout + torch_completed.stderr
+    )
+
+    bdf_case = bdf_sn160_case(REPOSITORY_ROOT)
+    bdf_reference = load_reference(bdf_case.reference)
+    bdf_states = list(_reference_states(bdf_reference))
+    for state_index, actual_sum, species in (
+        (0, 0.9999997928543, "fe56"),
+        (2, 1.000030571079, "fe57"),
+    ):
+        state = bdf_states[state_index]
+        mass_fractions = dict(state.mass_fractions)
+        mass_fractions[species] += actual_sum - math.fsum(
+            mass_fractions.values()
+        )
+        bdf_states[state_index] = replace(
+            state,
+            electron_fraction=(
+                0.49928059
+                if state.zone == 3
+                else state.electron_fraction
+            ),
+            mass_fractions=mass_fractions,
+        )
+    bdf_executable = _registered_case_executable(
+        tmp_path, bdf_case, tuple(bdf_states)
+    )
+    bdf_completed = _run_registered_pytest(
+        tmp_path, bdf_case, bdf_executable
+    )
+    assert bdf_completed.returncode == 0, (
+        bdf_completed.stdout + bdf_completed.stderr
+    )
+
+
+def test_registered_printed_sum_mutation_fails_while_other_gates_pass(
+    tmp_path: Path,
+) -> None:
+    case = bdf_sn160_case(REPOSITORY_ROOT)
+    reference = load_reference(case.reference)
+    states = list(_reference_states(reference))
+    state = states[2]
+    mass_fractions = dict(state.mass_fractions)
+    for species in ("fe57", "ca42", "ti47"):
+        mass_fractions[species] -= 1.5e-5
+    states[2] = replace(state, mass_fractions=mass_fractions)
+
+    executable = _registered_case_executable(tmp_path, case, tuple(states))
+    completed = _run_registered_pytest(tmp_path, case, executable)
+    output = completed.stdout + completed.stderr
+    assert completed.returncode != 0, output
+    assert "printed mass-fraction sum" in output
+    assert "recomputed mass-fraction normalization" not in output
+    assert "L1" not in output
+    assert "L-infinity" not in output
+
+
 def test_nse_case_rejects_missing_initialization_marker(tmp_path: Path) -> None:
     case = nse_sn160_case(REPOSITORY_ROOT)
     reference = load_reference(case.reference)
@@ -2156,7 +2340,20 @@ def test_registered_cases_reject_controlled_policy_violations(
             key=state.mass_fractions.__getitem__,
         )
         bounds = selected[recipient]
-        amount = 1.0e-6 if bounds.exact else 3.0 * bounds.atol
+        canonical_sum = math.fsum(reference.mass_fractions[zone].values())
+        composition_margin = reference.mass_fraction_sum_atols[zone] - abs(
+            canonical_sum - 1.0
+        )
+        amount = (
+            1.0e-6
+            if bounds.exact
+            else 3.0
+            * (
+                bounds.atol
+                + bounds.rtol * abs(state.mass_fractions[recipient])
+                + composition_margin
+            )
+        )
         states[state_index] = _move_mass_fraction(state, donor, recipient, amount)
     elif mutation == "localized_vector":
         assert reference.composition_norm_limits is not None

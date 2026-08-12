@@ -297,6 +297,59 @@ jobs:
             fi
           } 2>&1 | tee pilot-logs/job-finish.log
 
+      - name: Collect failing regression evidence
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          REGRESSION_ROOT: ${{ runner.temp }}/xnet-regression
+          FAILURE_ROOT: ${{ runner.temp }}/xnet-regression-failures
+        run: |
+          python3 - <<'PY' 2>&1 | tee pilot-logs/failure-collection.log
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+
+          log_path = Path("pilot-logs/serial-regression.log")
+          if not log_path.is_file():
+              print("serial regression did not run; no regression directory to collect")
+              raise SystemExit(0)
+
+          regression_root = Path(os.environ["REGRESSION_ROOT"]).resolve(strict=True)
+          failure_root = Path(os.environ["FAILURE_ROOT"])
+          artifact_paths = sorted(set(re.findall(r"artifacts: (\S+)", log_path.read_text())))
+          if not artifact_paths:
+              print("no failing regression artifact paths were reported")
+              raise SystemExit(0)
+
+          copied = []
+          for raw_path in artifact_paths:
+              source = Path(raw_path).resolve(strict=True)
+              if regression_root not in source.parents or not source.is_dir():
+                  raise SystemExit(f"refusing artifact path outside regression root: {raw_path}")
+              if any(path.is_symlink() for path in source.rglob("*")):
+                  raise SystemExit(f"refusing artifact directory containing symlinks: {raw_path}")
+
+              relative = source.relative_to(regression_root)
+              destination = failure_root / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copytree(
+                  source,
+                  destination,
+                  ignore=shutil.ignore_patterns("helm_table.dat"),
+              )
+              copied.append(relative.as_posix())
+
+          manifest = failure_root / "MANIFEST.txt"
+          manifest.write_text(
+              "Copied failing regression directories (helm_table.dat omitted):\n"
+              + "".join(f"{path}\n" for path in copied)
+          )
+          print(manifest.read_text(), end="")
+          PY
+          du -sh "$FAILURE_ROOT" | tee -a pilot-logs/failure-collection.log
+          find "$FAILURE_ROOT" -type f | wc -l | tee -a pilot-logs/failure-collection.log
+
       - name: Upload failure evidence
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -304,6 +357,6 @@ jobs:
           name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             pilot-logs
-            ${{ runner.temp }}/xnet-regression
+            ${{ runner.temp }}/xnet-regression-failures
           retention-days: 7
           if-no-files-found: error

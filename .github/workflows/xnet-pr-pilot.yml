@@ -36,7 +36,7 @@ jobs:
           } | tee "$RUNNER_TEMP/xnet-pilot-start.log"
 
       - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload failure evidence
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: pilot-logs
@@ -122,7 +122,7 @@ jobs:
           } | tee "$RUNNER_TEMP/xnet-pilot-start.log"
 
       - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -183,17 +183,77 @@ jobs:
             date -u +%Y-%m-%dT%H:%M:%SZ
             printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
             df -h "$GITHUB_WORKSPACE"
-            du -sh "$GITHUB_WORKSPACE" pilot-logs test/unit/build
+            du -sh "$GITHUB_WORKSPACE" pilot-logs
+            if [[ -d test/unit/build ]]; then
+              du -sh test/unit/build
+              find test/unit/build -type f | wc -l
+            fi
           } 2>&1 | tee pilot-logs/job-finish.log
+
+      - name: Collect failing unit evidence
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          UNIT_BUILD_ROOT: ${{ github.workspace }}/test/unit/build
+          UNIT_FAILURE_ROOT: ${{ runner.temp }}/xnet-unit-failures
+          WORKSPACE_ROOT: ${{ github.workspace }}
+        run: |
+          python3 - <<'PY' 2>&1 | tee pilot-logs/failure-collection.log
+          import os
+          from pathlib import Path
+          import shutil
+
+          source = Path(os.environ["UNIT_BUILD_ROOT"])
+          failure_root = Path(os.environ["UNIT_FAILURE_ROOT"])
+          workspace_root = Path(os.environ["WORKSPACE_ROOT"]).resolve(strict=True)
+          failure_root.mkdir(parents=True, exist_ok=True)
+          manifest = failure_root / "MANIFEST.txt"
+
+          if not source.exists():
+              manifest.write_text("Unit build directory was not created.\n")
+              print(manifest.read_text(), end="")
+              raise SystemExit(0)
+
+          if source.is_symlink() or not source.is_dir():
+              raise SystemExit("refusing unit build root that is not a regular directory")
+          source = source.resolve(strict=True)
+          if workspace_root not in source.parents:
+              raise SystemExit("refusing unit build root outside the workspace")
+
+          omitted = []
+
+          def ignore_staged_inputs(directory, names):
+              ignored = []
+              for name in names:
+                  candidate = Path(directory) / name
+                  if name == "helm_table.dat" or candidate.is_symlink():
+                      ignored.append(name)
+                      omitted.append(candidate.relative_to(source).as_posix())
+              return ignored
+
+          shutil.copytree(
+              source,
+              failure_root / "unit-build",
+              ignore=ignore_staged_inputs,
+          )
+          manifest.write_text(
+              "Copied regular files from test/unit/build.\n"
+              "Omitted staged symlinks and helm_table.dat:\n"
+              + "".join(f"{path}\n" for path in sorted(set(omitted)))
+          )
+          print(manifest.read_text(), end="")
+          PY
+          du -sh "$UNIT_FAILURE_ROOT" | tee -a pilot-logs/failure-collection.log
+          find "$UNIT_FAILURE_ROOT" -type f | wc -l | tee -a pilot-logs/failure-collection.log
 
       - name: Upload failure evidence
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             pilot-logs
-            test/unit/build
+            ${{ runner.temp }}/xnet-unit-failures
           retention-days: 7
           if-no-files-found: error
 
@@ -212,7 +272,7 @@ jobs:
           } | tee "$RUNNER_TEMP/xnet-pilot-start.log"
 
       - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -363,7 +423,7 @@ jobs:
 
       - name: Upload failure evidence
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

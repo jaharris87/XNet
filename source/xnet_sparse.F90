@@ -1,9 +1,8 @@
 !***************************************************************************************************
-! Dependency-light contracts for the persisted sparse_ind schema and PARDISO-family self-heating
-! augmentation.
+! Persisted sparse_ind data and CRS storage operations shared by sparse Jacobian providers.
 !***************************************************************************************************
 
-Module xnet_sparse_contract
+Module xnet_sparse
   Use, Intrinsic :: iso_fortran_env, Only: iostat_end
   Implicit None
   Private
@@ -14,7 +13,7 @@ Module xnet_sparse_contract
   Integer, Parameter, Public :: sparse_ind_invalid = 3
   Integer, Parameter :: count_kind = selected_int_kind(18)
 
-  Type, Public :: raw_sparse_ind_data
+  Type, Public :: sparse_data
     Integer :: lval = 0
     Integer :: l1s = 0
     Integer :: l2s = 0
@@ -24,16 +23,9 @@ Module xnet_sparse_contract
     Integer, Allocatable :: ns11(:), ns21(:), ns22(:)
     Integer, Allocatable :: ns31(:), ns32(:), ns33(:)
     Integer, Allocatable :: ns41(:), ns42(:), ns43(:), ns44(:)
-  End Type raw_sparse_ind_data
+  End Type sparse_data
 
-  Type, Public :: pardiso_heat_data
-    Integer, Allocatable :: ridx(:), cidx(:), pb(:)
-    Integer, Allocatable :: ns11(:), ns21(:), ns22(:)
-    Integer, Allocatable :: ns31(:), ns32(:), ns33(:)
-    Integer, Allocatable :: ns41(:), ns42(:), ns43(:), ns44(:)
-  End Type pardiso_heat_data
-
-  Public :: augment_pardiso_crs
+  Public :: augment_crs
   Public :: read_sparse_ind
 
 Contains
@@ -51,7 +43,7 @@ Contains
     Integer, Intent(in) :: n10(:), n11(:), n20(:), n21(:), n22(:)
     Integer, Intent(in) :: n30(:), n31(:), n32(:), n33(:)
     Integer, Intent(in) :: n40(:), n41(:), n42(:), n43(:), n44(:)
-    Type(raw_sparse_ind_data), Intent(out) :: data
+    Type(sparse_data), Intent(out) :: data
     Integer, Intent(out) :: status, io_status
     Character(*), Intent(out) :: message
 
@@ -178,22 +170,22 @@ Contains
     io_status = 0
     Close(lun_sparse)
 
-    Call validate_raw_sparse_ind(data,ny,n10,n11,n20,n21,n22,n30,n31,n32,n33, &
+    Call validate_sparse_ind(data,ny,n10,n11,n20,n21,n22,n30,n31,n32,n33, &
       & n40,n41,n42,n43,n44,status,message)
 
     Return
   End Subroutine read_sparse_ind
 
-  Subroutine augment_pardiso_crs(raw,ny,heated,status,message)
+  Subroutine augment_crs(base,ny,augmented,status,message)
     !-----------------------------------------------------------------------------------------------
     ! Insert one self-heating column entry in every species row, append the complete temperature
     ! row, and remap persisted reaction locations without changing base-entry ordering.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
-    Type(raw_sparse_ind_data), Intent(in) :: raw
+    Type(sparse_data), Intent(in) :: base
     Integer, Intent(in) :: ny
-    Type(pardiso_heat_data), Intent(out) :: heated
+    Type(sparse_data), Intent(out) :: augmented
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
 
@@ -201,53 +193,58 @@ Contains
 
     status = sparse_ind_ok
     message = ''
-    Call validate_raw_topology(raw,ny,status,message)
+    Call validate_crs_topology(base,ny,status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_raw_map_indices(raw,status,message)
+    Call validate_map_indices(base,status,message)
     If ( status /= sparse_ind_ok ) Return
 
-    nnz = raw%lval + 2*ny + 1
-    Allocate (heated%ridx(nnz),heated%cidx(nnz),heated%pb(ny+2))
-    heated%pb(1) = raw%pb(1)
+    nnz = base%lval + 2*ny + 1
+    augmented%lval = nnz
+    augmented%l1s = base%l1s
+    augmented%l2s = base%l2s
+    augmented%l3s = base%l3s
+    augmented%l4s = base%l4s
+    Allocate (augmented%ridx(nnz),augmented%cidx(nnz),augmented%pb(ny+2))
+    augmented%pb(1) = base%pb(1)
     Do row = 1, ny
-      old_start = raw%pb(row)
-      old_end = raw%pb(row+1) - 1
-      new_start = heated%pb(row)
+      old_start = base%pb(row)
+      old_end = base%pb(row+1) - 1
+      new_start = augmented%pb(row)
       new_end = new_start + old_end - old_start
-      heated%ridx(new_start:new_end) = raw%ridx(old_start:old_end)
-      heated%cidx(new_start:new_end) = raw%cidx(old_start:old_end)
-      heated%ridx(new_end+1) = row
-      heated%cidx(new_end+1) = ny + 1
-      heated%pb(row+1) = new_end + 2
+      augmented%ridx(new_start:new_end) = base%ridx(old_start:old_end)
+      augmented%cidx(new_start:new_end) = base%cidx(old_start:old_end)
+      augmented%ridx(new_end+1) = row
+      augmented%cidx(new_end+1) = ny + 1
+      augmented%pb(row+1) = new_end + 2
     EndDo
-    heated%pb(ny+2) = nnz + 1
-    new_start = heated%pb(ny+1)
+    augmented%pb(ny+2) = nnz + 1
+    new_start = augmented%pb(ny+1)
     Do row = 1, ny+1
-      heated%ridx(new_start+row-1) = ny + 1
-      heated%cidx(new_start+row-1) = row
+      augmented%ridx(new_start+row-1) = ny + 1
+      augmented%cidx(new_start+row-1) = row
     EndDo
 
-    Call remap_indices(raw%ns11,raw%ridx,heated%ns11)
-    Call remap_indices(raw%ns21,raw%ridx,heated%ns21)
-    Call remap_indices(raw%ns22,raw%ridx,heated%ns22)
-    Call remap_indices(raw%ns31,raw%ridx,heated%ns31)
-    Call remap_indices(raw%ns32,raw%ridx,heated%ns32)
-    Call remap_indices(raw%ns33,raw%ridx,heated%ns33)
-    Call remap_indices(raw%ns41,raw%ridx,heated%ns41)
-    Call remap_indices(raw%ns42,raw%ridx,heated%ns42)
-    Call remap_indices(raw%ns43,raw%ridx,heated%ns43)
-    Call remap_indices(raw%ns44,raw%ridx,heated%ns44)
+    Call remap_indices(base%ns11,base%ridx,augmented%ns11)
+    Call remap_indices(base%ns21,base%ridx,augmented%ns21)
+    Call remap_indices(base%ns22,base%ridx,augmented%ns22)
+    Call remap_indices(base%ns31,base%ridx,augmented%ns31)
+    Call remap_indices(base%ns32,base%ridx,augmented%ns32)
+    Call remap_indices(base%ns33,base%ridx,augmented%ns33)
+    Call remap_indices(base%ns41,base%ridx,augmented%ns41)
+    Call remap_indices(base%ns42,base%ridx,augmented%ns42)
+    Call remap_indices(base%ns43,base%ridx,augmented%ns43)
+    Call remap_indices(base%ns44,base%ridx,augmented%ns44)
 
-    Call validate_pardiso_heat(raw,heated,ny,status,message)
+    Call validate_augmented_crs(base,augmented,ny,status,message)
 
     Return
-  End Subroutine augment_pardiso_crs
+  End Subroutine augment_crs
 
-  Subroutine validate_raw_sparse_ind(data,ny,n10,n11,n20,n21,n22,n30,n31,n32,n33, &
+  Subroutine validate_sparse_ind(data,ny,n10,n11,n20,n21,n22,n30,n31,n32,n33, &
     & n40,n41,n42,n43,n44,status,message)
     Implicit None
 
-    Type(raw_sparse_ind_data), Intent(in) :: data
+    Type(sparse_data), Intent(in) :: data
     Integer, Intent(in) :: ny
     Integer, Intent(in) :: n10(:), n11(:), n20(:), n21(:), n22(:)
     Integer, Intent(in) :: n30(:), n31(:), n32(:), n33(:)
@@ -257,7 +254,7 @@ Contains
 
     status = sparse_ind_ok
     message = ''
-    Call validate_raw_topology(data,ny,status,message)
+    Call validate_crs_topology(data,ny,status,message)
     If ( status /= sparse_ind_ok ) Return
     Call validate_map(data%ns11,n10,n11,data,'ns11',status,message)
     If ( status /= sparse_ind_ok ) Return
@@ -280,12 +277,12 @@ Contains
     Call validate_map(data%ns44,n40,n44,data,'ns44',status,message)
 
     Return
-  End Subroutine validate_raw_sparse_ind
+  End Subroutine validate_sparse_ind
 
-  Subroutine validate_raw_topology(data,ny,status,message)
+  Subroutine validate_crs_topology(data,ny,status,message)
     Implicit None
 
-    Type(raw_sparse_ind_data), Intent(in) :: data
+    Type(sparse_data), Intent(in) :: data
     Integer, Intent(in) :: ny
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
@@ -336,12 +333,12 @@ Contains
     EndDo
 
     Return
-  End Subroutine validate_raw_topology
+  End Subroutine validate_crs_topology
 
-  Subroutine validate_raw_map_indices(data,status,message)
+  Subroutine validate_map_indices(data,status,message)
     Implicit None
 
-    Type(raw_sparse_ind_data), Intent(in) :: data
+    Type(sparse_data), Intent(in) :: data
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
 
@@ -378,13 +375,13 @@ Contains
     EndIf
 
     Return
-  End Subroutine validate_raw_map_indices
+  End Subroutine validate_map_indices
 
   Subroutine validate_map(map,row_index,column_index,data,label,status,message)
     Implicit None
 
     Integer, Intent(in) :: map(:), row_index(:), column_index(:)
-    Type(raw_sparse_ind_data), Intent(in) :: data
+    Type(sparse_data), Intent(in) :: data
     Character(*), Intent(in) :: label
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
@@ -409,11 +406,11 @@ Contains
     Return
   End Subroutine validate_map
 
-  Subroutine validate_pardiso_heat(raw,heated,ny,status,message)
+  Subroutine validate_augmented_crs(base,augmented,ny,status,message)
     Implicit None
 
-    Type(raw_sparse_ind_data), Intent(in) :: raw
-    Type(pardiso_heat_data), Intent(in) :: heated
+    Type(sparse_data), Intent(in) :: base
+    Type(sparse_data), Intent(in) :: augmented
     Integer, Intent(in) :: ny
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
@@ -422,80 +419,86 @@ Contains
 
     status = sparse_ind_ok
     message = ''
-    nnz = raw%lval + 2*ny + 1
-    If ( size(heated%ridx) /= nnz .or. size(heated%cidx) /= nnz .or. &
-      & size(heated%pb) /= ny+2 ) Then
-      Call invalidate(status,message,'heated CRS dimensions are incompatible')
+    nnz = base%lval + 2*ny + 1
+    If ( augmented%lval /= nnz .or. augmented%l1s /= base%l1s .or. &
+      & augmented%l2s /= base%l2s .or. augmented%l3s /= base%l3s .or. &
+      & augmented%l4s /= base%l4s ) Then
+      Call invalidate(status,message,'augmented CRS metadata are incompatible')
       Return
     EndIf
-    If ( heated%pb(1) /= 1 .or. heated%pb(ny+2) /= nnz+1 ) Then
-      Call invalidate(status,message,'heated CRS has wrong terminal pointer')
+    If ( size(augmented%ridx) /= nnz .or. size(augmented%cidx) /= nnz .or. &
+      & size(augmented%pb) /= ny+2 ) Then
+      Call invalidate(status,message,'augmented CRS dimensions are incompatible')
+      Return
+    EndIf
+    If ( augmented%pb(1) /= 1 .or. augmented%pb(ny+2) /= nnz+1 ) Then
+      Call invalidate(status,message,'augmented CRS has wrong terminal pointer')
       Return
     EndIf
     Do row = 1, ny+1
-      If ( heated%pb(row+1) <= heated%pb(row) ) Then
-        Call invalidate(status,message,'heated CRS row pointers are not strictly ordered')
+      If ( augmented%pb(row+1) <= augmented%pb(row) ) Then
+        Call invalidate(status,message,'augmented CRS row pointers are not strictly ordered')
         Return
       EndIf
-      Do entry = heated%pb(row), heated%pb(row+1)-1
-        If ( heated%ridx(entry) /= row .or. heated%cidx(entry) < 1 .or. &
-          & heated%cidx(entry) > ny+1 ) Then
-          Call invalidate(status,message,'heated CRS coordinate is outside its declared row')
+      Do entry = augmented%pb(row), augmented%pb(row+1)-1
+        If ( augmented%ridx(entry) /= row .or. augmented%cidx(entry) < 1 .or. &
+          & augmented%cidx(entry) > ny+1 ) Then
+          Call invalidate(status,message,'augmented CRS coordinate is outside its declared row')
           Return
         EndIf
-        If ( entry > heated%pb(row) ) Then
-          If ( heated%cidx(entry) <= heated%cidx(entry-1) ) Then
-            Call invalidate(status,message,'heated CRS columns are not strictly ordered')
+        If ( entry > augmented%pb(row) ) Then
+          If ( augmented%cidx(entry) <= augmented%cidx(entry-1) ) Then
+            Call invalidate(status,message,'augmented CRS columns are not strictly ordered')
             Return
           EndIf
         EndIf
       EndDo
-      If ( count(heated%cidx(heated%pb(row):heated%pb(row+1)-1) == row) /= 1 ) Then
-        Call invalidate(status,message,'heated CRS row does not contain exactly one diagonal')
+      If ( count(augmented%cidx(augmented%pb(row):augmented%pb(row+1)-1) == row) /= 1 ) Then
+        Call invalidate(status,message,'augmented CRS row does not contain exactly one diagonal')
         Return
       EndIf
     EndDo
     Do row = 1, ny
-      entry = heated%pb(row+1) - 1
-      If ( heated%ridx(entry) /= row .or. heated%cidx(entry) /= ny+1 ) Then
-        Call invalidate(status,message,'heated CRS is missing an ordered temperature column entry')
+      entry = augmented%pb(row+1) - 1
+      If ( augmented%ridx(entry) /= row .or. augmented%cidx(entry) /= ny+1 ) Then
+        Call invalidate(status,message,'augmented CRS is missing an ordered temperature column entry')
         Return
       EndIf
     EndDo
-    If ( any(heated%cidx(heated%pb(ny+1):heated%pb(ny+2)-1) /= (/ (row,row=1,ny+1) /)) ) Then
-      Call invalidate(status,message,'heated CRS temperature row is incomplete')
+    If ( any(augmented%cidx(augmented%pb(ny+1):augmented%pb(ny+2)-1) /= (/ (row,row=1,ny+1) /)) ) Then
+      Call invalidate(status,message,'augmented CRS temperature row is incomplete')
       Return
     EndIf
 
-    Call validate_remapped_indices(raw%ns11,heated%ns11,raw,heated,'ns11',status,message)
+    Call validate_remapped_indices(base%ns11,augmented%ns11,base,augmented,'ns11',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns21,heated%ns21,raw,heated,'ns21',status,message)
+    Call validate_remapped_indices(base%ns21,augmented%ns21,base,augmented,'ns21',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns22,heated%ns22,raw,heated,'ns22',status,message)
+    Call validate_remapped_indices(base%ns22,augmented%ns22,base,augmented,'ns22',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns31,heated%ns31,raw,heated,'ns31',status,message)
+    Call validate_remapped_indices(base%ns31,augmented%ns31,base,augmented,'ns31',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns32,heated%ns32,raw,heated,'ns32',status,message)
+    Call validate_remapped_indices(base%ns32,augmented%ns32,base,augmented,'ns32',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns33,heated%ns33,raw,heated,'ns33',status,message)
+    Call validate_remapped_indices(base%ns33,augmented%ns33,base,augmented,'ns33',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns41,heated%ns41,raw,heated,'ns41',status,message)
+    Call validate_remapped_indices(base%ns41,augmented%ns41,base,augmented,'ns41',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns42,heated%ns42,raw,heated,'ns42',status,message)
+    Call validate_remapped_indices(base%ns42,augmented%ns42,base,augmented,'ns42',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns43,heated%ns43,raw,heated,'ns43',status,message)
+    Call validate_remapped_indices(base%ns43,augmented%ns43,base,augmented,'ns43',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(raw%ns44,heated%ns44,raw,heated,'ns44',status,message)
+    Call validate_remapped_indices(base%ns44,augmented%ns44,base,augmented,'ns44',status,message)
 
     Return
-  End Subroutine validate_pardiso_heat
+  End Subroutine validate_augmented_crs
 
-  Subroutine validate_remapped_indices(raw_map,heated_map,raw,heated,label,status,message)
+  Subroutine validate_remapped_indices(base_map,augmented_map,base,augmented,label,status,message)
     Implicit None
 
-    Integer, Intent(in) :: raw_map(:), heated_map(:)
-    Type(raw_sparse_ind_data), Intent(in) :: raw
-    Type(pardiso_heat_data), Intent(in) :: heated
+    Integer, Intent(in) :: base_map(:), augmented_map(:)
+    Type(sparse_data), Intent(in) :: base
+    Type(sparse_data), Intent(in) :: augmented
     Character(*), Intent(in) :: label
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
@@ -504,18 +507,18 @@ Contains
 
     status = sparse_ind_ok
     message = ''
-    If ( size(raw_map) /= size(heated_map) ) Then
-      Call invalidate(status,message,trim(label)//' transformed size changed')
+    If ( size(base_map) /= size(augmented_map) ) Then
+      Call invalidate(status,message,trim(label)//' augmented size changed')
       Return
     EndIf
-    Do reaction = 1, size(raw_map)
-      If ( heated_map(reaction) < 1 .or. heated_map(reaction) > size(heated%ridx) ) Then
-        Call invalidate(status,message,trim(label)//' transformed index is out of range')
+    Do reaction = 1, size(base_map)
+      If ( augmented_map(reaction) < 1 .or. augmented_map(reaction) > size(augmented%ridx) ) Then
+        Call invalidate(status,message,trim(label)//' augmented index is out of range')
         Return
       EndIf
-      If ( heated%ridx(heated_map(reaction)) /= raw%ridx(raw_map(reaction)) .or. &
-        & heated%cidx(heated_map(reaction)) /= raw%cidx(raw_map(reaction)) ) Then
-        Call invalidate(status,message,trim(label)//' transformed coordinate changed')
+      If ( augmented%ridx(augmented_map(reaction)) /= base%ridx(base_map(reaction)) .or. &
+        & augmented%cidx(augmented_map(reaction)) /= base%cidx(base_map(reaction)) ) Then
+        Call invalidate(status,message,trim(label)//' augmented coordinate changed')
         Return
       EndIf
     EndDo
@@ -523,17 +526,17 @@ Contains
     Return
   End Subroutine validate_remapped_indices
 
-  Subroutine remap_indices(raw_map,raw_rows,heated_map)
+  Subroutine remap_indices(base_map,base_rows,augmented_map)
     Implicit None
 
-    Integer, Intent(in) :: raw_map(:), raw_rows(:)
-    Integer, Allocatable, Intent(out) :: heated_map(:)
+    Integer, Intent(in) :: base_map(:), base_rows(:)
+    Integer, Allocatable, Intent(out) :: augmented_map(:)
 
     Integer :: reaction
 
-    Allocate (heated_map(size(raw_map)))
-    Do reaction = 1, size(raw_map)
-      heated_map(reaction) = raw_map(reaction) + raw_rows(raw_map(reaction)) - 1
+    Allocate (augmented_map(size(base_map)))
+    Do reaction = 1, size(base_map)
+      augmented_map(reaction) = base_map(reaction) + base_rows(base_map(reaction)) - 1
     EndDo
 
     Return
@@ -595,4 +598,4 @@ Contains
     Return
   End Subroutine invalidate
 
-End Module xnet_sparse_contract
+End Module xnet_sparse

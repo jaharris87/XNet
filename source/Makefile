@@ -42,7 +42,7 @@ BASE = \
        xnet_nse.o \
        xnet_preprocess.o \
        xnet_screening.o \
-       xnet_sparse_contract.o \
+       xnet_sparse.o \
        xnet_timers.o \
        xnet_types.o \
        xnet_util.o
@@ -243,9 +243,9 @@ eos_type.o: xnet_types.o xnet_util.o
 
 xnet_jacobian_dense.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o
 xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o $(MA41_OBJ) $(MPI_OBJ)
-xnet_jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_sparse_contract.o xnet_timers.o xnet_types.o xnet_util.o $(MA48_OBJ) $(MPI_OBJ)
-xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_sparse_contract.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
-xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_sparse_contract.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
+xnet_jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_sparse.o xnet_timers.o xnet_types.o xnet_util.o $(MA48_OBJ) $(MPI_OBJ)
+xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_sparse.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
+xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_sparse.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
 
 xnet_parallel_stubs.o: xnet_types.o
 xnet_parallel.o: xnet_types.o

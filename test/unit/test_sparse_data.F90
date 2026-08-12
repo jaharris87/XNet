@@ -1,5 +1,5 @@
-Module sparse_ind_contract_fixture
-  Use xnet_sparse_contract, Only: raw_sparse_ind_data, read_sparse_ind
+Module sparse_data_fixture
+  Use xnet_sparse, Only: sparse_data, read_sparse_ind
   Implicit None
   Private
 
@@ -57,7 +57,7 @@ Contains
     Implicit None
 
     Character(*), Intent(in) :: mutation
-    Type(raw_sparse_ind_data), Intent(out) :: data
+    Type(sparse_data), Intent(out) :: data
     Integer, Intent(out) :: status, io_status
     Character(*), Intent(out) :: message
     Integer, Intent(in), Optional :: requested_map_sizes(4), requested_n44(:)
@@ -191,27 +191,27 @@ Contains
     Return
   End Subroutine write_fixture
 
-End Module sparse_ind_contract_fixture
+End Module sparse_data_fixture
 
-Module test_sparse_ind_contract
-  Use sparse_ind_contract_fixture
+Module test_sparse_data
+  Use sparse_data_fixture
   Use testdrive, Only: check, error_type, new_unittest, unittest_type
-  Use xnet_sparse_contract, Only: augment_pardiso_crs, pardiso_heat_data, raw_sparse_ind_data, &
-    & read_sparse_ind, sparse_ind_invalid, sparse_ind_ok, sparse_ind_read_error
+  Use xnet_sparse, Only: augment_crs, read_sparse_ind, sparse_data, sparse_ind_invalid, &
+    & sparse_ind_ok, sparse_ind_read_error
   Implicit None
   Private
 
-  Public :: collect_sparse_ind_contracts
+  Public :: collect_sparse_data_tests
 
 Contains
 
-  Subroutine collect_sparse_ind_contracts(testsuite)
+  Subroutine collect_sparse_data_tests(testsuite)
     Implicit None
 
     Type(unittest_type), Allocatable, Intent(out) :: testsuite(:)
 
     testsuite = [ &
-      & new_unittest('valid raw schema',test_valid_raw_schema), &
+      & new_unittest('valid sparse_ind schema',test_valid_sparse_ind), &
       & new_unittest('zero-length reaction maps',test_zero_length_maps), &
       & new_unittest('malformed and truncated header',test_invalid_header), &
       & new_unittest('incompatible dimensions',test_invalid_dimensions), &
@@ -220,17 +220,17 @@ Contains
       & new_unittest('coordinate and topology invariants',test_invalid_topology), &
       & new_unittest('reaction-map invariants',test_invalid_maps), &
       & new_unittest('record count',test_record_count), &
-      & new_unittest('PARDISO heat augmentation and remapping',test_pardiso_heat), &
-      & new_unittest('PARDISO transformation rejects invalid input',test_pardiso_rejection) ]
+      & new_unittest('CRS augmentation and remapping',test_crs_augmentation), &
+      & new_unittest('CRS augmentation rejects invalid input',test_crs_rejection) ]
 
     Return
-  End Subroutine collect_sparse_ind_contracts
+  End Subroutine collect_sparse_data_tests
 
-  Subroutine test_valid_raw_schema(error)
+  Subroutine test_valid_sparse_ind(error)
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Type(raw_sparse_ind_data) :: data
+    Type(sparse_data) :: data
     Character(256) :: message
     Integer :: io_status, status
 
@@ -257,13 +257,13 @@ Contains
       & data%ns43(1) == 5 .and. data%ns44(1) == 3)
 
     Return
-  End Subroutine test_valid_raw_schema
+  End Subroutine test_valid_sparse_ind
 
   Subroutine test_zero_length_maps(error)
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Type(raw_sparse_ind_data) :: data
+    Type(sparse_data) :: data
     Character(512) :: file_name
     Character(256) :: message
     Integer, Allocatable :: empty(:)
@@ -312,7 +312,7 @@ Contains
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Type(raw_sparse_ind_data) :: data
+    Type(sparse_data) :: data
     Character(256) :: message
     Integer :: io_status, status
 
@@ -432,69 +432,72 @@ Contains
     Return
   End Subroutine test_record_count
 
-  Subroutine test_pardiso_heat(error)
+  Subroutine test_crs_augmentation(error)
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Type(raw_sparse_ind_data) :: raw
-    Type(pardiso_heat_data) :: heated
+    Type(sparse_data) :: base
+    Type(sparse_data) :: augmented
     Character(256) :: message, mutation
     Integer :: io_status, length, status, variable_status
 
-    Call write_fixture('heat')
-    Call read_fixture('heat',raw,status,io_status,message)
+    Call write_fixture('augmentation')
+    Call read_fixture('augmentation',base,status,io_status,message)
     Call check(error,status,sparse_ind_ok)
     If ( allocated(error) ) Return
-    Call augment_pardiso_crs(raw,ny,heated,status,message)
+    Call augment_crs(base,ny,augmented,status,message)
     Call check(error,status,sparse_ind_ok)
+    If ( allocated(error) ) Return
+    Call check(error,augmented%lval == 14 .and. &
+      & all((/ augmented%l1s, augmented%l2s, augmented%l3s, augmented%l4s /) == map_sizes))
     If ( allocated(error) ) Return
 
     mutation = ''
-    Call get_environment_variable('XNET_PARDISO_TRANSFORM_MUTATION',mutation, &
+    Call get_environment_variable('XNET_CRS_AUGMENTATION_MUTATION',mutation, &
       & length=length,status=variable_status)
     If ( variable_status == 0 ) Then
-      If ( mutation(1:length) == 'missing-heat-entry' ) heated%cidx(heated%pb(2)-1) = 1
+      If ( mutation(1:length) == 'missing-temperature-entry' ) augmented%cidx(augmented%pb(2)-1) = 1
     EndIf
 
-    Call check(error,all(heated%ridx == (/ 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4 /)))
+    Call check(error,all(augmented%ridx == (/ 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(heated%cidx == (/ 1, 2, 4, 1, 2, 3, 4, 2, 3, 4, 1, 2, 3, 4 /)))
+    Call check(error,all(augmented%cidx == (/ 1, 2, 4, 1, 2, 3, 4, 2, 3, 4, 1, 2, 3, 4 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(heated%pb == (/ 1, 4, 8, 11, 15 /)))
+    Call check(error,all(augmented%pb == (/ 1, 4, 8, 11, 15 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(heated%ns11 == (/ 2, 6, 8 /)))
+    Call check(error,all(augmented%ns11 == (/ 2, 6, 8 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(heated%ns21 == (/ 1, 4 /)) .and. all(heated%ns22 == (/ 2, 6 /)))
+    Call check(error,all(augmented%ns21 == (/ 1, 4 /)) .and. all(augmented%ns22 == (/ 2, 6 /)))
     If ( allocated(error) ) Return
-    Call check(error,heated%ns31(1) == 8 .and. heated%ns32(1) == 9 .and. heated%ns33(1) == 8)
+    Call check(error,augmented%ns31(1) == 8 .and. augmented%ns32(1) == 9 .and. augmented%ns33(1) == 8)
     If ( allocated(error) ) Return
-    Call check(error,heated%ns41(1) == 4 .and. heated%ns42(1) == 5 .and. &
-      & heated%ns43(1) == 6 .and. heated%ns44(1) == 4)
+    Call check(error,augmented%ns41(1) == 4 .and. augmented%ns42(1) == 5 .and. &
+      & augmented%ns43(1) == 6 .and. augmented%ns44(1) == 4)
 
     Return
-  End Subroutine test_pardiso_heat
+  End Subroutine test_crs_augmentation
 
-  Subroutine test_pardiso_rejection(error)
+  Subroutine test_crs_rejection(error)
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Type(raw_sparse_ind_data) :: raw
-    Type(pardiso_heat_data) :: heated
+    Type(sparse_data) :: base
+    Type(sparse_data) :: augmented
     Character(256) :: message
     Integer :: io_status, status
 
-    Call write_fixture('transform-rejection')
-    Call read_fixture('transform-rejection',raw,status,io_status,message)
+    Call write_fixture('augmentation-rejection')
+    Call read_fixture('augmentation-rejection',base,status,io_status,message)
     Call check(error,status,sparse_ind_ok)
     If ( allocated(error) ) Return
-    raw%pb(2) = raw%pb(2) + 1
-    Call augment_pardiso_crs(raw,ny,heated,status,message)
+    base%pb(2) = base%pb(2) + 1
+    Call augment_crs(base,ny,augmented,status,message)
     Call check(error,status,sparse_ind_invalid)
     If ( allocated(error) ) Return
     Call check(error,index(message,'declared row') > 0 .or. index(message,'strictly ordered') > 0)
 
     Return
-  End Subroutine test_pardiso_rejection
+  End Subroutine test_crs_rejection
 
   Subroutine expect_failure(error,mutation,expected_status,diagnostic)
     Implicit None
@@ -503,7 +506,7 @@ Contains
     Character(*), Intent(in) :: mutation, diagnostic
     Integer, Intent(in) :: expected_status
 
-    Type(raw_sparse_ind_data) :: data
+    Type(sparse_data) :: data
     Character(256) :: message
     Integer :: io_status, status
 
@@ -516,12 +519,12 @@ Contains
     Return
   End Subroutine expect_failure
 
-End Module test_sparse_ind_contract
+End Module test_sparse_data
 
-Program sparse_ind_contract_test_runner
+Program sparse_data_test_runner
   Use, Intrinsic :: iso_fortran_env, Only: error_unit
-  Use sparse_ind_contract_fixture, Only: set_work_directory
-  Use test_sparse_ind_contract, Only: collect_sparse_ind_contracts
+  Use sparse_data_fixture, Only: set_work_directory
+  Use test_sparse_data, Only: collect_sparse_data_tests
   Use testdrive, Only: new_testsuite, run_testsuite, testsuite_type
   Implicit None
 
@@ -530,18 +533,18 @@ Program sparse_ind_contract_test_runner
   Type(testsuite_type), Allocatable :: testsuites(:)
 
   If ( command_argument_count() /= 1 ) Then
-    Write(error_unit,*) 'usage: sparse_ind contract test WORK_DIRECTORY'
+    Write(error_unit,*) 'usage: sparse data test WORK_DIRECTORY'
     Stop 1
   EndIf
   Call get_command_argument(1,work_directory)
   Call set_work_directory(trim(work_directory))
 
   stat = 0
-  testsuites = [ new_testsuite('sparse_ind production contracts',collect_sparse_ind_contracts) ]
+  testsuites = [ new_testsuite('sparse data',collect_sparse_data_tests) ]
   Write(error_unit,'("# Testing: ",a)') testsuites(1)%name
   Call run_testsuite(testsuites(1)%collect,error_unit,stat,parallel=.False.)
   If ( stat > 0 ) Then
     Write(error_unit,'(i0,1x,a)') stat,'test(s) failed'
     Stop 1
   EndIf
-End Program sparse_ind_contract_test_runner
+End Program sparse_data_test_runner

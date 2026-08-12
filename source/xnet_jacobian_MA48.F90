@@ -74,7 +74,7 @@ Contains
       & n40, n41, n42, n43, n44, nan
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
-    Use xnet_sparse_contract, Only: raw_sparse_ind_data, read_sparse_ind, sparse_ind_invalid, &
+    Use xnet_sparse, Only: read_sparse_ind, sparse_data, sparse_ind_invalid, &
       & sparse_ind_open_error, sparse_ind_read_error
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -83,13 +83,13 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Type(raw_sparse_ind_data) :: raw
+    Type(sparse_data) :: base
     Character(256) :: sparse_message
     Integer :: i, ierr, io_status, lun_solver, sparse_status
 
     If ( parallel_IOProcessor() ) Then
       Call read_sparse_ind(trim(data_dir)//'/sparse_ind',ny,nan,n10,n11,n20,n21,n22, &
-        & n30,n31,n32,n33,n40,n41,n42,n43,n44,raw,sparse_status,io_status,sparse_message)
+        & n30,n31,n32,n33,n40,n41,n42,n43,n44,base,sparse_status,io_status,sparse_message)
       Select Case (sparse_status)
       Case (sparse_ind_open_error)
         Call xnet_terminate('Failed to open sparse_ind file',io_status)
@@ -98,11 +98,11 @@ Contains
       Case (sparse_ind_invalid)
         Call xnet_terminate('Invalid sparse_ind: '//trim(sparse_message))
       End Select
-      lval = raw%lval
-      l1s = raw%l1s
-      l2s = raw%l2s
-      l3s = raw%l3s
-      l4s = raw%l4s
+      lval = base%lval
+      l1s = base%l1s
+      l2s = base%l2s
+      l3s = base%l3s
+      l4s = base%l4s
     EndIf
     Call parallel_bcast(lval)
 
@@ -118,9 +118,9 @@ Contains
     ! Allocate, read, and broadcast CRS arrays
     Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
     If ( parallel_IOProcessor() ) Then
-      ridx(1:lval) = raw%ridx
-      cidx(1:lval) = raw%cidx
-      pb(1:ny+1) = raw%pb
+      ridx(1:lval) = base%ridx
+      cidx(1:lval) = base%cidx
+      pb(1:ny+1) = base%pb
       If ( iheat > 0 ) Then
         ! Add indices for self-heating
         Do i = 1, ny
@@ -147,20 +147,20 @@ Contains
     Allocate (ns31(l3s),ns32(l3s),ns33(l3s))
     Allocate (ns41(l4s),ns42(l4s),ns43(l4s),ns44(l4s))
     If ( parallel_IOProcessor() ) Then
-      ns11 = raw%ns11
-      ns21 = raw%ns21
-      ns22 = raw%ns22
-      ns31 = raw%ns31
-      ns32 = raw%ns32
-      ns33 = raw%ns33
-      ns41 = raw%ns41
-      ns42 = raw%ns42
-      ns43 = raw%ns43
-      ns44 = raw%ns44
-      Deallocate (raw%ridx,raw%cidx,raw%pb)
-      Deallocate (raw%ns11,raw%ns21,raw%ns22)
-      Deallocate (raw%ns31,raw%ns32,raw%ns33)
-      Deallocate (raw%ns41,raw%ns42,raw%ns43,raw%ns44)
+      ns11 = base%ns11
+      ns21 = base%ns21
+      ns22 = base%ns22
+      ns31 = base%ns31
+      ns32 = base%ns32
+      ns33 = base%ns33
+      ns41 = base%ns41
+      ns42 = base%ns42
+      ns43 = base%ns43
+      ns44 = base%ns44
+      Deallocate (base%ridx,base%cidx,base%pb)
+      Deallocate (base%ns11,base%ns21,base%ns22)
+      Deallocate (base%ns31,base%ns32,base%ns33)
+      Deallocate (base%ns41,base%ns42,base%ns43,base%ns44)
     EndIf
     Call parallel_bcast(ns11)
     Call parallel_bcast(ns21)

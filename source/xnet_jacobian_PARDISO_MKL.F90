@@ -125,9 +125,8 @@ Contains
       & n40, n41, n42, n43, n44, nan
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
-    Use xnet_sparse_contract, Only: augment_pardiso_crs, pardiso_heat_data, &
-      & raw_sparse_ind_data, read_sparse_ind, sparse_ind_invalid, sparse_ind_open_error, &
-      & sparse_ind_read_error
+    Use xnet_sparse, Only: augment_crs, read_sparse_ind, sparse_data, sparse_ind_invalid, &
+      & sparse_ind_open_error, sparse_ind_read_error
     Use xnet_util, Only: xnet_terminate
     Implicit None
 
@@ -135,14 +134,14 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Type(raw_sparse_ind_data) :: raw
-    Type(pardiso_heat_data) :: heated
+    Type(sparse_data) :: base
+    Type(sparse_data) :: augmented
     Character(256) :: sparse_message
     Integer :: ierr, io_status, lun_solver, sparse_status
 
     If ( parallel_IOProcessor() ) Then
       Call read_sparse_ind(trim(data_dir)//'/sparse_ind',ny,nan,n10,n11,n20,n21,n22, &
-        & n30,n31,n32,n33,n40,n41,n42,n43,n44,raw,sparse_status,io_status,sparse_message)
+        & n30,n31,n32,n33,n40,n41,n42,n43,n44,base,sparse_status,io_status,sparse_message)
       Select Case (sparse_status)
       Case (sparse_ind_open_error)
         Call xnet_terminate('Failed to open sparse_ind file',io_status)
@@ -151,11 +150,11 @@ Contains
       Case (sparse_ind_invalid)
         Call xnet_terminate('Invalid sparse_ind: '//trim(sparse_message))
       End Select
-      lval = raw%lval
-      l1s = raw%l1s
-      l2s = raw%l2s
-      l3s = raw%l3s
-      l4s = raw%l4s
+      lval = base%lval
+      l1s = base%l1s
+      l2s = base%l2s
+      l3s = base%l3s
+      l4s = base%l4s
     EndIf
     Call parallel_bcast(lval)
 
@@ -172,16 +171,16 @@ Contains
     Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
     If ( parallel_IOProcessor() ) Then
       If ( iheat > 0 ) Then
-        Call augment_pardiso_crs(raw,ny,heated,sparse_status,sparse_message)
+        Call augment_crs(base,ny,augmented,sparse_status,sparse_message)
         If ( sparse_status == sparse_ind_invalid ) &
-          & Call xnet_terminate('Invalid PARDISO sparse transformation: '//trim(sparse_message))
-        ridx = heated%ridx
-        cidx = heated%cidx
-        pb = heated%pb
+          & Call xnet_terminate('Invalid augmented CRS data: '//trim(sparse_message))
+        ridx = augmented%ridx
+        cidx = augmented%cidx
+        pb = augmented%pb
       Else
-        ridx = raw%ridx
-        cidx = raw%cidx
-        pb = raw%pb
+        ridx = base%ridx
+        cidx = base%cidx
+        pb = base%pb
       EndIf
     EndIf
     Call parallel_bcast(ridx)
@@ -200,27 +199,27 @@ Contains
 
     If ( parallel_IOProcessor() ) Then
       If ( iheat > 0 ) Then
-        ns11 = heated%ns11
-        ns21 = heated%ns21
-        ns22 = heated%ns22
-        ns31 = heated%ns31
-        ns32 = heated%ns32
-        ns33 = heated%ns33
-        ns41 = heated%ns41
-        ns42 = heated%ns42
-        ns43 = heated%ns43
-        ns44 = heated%ns44
+        ns11 = augmented%ns11
+        ns21 = augmented%ns21
+        ns22 = augmented%ns22
+        ns31 = augmented%ns31
+        ns32 = augmented%ns32
+        ns33 = augmented%ns33
+        ns41 = augmented%ns41
+        ns42 = augmented%ns42
+        ns43 = augmented%ns43
+        ns44 = augmented%ns44
       Else
-        ns11 = raw%ns11
-        ns21 = raw%ns21
-        ns22 = raw%ns22
-        ns31 = raw%ns31
-        ns32 = raw%ns32
-        ns33 = raw%ns33
-        ns41 = raw%ns41
-        ns42 = raw%ns42
-        ns43 = raw%ns43
-        ns44 = raw%ns44
+        ns11 = base%ns11
+        ns21 = base%ns21
+        ns22 = base%ns22
+        ns31 = base%ns31
+        ns32 = base%ns32
+        ns33 = base%ns33
+        ns41 = base%ns41
+        ns42 = base%ns42
+        ns43 = base%ns43
+        ns44 = base%ns44
       EndIf
     EndIf
     Call parallel_bcast(ns11)

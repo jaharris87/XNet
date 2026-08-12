@@ -230,8 +230,7 @@ $(BUILD_NET_READER_EXE): $(PREPROCESS_VERIFY_OBJECTS:$(PREPROCESS_BUILD_DIR)/ver
     $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
-$(NETWORK_HEADER_MUTATOR_EXE): $(PREPROCESS_BUILD_DIR)/xnet_types.o \
-    $(PREPROCESS_BUILD_DIR)/mutate_network_header.o
+$(NETWORK_HEADER_MUTATOR_EXE): $(PREPROCESS_BUILD_DIR)/mutate_network_header.o
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
 $(PREPROCESS_BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(PREPROCESS_BUILD_DIR)
@@ -313,7 +312,7 @@ $(PREPROCESS_BUILD_DIR)/net_setup.o: $(XNET_DIR)/net_setup.F90 \
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/mutate_network_header.o: support/mutate_network_header.F90 \
-    $(PREPROCESS_BUILD_DIR)/xnet_types.o | $(PREPROCESS_BUILD_DIR)
+    | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/pardiso_test_stubs.o: support/pardiso_test_stubs.F90 \

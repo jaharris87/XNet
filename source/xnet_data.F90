@@ -378,7 +378,7 @@ Contains
   End Subroutine read_sunet
 
   Subroutine read_netwinv_header(lun_winv,ny_expected,nname_expected,it9i_file, &
-    & status,mismatch_index,io_status)
+    & nname_file,status,mismatch_index,io_status)
     Implicit None
 
     ! Input variables
@@ -387,9 +387,9 @@ Contains
 
     ! Output variables
     Integer, Intent(out) :: it9i_file(ng), status, mismatch_index, io_status
+    Character(5), Intent(out) :: nname_file(ny_expected)
 
     ! Local variables
-    Character(5) :: nname_file
     Integer :: inuc, ny_file
 
     status = identity_ok
@@ -412,12 +412,12 @@ Contains
       Return
     EndIf
     Do inuc = 1, ny_expected
-      Read(lun_winv,"(a5)",iostat=io_status) nname_file
+      Read(lun_winv,"(a5)",iostat=io_status) nname_file(inuc)
       If ( io_status /= 0 ) Then
         status = identity_read_error
         Return
       EndIf
-      If ( adjustl(nname_file) /= adjustl(nname_expected(inuc)) ) Then
+      If ( adjustl(nname_file(inuc)) /= adjustl(nname_expected(inuc)) ) Then
         status = identity_name_mismatch
         mismatch_index = inuc
         Return
@@ -427,7 +427,7 @@ Contains
     Return
   End Subroutine read_netwinv_header
 
-  Subroutine validate_netwinv_identity(data_dir,ny_expected,nname_expected, &
+  Subroutine validate_netwinv_identity(data_dir,ny_expected,nname_expected,nname_file, &
     & status,mismatch_index,io_status)
     Implicit None
 
@@ -437,6 +437,7 @@ Contains
     Character(5), Intent(in) :: nname_expected(ny_expected)
 
     ! Output variables
+    Character(5), Intent(out) :: nname_file(ny_expected)
     Integer, Intent(out) :: status, mismatch_index, io_status
 
     ! Local variables
@@ -454,7 +455,7 @@ Contains
       Return
     EndIf
 
-    Call read_netwinv_header(lun_winv,ny_expected,nname_expected,it9i_file, &
+    Call read_netwinv_header(lun_winv,ny_expected,nname_expected,it9i_file,nname_file, &
       & status,mismatch_index,io_status)
     Close(lun_winv)
 
@@ -469,11 +470,11 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Character(5), Allocatable :: nname_file(:)
+    Character(5), Allocatable :: nname_netwinv(:), nname_sunet(:)
     Integer :: inuc, io_status, mismatch_index, ny_file, status
 
     ! Validate both generated identity headers before installing either one.
-    Call read_sunet_file(data_dir,ny_file,nname_file,status,io_status)
+    Call read_sunet_file(data_dir,ny_file,nname_sunet,status,io_status)
     Select Case (status)
     Case (identity_open_error)
       Call xnet_terminate('Failed to open sunet file',io_status)
@@ -481,7 +482,9 @@ Contains
       Call xnet_terminate('Error reading sunet file',io_status)
     End Select
 
-    Call validate_netwinv_identity(data_dir,ny_file,nname_file,status,mismatch_index,io_status)
+    Allocate (nname_netwinv(ny_file))
+    Call validate_netwinv_identity(data_dir,ny_file,nname_sunet,nname_netwinv, &
+      & status,mismatch_index,io_status)
     Select Case (status)
     Case (identity_open_error)
       Call xnet_terminate('Failed to open netwinv file',io_status)
@@ -496,16 +499,17 @@ Contains
     If ( allocated(nname) ) Then
       If ( ny_file /= ny ) Call xnet_terminate('sunet species count does not match installed network')
       Do inuc = 1, ny
-        If ( adjustl(nname_file(inuc)) /= adjustl(nname(inuc)) ) &
+        If ( adjustl(nname_sunet(inuc)) /= adjustl(nname(inuc)) ) &
           & Call xnet_terminate('sunet species name does not match installed network for inuc=',inuc)
       EndDo
     Else
       ny = ny_file
       Allocate (nname(0:ny))
       nname(0) = ' === '
-      nname(1:ny) = nname_file
     EndIf
-    Deallocate (nname_file)
+    ! Preserve netwinv as the historical canonical spelling after complete validation.
+    nname(1:ny) = nname_netwinv
+    Deallocate (nname_netwinv,nname_sunet)
 
     Return
   End Subroutine read_nuclear_identity
@@ -521,15 +525,20 @@ Contains
     ! Local variables
     Character(256) :: filename
     Character(5) :: nam
+    Character(5), Allocatable :: nname_file(:)
     Integer :: it9i_file(ng)
     Real(dp) :: spin ! Ground state spin
     Integer :: inuc, j, io_status, lun_winv, mismatch_index, status
+
+    If ( .not. allocated(nname) ) Call read_nuclear_identity(data_dir)
 
     filename = trim(data_dir)//'/netwinv'
     Open(newunit=lun_winv, file=trim(filename), status='old', action='read', iostat=io_status)
     If ( io_status /= 0 ) Call xnet_terminate('Failed to open netwinv file',io_status)
 
-    Call read_netwinv_header(lun_winv,ny,nname(1:ny),it9i_file,status,mismatch_index,io_status)
+    Allocate (nname_file(ny))
+    Call read_netwinv_header(lun_winv,ny,nname(1:ny),it9i_file,nname_file, &
+      & status,mismatch_index,io_status)
     Select Case (status)
     Case (identity_read_error)
       Close(lun_winv)
@@ -541,6 +550,8 @@ Contains
       Close(lun_winv)
       Call xnet_terminate('netwinv species name does not match sunet for inuc=',mismatch_index)
     End Select
+    nname(1:ny) = nname_file
+    Deallocate (nname_file)
 
     ! Read in the partition function iteration grid, and fix endpoints
     If ( .not. allocated(it9i) ) Allocate (it9i(ng))

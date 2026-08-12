@@ -199,12 +199,17 @@ interoperability check, not a stored scientific endpoint comparison.
 
 The one-zone production smoke sets `iprocess=0`, so it reads the already
 generated bundle without replacing it through runtime preprocessing. Before
-that smoke, isolated copies of the same valid bundle receive four ASCII header
-mutations and three sequential-unformatted header mutations. Each copy must
-return nonzero status from the production reader executable with the specific
-cross-file rejection diagnostic, before the reader's final state-verification
-message. The unformatted-file mutator only rewrites controlled test copies; no
-test-only entry point is added to production modules.
+that smoke, isolated copies of the same valid bundle receive head and tail
+ordered-name mutations, count mutations, and each of the four `match_data`
+reaction-count mutations. Records beyond each mismatching header boundary are
+truncated, so a delayed validator cannot pass by emitting the right diagnostic
+after consuming dependent data. Each copy must return nonzero status from the
+production reader executable with the specific cross-file rejection diagnostic,
+before the reader's final state-verification message. Positive variants also
+cover the public `read_netwinv` wrapper from fresh state and preserve netwinv's
+historical canonical name padding when `sunet` differs only in padding. The
+unformatted-file mutator only rewrites controlled test copies; no test-only
+entry point is added to production modules.
 
 ## Vendored test-drive dependency
 

@@ -1,5 +1,4 @@
 Program mutate_network_header
-  Use xnet_types, Only: dp
   Implicit None
 
   Character(32) :: mode
@@ -13,10 +12,16 @@ Program mutate_network_header
   Call get_command_argument(2,data_dir)
 
   Select Case (trim(mode))
-  Case ('nets4-count','nets4-order')
+  Case ('nets4-count','nets4-order-head','nets4-order-tail')
     Call mutate_nets4(trim(data_dir),trim(mode))
-  Case ('match-count')
-    Call mutate_match_data(trim(data_dir))
+  Case ('match-count-1')
+    Call mutate_match_data(trim(data_dir),1)
+  Case ('match-count-2')
+    Call mutate_match_data(trim(data_dir),2)
+  Case ('match-count-3')
+    Call mutate_match_data(trim(data_dir),3)
+  Case ('match-count-4')
+    Call mutate_match_data(trim(data_dir),4)
   Case Default
     Write(*,*) 'unsupported network-header mutation: ',trim(mode)
     Stop 2
@@ -58,19 +63,25 @@ Contains
         Write(*,*) 'nets4 order mutation requires at least two species'
         Stop 2
       EndIf
-      saved_name = names(1)
-      names(1) = names(2)
-      names(2) = saved_name
+      If ( mutation == 'nets4-order-tail' ) Then
+        saved_name = names(ny_file-1)
+        names(ny_file-1) = names(ny_file)
+        names(ny_file) = saved_name
+      Else
+        saved_name = names(1)
+        names(1) = names(2)
+        names(2) = saved_name
+      EndIf
     EndIf
 
     Open(newunit=lun,file=trim(directory)//'/nets4',form='unformatted',status='replace',action='write')
     Write(lun) ny_write
+    If ( mutation == 'nets4-count' ) Then
+      Close(lun)
+      Deallocate (names,la,le)
+      Return
+    EndIf
     Write(lun) names
-    Write(lun) nffn, nnnu
-    Write(lun) nreac
-    Do i = 1, ny_file
-      Write(lun) i, (la(j,i),le(j,i),j=1,4)
-    EndDo
     Close(lun)
 
     Deallocate (names,la,le)
@@ -78,34 +89,23 @@ Contains
     Return
   End Subroutine mutate_nets4
 
-  Subroutine mutate_match_data(directory)
+  Subroutine mutate_match_data(directory,group)
     Implicit None
 
     Character(*), Intent(in) :: directory
+    Integer, Intent(in) :: group
 
-    Character(4), Allocatable :: descx(:)
-    Integer, Allocatable :: ifl1(:), ifl2(:), ifl3(:), ifl4(:)
-    Integer, Allocatable :: iwflx(:), nflx(:,:)
-    Real(dp), Allocatable :: qflx(:)
     Integer :: lun, mflx, nr(4), nr_write(4)
 
     Open(newunit=lun,file=trim(directory)//'/match_data',form='unformatted',status='old',action='read')
     Read(lun) mflx, nr
-    Allocate (ifl1(nr(1)),ifl2(nr(2)),ifl3(nr(3)),ifl4(nr(4)))
-    Allocate (nflx(8,mflx),qflx(mflx),iwflx(mflx),descx(mflx))
-    Read(lun) ifl1, ifl2, ifl3, ifl4
-    Read(lun) nflx, qflx, iwflx, descx
     Close(lun)
 
     nr_write = nr
-    nr_write(1) = nr_write(1) + 1
+    nr_write(group) = nr_write(group) + 1
     Open(newunit=lun,file=trim(directory)//'/match_data',form='unformatted',status='replace',action='write')
     Write(lun) mflx, nr_write
-    Write(lun) ifl1, ifl2, ifl3, ifl4
-    Write(lun) nflx, qflx, iwflx, descx
     Close(lun)
-
-    Deallocate (ifl1,ifl2,ifl3,ifl4,nflx,qflx,iwflx,descx)
 
     Return
   End Subroutine mutate_match_data

@@ -514,11 +514,17 @@ def mutate_reaction_participant(directory: Path) -> None:
     fail("could not locate forward reaction for mutation")
 
 
-def mutate_species_order(directory: Path) -> None:
+def mutate_netwinv_order(directory: Path, *, tail: bool) -> None:
     path = directory / "netwinv"
     lines = path.read_text(encoding="ascii").splitlines()
-    lines[2], lines[3] = lines[3], lines[2]
+    count = int(lines[0])
+    first = 2 + count - 2 if tail else 2
+    lines[first], lines[first + 1] = lines[first + 1], lines[first]
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
+
+
+def mutate_species_order(directory: Path) -> None:
+    mutate_netwinv_order(directory, tail=False)
 
 
 def mutate_sunet_count(directory: Path) -> None:
@@ -528,13 +534,22 @@ def mutate_sunet_count(directory: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
 
 
-def mutate_sunet_order(directory: Path) -> None:
+def mutate_sunet_order(directory: Path, *, tail: bool) -> None:
     path = directory / "sunet"
     lines = path.read_text(encoding="ascii").splitlines()
     if len(lines) < 2:
         fail("sunet order mutation requires at least two species")
-    lines[0], lines[1] = lines[1], lines[0]
+    first = len(lines) - 2 if tail else 0
+    lines[first], lines[first + 1] = lines[first + 1], lines[first]
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
+
+
+def mutate_sunet_padding(directory: Path) -> None:
+    path = directory / "sunet"
+    lines = path.read_text(encoding="ascii").splitlines()
+    path.write_text(
+        "\n".join(line.strip().ljust(5) for line in lines) + "\n", encoding="ascii"
+    )
 
 
 def mutate_netwinv_count(directory: Path) -> None:
@@ -542,6 +557,13 @@ def mutate_netwinv_count(directory: Path) -> None:
     lines = path.read_text(encoding="ascii").splitlines()
     lines[0] = f"{int(lines[0]) + 1:5d}"
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
+
+
+def truncate_netwinv_header(directory: Path, *, after_names: bool) -> None:
+    path = directory / "netwinv"
+    lines = path.read_text(encoding="ascii").splitlines()
+    retained = 2 + int(lines[0]) if after_names else 1
+    path.write_text("\n".join(lines[:retained]) + "\n", encoding="ascii")
 
 
 def mutate_mass(directory: Path) -> None:
@@ -748,32 +770,60 @@ def main(argv: list[str]) -> int:
     reader_result = run_process([str(reader_check), str(downstream)], downstream)
     require_success("build_net production readers", reader_result)
 
+    padding_case = work_dir / "reader-padding-preservation"
+    copy_output(downstream, padding_case)
+    mutate_sunet_padding(padding_case)
+    padding_result = run_process([str(reader_check), str(padding_case)], padding_case)
+    require_success("sunet padding preservation", padding_result)
+
+    direct_netwinv_result = run_process(
+        [str(reader_check), str(downstream), "direct-netwinv"], downstream
+    )
+    require_success("direct read_netwinv wrapper", direct_netwinv_result)
+
     ascii_header_mutations = (
         (
             "sunet-count",
             mutate_sunet_count,
+            False,
             "netwinv species count does not match sunet",
         ),
         (
-            "sunet-order",
-            mutate_sunet_order,
+            "sunet-order-head",
+            lambda case: mutate_sunet_order(case, tail=False),
+            True,
+            "netwinv species name does not match sunet for inuc=",
+        ),
+        (
+            "sunet-order-tail",
+            lambda case: mutate_sunet_order(case, tail=True),
+            True,
             "netwinv species name does not match sunet for inuc=",
         ),
         (
             "netwinv-count",
             mutate_netwinv_count,
+            False,
             "netwinv species count does not match sunet",
         ),
         (
-            "netwinv-order",
-            mutate_species_order,
+            "netwinv-order-head",
+            lambda case: mutate_netwinv_order(case, tail=False),
+            True,
+            "netwinv species name does not match sunet for inuc=",
+        ),
+        (
+            "netwinv-order-tail",
+            lambda case: mutate_netwinv_order(case, tail=True),
+            True,
             "netwinv species name does not match sunet for inuc=",
         ),
     )
-    for name, mutation, diagnostic in ascii_header_mutations:
+    for name, mutation, after_names, diagnostic in ascii_header_mutations:
         case = work_dir / f"reader-{name}"
         copy_output(downstream, case)
         mutation(case)
+        truncate_netwinv_header(case, after_names=after_names)
         result = run_process([str(reader_check), str(case)], case)
         require_reader_rejection(name, result, diagnostic)
 
@@ -783,11 +833,27 @@ def main(argv: list[str]) -> int:
             "nets4 species count does not match installed network",
         ),
         (
-            "nets4-order",
+            "nets4-order-head",
             "nets4 species name does not match installed network for inuc=",
         ),
         (
-            "match-count",
+            "nets4-order-tail",
+            "nets4 species name does not match installed network for inuc=",
+        ),
+        (
+            "match-count-1",
+            "match_data reaction count does not match reaction_data for group=",
+        ),
+        (
+            "match-count-2",
+            "match_data reaction count does not match reaction_data for group=",
+        ),
+        (
+            "match-count-3",
+            "match_data reaction count does not match reaction_data for group=",
+        ),
+        (
+            "match-count-4",
             "match_data reaction count does not match reaction_data for group=",
         ),
     )

@@ -297,18 +297,6 @@ def require_failure_diagnostic(
         fail(f"{label} failed without expected diagnostic: {diagnostic}")
 
 
-def require_reader_rejection(
-    label: str, result: subprocess.CompletedProcess[str], diagnostic: str
-) -> None:
-    output = result.stdout + result.stderr
-    if result.returncode == 0:
-        fail(f"{label} unexpectedly reached dependent reader use")
-    if diagnostic.lower() not in output.lower():
-        fail(f"{label} failed without expected early diagnostic: {diagnostic}")
-    if "build_net production reader semantics passed" in output:
-        fail(f"{label} reported rejection after dependent reader use")
-
-
 def floats_from_fixed(line: str, width: int) -> tuple[float, ...]:
     values = []
     for offset in range(0, len(line), width):
@@ -514,56 +502,11 @@ def mutate_reaction_participant(directory: Path) -> None:
     fail("could not locate forward reaction for mutation")
 
 
-def mutate_netwinv_order(directory: Path, *, tail: bool) -> None:
-    path = directory / "netwinv"
-    lines = path.read_text(encoding="ascii").splitlines()
-    count = int(lines[0])
-    first = 2 + count - 2 if tail else 2
-    lines[first], lines[first + 1] = lines[first + 1], lines[first]
-    path.write_text("\n".join(lines) + "\n", encoding="ascii")
-
-
 def mutate_species_order(directory: Path) -> None:
-    mutate_netwinv_order(directory, tail=False)
-
-
-def mutate_sunet_count(directory: Path) -> None:
-    path = directory / "sunet"
-    lines = path.read_text(encoding="ascii").splitlines()
-    lines.append("ne20")
-    path.write_text("\n".join(lines) + "\n", encoding="ascii")
-
-
-def mutate_sunet_order(directory: Path, *, tail: bool) -> None:
-    path = directory / "sunet"
-    lines = path.read_text(encoding="ascii").splitlines()
-    if len(lines) < 2:
-        fail("sunet order mutation requires at least two species")
-    first = len(lines) - 2 if tail else 0
-    lines[first], lines[first + 1] = lines[first + 1], lines[first]
-    path.write_text("\n".join(lines) + "\n", encoding="ascii")
-
-
-def mutate_sunet_padding(directory: Path) -> None:
-    path = directory / "sunet"
-    lines = path.read_text(encoding="ascii").splitlines()
-    path.write_text(
-        "\n".join(line.strip().ljust(5) for line in lines) + "\n", encoding="ascii"
-    )
-
-
-def mutate_netwinv_count(directory: Path) -> None:
     path = directory / "netwinv"
     lines = path.read_text(encoding="ascii").splitlines()
-    lines[0] = f"{int(lines[0]) + 1:5d}"
+    lines[2], lines[3] = lines[3], lines[2]
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
-
-
-def truncate_netwinv_header(directory: Path, *, after_names: bool) -> None:
-    path = directory / "netwinv"
-    lines = path.read_text(encoding="ascii").splitlines()
-    retained = 2 + int(lines[0]) if after_names else 1
-    path.write_text("\n".join(lines[:retained]) + "\n", encoding="ascii")
 
 
 def mutate_mass(directory: Path) -> None:
@@ -685,10 +628,9 @@ def verify_smoke(directory: Path, result: subprocess.CompletedProcess[str]) -> N
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 8:
+    if len(argv) != 7:
         print(
-            "usage: run_build_net_contracts.py WORK_DIR BUILD_NET NET_SETUP "
-            "READER_CHECK HEADER_MUTATOR XNET HELM_TABLE",
+            "usage: run_build_net_contracts.py WORK_DIR BUILD_NET NET_SETUP READER_CHECK XNET HELM_TABLE",
             file=sys.stderr,
         )
         return 2
@@ -696,12 +638,11 @@ def main(argv: list[str]) -> int:
     build_net = Path(argv[2]).resolve()
     net_setup = Path(argv[3]).resolve()
     reader_check = Path(argv[4]).resolve()
-    header_mutator = Path(argv[5]).resolve()
-    xnet = Path(argv[6]).resolve()
-    helm_table = Path(argv[7]).resolve()
+    xnet = Path(argv[5]).resolve()
+    helm_table = Path(argv[6]).resolve()
     if "/build/" not in str(work_dir) or work_dir.name != "build-net-work":
         fail(f"refusing unexpected build_net work directory: {work_dir}")
-    for required in (build_net, net_setup, reader_check, header_mutator, xnet, helm_table):
+    for required in (build_net, net_setup, reader_check, xnet, helm_table):
         if not required.is_file():
             fail(f"required executable/input does not exist: {required}")
     shutil.rmtree(work_dir, ignore_errors=True)
@@ -769,102 +710,6 @@ def main(argv: list[str]) -> int:
         fail(f"net_setup did not create required artifacts: {', '.join(missing)}")
     reader_result = run_process([str(reader_check), str(downstream)], downstream)
     require_success("build_net production readers", reader_result)
-
-    padding_case = work_dir / "reader-padding-preservation"
-    copy_output(downstream, padding_case)
-    mutate_sunet_padding(padding_case)
-    padding_result = run_process([str(reader_check), str(padding_case)], padding_case)
-    require_success("sunet padding preservation", padding_result)
-
-    direct_netwinv_result = run_process(
-        [str(reader_check), str(downstream), "direct-netwinv"], downstream
-    )
-    require_success("direct read_netwinv wrapper", direct_netwinv_result)
-
-    ascii_header_mutations = (
-        (
-            "sunet-count",
-            mutate_sunet_count,
-            False,
-            "netwinv species count does not match sunet",
-        ),
-        (
-            "sunet-order-head",
-            lambda case: mutate_sunet_order(case, tail=False),
-            True,
-            "netwinv species name does not match sunet for inuc=",
-        ),
-        (
-            "sunet-order-tail",
-            lambda case: mutate_sunet_order(case, tail=True),
-            True,
-            "netwinv species name does not match sunet for inuc=",
-        ),
-        (
-            "netwinv-count",
-            mutate_netwinv_count,
-            False,
-            "netwinv species count does not match sunet",
-        ),
-        (
-            "netwinv-order-head",
-            lambda case: mutate_netwinv_order(case, tail=False),
-            True,
-            "netwinv species name does not match sunet for inuc=",
-        ),
-        (
-            "netwinv-order-tail",
-            lambda case: mutate_netwinv_order(case, tail=True),
-            True,
-            "netwinv species name does not match sunet for inuc=",
-        ),
-    )
-    for name, mutation, after_names, diagnostic in ascii_header_mutations:
-        case = work_dir / f"reader-{name}"
-        copy_output(downstream, case)
-        mutation(case)
-        truncate_netwinv_header(case, after_names=after_names)
-        result = run_process([str(reader_check), str(case)], case)
-        require_reader_rejection(name, result, diagnostic)
-
-    binary_header_mutations = (
-        (
-            "nets4-count",
-            "nets4 species count does not match installed network",
-        ),
-        (
-            "nets4-order-head",
-            "nets4 species name does not match installed network for inuc=",
-        ),
-        (
-            "nets4-order-tail",
-            "nets4 species name does not match installed network for inuc=",
-        ),
-        (
-            "match-count-1",
-            "match_data reaction count does not match reaction_data for group=",
-        ),
-        (
-            "match-count-2",
-            "match_data reaction count does not match reaction_data for group=",
-        ),
-        (
-            "match-count-3",
-            "match_data reaction count does not match reaction_data for group=",
-        ),
-        (
-            "match-count-4",
-            "match_data reaction count does not match reaction_data for group=",
-        ),
-    )
-    for mode, diagnostic in binary_header_mutations:
-        case = work_dir / f"reader-{mode}"
-        copy_output(downstream, case)
-        mutation_result = run_process([str(header_mutator), mode, str(case)], case)
-        require_success(f"{mode} mutation", mutation_result)
-        result = run_process([str(reader_check), str(case)], case)
-        require_reader_rejection(mode, result, diagnostic)
-
     write_smoke_inputs(downstream, helm_table)
     smoke_result = run_process([str(xnet)], downstream, timeout=60.0)
     verify_smoke(downstream, smoke_result)

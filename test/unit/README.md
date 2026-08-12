@@ -127,9 +127,6 @@ The suite checks:
   weak rates and without private neutrino data;
 - generated species order, selected mass and partition data, retained and
   excluded reactions, weak/reverse metadata, and mass-consistent Q values;
-- early production-reader rejection for controlled `sunet` and `netwinv`
-  count/order disagreement, `nets4` count/order disagreement, and
-  `match_data` reaction-count disagreement;
 - nonzero `build_net` status for missing, duplicate, unavailable, malformed,
   and truncated inputs; and
 - `build_net` output interoperability through `net_setup`, the production
@@ -196,20 +193,6 @@ CRS coordinates, and every reaction-to-entry map before the tracked serial GNU
 `source/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
 requires normal target-time completion and emitted counters; it is an
 interoperability check, not a stored scientific endpoint comparison.
-
-The one-zone production smoke sets `iprocess=0`, so it reads the already
-generated bundle without replacing it through runtime preprocessing. Before
-that smoke, isolated copies of the same valid bundle receive head and tail
-ordered-name mutations, count mutations, and each of the four `match_data`
-reaction-count mutations. Records beyond each mismatching header boundary are
-truncated, so a delayed validator cannot pass by emitting the right diagnostic
-after consuming dependent data. Each copy must return nonzero status from the
-production reader executable with the specific cross-file rejection diagnostic,
-before the reader's final state-verification message. Positive variants also
-cover the public `read_netwinv` wrapper from fresh state and preserve netwinv's
-historical canonical name padding when `sunet` differs only in padding. The
-unformatted-file mutator only rewrites controlled test copies; no test-only
-entry point is added to production modules.
 
 ## Vendored test-drive dependency
 

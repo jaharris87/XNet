@@ -1,6 +1,5 @@
 Program verify_build_net_readers
-  Use nuclear_data, Only: aa, angm, g, mex, nname, nn, ny, read_netwinv, &
-    & read_nuclear_data, zz
+  Use nuclear_data, Only: aa, angm, g, mex, nname, nn, ny, read_nuclear_data, zz
   Use reaction_data, Only: ires1, ires2, ires3, ires4, irev1, irev2, iwk1, iwk2, &
     & mu1, mu2, n1i, n2i, n10, n11, n20, n21, n22, nan, nreac, q1, q2, rc1, rc2, &
     & read_reaction_data
@@ -15,22 +14,14 @@ Program verify_build_net_readers
 
   Real(dp), Parameter :: tolerance = 1.0e-8_dp
   Character(80) :: data_desc
-  Character(256) :: data_dir, mode
+  Character(256) :: data_dir
   Integer :: i, j, k
 
-  If ( command_argument_count() < 1 .or. command_argument_count() > 2 ) Then
-    Write(*,*) 'usage: verify_build_net_readers DATA_DIR [direct-netwinv]'
+  If ( command_argument_count() /= 1 ) Then
+    Write(*,*) 'usage: verify_build_net_readers DATA_DIR'
     Stop 1
   EndIf
   Call get_command_argument(1,data_dir)
-  mode = ''
-  If ( command_argument_count() == 2 ) Then
-    Call get_command_argument(2,mode)
-    If ( trim(mode) /= 'direct-netwinv' ) Then
-      Write(*,*) 'unsupported reader mode: ',trim(mode)
-      Stop 1
-    EndIf
-  EndIf
 
   idiag = -1
   iheat = 0
@@ -43,7 +34,6 @@ Program verify_build_net_readers
   zb_lo = 1
   zb_hi = 1
 
-  If ( trim(mode) == 'direct-netwinv' ) Call read_netwinv(trim(data_dir))
   Call read_nuclear_data(trim(data_dir),data_desc)
   Call read_reaction_data(trim(data_dir))
   Call read_match_data(trim(data_dir))

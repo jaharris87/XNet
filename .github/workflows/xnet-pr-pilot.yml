@@ -323,12 +323,21 @@ jobs:
               raise SystemExit(0)
 
           copied = []
+          omitted = []
+
+          def ignore_staged_inputs(directory, names):
+              ignored = []
+              for name in names:
+                  candidate = Path(directory) / name
+                  if name == "helm_table.dat" or candidate.is_symlink():
+                      ignored.append(name)
+                      omitted.append(candidate.relative_to(regression_root).as_posix())
+              return ignored
+
           for raw_path in artifact_paths:
               source = Path(raw_path).resolve(strict=True)
               if regression_root not in source.parents or not source.is_dir():
                   raise SystemExit(f"refusing artifact path outside regression root: {raw_path}")
-              if any(path.is_symlink() for path in source.rglob("*")):
-                  raise SystemExit(f"refusing artifact directory containing symlinks: {raw_path}")
 
               relative = source.relative_to(regression_root)
               destination = failure_root / relative
@@ -336,14 +345,16 @@ jobs:
               shutil.copytree(
                   source,
                   destination,
-                  ignore=shutil.ignore_patterns("helm_table.dat"),
+                  ignore=ignore_staged_inputs,
               )
               copied.append(relative.as_posix())
 
           manifest = failure_root / "MANIFEST.txt"
           manifest.write_text(
-              "Copied failing regression directories (helm_table.dat omitted):\n"
+              "Copied failing regression directories:\n"
               + "".join(f"{path}\n" for path in copied)
+              + "Omitted staged symlinks and helm_table.dat:\n"
+              + "".join(f"{path}\n" for path in sorted(set(omitted)))
           )
           print(manifest.read_text(), end="")
           PY

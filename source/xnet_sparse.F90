@@ -606,7 +606,7 @@ Contains
     Character(*), Intent(out) :: message
 
     Character(1) :: record_probe
-    Integer :: lun_probe
+    Integer :: lun_probe, short_record_status
     Type(sparse_data) :: probe_data
 
     status = sparse_ind_ok
@@ -621,16 +621,20 @@ Contains
     Allocate (probe_data%ns41(size(data%ns41)),probe_data%ns42(size(data%ns42)), &
       & probe_data%ns43(size(data%ns43)),probe_data%ns44(size(data%ns44)))
 
+    Call determine_short_record_status(short_record_status,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
     Call start_record_probe(file_name,1,'header record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%lval, record_probe
-    Call finish_record_probe(lun_probe,'header record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'header record',short_record_status,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,2,'topology record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ridx, probe_data%cidx, probe_data%pb, record_probe
-    Call finish_record_probe(lun_probe,'topology record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'topology record',short_record_status,status,io_status, &
+      & message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,3,'reaction-map dimension record',lun_probe,status, &
@@ -638,7 +642,8 @@ Contains
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%l1s, probe_data%l2s, probe_data%l3s, &
       & probe_data%l4s, record_probe
-    Call finish_record_probe(lun_probe,'reaction-map dimension record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'reaction-map dimension record',short_record_status, &
+      & status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,4,'one/two-reactant map record',lun_probe,status, &
@@ -646,52 +651,108 @@ Contains
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns11, probe_data%ns21, probe_data%ns22, &
       & record_probe
-    Call finish_record_probe(lun_probe,'one/two-reactant map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'one/two-reactant map record',short_record_status,status, &
+      & io_status,message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,5,'ns31 map record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns31, record_probe
-    Call finish_record_probe(lun_probe,'ns31 map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'ns31 map record',short_record_status,status,io_status, &
+      & message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,6,'ns32 map record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns32, record_probe
-    Call finish_record_probe(lun_probe,'ns32 map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'ns32 map record',short_record_status,status,io_status, &
+      & message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,7,'ns33 map record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns33, record_probe
-    Call finish_record_probe(lun_probe,'ns33 map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'ns33 map record',short_record_status,status,io_status, &
+      & message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,8,'ns41 map record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns41, record_probe
-    Call finish_record_probe(lun_probe,'ns41 map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'ns41 map record',short_record_status,status,io_status, &
+      & message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,9,'ns42 map record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns42, record_probe
-    Call finish_record_probe(lun_probe,'ns42 map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'ns42 map record',short_record_status,status,io_status, &
+      & message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,10,'ns43 map record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns43, record_probe
-    Call finish_record_probe(lun_probe,'ns43 map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'ns43 map record',short_record_status,status,io_status, &
+      & message)
     If ( status /= sparse_ind_ok ) Return
 
     Call start_record_probe(file_name,11,'ns44 map record',lun_probe,status,io_status,message)
     If ( status /= sparse_ind_ok ) Return
     Read(lun_probe,iostat=io_status) probe_data%ns44, record_probe
-    Call finish_record_probe(lun_probe,'ns44 map record',status,io_status,message)
+    Call finish_record_probe(lun_probe,'ns44 map record',short_record_status,status,io_status, &
+      & message)
 
     Return
   End Subroutine validate_record_sizes
+
+  Subroutine determine_short_record_status(short_record_status,status,io_status,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Sequential-unformatted short-record errors have processor-specific positive status values.
+    ! Generate that condition on a scratch record so production probes can require the exact value.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    Integer, Intent(out) :: short_record_status, status, io_status
+    Character(*), Intent(out) :: message
+
+    Character(1) :: record_probe
+    Character(256) :: io_message
+    Integer :: close_status, lun_probe, value
+
+    short_record_status = 0
+    status = sparse_ind_ok
+    io_status = 0
+    message = ''
+    Open(newunit=lun_probe,status='scratch',action='readwrite',form='unformatted', &
+      & iostat=io_status,iomsg=io_message)
+    If ( io_status /= 0 ) Then
+      Call read_failure(status,message,'record-size probe setup',io_message)
+      Return
+    EndIf
+    Write(lun_probe,iostat=io_status,iomsg=io_message) 0
+    If ( io_status == 0 ) Rewind(lun_probe,iostat=io_status,iomsg=io_message)
+    If ( io_status /= 0 ) Then
+      Call read_failure(status,message,'record-size probe setup',io_message)
+      Close(lun_probe)
+      Return
+    EndIf
+    Read(lun_probe,iostat=short_record_status) value, record_probe
+    Close(lun_probe,iostat=close_status,iomsg=io_message)
+    If ( close_status /= 0 ) Then
+      Call read_failure(status,message,'record-size probe close',io_message)
+      io_status = close_status
+      Return
+    EndIf
+    If ( short_record_status <= 0 .or. short_record_status == iostat_end .or. &
+      & short_record_status == iostat_eor ) Then
+      Call read_failure(status,message,'record-size probe setup', &
+        & 'processor did not report the expected sequential short-record error')
+      io_status = short_record_status
+    EndIf
+
+    Return
+  End Subroutine determine_short_record_status
 
   Subroutine start_record_probe(file_name,record_number,record_name,lun,status,io_status,message)
     Implicit None
@@ -728,11 +789,12 @@ Contains
     Return
   End Subroutine start_record_probe
 
-  Subroutine finish_record_probe(lun,record_name,status,io_status,message)
+  Subroutine finish_record_probe(lun,record_name,short_record_status,status,io_status,message)
     Implicit None
 
     Integer, Intent(in) :: lun
     Character(*), Intent(in) :: record_name
+    Integer, Intent(in) :: short_record_status
     Integer, Intent(out) :: status
     Integer, Intent(inout) :: io_status
     Character(*), Intent(out) :: message
@@ -750,15 +812,12 @@ Contains
     EndIf
     If ( io_status == 0 ) Then
       Call invalidate(status,message,trim(record_name)//' contains unexpected data')
-    ElseIf ( io_status == iostat_end .or. io_status == iostat_eor ) Then
+    ElseIf ( short_record_status <= 0 .or. io_status < 0 ) Then
       Call read_failure(status,message,trim(record_name)//' size probe', &
-        & 'unexpected end condition while checking record size')
-    ElseIf ( io_status < 0 ) Then
-      Call read_failure(status,message,trim(record_name)//' size probe', &
-        & 'unexpected input condition while checking record size')
+        & 'unexpected input status while checking record size')
     Else
-      ! Sequential-unformatted input past a record is an error, not the named nonadvancing EOR
-      ! condition. The positive status is consumed only on this fresh unit, which is now closed.
+      ! Positive values identify processor-defined error conditions. The successful data pass and
+      ! checked skips leave the one-character short-record read as the only expected error here.
       io_status = 0
     EndIf
 

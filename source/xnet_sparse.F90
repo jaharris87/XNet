@@ -3,7 +3,7 @@
 !***************************************************************************************************
 
 Module xnet_sparse
-  Use, Intrinsic :: iso_fortran_env, Only: iostat_end
+  Use, Intrinsic :: iso_fortran_env, Only: iostat_end, iostat_eor
   Implicit None
   Private
 
@@ -48,7 +48,7 @@ Contains
     Character(*), Intent(out) :: message
 
     Character(256) :: io_message
-    Integer :: lun_sparse, record_probe, trailing_value
+    Integer :: lun_sparse, trailing_value
 
     status = sparse_ind_ok
     io_status = 0
@@ -77,17 +77,6 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
-    Call start_record_probe(lun_sparse,'header record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%lval, record_probe
-    Call finish_record_probe('header record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
     If ( data%lval < ny .or. int(data%lval,count_kind) > &
       & int(ny,count_kind)*int(ny,count_kind) ) Then
       Call invalidate(status,message,'nonzero count is incompatible with network dimension')
@@ -102,32 +91,9 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
-    Call start_record_probe(lun_sparse,'topology record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ridx, data%cidx, data%pb, record_probe
-    Call finish_record_probe('topology record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%l1s, data%l2s, data%l3s, data%l4s
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'reaction-map dimension record',io_message)
-      Close(lun_sparse)
-      Return
-    EndIf
-    Call start_record_probe(lun_sparse,'reaction-map dimension record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%l1s, data%l2s, data%l3s, data%l4s, record_probe
-    Call finish_record_probe('reaction-map dimension record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -147,31 +113,9 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
-    Call start_record_probe(lun_sparse,'one/two-reactant map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns11, data%ns21, data%ns22, record_probe
-    Call finish_record_probe('one/two-reactant map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns31
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns31 map record',io_message)
-      Close(lun_sparse)
-      Return
-    EndIf
-    Call start_record_probe(lun_sparse,'ns31 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns31, record_probe
-    Call finish_record_probe('ns31 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -181,31 +125,9 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
-    Call start_record_probe(lun_sparse,'ns32 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns32, record_probe
-    Call finish_record_probe('ns32 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns33
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns33 map record',io_message)
-      Close(lun_sparse)
-      Return
-    EndIf
-    Call start_record_probe(lun_sparse,'ns33 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns33, record_probe
-    Call finish_record_probe('ns33 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -215,31 +137,9 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
-    Call start_record_probe(lun_sparse,'ns41 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns41, record_probe
-    Call finish_record_probe('ns41 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns42
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns42 map record',io_message)
-      Close(lun_sparse)
-      Return
-    EndIf
-    Call start_record_probe(lun_sparse,'ns42 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns42, record_probe
-    Call finish_record_probe('ns42 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -249,35 +149,12 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
-    Call start_record_probe(lun_sparse,'ns43 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns43, record_probe
-    Call finish_record_probe('ns43 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns44
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns44 map record',io_message)
       Close(lun_sparse)
       Return
     EndIf
-    Call start_record_probe(lun_sparse,'ns44 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-    Read(lun_sparse,iostat=io_status) data%ns44, record_probe
-    Call finish_record_probe('ns44 map record',status,io_status,message)
-    If ( status /= sparse_ind_ok ) Then
-      Close(lun_sparse)
-      Return
-    EndIf
-
     Read(lun_sparse,iostat=io_status,iomsg=io_message) trailing_value
     If ( io_status == 0 ) Then
       Call invalidate(status,message,'unexpected trailing record')
@@ -290,6 +167,9 @@ Contains
     EndIf
     io_status = 0
     Close(lun_sparse)
+
+    Call validate_record_sizes(file_name,data,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
 
     Call validate_sparse_ind(data,ny,n10,n11,n20,n21,n22,n30,n31,n32,n33, &
       & n40,n41,n42,n43,n44,status,message)
@@ -711,42 +591,174 @@ Contains
     Return
   End Function target_dimensions_match
 
-  Subroutine start_record_probe(lun,record_name,status,io_status,message)
+  Subroutine validate_record_sizes(file_name,data,status,io_status,message)
     !-----------------------------------------------------------------------------------------------
-    ! The ordinary read has already shown that the record contains every required field. Re-read it
-    ! with one extra scalar so that only an overlong record succeeds without an end-of-record error.
+    ! The ordinary pass has already shown that every required field is present. Probe each record on
+    ! a fresh unit with one extra character, then close that unit immediately after the target read.
+    ! Thus an exact record fails only the probe read, while the successful data-read unit is never
+    ! used after an error and any unexpected file-storage unit is detected.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
-    Integer, Intent(in) :: lun
-    Character(*), Intent(in) :: record_name
+    Character(*), Intent(in) :: file_name
+    Type(sparse_data), Intent(in) :: data
     Integer, Intent(out) :: status, io_status
     Character(*), Intent(out) :: message
 
-    Character(256) :: io_message
+    Character(1) :: record_probe
+    Integer :: lun_probe
+    Type(sparse_data) :: probe_data
 
     status = sparse_ind_ok
     io_status = 0
     message = ''
-    Backspace(lun,iostat=io_status,iomsg=io_message)
-    If ( io_status /= 0 ) Call read_failure(status,message,trim(record_name)//' rewind',io_message)
+    Allocate (probe_data%ridx(size(data%ridx)),probe_data%cidx(size(data%cidx)), &
+      & probe_data%pb(size(data%pb)))
+    Allocate (probe_data%ns11(size(data%ns11)))
+    Allocate (probe_data%ns21(size(data%ns21)),probe_data%ns22(size(data%ns22)))
+    Allocate (probe_data%ns31(size(data%ns31)),probe_data%ns32(size(data%ns32)), &
+      & probe_data%ns33(size(data%ns33)))
+    Allocate (probe_data%ns41(size(data%ns41)),probe_data%ns42(size(data%ns42)), &
+      & probe_data%ns43(size(data%ns43)),probe_data%ns44(size(data%ns44)))
+
+    Call start_record_probe(file_name,1,'header record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%lval, record_probe
+    Call finish_record_probe(lun_probe,'header record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,2,'topology record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ridx, probe_data%cidx, probe_data%pb, record_probe
+    Call finish_record_probe(lun_probe,'topology record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,3,'reaction-map dimension record',lun_probe,status, &
+      & io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%l1s, probe_data%l2s, probe_data%l3s, &
+      & probe_data%l4s, record_probe
+    Call finish_record_probe(lun_probe,'reaction-map dimension record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,4,'one/two-reactant map record',lun_probe,status, &
+      & io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns11, probe_data%ns21, probe_data%ns22, &
+      & record_probe
+    Call finish_record_probe(lun_probe,'one/two-reactant map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,5,'ns31 map record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns31, record_probe
+    Call finish_record_probe(lun_probe,'ns31 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,6,'ns32 map record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns32, record_probe
+    Call finish_record_probe(lun_probe,'ns32 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,7,'ns33 map record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns33, record_probe
+    Call finish_record_probe(lun_probe,'ns33 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,8,'ns41 map record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns41, record_probe
+    Call finish_record_probe(lun_probe,'ns41 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,9,'ns42 map record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns42, record_probe
+    Call finish_record_probe(lun_probe,'ns42 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,10,'ns43 map record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns43, record_probe
+    Call finish_record_probe(lun_probe,'ns43 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+
+    Call start_record_probe(file_name,11,'ns44 map record',lun_probe,status,io_status,message)
+    If ( status /= sparse_ind_ok ) Return
+    Read(lun_probe,iostat=io_status) probe_data%ns44, record_probe
+    Call finish_record_probe(lun_probe,'ns44 map record',status,io_status,message)
+
+    Return
+  End Subroutine validate_record_sizes
+
+  Subroutine start_record_probe(file_name,record_number,record_name,lun,status,io_status,message)
+    Implicit None
+
+    Character(*), Intent(in) :: file_name
+    Integer, Intent(in) :: record_number
+    Character(*), Intent(in) :: record_name
+    Integer, Intent(out) :: lun
+    Integer, Intent(out) :: status, io_status
+    Character(*), Intent(out) :: message
+
+    Character(256) :: io_message
+    Integer :: record
+
+    status = sparse_ind_ok
+    io_status = 0
+    message = ''
+    Open(newunit=lun,file=trim(file_name),status='old',action='read',form='unformatted', &
+      & iostat=io_status,iomsg=io_message)
+    If ( io_status /= 0 ) Then
+      status = sparse_ind_open_error
+      message = trim(io_message)
+      Return
+    EndIf
+    Do record = 1, record_number-1
+      Read(lun,iostat=io_status,iomsg=io_message)
+      If ( io_status /= 0 ) Then
+        Call read_failure(status,message,trim(record_name)//' probe setup',io_message)
+        Close(lun)
+        Return
+      EndIf
+    EndDo
 
     Return
   End Subroutine start_record_probe
 
-  Subroutine finish_record_probe(record_name,status,io_status,message)
+  Subroutine finish_record_probe(lun,record_name,status,io_status,message)
     Implicit None
 
+    Integer, Intent(in) :: lun
     Character(*), Intent(in) :: record_name
     Integer, Intent(out) :: status
     Integer, Intent(inout) :: io_status
     Character(*), Intent(out) :: message
 
+    Character(256) :: io_message
+    Integer :: close_status
+
     status = sparse_ind_ok
     message = ''
+    Close(lun,iostat=close_status,iomsg=io_message)
+    If ( close_status /= 0 ) Then
+      Call read_failure(status,message,trim(record_name)//' probe close',io_message)
+      io_status = close_status
+      Return
+    EndIf
     If ( io_status == 0 ) Then
       Call invalidate(status,message,trim(record_name)//' contains unexpected data')
+    ElseIf ( io_status == iostat_end .or. io_status == iostat_eor ) Then
+      Call read_failure(status,message,trim(record_name)//' size probe', &
+        & 'unexpected end condition while checking record size')
+    ElseIf ( io_status < 0 ) Then
+      Call read_failure(status,message,trim(record_name)//' size probe', &
+        & 'unexpected input condition while checking record size')
     Else
+      ! Sequential-unformatted input past a record is an error, not the named nonadvancing EOR
+      ! condition. The positive status is consumed only on this fresh unit, which is now closed.
       io_status = 0
     EndIf
 

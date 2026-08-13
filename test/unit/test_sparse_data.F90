@@ -30,6 +30,7 @@ Module sparse_data_fixture
   Public :: set_work_directory
   Public :: sparse_file_name
   Public :: write_fixture
+  Public :: write_zero_map_overlong
 
 Contains
 
@@ -78,9 +79,11 @@ Contains
     Character(*), Intent(in) :: mutation
 
     Integer, Parameter :: lval = 13
+    Character(2), Parameter :: byte_tail = 'xy'
     Integer :: cidx(lval), lun_sparse, lval_out, pb(ny+1), ridx(lval)
     Integer :: ns11(3), ns21(2), ns22(2), ns31(1), ns32(1), ns33(1)
     Integer :: ns41(1), ns42(1), ns43(1), ns44(1)
+    Integer :: tail_length
 
     ridx = (/ 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4 /)
     cidx = (/ 1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4 /)
@@ -109,7 +112,10 @@ Contains
     Case ('invalid-count')
       lval_out = ny*ny + 1
     End Select
-    If ( trim(mutation) == 'overlong-header' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-header')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) lval_out, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-header' ) Then
       Write(lun_sparse) lval_out, 99
     Else
       Write(lun_sparse) lval_out
@@ -139,7 +145,10 @@ Contains
     Case ('unordered-columns')
       cidx(1:2) = (/ 2, 1 /)
     End Select
-    If ( trim(mutation) == 'overlong-topology' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-topology')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ridx, cidx, pb, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-topology' ) Then
       Write(lun_sparse) ridx, cidx, pb, 99
     Else
       Write(lun_sparse) ridx, cidx, pb
@@ -150,7 +159,10 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
-    If ( trim(mutation) == 'overlong-map-dimensions' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-map-dimensions')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) map_sizes, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-map-dimensions' ) Then
       Write(lun_sparse) map_sizes, 99
     Else
       Write(lun_sparse) map_sizes
@@ -184,42 +196,66 @@ Contains
       Close(lun_sparse)
       Return
     End Select
-    If ( trim(mutation) == 'overlong-one-two-map' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-one-two-map')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns11, ns21, ns22, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-one-two-map' ) Then
       Write(lun_sparse) ns11, ns21, ns22, 99
     Else
       Write(lun_sparse) ns11, ns21, ns22
     EndIf
-    If ( trim(mutation) == 'overlong-ns31' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-ns31')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns31, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-ns31' ) Then
       Write(lun_sparse) ns31, 99
     Else
       Write(lun_sparse) ns31
     EndIf
-    If ( trim(mutation) == 'overlong-ns32' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-ns32')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns32, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-ns32' ) Then
       Write(lun_sparse) ns32, 99
     Else
       Write(lun_sparse) ns32
     EndIf
-    If ( trim(mutation) == 'overlong-ns33' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-ns33')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns33, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-ns33' ) Then
       Write(lun_sparse) ns33, 99
     Else
       Write(lun_sparse) ns33
     EndIf
-    If ( trim(mutation) == 'overlong-ns41' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-ns41')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns41, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-ns41' ) Then
       Write(lun_sparse) ns41, 99
     Else
       Write(lun_sparse) ns41
     EndIf
-    If ( trim(mutation) == 'overlong-ns42' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-ns42')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns42, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-ns42' ) Then
       Write(lun_sparse) ns42, 99
     Else
       Write(lun_sparse) ns42
     EndIf
-    If ( trim(mutation) == 'overlong-ns43' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-ns43')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns43, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-ns43' ) Then
       Write(lun_sparse) ns43, 99
     Else
       Write(lun_sparse) ns43
     EndIf
-    If ( trim(mutation) == 'overlong-ns44' ) Then
+    tail_length = byte_tail_length(mutation,'overlong-ns44')
+    If ( tail_length > 0 ) Then
+      Write(lun_sparse) ns44, byte_tail(1:tail_length)
+    ElseIf ( trim(mutation) == 'overlong-ns44' ) Then
       Write(lun_sparse) ns44, 99
     Else
       Write(lun_sparse) ns44
@@ -229,6 +265,79 @@ Contains
 
     Return
   End Subroutine write_fixture
+
+  Subroutine write_zero_map_overlong(record_number,tail_length)
+    Implicit None
+
+    Integer, Intent(in) :: record_number, tail_length
+
+    Character(2), Parameter :: byte_tail = 'xy'
+    Integer, Allocatable :: empty(:)
+    Integer :: lun_sparse
+
+    Allocate (empty(0))
+    Open(newunit=lun_sparse,file=sparse_file_name('zero-maps-overlong'),status='replace', &
+      & form='unformatted')
+    Write(lun_sparse) 2
+    Write(lun_sparse) (/ 1, 2 /), (/ 1, 2 /), (/ 1, 2, 3 /)
+    Write(lun_sparse) 0, 0, 0, 0
+    If ( record_number == 4 ) Then
+      Write(lun_sparse) empty, empty, empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty, empty, empty
+    EndIf
+    If ( record_number == 5 ) Then
+      Write(lun_sparse) empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty
+    EndIf
+    If ( record_number == 6 ) Then
+      Write(lun_sparse) empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty
+    EndIf
+    If ( record_number == 7 ) Then
+      Write(lun_sparse) empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty
+    EndIf
+    If ( record_number == 8 ) Then
+      Write(lun_sparse) empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty
+    EndIf
+    If ( record_number == 9 ) Then
+      Write(lun_sparse) empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty
+    EndIf
+    If ( record_number == 10 ) Then
+      Write(lun_sparse) empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty
+    EndIf
+    If ( record_number == 11 ) Then
+      Write(lun_sparse) empty, byte_tail(1:tail_length)
+    Else
+      Write(lun_sparse) empty
+    EndIf
+    Close(lun_sparse)
+    Deallocate (empty)
+
+    Return
+  End Subroutine write_zero_map_overlong
+
+  Integer Function byte_tail_length(mutation,record_mutation)
+    Implicit None
+
+    Character(*), Intent(in) :: mutation, record_mutation
+
+    byte_tail_length = 0
+    If ( trim(mutation) == trim(record_mutation)//'-byte1' ) byte_tail_length = 1
+    If ( trim(mutation) == trim(record_mutation)//'-byte2' ) byte_tail_length = 2
+
+    Return
+  End Function byte_tail_length
 
 End Module sparse_data_fixture
 
@@ -510,34 +619,94 @@ Contains
 
     Type(error_type), Allocatable, Intent(out) :: error
 
-    Call expect_failure(error,'overlong-header',sparse_ind_invalid,'header record')
+    Call expect_overlong_record(error,'overlong-header','header record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-topology',sparse_ind_invalid,'topology record')
+    Call expect_overlong_record(error,'overlong-topology','topology record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-map-dimensions',sparse_ind_invalid, &
+    Call expect_overlong_record(error,'overlong-map-dimensions', &
       & 'reaction-map dimension record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-one-two-map',sparse_ind_invalid, &
+    Call expect_overlong_record(error,'overlong-one-two-map', &
       & 'one/two-reactant map record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-ns31',sparse_ind_invalid,'ns31 map record')
+    Call expect_overlong_record(error,'overlong-ns31','ns31 map record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-ns32',sparse_ind_invalid,'ns32 map record')
+    Call expect_overlong_record(error,'overlong-ns32','ns32 map record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-ns33',sparse_ind_invalid,'ns33 map record')
+    Call expect_overlong_record(error,'overlong-ns33','ns33 map record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-ns41',sparse_ind_invalid,'ns41 map record')
+    Call expect_overlong_record(error,'overlong-ns41','ns41 map record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-ns42',sparse_ind_invalid,'ns42 map record')
+    Call expect_overlong_record(error,'overlong-ns42','ns42 map record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-ns43',sparse_ind_invalid,'ns43 map record')
+    Call expect_overlong_record(error,'overlong-ns43','ns43 map record')
     If ( allocated(error) ) Return
-    Call expect_failure(error,'overlong-ns44',sparse_ind_invalid,'ns44 map record')
+    Call expect_overlong_record(error,'overlong-ns44','ns44 map record')
     If ( allocated(error) ) Return
     Call expect_failure(error,'extra-record',sparse_ind_invalid,'trailing record')
+    If ( allocated(error) ) Return
+
+    Call expect_zero_map_overlong(error,4,'one/two-reactant map record')
+    If ( allocated(error) ) Return
+    Call expect_zero_map_overlong(error,5,'ns31 map record')
+    If ( allocated(error) ) Return
+    Call expect_zero_map_overlong(error,6,'ns32 map record')
+    If ( allocated(error) ) Return
+    Call expect_zero_map_overlong(error,7,'ns33 map record')
+    If ( allocated(error) ) Return
+    Call expect_zero_map_overlong(error,8,'ns41 map record')
+    If ( allocated(error) ) Return
+    Call expect_zero_map_overlong(error,9,'ns42 map record')
+    If ( allocated(error) ) Return
+    Call expect_zero_map_overlong(error,10,'ns43 map record')
+    If ( allocated(error) ) Return
+    Call expect_zero_map_overlong(error,11,'ns44 map record')
 
     Return
   End Subroutine test_record_sizes_and_count
+
+  Subroutine expect_overlong_record(error,mutation,diagnostic)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Character(*), Intent(in) :: mutation, diagnostic
+
+    Call expect_failure(error,mutation,sparse_ind_invalid,diagnostic)
+    If ( allocated(error) ) Return
+    Call expect_failure(error,trim(mutation)//'-byte1',sparse_ind_invalid,diagnostic)
+    If ( allocated(error) ) Return
+    Call expect_failure(error,trim(mutation)//'-byte2',sparse_ind_invalid,diagnostic)
+
+    Return
+  End Subroutine expect_overlong_record
+
+  Subroutine expect_zero_map_overlong(error,record_number,diagnostic)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Integer, Intent(in) :: record_number
+    Character(*), Intent(in) :: diagnostic
+
+    Type(sparse_data) :: data
+    Character(256) :: message
+    Integer, Allocatable :: empty(:)
+    Integer :: io_status, status, tail_length
+
+    Allocate (empty(0))
+    Do tail_length = 1, 2
+      Call write_zero_map_overlong(record_number,tail_length)
+      Call read_sparse_ind(sparse_file_name('zero-maps-overlong'),2,(/ 0, 0, 0, 0 /), &
+        & empty,empty,empty,empty,empty,empty,empty,empty,empty,empty,empty,empty,empty,empty, &
+        & data,status,io_status,message)
+      Call check(error,status,sparse_ind_invalid)
+      If ( allocated(error) ) Return
+      Call check(error,index(message,trim(diagnostic)) > 0)
+      If ( allocated(error) ) Return
+    EndDo
+    Deallocate (empty)
+
+    Return
+  End Subroutine expect_zero_map_overlong
 
   Subroutine test_crs_heat(error)
     Implicit None

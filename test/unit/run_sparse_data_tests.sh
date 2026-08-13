@@ -19,11 +19,11 @@ if XNET_CRS_AUGMENTATION_MUTATION=missing-temperature-entry \
   exit 1
 fi
 if [[ $(grep -Fc '[FAILED]' "$mutation_log") -ne 1 ]] || \
-    ! grep -Fq '... CRS augmentation and remapping [FAILED]' "$mutation_log" || \
+    ! grep -Fq '... self-heating CRS augmentation and remapping [FAILED]' "$mutation_log" || \
     ! grep -Fq '1 test(s) failed' "$mutation_log"; then
-  echo "sparse_ind mutation did not fail only the intended CRS augmentation test" >&2
+  echo "sparse_ind mutation did not fail only the intended self-heating CRS test" >&2
   cat "$mutation_log" >&2
   exit 1
 fi
 
-echo "sparse_ind reader and CRS augmentation tests passed"
+echo "sparse_ind reader and self-heating CRS tests passed"

@@ -83,13 +83,13 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Type(sparse_data) :: base
+    Type(sparse_data) :: sparse_ind
     Character(256) :: sparse_message
     Integer :: i, ierr, io_status, lun_solver, sparse_status
 
     If ( parallel_IOProcessor() ) Then
       Call read_sparse_ind(trim(data_dir)//'/sparse_ind',ny,nan,n10,n11,n20,n21,n22, &
-        & n30,n31,n32,n33,n40,n41,n42,n43,n44,base,sparse_status,io_status,sparse_message)
+        & n30,n31,n32,n33,n40,n41,n42,n43,n44,sparse_ind,sparse_status,io_status,sparse_message)
       Select Case (sparse_status)
       Case (sparse_ind_open_error)
         Call xnet_terminate('Failed to open sparse_ind file',io_status)
@@ -98,11 +98,11 @@ Contains
       Case (sparse_ind_invalid)
         Call xnet_terminate('Invalid sparse_ind: '//trim(sparse_message))
       End Select
-      lval = base%lval
-      l1s = base%l1s
-      l2s = base%l2s
-      l3s = base%l3s
-      l4s = base%l4s
+      lval = sparse_ind%lval
+      l1s = sparse_ind%l1s
+      l2s = sparse_ind%l2s
+      l3s = sparse_ind%l3s
+      l4s = sparse_ind%l4s
     EndIf
     Call parallel_bcast(lval)
 
@@ -118,9 +118,9 @@ Contains
     ! Allocate, read, and broadcast CRS arrays
     Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
     If ( parallel_IOProcessor() ) Then
-      ridx(1:lval) = base%ridx
-      cidx(1:lval) = base%cidx
-      pb(1:ny+1) = base%pb
+      ridx(1:lval) = sparse_ind%ridx
+      cidx(1:lval) = sparse_ind%cidx
+      pb(1:ny+1) = sparse_ind%pb
       If ( iheat > 0 ) Then
         ! Add indices for self-heating
         Do i = 1, ny
@@ -147,20 +147,20 @@ Contains
     Allocate (ns31(l3s),ns32(l3s),ns33(l3s))
     Allocate (ns41(l4s),ns42(l4s),ns43(l4s),ns44(l4s))
     If ( parallel_IOProcessor() ) Then
-      ns11 = base%ns11
-      ns21 = base%ns21
-      ns22 = base%ns22
-      ns31 = base%ns31
-      ns32 = base%ns32
-      ns33 = base%ns33
-      ns41 = base%ns41
-      ns42 = base%ns42
-      ns43 = base%ns43
-      ns44 = base%ns44
-      Deallocate (base%ridx,base%cidx,base%pb)
-      Deallocate (base%ns11,base%ns21,base%ns22)
-      Deallocate (base%ns31,base%ns32,base%ns33)
-      Deallocate (base%ns41,base%ns42,base%ns43,base%ns44)
+      ns11 = sparse_ind%ns11
+      ns21 = sparse_ind%ns21
+      ns22 = sparse_ind%ns22
+      ns31 = sparse_ind%ns31
+      ns32 = sparse_ind%ns32
+      ns33 = sparse_ind%ns33
+      ns41 = sparse_ind%ns41
+      ns42 = sparse_ind%ns42
+      ns43 = sparse_ind%ns43
+      ns44 = sparse_ind%ns44
+      Deallocate (sparse_ind%ridx,sparse_ind%cidx,sparse_ind%pb)
+      Deallocate (sparse_ind%ns11,sparse_ind%ns21,sparse_ind%ns22)
+      Deallocate (sparse_ind%ns31,sparse_ind%ns32,sparse_ind%ns33)
+      Deallocate (sparse_ind%ns41,sparse_ind%ns42,sparse_ind%ns43,sparse_ind%ns44)
     EndIf
     Call parallel_bcast(ns11)
     Call parallel_bcast(ns21)

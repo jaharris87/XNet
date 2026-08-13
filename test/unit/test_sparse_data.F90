@@ -5,20 +5,20 @@ Module sparse_data_fixture
 
   Integer, Parameter :: map_sizes(4) = (/ 3, 2, 1, 1 /)
   Integer, Parameter :: n10(3) = (/ 1, 2, 3 /)
-  Integer, Parameter :: n11(3) = (/ 2, 3, 2 /)
+  Integer, Parameter :: n11(3) = (/ 2, 3, 4 /)
   Integer, Parameter :: n20(2) = (/ 1, 2 /)
   Integer, Parameter :: n21(2) = (/ 1, 1 /)
   Integer, Parameter :: n22(2) = (/ 2, 3 /)
   Integer, Parameter :: n30(1) = 3
-  Integer, Parameter :: n31(1) = 2
-  Integer, Parameter :: n32(1) = 3
-  Integer, Parameter :: n33(1) = 2
-  Integer, Parameter :: n40(1) = 2
+  Integer, Parameter :: n31(1) = 1
+  Integer, Parameter :: n32(1) = 2
+  Integer, Parameter :: n33(1) = 3
+  Integer, Parameter :: n40(1) = 4
   Integer, Parameter :: n41(1) = 1
   Integer, Parameter :: n42(1) = 2
   Integer, Parameter :: n43(1) = 3
-  Integer, Parameter :: n44(1) = 1
-  Integer, Parameter :: ny = 3
+  Integer, Parameter :: n44(1) = 4
+  Integer, Parameter :: ny = 4
 
   Character(256) :: work_directory = ''
 
@@ -53,26 +53,21 @@ Contains
     Return
   End Function sparse_file_name
 
-  Subroutine read_fixture(mutation,data,status,io_status,message,requested_map_sizes,requested_n44)
+  Subroutine read_fixture(mutation,data,status,io_status,message,requested_map_sizes)
     Implicit None
 
     Character(*), Intent(in) :: mutation
     Type(sparse_data), Intent(out) :: data
     Integer, Intent(out) :: status, io_status
     Character(*), Intent(out) :: message
-    Integer, Intent(in), Optional :: requested_map_sizes(4), requested_n44(:)
+    Integer, Intent(in), Optional :: requested_map_sizes(4)
 
     Integer :: effective_map_sizes(4)
 
     effective_map_sizes = map_sizes
     If ( present(requested_map_sizes) ) effective_map_sizes = requested_map_sizes
-    If ( present(requested_n44) ) Then
-      Call read_sparse_ind(sparse_file_name(mutation),ny,effective_map_sizes,n10,n11,n20,n21, &
-        & n22,n30,n31,n32,n33,n40,n41,n42,n43,requested_n44,data,status,io_status,message)
-    Else
-      Call read_sparse_ind(sparse_file_name(mutation),ny,effective_map_sizes,n10,n11,n20,n21, &
-        & n22,n30,n31,n32,n33,n40,n41,n42,n43,n44,data,status,io_status,message)
-    EndIf
+    Call read_sparse_ind(sparse_file_name(mutation),ny,effective_map_sizes,n10,n11,n20,n21, &
+      & n22,n30,n31,n32,n33,n40,n41,n42,n43,n44,data,status,io_status,message)
 
     Return
   End Subroutine read_fixture
@@ -82,24 +77,24 @@ Contains
 
     Character(*), Intent(in) :: mutation
 
-    Integer, Parameter :: lval = 7
+    Integer, Parameter :: lval = 13
     Integer :: cidx(lval), lun_sparse, lval_out, pb(ny+1), ridx(lval)
     Integer :: ns11(3), ns21(2), ns22(2), ns31(1), ns32(1), ns33(1)
     Integer :: ns41(1), ns42(1), ns43(1), ns44(1)
 
-    ridx = (/ 1, 1, 2, 2, 2, 3, 3 /)
-    cidx = (/ 1, 2, 1, 2, 3, 2, 3 /)
-    pb = (/ 1, 3, 6, 8 /)
-    ns11 = (/ 2, 5, 6 /)
+    ridx = (/ 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4 /)
+    cidx = (/ 1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4 /)
+    pb = (/ 1, 3, 6, 10, 14 /)
+    ns11 = (/ 2, 5, 9 /)
     ns21 = (/ 1, 3 /)
     ns22 = (/ 2, 5 /)
     ns31 = 6
     ns32 = 7
-    ns33 = 6
-    ns41 = 3
-    ns42 = 4
-    ns43 = 5
-    ns44 = 3
+    ns33 = 8
+    ns41 = 10
+    ns42 = 11
+    ns43 = 12
+    ns44 = 13
     lval_out = lval
 
     Open(newunit=lun_sparse,file=sparse_file_name(mutation),status='replace',form='unformatted')
@@ -114,7 +109,11 @@ Contains
     Case ('invalid-count')
       lval_out = ny*ny + 1
     End Select
-    Write(lun_sparse) lval_out
+    If ( trim(mutation) == 'overlong-header' ) Then
+      Write(lun_sparse) lval_out, 99
+    Else
+      Write(lun_sparse) lval_out
+    EndIf
     If ( trim(mutation) == 'invalid-count' ) Then
       Close(lun_sparse)
       Return
@@ -140,14 +139,22 @@ Contains
     Case ('unordered-columns')
       cidx(1:2) = (/ 2, 1 /)
     End Select
-    Write(lun_sparse) ridx, cidx, pb
+    If ( trim(mutation) == 'overlong-topology' ) Then
+      Write(lun_sparse) ridx, cidx, pb, 99
+    Else
+      Write(lun_sparse) ridx, cidx, pb
+    EndIf
 
     If ( trim(mutation) == 'map-dimensions' ) Then
       Write(lun_sparse) 3, 2, 1, 0
       Close(lun_sparse)
       Return
     EndIf
-    Write(lun_sparse) map_sizes
+    If ( trim(mutation) == 'overlong-map-dimensions' ) Then
+      Write(lun_sparse) map_sizes, 99
+    Else
+      Write(lun_sparse) map_sizes
+    EndIf
 
     Select Case (trim(mutation))
     Case ('map-index')
@@ -163,28 +170,60 @@ Contains
     Case ('map-coordinate-ns32')
       ns32(1) = 6
     Case ('map-coordinate-ns33')
-      ns33(1) = 7
+      ns33(1) = 9
     Case ('map-coordinate-ns41')
-      ns41(1) = 4
+      ns41(1) = 11
     Case ('map-coordinate-ns42')
-      ns42(1) = 3
+      ns42(1) = 10
     Case ('map-coordinate-ns43')
-      ns43(1) = 4
+      ns43(1) = 11
     Case ('map-coordinate-ns44')
-      ns44(1) = 4
+      ns44(1) = 12
     Case ('truncated-map')
       Write(lun_sparse) ns11
       Close(lun_sparse)
       Return
     End Select
-    Write(lun_sparse) ns11, ns21, ns22
-    Write(lun_sparse) ns31
-    Write(lun_sparse) ns32
-    Write(lun_sparse) ns33
-    Write(lun_sparse) ns41
-    Write(lun_sparse) ns42
-    Write(lun_sparse) ns43
-    Write(lun_sparse) ns44
+    If ( trim(mutation) == 'overlong-one-two-map' ) Then
+      Write(lun_sparse) ns11, ns21, ns22, 99
+    Else
+      Write(lun_sparse) ns11, ns21, ns22
+    EndIf
+    If ( trim(mutation) == 'overlong-ns31' ) Then
+      Write(lun_sparse) ns31, 99
+    Else
+      Write(lun_sparse) ns31
+    EndIf
+    If ( trim(mutation) == 'overlong-ns32' ) Then
+      Write(lun_sparse) ns32, 99
+    Else
+      Write(lun_sparse) ns32
+    EndIf
+    If ( trim(mutation) == 'overlong-ns33' ) Then
+      Write(lun_sparse) ns33, 99
+    Else
+      Write(lun_sparse) ns33
+    EndIf
+    If ( trim(mutation) == 'overlong-ns41' ) Then
+      Write(lun_sparse) ns41, 99
+    Else
+      Write(lun_sparse) ns41
+    EndIf
+    If ( trim(mutation) == 'overlong-ns42' ) Then
+      Write(lun_sparse) ns42, 99
+    Else
+      Write(lun_sparse) ns42
+    EndIf
+    If ( trim(mutation) == 'overlong-ns43' ) Then
+      Write(lun_sparse) ns43, 99
+    Else
+      Write(lun_sparse) ns43
+    EndIf
+    If ( trim(mutation) == 'overlong-ns44' ) Then
+      Write(lun_sparse) ns44, 99
+    Else
+      Write(lun_sparse) ns44
+    EndIf
     If ( trim(mutation) == 'extra-record' ) Write(lun_sparse) 1
     Close(lun_sparse)
 
@@ -196,7 +235,7 @@ End Module sparse_data_fixture
 Module test_sparse_data
   Use sparse_data_fixture
   Use testdrive, Only: check, error_type, new_unittest, unittest_type
-  Use xnet_sparse, Only: augment_crs, read_sparse_ind, sparse_data, sparse_ind_invalid, &
+  Use xnet_sparse, Only: augment_crs_heat, read_sparse_ind, sparse_data, sparse_ind_invalid, &
     & sparse_ind_ok, sparse_ind_read_error
   Implicit None
   Private
@@ -219,9 +258,9 @@ Contains
       & new_unittest('row pointer invariants',test_invalid_pointers), &
       & new_unittest('coordinate and topology invariants',test_invalid_topology), &
       & new_unittest('reaction-map invariants',test_invalid_maps), &
-      & new_unittest('record count',test_record_count), &
-      & new_unittest('CRS augmentation and remapping',test_crs_augmentation), &
-      & new_unittest('CRS augmentation rejects invalid input',test_crs_rejection) ]
+      & new_unittest('record sizes and count',test_record_sizes_and_count), &
+      & new_unittest('self-heating CRS augmentation and remapping',test_crs_heat), &
+      & new_unittest('self-heating CRS rejects invalid input',test_crs_heat_rejection) ]
 
     Return
   End Subroutine collect_sparse_data_tests
@@ -240,21 +279,21 @@ Contains
     If ( allocated(error) ) Return
     Call check(error,io_status,0)
     If ( allocated(error) ) Return
-    Call check(error,data%lval == 7 .and. &
+    Call check(error,data%lval == 13 .and. &
       & all((/ data%l1s, data%l2s, data%l3s, data%l4s /) == map_sizes))
     If ( allocated(error) ) Return
-    Call check(error,all(data%ridx == (/ 1, 1, 2, 2, 2, 3, 3 /)) .and. &
-      & all(data%cidx == (/ 1, 2, 1, 2, 3, 2, 3 /)))
+    Call check(error,all(data%ridx == (/ 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4 /)) .and. &
+      & all(data%cidx == (/ 1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(data%pb == (/ 1, 3, 6, 8 /)))
+    Call check(error,all(data%pb == (/ 1, 3, 6, 10, 14 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(data%ns11 == (/ 2, 5, 6 /)) .and. &
+    Call check(error,all(data%ns11 == (/ 2, 5, 9 /)) .and. &
       & all(data%ns21 == (/ 1, 3 /)) .and. all(data%ns22 == (/ 2, 5 /)))
     If ( allocated(error) ) Return
-    Call check(error,data%ns31(1) == 6 .and. data%ns32(1) == 7 .and. data%ns33(1) == 6)
+    Call check(error,data%ns31(1) == 6 .and. data%ns32(1) == 7 .and. data%ns33(1) == 8)
     If ( allocated(error) ) Return
-    Call check(error,data%ns41(1) == 3 .and. data%ns42(1) == 4 .and. &
-      & data%ns43(1) == 5 .and. data%ns44(1) == 3)
+    Call check(error,data%ns41(1) == 10 .and. data%ns42(1) == 11 .and. &
+      & data%ns43(1) == 12 .and. data%ns44(1) == 13)
 
     Return
   End Subroutine test_valid_sparse_ind
@@ -314,7 +353,9 @@ Contains
     Type(error_type), Allocatable, Intent(out) :: error
     Type(sparse_data) :: data
     Character(256) :: message
-    Integer :: io_status, status
+    Character(3), Parameter :: targets(15) = (/ 'ny ', 'n10', 'n11', 'n20', 'n21', 'n22', &
+      & 'n30', 'n31', 'n32', 'n33', 'n40', 'n41', 'n42', 'n43', 'n44' /)
+    Integer :: io_status, status, target
 
     Call expect_failure(error,'invalid-count',sparse_ind_invalid,'nonzero count')
     If ( allocated(error) ) Return
@@ -328,15 +369,57 @@ Contains
     Call check(error,index(message,'dimensions are incompatible') > 0)
     If ( allocated(error) ) Return
 
-    Call write_fixture('target-dimensions')
-    Call read_fixture('target-dimensions',data,status,io_status,message, &
-      & requested_n44=(/ 1, 1 /))
-    Call check(error,status,sparse_ind_invalid)
-    If ( allocated(error) ) Return
-    Call check(error,index(message,'dimensions are incompatible') > 0)
+    Do target = 1, size(targets)
+      Call expect_caller_dimension_failure(error,trim(targets(target)))
+      If ( allocated(error) ) Return
+    EndDo
 
     Return
   End Subroutine test_invalid_dimensions
+
+  Subroutine expect_caller_dimension_failure(error,mismatch)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Character(*), Intent(in) :: mismatch
+
+    Type(sparse_data) :: data
+    Character(256) :: message
+    Integer, Allocatable :: n10_arg(:), n11_arg(:), n20_arg(:), n21_arg(:), n22_arg(:)
+    Integer, Allocatable :: n30_arg(:), n31_arg(:), n32_arg(:), n33_arg(:)
+    Integer, Allocatable :: n40_arg(:), n41_arg(:), n42_arg(:), n43_arg(:), n44_arg(:)
+    Integer :: io_status, requested_ny, status
+
+    requested_ny = ny
+    If ( mismatch == 'ny' ) requested_ny = 0
+    Allocate (n10_arg(size(n10)+merge(1,0,mismatch == 'n10')))
+    Allocate (n11_arg(size(n11)+merge(1,0,mismatch == 'n11')))
+    Allocate (n20_arg(size(n20)+merge(1,0,mismatch == 'n20')))
+    Allocate (n21_arg(size(n21)+merge(1,0,mismatch == 'n21')))
+    Allocate (n22_arg(size(n22)+merge(1,0,mismatch == 'n22')))
+    Allocate (n30_arg(size(n30)+merge(1,0,mismatch == 'n30')))
+    Allocate (n31_arg(size(n31)+merge(1,0,mismatch == 'n31')))
+    Allocate (n32_arg(size(n32)+merge(1,0,mismatch == 'n32')))
+    Allocate (n33_arg(size(n33)+merge(1,0,mismatch == 'n33')))
+    Allocate (n40_arg(size(n40)+merge(1,0,mismatch == 'n40')))
+    Allocate (n41_arg(size(n41)+merge(1,0,mismatch == 'n41')))
+    Allocate (n42_arg(size(n42)+merge(1,0,mismatch == 'n42')))
+    Allocate (n43_arg(size(n43)+merge(1,0,mismatch == 'n43')))
+    Allocate (n44_arg(size(n44)+merge(1,0,mismatch == 'n44')))
+
+    Call read_sparse_ind(sparse_file_name('unused'),requested_ny,map_sizes,n10_arg,n11_arg, &
+      & n20_arg,n21_arg,n22_arg,n30_arg,n31_arg,n32_arg,n33_arg,n40_arg,n41_arg,n42_arg, &
+      & n43_arg,n44_arg,data,status,io_status,message)
+    Call check(error,status,sparse_ind_invalid)
+    If ( allocated(error) ) Return
+    If ( mismatch == 'ny' ) Then
+      Call check(error,index(message,'network dimension must be positive') > 0)
+    Else
+      Call check(error,index(message,'dimensions are incompatible') > 0)
+    EndIf
+
+    Return
+  End Subroutine expect_caller_dimension_failure
 
   Subroutine test_truncated_records(error)
     Implicit None
@@ -422,82 +505,111 @@ Contains
     Return
   End Subroutine test_invalid_maps
 
-  Subroutine test_record_count(error)
+  Subroutine test_record_sizes_and_count(error)
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
 
+    Call expect_failure(error,'overlong-header',sparse_ind_invalid,'header record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-topology',sparse_ind_invalid,'topology record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-map-dimensions',sparse_ind_invalid, &
+      & 'reaction-map dimension record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-one-two-map',sparse_ind_invalid, &
+      & 'one/two-reactant map record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-ns31',sparse_ind_invalid,'ns31 map record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-ns32',sparse_ind_invalid,'ns32 map record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-ns33',sparse_ind_invalid,'ns33 map record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-ns41',sparse_ind_invalid,'ns41 map record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-ns42',sparse_ind_invalid,'ns42 map record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-ns43',sparse_ind_invalid,'ns43 map record')
+    If ( allocated(error) ) Return
+    Call expect_failure(error,'overlong-ns44',sparse_ind_invalid,'ns44 map record')
+    If ( allocated(error) ) Return
     Call expect_failure(error,'extra-record',sparse_ind_invalid,'trailing record')
 
     Return
-  End Subroutine test_record_count
+  End Subroutine test_record_sizes_and_count
 
-  Subroutine test_crs_augmentation(error)
+  Subroutine test_crs_heat(error)
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Type(sparse_data) :: base
-    Type(sparse_data) :: augmented
+    Type(sparse_data) :: sparse_ind
+    Type(sparse_data) :: sparse_ind_heat
     Character(256) :: message, mutation
     Integer :: io_status, length, status, variable_status
 
     Call write_fixture('augmentation')
-    Call read_fixture('augmentation',base,status,io_status,message)
+    Call read_fixture('augmentation',sparse_ind,status,io_status,message)
     Call check(error,status,sparse_ind_ok)
     If ( allocated(error) ) Return
-    Call augment_crs(base,ny,augmented,status,message)
+    Call augment_crs_heat(sparse_ind,ny,sparse_ind_heat,status,message)
     Call check(error,status,sparse_ind_ok)
     If ( allocated(error) ) Return
-    Call check(error,augmented%lval == 14 .and. &
-      & all((/ augmented%l1s, augmented%l2s, augmented%l3s, augmented%l4s /) == map_sizes))
+    Call check(error,sparse_ind_heat%lval == 22 .and. all((/ sparse_ind_heat%l1s, &
+      & sparse_ind_heat%l2s, sparse_ind_heat%l3s, sparse_ind_heat%l4s /) == map_sizes))
     If ( allocated(error) ) Return
 
     mutation = ''
     Call get_environment_variable('XNET_CRS_AUGMENTATION_MUTATION',mutation, &
       & length=length,status=variable_status)
     If ( variable_status == 0 ) Then
-      If ( mutation(1:length) == 'missing-temperature-entry' ) augmented%cidx(augmented%pb(2)-1) = 1
+      If ( mutation(1:length) == 'missing-temperature-entry' ) &
+        & sparse_ind_heat%cidx(sparse_ind_heat%pb(2)-1) = 1
     EndIf
 
-    Call check(error,all(augmented%ridx == (/ 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4 /)))
+    Call check(error,all(sparse_ind_heat%ridx == &
+      & (/ 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(augmented%cidx == (/ 1, 2, 4, 1, 2, 3, 4, 2, 3, 4, 1, 2, 3, 4 /)))
+    Call check(error,all(sparse_ind_heat%cidx == &
+      & (/ 1, 2, 5, 1, 2, 3, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(augmented%pb == (/ 1, 4, 8, 11, 15 /)))
+    Call check(error,all(sparse_ind_heat%pb == (/ 1, 4, 8, 13, 18, 23 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(augmented%ns11 == (/ 2, 6, 8 /)))
+    Call check(error,all(sparse_ind_heat%ns11 == (/ 2, 6, 11 /)))
     If ( allocated(error) ) Return
-    Call check(error,all(augmented%ns21 == (/ 1, 4 /)) .and. all(augmented%ns22 == (/ 2, 6 /)))
+    Call check(error,all(sparse_ind_heat%ns21 == (/ 1, 4 /)) .and. &
+      & all(sparse_ind_heat%ns22 == (/ 2, 6 /)))
     If ( allocated(error) ) Return
-    Call check(error,augmented%ns31(1) == 8 .and. augmented%ns32(1) == 9 .and. augmented%ns33(1) == 8)
+    Call check(error,sparse_ind_heat%ns31(1) == 8 .and. sparse_ind_heat%ns32(1) == 9 .and. &
+      & sparse_ind_heat%ns33(1) == 10)
     If ( allocated(error) ) Return
-    Call check(error,augmented%ns41(1) == 4 .and. augmented%ns42(1) == 5 .and. &
-      & augmented%ns43(1) == 6 .and. augmented%ns44(1) == 4)
+    Call check(error,sparse_ind_heat%ns41(1) == 13 .and. sparse_ind_heat%ns42(1) == 14 .and. &
+      & sparse_ind_heat%ns43(1) == 15 .and. sparse_ind_heat%ns44(1) == 16)
 
     Return
-  End Subroutine test_crs_augmentation
+  End Subroutine test_crs_heat
 
-  Subroutine test_crs_rejection(error)
+  Subroutine test_crs_heat_rejection(error)
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Type(sparse_data) :: base
-    Type(sparse_data) :: augmented
+    Type(sparse_data) :: sparse_ind
+    Type(sparse_data) :: sparse_ind_heat
     Character(256) :: message
     Integer :: io_status, status
 
     Call write_fixture('augmentation-rejection')
-    Call read_fixture('augmentation-rejection',base,status,io_status,message)
+    Call read_fixture('augmentation-rejection',sparse_ind,status,io_status,message)
     Call check(error,status,sparse_ind_ok)
     If ( allocated(error) ) Return
-    base%pb(2) = base%pb(2) + 1
-    Call augment_crs(base,ny,augmented,status,message)
+    sparse_ind%pb(2) = sparse_ind%pb(2) + 1
+    Call augment_crs_heat(sparse_ind,ny,sparse_ind_heat,status,message)
     Call check(error,status,sparse_ind_invalid)
     If ( allocated(error) ) Return
     Call check(error,index(message,'declared row') > 0 .or. index(message,'strictly ordered') > 0)
 
     Return
-  End Subroutine test_crs_rejection
+  End Subroutine test_crs_heat_rejection
 
   Subroutine expect_failure(error,mutation,expected_status,diagnostic)
     Implicit None

@@ -25,7 +25,7 @@ Module xnet_sparse
     Integer, Allocatable :: ns41(:), ns42(:), ns43(:), ns44(:)
   End Type sparse_data
 
-  Public :: augment_crs
+  Public :: augment_crs_heat
   Public :: read_sparse_ind
 
 Contains
@@ -48,7 +48,7 @@ Contains
     Character(*), Intent(out) :: message
 
     Character(256) :: io_message
-    Integer :: lun_sparse, trailing_value
+    Integer :: lun_sparse, record_probe, trailing_value
 
     status = sparse_ind_ok
     io_status = 0
@@ -77,6 +77,17 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
+    Call start_record_probe(lun_sparse,'header record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%lval, record_probe
+    Call finish_record_probe('header record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
     If ( data%lval < ny .or. int(data%lval,count_kind) > &
       & int(ny,count_kind)*int(ny,count_kind) ) Then
       Call invalidate(status,message,'nonzero count is incompatible with network dimension')
@@ -91,10 +102,32 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
+    Call start_record_probe(lun_sparse,'topology record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ridx, data%cidx, data%pb, record_probe
+    Call finish_record_probe('topology record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
 
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%l1s, data%l2s, data%l3s, data%l4s
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'reaction-map dimension record',io_message)
+      Close(lun_sparse)
+      Return
+    EndIf
+    Call start_record_probe(lun_sparse,'reaction-map dimension record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%l1s, data%l2s, data%l3s, data%l4s, record_probe
+    Call finish_record_probe('reaction-map dimension record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -114,9 +147,31 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
+    Call start_record_probe(lun_sparse,'one/two-reactant map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns11, data%ns21, data%ns22, record_probe
+    Call finish_record_probe('one/two-reactant map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns31
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns31 map record',io_message)
+      Close(lun_sparse)
+      Return
+    EndIf
+    Call start_record_probe(lun_sparse,'ns31 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns31, record_probe
+    Call finish_record_probe('ns31 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -126,9 +181,31 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
+    Call start_record_probe(lun_sparse,'ns32 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns32, record_probe
+    Call finish_record_probe('ns32 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns33
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns33 map record',io_message)
+      Close(lun_sparse)
+      Return
+    EndIf
+    Call start_record_probe(lun_sparse,'ns33 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns33, record_probe
+    Call finish_record_probe('ns33 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -138,9 +215,31 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
+    Call start_record_probe(lun_sparse,'ns41 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns41, record_probe
+    Call finish_record_probe('ns41 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns42
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns42 map record',io_message)
+      Close(lun_sparse)
+      Return
+    EndIf
+    Call start_record_probe(lun_sparse,'ns42 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns42, record_probe
+    Call finish_record_probe('ns42 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -150,9 +249,31 @@ Contains
       Close(lun_sparse)
       Return
     EndIf
+    Call start_record_probe(lun_sparse,'ns43 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns43, record_probe
+    Call finish_record_probe('ns43 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
     Read(lun_sparse,iostat=io_status,iomsg=io_message) data%ns44
     If ( io_status /= 0 ) Then
       Call read_failure(status,message,'ns44 map record',io_message)
+      Close(lun_sparse)
+      Return
+    EndIf
+    Call start_record_probe(lun_sparse,'ns44 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
+      Close(lun_sparse)
+      Return
+    EndIf
+    Read(lun_sparse,iostat=io_status) data%ns44, record_probe
+    Call finish_record_probe('ns44 map record',status,io_status,message)
+    If ( status /= sparse_ind_ok ) Then
       Close(lun_sparse)
       Return
     EndIf
@@ -176,16 +297,16 @@ Contains
     Return
   End Subroutine read_sparse_ind
 
-  Subroutine augment_crs(base,ny,augmented,status,message)
+  Subroutine augment_crs_heat(sparse_ind,ny,sparse_ind_heat,status,message)
     !-----------------------------------------------------------------------------------------------
     ! Insert one self-heating column entry in every species row, append the complete temperature
-    ! row, and remap persisted reaction locations without changing base-entry ordering.
+    ! row, and remap persisted reaction locations without changing persisted-entry ordering.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
-    Type(sparse_data), Intent(in) :: base
+    Type(sparse_data), Intent(in) :: sparse_ind
     Integer, Intent(in) :: ny
-    Type(sparse_data), Intent(out) :: augmented
+    Type(sparse_data), Intent(out) :: sparse_ind_heat
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
 
@@ -193,52 +314,52 @@ Contains
 
     status = sparse_ind_ok
     message = ''
-    Call validate_crs_topology(base,ny,status,message)
+    Call validate_crs_topology(sparse_ind,ny,status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_map_indices(base,status,message)
+    Call validate_map_indices(sparse_ind,status,message)
     If ( status /= sparse_ind_ok ) Return
 
-    nnz = base%lval + 2*ny + 1
-    augmented%lval = nnz
-    augmented%l1s = base%l1s
-    augmented%l2s = base%l2s
-    augmented%l3s = base%l3s
-    augmented%l4s = base%l4s
-    Allocate (augmented%ridx(nnz),augmented%cidx(nnz),augmented%pb(ny+2))
-    augmented%pb(1) = base%pb(1)
+    nnz = sparse_ind%lval + 2*ny + 1
+    sparse_ind_heat%lval = nnz
+    sparse_ind_heat%l1s = sparse_ind%l1s
+    sparse_ind_heat%l2s = sparse_ind%l2s
+    sparse_ind_heat%l3s = sparse_ind%l3s
+    sparse_ind_heat%l4s = sparse_ind%l4s
+    Allocate (sparse_ind_heat%ridx(nnz),sparse_ind_heat%cidx(nnz),sparse_ind_heat%pb(ny+2))
+    sparse_ind_heat%pb(1) = sparse_ind%pb(1)
     Do row = 1, ny
-      old_start = base%pb(row)
-      old_end = base%pb(row+1) - 1
-      new_start = augmented%pb(row)
+      old_start = sparse_ind%pb(row)
+      old_end = sparse_ind%pb(row+1) - 1
+      new_start = sparse_ind_heat%pb(row)
       new_end = new_start + old_end - old_start
-      augmented%ridx(new_start:new_end) = base%ridx(old_start:old_end)
-      augmented%cidx(new_start:new_end) = base%cidx(old_start:old_end)
-      augmented%ridx(new_end+1) = row
-      augmented%cidx(new_end+1) = ny + 1
-      augmented%pb(row+1) = new_end + 2
+      sparse_ind_heat%ridx(new_start:new_end) = sparse_ind%ridx(old_start:old_end)
+      sparse_ind_heat%cidx(new_start:new_end) = sparse_ind%cidx(old_start:old_end)
+      sparse_ind_heat%ridx(new_end+1) = row
+      sparse_ind_heat%cidx(new_end+1) = ny + 1
+      sparse_ind_heat%pb(row+1) = new_end + 2
     EndDo
-    augmented%pb(ny+2) = nnz + 1
-    new_start = augmented%pb(ny+1)
+    sparse_ind_heat%pb(ny+2) = nnz + 1
+    new_start = sparse_ind_heat%pb(ny+1)
     Do row = 1, ny+1
-      augmented%ridx(new_start+row-1) = ny + 1
-      augmented%cidx(new_start+row-1) = row
+      sparse_ind_heat%ridx(new_start+row-1) = ny + 1
+      sparse_ind_heat%cidx(new_start+row-1) = row
     EndDo
 
-    Call remap_indices(base%ns11,base%ridx,augmented%ns11)
-    Call remap_indices(base%ns21,base%ridx,augmented%ns21)
-    Call remap_indices(base%ns22,base%ridx,augmented%ns22)
-    Call remap_indices(base%ns31,base%ridx,augmented%ns31)
-    Call remap_indices(base%ns32,base%ridx,augmented%ns32)
-    Call remap_indices(base%ns33,base%ridx,augmented%ns33)
-    Call remap_indices(base%ns41,base%ridx,augmented%ns41)
-    Call remap_indices(base%ns42,base%ridx,augmented%ns42)
-    Call remap_indices(base%ns43,base%ridx,augmented%ns43)
-    Call remap_indices(base%ns44,base%ridx,augmented%ns44)
+    Call remap_indices(sparse_ind%ns11,sparse_ind%ridx,sparse_ind_heat%ns11)
+    Call remap_indices(sparse_ind%ns21,sparse_ind%ridx,sparse_ind_heat%ns21)
+    Call remap_indices(sparse_ind%ns22,sparse_ind%ridx,sparse_ind_heat%ns22)
+    Call remap_indices(sparse_ind%ns31,sparse_ind%ridx,sparse_ind_heat%ns31)
+    Call remap_indices(sparse_ind%ns32,sparse_ind%ridx,sparse_ind_heat%ns32)
+    Call remap_indices(sparse_ind%ns33,sparse_ind%ridx,sparse_ind_heat%ns33)
+    Call remap_indices(sparse_ind%ns41,sparse_ind%ridx,sparse_ind_heat%ns41)
+    Call remap_indices(sparse_ind%ns42,sparse_ind%ridx,sparse_ind_heat%ns42)
+    Call remap_indices(sparse_ind%ns43,sparse_ind%ridx,sparse_ind_heat%ns43)
+    Call remap_indices(sparse_ind%ns44,sparse_ind%ridx,sparse_ind_heat%ns44)
 
-    Call validate_augmented_crs(base,augmented,ny,status,message)
+    Call validate_crs_heat(sparse_ind,sparse_ind_heat,ny,status,message)
 
     Return
-  End Subroutine augment_crs
+  End Subroutine augment_crs_heat
 
   Subroutine validate_sparse_ind(data,ny,n10,n11,n20,n21,n22,n30,n31,n32,n33, &
     & n40,n41,n42,n43,n44,status,message)
@@ -406,11 +527,11 @@ Contains
     Return
   End Subroutine validate_map
 
-  Subroutine validate_augmented_crs(base,augmented,ny,status,message)
+  Subroutine validate_crs_heat(sparse_ind,sparse_ind_heat,ny,status,message)
     Implicit None
 
-    Type(sparse_data), Intent(in) :: base
-    Type(sparse_data), Intent(in) :: augmented
+    Type(sparse_data), Intent(in) :: sparse_ind
+    Type(sparse_data), Intent(in) :: sparse_ind_heat
     Integer, Intent(in) :: ny
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
@@ -419,86 +540,100 @@ Contains
 
     status = sparse_ind_ok
     message = ''
-    nnz = base%lval + 2*ny + 1
-    If ( augmented%lval /= nnz .or. augmented%l1s /= base%l1s .or. &
-      & augmented%l2s /= base%l2s .or. augmented%l3s /= base%l3s .or. &
-      & augmented%l4s /= base%l4s ) Then
-      Call invalidate(status,message,'augmented CRS metadata are incompatible')
+    nnz = sparse_ind%lval + 2*ny + 1
+    If ( sparse_ind_heat%lval /= nnz .or. sparse_ind_heat%l1s /= sparse_ind%l1s .or. &
+      & sparse_ind_heat%l2s /= sparse_ind%l2s .or. sparse_ind_heat%l3s /= sparse_ind%l3s .or. &
+      & sparse_ind_heat%l4s /= sparse_ind%l4s ) Then
+      Call invalidate(status,message,'self-heating CRS metadata are incompatible')
       Return
     EndIf
-    If ( size(augmented%ridx) /= nnz .or. size(augmented%cidx) /= nnz .or. &
-      & size(augmented%pb) /= ny+2 ) Then
-      Call invalidate(status,message,'augmented CRS dimensions are incompatible')
+    If ( size(sparse_ind_heat%ridx) /= nnz .or. size(sparse_ind_heat%cidx) /= nnz .or. &
+      & size(sparse_ind_heat%pb) /= ny+2 ) Then
+      Call invalidate(status,message,'self-heating CRS dimensions are incompatible')
       Return
     EndIf
-    If ( augmented%pb(1) /= 1 .or. augmented%pb(ny+2) /= nnz+1 ) Then
-      Call invalidate(status,message,'augmented CRS has wrong terminal pointer')
+    If ( sparse_ind_heat%pb(1) /= 1 .or. sparse_ind_heat%pb(ny+2) /= nnz+1 ) Then
+      Call invalidate(status,message,'self-heating CRS has wrong terminal pointer')
       Return
     EndIf
     Do row = 1, ny+1
-      If ( augmented%pb(row+1) <= augmented%pb(row) ) Then
-        Call invalidate(status,message,'augmented CRS row pointers are not strictly ordered')
+      If ( sparse_ind_heat%pb(row+1) <= sparse_ind_heat%pb(row) ) Then
+        Call invalidate(status,message,'self-heating CRS row pointers are not strictly ordered')
         Return
       EndIf
-      Do entry = augmented%pb(row), augmented%pb(row+1)-1
-        If ( augmented%ridx(entry) /= row .or. augmented%cidx(entry) < 1 .or. &
-          & augmented%cidx(entry) > ny+1 ) Then
-          Call invalidate(status,message,'augmented CRS coordinate is outside its declared row')
+      Do entry = sparse_ind_heat%pb(row), sparse_ind_heat%pb(row+1)-1
+        If ( sparse_ind_heat%ridx(entry) /= row .or. sparse_ind_heat%cidx(entry) < 1 .or. &
+          & sparse_ind_heat%cidx(entry) > ny+1 ) Then
+          Call invalidate(status,message,'self-heating CRS coordinate is outside its declared row')
           Return
         EndIf
-        If ( entry > augmented%pb(row) ) Then
-          If ( augmented%cidx(entry) <= augmented%cidx(entry-1) ) Then
-            Call invalidate(status,message,'augmented CRS columns are not strictly ordered')
+        If ( entry > sparse_ind_heat%pb(row) ) Then
+          If ( sparse_ind_heat%cidx(entry) <= sparse_ind_heat%cidx(entry-1) ) Then
+            Call invalidate(status,message,'self-heating CRS columns are not strictly ordered')
             Return
           EndIf
         EndIf
       EndDo
-      If ( count(augmented%cidx(augmented%pb(row):augmented%pb(row+1)-1) == row) /= 1 ) Then
-        Call invalidate(status,message,'augmented CRS row does not contain exactly one diagonal')
+      If ( count(sparse_ind_heat%cidx(sparse_ind_heat%pb(row): &
+        & sparse_ind_heat%pb(row+1)-1) == row) /= 1 ) Then
+        Call invalidate(status,message,'self-heating CRS row does not contain exactly one diagonal')
         Return
       EndIf
     EndDo
     Do row = 1, ny
-      entry = augmented%pb(row+1) - 1
-      If ( augmented%ridx(entry) /= row .or. augmented%cidx(entry) /= ny+1 ) Then
-        Call invalidate(status,message,'augmented CRS is missing an ordered temperature column entry')
+      entry = sparse_ind_heat%pb(row+1) - 1
+      If ( sparse_ind_heat%ridx(entry) /= row .or. sparse_ind_heat%cidx(entry) /= ny+1 ) Then
+        Call invalidate(status,message, &
+          & 'self-heating CRS is missing an ordered temperature column entry')
         Return
       EndIf
     EndDo
-    If ( any(augmented%cidx(augmented%pb(ny+1):augmented%pb(ny+2)-1) /= (/ (row,row=1,ny+1) /)) ) Then
-      Call invalidate(status,message,'augmented CRS temperature row is incomplete')
+    If ( any(sparse_ind_heat%cidx(sparse_ind_heat%pb(ny+1):sparse_ind_heat%pb(ny+2)-1) /= &
+      & (/ (row,row=1,ny+1) /)) ) Then
+      Call invalidate(status,message,'self-heating CRS temperature row is incomplete')
       Return
     EndIf
 
-    Call validate_remapped_indices(base%ns11,augmented%ns11,base,augmented,'ns11',status,message)
+    Call validate_remapped_indices(sparse_ind%ns11,sparse_ind_heat%ns11,sparse_ind, &
+      & sparse_ind_heat,'ns11',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns21,augmented%ns21,base,augmented,'ns21',status,message)
+    Call validate_remapped_indices(sparse_ind%ns21,sparse_ind_heat%ns21,sparse_ind, &
+      & sparse_ind_heat,'ns21',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns22,augmented%ns22,base,augmented,'ns22',status,message)
+    Call validate_remapped_indices(sparse_ind%ns22,sparse_ind_heat%ns22,sparse_ind, &
+      & sparse_ind_heat,'ns22',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns31,augmented%ns31,base,augmented,'ns31',status,message)
+    Call validate_remapped_indices(sparse_ind%ns31,sparse_ind_heat%ns31,sparse_ind, &
+      & sparse_ind_heat,'ns31',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns32,augmented%ns32,base,augmented,'ns32',status,message)
+    Call validate_remapped_indices(sparse_ind%ns32,sparse_ind_heat%ns32,sparse_ind, &
+      & sparse_ind_heat,'ns32',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns33,augmented%ns33,base,augmented,'ns33',status,message)
+    Call validate_remapped_indices(sparse_ind%ns33,sparse_ind_heat%ns33,sparse_ind, &
+      & sparse_ind_heat,'ns33',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns41,augmented%ns41,base,augmented,'ns41',status,message)
+    Call validate_remapped_indices(sparse_ind%ns41,sparse_ind_heat%ns41,sparse_ind, &
+      & sparse_ind_heat,'ns41',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns42,augmented%ns42,base,augmented,'ns42',status,message)
+    Call validate_remapped_indices(sparse_ind%ns42,sparse_ind_heat%ns42,sparse_ind, &
+      & sparse_ind_heat,'ns42',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns43,augmented%ns43,base,augmented,'ns43',status,message)
+    Call validate_remapped_indices(sparse_ind%ns43,sparse_ind_heat%ns43,sparse_ind, &
+      & sparse_ind_heat,'ns43',status,message)
     If ( status /= sparse_ind_ok ) Return
-    Call validate_remapped_indices(base%ns44,augmented%ns44,base,augmented,'ns44',status,message)
+    Call validate_remapped_indices(sparse_ind%ns44,sparse_ind_heat%ns44,sparse_ind, &
+      & sparse_ind_heat,'ns44',status,message)
 
     Return
-  End Subroutine validate_augmented_crs
+  End Subroutine validate_crs_heat
 
-  Subroutine validate_remapped_indices(base_map,augmented_map,base,augmented,label,status,message)
+  Subroutine validate_remapped_indices(sparse_ind_map,sparse_ind_heat_map,sparse_ind, &
+    & sparse_ind_heat,label,status,message)
     Implicit None
 
-    Integer, Intent(in) :: base_map(:), augmented_map(:)
-    Type(sparse_data), Intent(in) :: base
-    Type(sparse_data), Intent(in) :: augmented
+    Integer, Intent(in) :: sparse_ind_map(:), sparse_ind_heat_map(:)
+    Type(sparse_data), Intent(in) :: sparse_ind
+    Type(sparse_data), Intent(in) :: sparse_ind_heat
     Character(*), Intent(in) :: label
     Integer, Intent(out) :: status
     Character(*), Intent(out) :: message
@@ -507,18 +642,21 @@ Contains
 
     status = sparse_ind_ok
     message = ''
-    If ( size(base_map) /= size(augmented_map) ) Then
-      Call invalidate(status,message,trim(label)//' augmented size changed')
+    If ( size(sparse_ind_map) /= size(sparse_ind_heat_map) ) Then
+      Call invalidate(status,message,trim(label)//' self-heating size changed')
       Return
     EndIf
-    Do reaction = 1, size(base_map)
-      If ( augmented_map(reaction) < 1 .or. augmented_map(reaction) > size(augmented%ridx) ) Then
-        Call invalidate(status,message,trim(label)//' augmented index is out of range')
+    Do reaction = 1, size(sparse_ind_map)
+      If ( sparse_ind_heat_map(reaction) < 1 .or. &
+        & sparse_ind_heat_map(reaction) > size(sparse_ind_heat%ridx) ) Then
+        Call invalidate(status,message,trim(label)//' self-heating index is out of range')
         Return
       EndIf
-      If ( augmented%ridx(augmented_map(reaction)) /= base%ridx(base_map(reaction)) .or. &
-        & augmented%cidx(augmented_map(reaction)) /= base%cidx(base_map(reaction)) ) Then
-        Call invalidate(status,message,trim(label)//' augmented coordinate changed')
+      If ( sparse_ind_heat%ridx(sparse_ind_heat_map(reaction)) /= &
+        & sparse_ind%ridx(sparse_ind_map(reaction)) .or. &
+        & sparse_ind_heat%cidx(sparse_ind_heat_map(reaction)) /= &
+        & sparse_ind%cidx(sparse_ind_map(reaction)) ) Then
+        Call invalidate(status,message,trim(label)//' self-heating coordinate changed')
         Return
       EndIf
     EndDo
@@ -526,17 +664,18 @@ Contains
     Return
   End Subroutine validate_remapped_indices
 
-  Subroutine remap_indices(base_map,base_rows,augmented_map)
+  Subroutine remap_indices(sparse_ind_map,sparse_ind_rows,sparse_ind_heat_map)
     Implicit None
 
-    Integer, Intent(in) :: base_map(:), base_rows(:)
-    Integer, Allocatable, Intent(out) :: augmented_map(:)
+    Integer, Intent(in) :: sparse_ind_map(:), sparse_ind_rows(:)
+    Integer, Allocatable, Intent(out) :: sparse_ind_heat_map(:)
 
     Integer :: reaction
 
-    Allocate (augmented_map(size(base_map)))
-    Do reaction = 1, size(base_map)
-      augmented_map(reaction) = base_map(reaction) + base_rows(base_map(reaction)) - 1
+    Allocate (sparse_ind_heat_map(size(sparse_ind_map)))
+    Do reaction = 1, size(sparse_ind_map)
+      sparse_ind_heat_map(reaction) = sparse_ind_map(reaction) + &
+        & sparse_ind_rows(sparse_ind_map(reaction)) - 1
     EndDo
 
     Return
@@ -571,6 +710,48 @@ Contains
 
     Return
   End Function target_dimensions_match
+
+  Subroutine start_record_probe(lun,record_name,status,io_status,message)
+    !-----------------------------------------------------------------------------------------------
+    ! The ordinary read has already shown that the record contains every required field. Re-read it
+    ! with one extra scalar so that only an overlong record succeeds without an end-of-record error.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    Integer, Intent(in) :: lun
+    Character(*), Intent(in) :: record_name
+    Integer, Intent(out) :: status, io_status
+    Character(*), Intent(out) :: message
+
+    Character(256) :: io_message
+
+    status = sparse_ind_ok
+    io_status = 0
+    message = ''
+    Backspace(lun,iostat=io_status,iomsg=io_message)
+    If ( io_status /= 0 ) Call read_failure(status,message,trim(record_name)//' rewind',io_message)
+
+    Return
+  End Subroutine start_record_probe
+
+  Subroutine finish_record_probe(record_name,status,io_status,message)
+    Implicit None
+
+    Character(*), Intent(in) :: record_name
+    Integer, Intent(out) :: status
+    Integer, Intent(inout) :: io_status
+    Character(*), Intent(out) :: message
+
+    status = sparse_ind_ok
+    message = ''
+    If ( io_status == 0 ) Then
+      Call invalidate(status,message,trim(record_name)//' contains unexpected data')
+    Else
+      io_status = 0
+    EndIf
+
+    Return
+  End Subroutine finish_record_probe
 
   Subroutine read_failure(status,message,record_name,io_message)
     Implicit None

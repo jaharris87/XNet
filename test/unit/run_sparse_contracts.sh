@@ -49,6 +49,29 @@ expect_failure() {
   fi
 }
 
+expect_input_failure() {
+  local name=$1
+  local executable=$2
+  local mutation=$3
+  local diagnostic=$4
+  local work_dir="$work_root/input-failure-$name-$mutation"
+  local log_file="$work_dir/output.log"
+
+  mkdir -p "$work_dir"
+  if (
+    cd "$work_dir"
+    XNET_SPARSE_INPUT_MUTATION="$mutation" "$executable" base .
+  ) >"$log_file" 2>&1; then
+    echo "$name accepted malformed sparse_ind input $mutation" >&2
+    exit 1
+  fi
+  if ! grep -Fq "$diagnostic" "$log_file"; then
+    echo "$name sparse_ind input $mutation did not fail in the reader" >&2
+    cat "$log_file" >&2
+    exit 1
+  fi
+}
+
 expect_mutation_failure() {
   local name=$1
   local executable=$2
@@ -108,6 +131,16 @@ run_tracked_controls pardiso-mkl "$pardiso_mkl_exe"
 
 run_recovery_case ma48 "$ma48_exe" ma48_analysis_warning
 run_recovery_case ma48 "$ma48_exe" ma48_storage_resize
+
+for provider in ma48 pardiso pardiso-mkl; do
+  case "$provider" in
+    ma48) input_exe=$ma48_exe ;;
+    pardiso) input_exe=$pardiso_exe ;;
+    pardiso-mkl) input_exe=$pardiso_mkl_exe ;;
+  esac
+  expect_input_failure "$provider" "$input_exe" missing-file 'Failed to open sparse_ind file'
+  expect_input_failure "$provider" "$input_exe" truncated-header 'Error reading sparse_ind header record'
+done
 
 expect_failure pardiso "$pardiso_exe" pardiso_init 'PARDISO initialization failed'
 expect_failure pardiso "$pardiso_exe" pardiso_factor 'PARDISO factorization failed'

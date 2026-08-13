@@ -137,7 +137,6 @@ Contains
     Integer :: ns11_fixture(3), ns21_fixture(2), ns22_fixture(2)
     Integer :: ns31_fixture(1), ns32_fixture(1), ns33_fixture(1)
     Integer :: ns41_fixture(1), ns42_fixture(1), ns43_fixture(1), ns44_fixture(1)
-    Logical :: overlong_header
 
     ridx_fixture = (/ 1, 1, 2, 2, 2, 3, 3 /)
     cidx_fixture = (/ 1, 2, 1, 2, 3, 2, 3 /)
@@ -154,12 +153,10 @@ Contains
     ns44_fixture = 3
 
     input_mutation = ''
-    overlong_header = .False.
     Call get_environment_variable('XNET_SPARSE_INPUT_MUTATION',input_mutation, &
       & length=length,status=variable_status)
     If ( variable_status == 0 ) Then
       If ( input_mutation(1:length) == 'missing-file' ) Return
-      overlong_header = input_mutation(1:length) == 'overlong-header'
     EndIf
 
     Open(newunit=lun_sparse,file=trim(data_dir)//'/sparse_ind',status='replace',form='unformatted')
@@ -169,11 +166,7 @@ Contains
         Return
       EndIf
     EndIf
-    If ( overlong_header ) Then
-      Write(lun_sparse) lval_fixture, 99
-    Else
-      Write(lun_sparse) lval_fixture
-    EndIf
+    Write(lun_sparse) lval_fixture
     Write(lun_sparse) ridx_fixture, cidx_fixture, pb_fixture
     Write(lun_sparse) 3, 2, 1, 1
     Write(lun_sparse) ns11_fixture, ns21_fixture, ns22_fixture

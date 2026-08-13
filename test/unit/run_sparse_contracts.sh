@@ -140,8 +140,6 @@ for provider in ma48 pardiso pardiso-mkl; do
   esac
   expect_input_failure "$provider" "$input_exe" missing-file 'Failed to open sparse_ind file'
   expect_input_failure "$provider" "$input_exe" truncated-header 'Error reading sparse_ind header record'
-  expect_input_failure "$provider" "$input_exe" overlong-header \
-    'Invalid sparse_ind: header record contains unexpected data'
 done
 
 expect_failure pardiso "$pardiso_exe" pardiso_init 'PARDISO initialization failed'

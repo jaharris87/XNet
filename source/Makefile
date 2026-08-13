@@ -42,7 +42,6 @@ BASE = \
        xnet_nse.o \
        xnet_preprocess.o \
        xnet_screening.o \
-       xnet_sparse.o \
        xnet_timers.o \
        xnet_types.o \
        xnet_util.o
@@ -80,9 +79,14 @@ BASE += $(EOS_OBJ)
 include $(XNET_DIR)/Makefile.internal
 -include $(XNET_DIR)/Makefile.dev
 
-$(EXE): $(BASE) xnet_jacobian_$(SOLVER).o $(SOLVER_OBJ) $(LAPACK_OBJ) $(DRIVER)
+## Sparse index data are used only by the sparse matrix solvers.
+ifneq ($(filter MA48 PARDISO,$(MATRIX_SOLVER)),)
+  SPARSE_OBJ = xnet_sparse.o
+endif
+
+$(EXE): $(BASE) $(SPARSE_OBJ) xnet_jacobian_$(SOLVER).o $(SOLVER_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o $(EXE) \
-	    $(BASE) xnet_jacobian_$(SOLVER).o $(notdir $(SOLVER_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) $(SPARSE_OBJ) xnet_jacobian_$(SOLVER).o $(notdir $(SOLVER_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(SOLVER_LIBDIR) $(SOLVER_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 all: xnet_dense net_setup xnse
@@ -127,13 +131,13 @@ xnet_MA41: $(BASE) xnet_jacobian_MA41.o $(MA41_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	    $(BASE) xnet_jacobian_MA41.o $(notdir $(MA41_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(MA41_LIBDIR) $(MA41_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
-xnet_MA48: $(BASE) xnet_jacobian_MA48.o $(MA48_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_MA48: $(BASE) $(SPARSE_OBJ) xnet_jacobian_MA48.o $(MA48_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnetm$(MPI_SFX) \
-	    $(BASE) xnet_jacobian_MA48.o $(notdir $(MA48_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) $(SPARSE_OBJ) xnet_jacobian_MA48.o $(notdir $(MA48_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(MA48_LIBDIR) $(MA48_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
-xnet_PARDISO: $(BASE) xnet_jacobian_$(PARDISO).o $(PARDISO_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_PARDISO: $(BASE) $(SPARSE_OBJ) xnet_jacobian_$(PARDISO).o $(PARDISO_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnetp$(MPI_SFX) \
-	    $(BASE) xnet_jacobian_$(PARDISO).o $(notdir $(PARDISO_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) $(SPARSE_OBJ) xnet_jacobian_$(PARDISO).o $(notdir $(PARDISO_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(PARDISO_LIBDIR) $(PARDISO_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 endif
 

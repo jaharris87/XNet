@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -129,6 +130,7 @@ def prepare_case(
     abundance_name: str,
     output_species: tuple[str, ...],
     title: str,
+    run_token: str,
     electron_fraction: float,
 ) -> Path:
     work_directory.mkdir(parents=True)
@@ -139,7 +141,7 @@ def prepare_case(
     (work_directory / helm_table.name).symlink_to(helm_table.resolve())
     (work_directory / "control").write_text(
         control_text(
-            title=title,
+            title=f"{title} token={run_token}",
             data_name=source_data.name,
             abundance_name=abundance_name,
             output_species=output_species,
@@ -219,10 +221,43 @@ def parse_composition(lines: list[str], marker: str, species: tuple[str, ...]) -
     return values
 
 
+def validate_production_run(lines: list[str], run_token: str, label: str) -> int:
+    if sum(run_token in line for line in lines) != 1:
+        fail(f"{label} diagnostic does not contain its unique run token exactly once")
+    start_lines = [line.split() for line in lines if line.startswith("Start")]
+    end_lines = [line.split() for line in lines if line.startswith("End")]
+    counter_headers = [i for i, line in enumerate(lines) if line.startswith("Counters:")]
+    if len(start_lines) != 1 or len(end_lines) != 1 or len(counter_headers) != 1:
+        fail(f"{label} diagnostic has incomplete or duplicate endpoint records")
+    if len(start_lines[0]) != 7 or len(end_lines[0]) != 8:
+        fail(f"{label} diagnostic endpoint header has the wrong field count")
+    try:
+        start_zone, start_step = (int(value) for value in start_lines[0][1:3])
+        start_values = [float(value) for value in start_lines[0][3:]]
+        end_zone, end_step = (int(value) for value in end_lines[0][1:3])
+        end_values = [float(value) for value in end_lines[0][3:]]
+        counter_values = [int(value) for value in lines[counter_headers[0] + 1].split()]
+    except (IndexError, ValueError) as error:
+        fail(f"{label} diagnostic endpoint/counter record is malformed: {error}")
+    if any(not math.isfinite(value) for value in start_values + end_values):
+        fail(f"{label} diagnostic endpoint contains a non-finite value")
+    if start_zone != 1 or end_zone != 1 or start_step != 0 or end_step <= 0:
+        fail(f"{label} diagnostic has unexpected zone/step identifiers")
+    if start_values[0] != 0.0 or end_values[0] != 1.0e-6 or end_values[1] != 1.0e-6:
+        fail(f"{label} diagnostic did not cover the requested time interval")
+    if len(counter_values) != 6 or counter_values[0] != 1:
+        fail(f"{label} diagnostic counter record is malformed")
+    if counter_values[1] != end_step or any(value <= 0 for value in counter_values[1:]):
+        fail(f"{label} diagnostic counters do not confirm completed evolution")
+    return end_step
+
+
 def write_candidate(
     path: Path,
     initial: list[float],
     result: list[float],
+    species: tuple[str, ...],
+    verification_token: str,
     *,
     fraction_tolerance: float = 1.0e-12,
     mass_tolerance: float = 2.0e-6,
@@ -233,6 +268,9 @@ def write_candidate(
 
     path.write_text(
         f"{len(initial)}\n"
+        f"{verification_token}\n"
+        + " ".join(species)
+        + "\n"
         f"{fraction_tolerance:.17e} {mass_tolerance:.17e} {ye_tolerance:.17e}\n"
         + " ".join(value_text(value) for value in initial)
         + "\n"
@@ -251,15 +289,29 @@ def verify_candidate(
     label: str,
 ) -> dict[str, int]:
     candidate = work_directory / f"{label}.candidate"
-    write_candidate(candidate, initial, result)
+    species = read_species(data_directory)
+    verification_token = secrets.token_hex(16)
+    write_candidate(candidate, initial, result, species, verification_token)
     completed = run_process(
         [str(verifier), str(data_directory), str(candidate)], work_directory, label
     )
     statuses: dict[str, int] = {}
+    echoed_token = ""
+    metadata_identity = 0
     for line in completed.stdout.splitlines():
+        if line.startswith("verification_token "):
+            echoed_token = line.split(maxsplit=1)[1]
+        if line.startswith("metadata_identity "):
+            metadata_identity = int(line.split(maxsplit=1)[1])
         match = re.fullmatch(r"([a-z_]+)\s+([0-9]+)", line.strip())
         if match and match.group(1) in STATUS_KEYS:
+            if match.group(1) in statuses:
+                fail(f"{label} verifier emitted a duplicate status key")
             statuses[match.group(1)] = int(match.group(2))
+    if echoed_token != verification_token:
+        fail(f"{label} verifier did not echo its unique candidate token")
+    if metadata_identity != 1:
+        fail(f"{label} verifier did not confirm production metadata identity")
     if tuple(statuses) != STATUS_KEYS:
         fail(f"{label} verifier output is incomplete: {completed.stdout!r}")
     return statuses
@@ -272,6 +324,70 @@ def require_only(statuses: dict[str, int], failed_key: str, label: str) -> None:
         expected = FAIL if key == failed_key else PASS
         if statuses[key] != expected:
             fail(f"{label} did not isolate {failed_key}: {statuses}")
+
+
+def exercise_substitution_guards(
+    work_root: Path,
+    verifier: Path,
+    alpha_work: Path,
+    alpha_data: Path,
+    data_alpha: Path,
+    helm_table: Path,
+    initial: list[float],
+    result: list[float],
+) -> None:
+    replay_xnet = work_root / "replay_xnet.py"
+    replay_source = alpha_work / "net_diag01"
+    replay_xnet.write_text(
+        "#!/usr/bin/env python3\n"
+        "from pathlib import Path\n"
+        f"Path('net_diag01').write_bytes(Path({str(replay_source)!r}).read_bytes())\n",
+        encoding="ascii",
+    )
+    replay_xnet.chmod(0o755)
+    try:
+        execute_case(
+            work_root,
+            replay_xnet,
+            verifier,
+            data_alpha,
+            helm_table,
+            name="negative_replay",
+            abundance_name="ab_he",
+            output_species=ALPHA_OUTPUT_SPECIES,
+            electron_fraction=0.5,
+        )
+    except CheckFailure as error:
+        if "unique run token" not in str(error):
+            fail(f"replayed XNet output failed for the wrong reason: {error}")
+    else:
+        fail("replayed XNet output bypassed the unique-run guard")
+
+    fake_verifier = work_root / "fake_verifier.py"
+    fake_verifier.write_text(
+        "#!/usr/bin/env python3\n"
+        "print('overall_status 1')\n"
+        "print('finite_status 1')\n"
+        "print('fraction_bounds_status 1')\n"
+        "print('mass_normalization_status 1')\n"
+        "print('fixed_ye_status 1')\n",
+        encoding="ascii",
+    )
+    fake_verifier.chmod(0o755)
+    try:
+        verify_candidate(
+            fake_verifier,
+            alpha_data,
+            alpha_work,
+            initial,
+            result,
+            "negative_fake_verifier",
+        )
+    except CheckFailure as error:
+        if "unique candidate token" not in str(error):
+            fail(f"substituted verifier failed for the wrong reason: {error}")
+    else:
+        fail("substituted verifier bypassed the candidate-token guard")
 
 
 def execute_case(
@@ -287,6 +403,7 @@ def execute_case(
     electron_fraction: float,
 ) -> tuple[Path, Path, tuple[str, ...], list[float], list[float]]:
     work_directory = root / name
+    run_token = secrets.token_hex(16)
     data_directory = prepare_case(
         work_directory,
         source_data,
@@ -294,6 +411,7 @@ def execute_case(
         abundance_name=abundance_name,
         output_species=output_species,
         title=f"{name} full_net surrogate-result candidate",
+        run_token=run_token,
         electron_fraction=electron_fraction,
     )
     run_process([str(xnet)], work_directory, "xnet")
@@ -301,6 +419,7 @@ def execute_case(
     if not diagnostic_path.is_file():
         fail(f"xnet did not emit {diagnostic_path}")
     lines = diagnostic_path.read_text(encoding="utf-8").splitlines()
+    validate_production_run(lines, run_token, name)
     species = read_species(data_directory)
     initial = parse_composition(lines, "Start", species)
     result = parse_composition(lines, "End", species)
@@ -421,6 +540,17 @@ def main(arguments: list[str]) -> int:
         "mutate_ye",
     )
     require_only(ye_statuses, "fixed_ye_status", "electron-fraction mutation")
+
+    exercise_substitution_guards(
+        work_root,
+        verifier.resolve(),
+        alpha_work,
+        alpha_data,
+        data_alpha.resolve(),
+        helm_table.resolve(),
+        alpha_initial,
+        alpha_result,
+    )
 
     print("Data_alpha and Data_SN231 full_net surrogate-result checks passed")
     return 0

@@ -123,10 +123,11 @@ BUILD_NET_OBJECTS := \
 
 .DEFAULT_GOAL := test
 
-.PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet
+.PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet \
+  surrogate-verifier
 
 test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
-    $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) $(SURROGATE_VERIFY_EXE) \
+    $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
     $(SPARSE_DATA_EXE) \
     $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(NUCLEAR_INPUT_MUTATOR_EXE) \
     $(BUILD_NET_EXE) production-xnet
@@ -265,6 +266,9 @@ $(PREPROCESS_VERIFY_EXE): $(PREPROCESS_VERIFY_OBJECTS)
 
 $(SURROGATE_VERIFY_EXE): $(SURROGATE_VERIFY_OBJECTS)
 	$(LDR) -o $@ $^ $(LDFLAGS)
+
+surrogate-verifier: $(SURROGATE_VERIFY_OBJECTS)
+	$(LDR) -o $(SURROGATE_VERIFY_EXE) $^ $(LDFLAGS)
 
 $(BUILD_NET_READER_EXE): $(PREPROCESS_VERIFY_OBJECTS:$(PREPROCESS_BUILD_DIR)/verify_preprocess.o=) \
     $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o

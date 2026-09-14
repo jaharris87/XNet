@@ -154,13 +154,29 @@ internal consistency, not physical accuracy or agreement with XNet. It does not
 select application tolerances, repair candidate states, trigger fallback, make
 NSE or out-of-distribution decisions, or call an EOS. The fixed-`Ye` check is
 enabled only when charge-changing weak evolution is excluded. The binding-energy
-check uses XNet's `N_A * MeV-to-erg * delta(sum(X_i B_i/A_i)) / dt` convention;
-additional weak-interaction or neutrino source terms must be accounted for by
-the caller before treating it as a complete energy closure. The process tests
-use strong reactions only and tolerate `2e-6` mass and `Ye` residuals because
-the diagnostic endpoint format emits seven digits after the decimal in
-scientific notation; observed unmodified residuals are approximately `2e-9` or
-smaller.
+check uses XNet's positive-binding convention,
+`N_A * MeV-to-erg * delta(sum(X_i B_i/A_i)) / dt`, and validates only that
+component. Total XNet mass-excess source closure additionally requires fixed
+`Ye`, because proton and neutron mass excesses contribute when `Ye` changes;
+neutrino losses must be excluded or checked separately.
+
+All tolerance-bearing checks require explicit nonnegative caller values;
+unset configuration fields are invalid and explicit zero requests an inclusive
+exact comparison. Fraction bounds, mass normalization, fixed `Ye`, and inactive
+composition use absolute dimensionless tolerances. Inactive energy and the
+absolute binding-rate term use `erg g^-1 s^-1`; the relative binding-rate term
+is dimensionless and scales with the larger absolute expected/reported rate.
+Focused tests cross both sides of every tolerance boundary, select every
+coordinator flag independently, and exercise finite-extreme inputs under the
+tracked floating-point traps.
+
+The process tests use strong reactions only and tolerate `2e-6` mass and `Ye`
+residuals because the diagnostic endpoint format emits seven digits after the
+decimal in scientific notation; observed unmodified residuals are approximately
+`2e-9` or smaller. Per-run challenge tokens, complete endpoint/counter records,
+and a verifier-echoed species identity reject replayed XNet output or a
+substituted status producer. The standard Make target also forcibly rebuilds
+the production executable and relinks the verifier before this evidence is run.
 
 ## Network preprocessing component
 

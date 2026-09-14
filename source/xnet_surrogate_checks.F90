@@ -18,6 +18,9 @@ Module xnet_surrogate_checks
   Integer, Parameter, Public :: bn_check_invalid = 3
 
   Type, Public :: bn_surrogate_check_config
+    ! Flags must be zero (disabled) or one (enabled); any other value is invalid. Tolerances use
+    ! -1 as an unset sentinel so enabling a tolerance-bearing check requires explicit caller
+    ! policy. Explicit zero is valid and requests an inclusive exact comparison.
     Integer :: check_finite = 0
     Integer :: check_fraction_bounds = 0
     Integer :: check_mass_normalization = 0
@@ -25,16 +28,26 @@ Module xnet_surrogate_checks
     Integer :: check_inactive_identity = 0
     Integer :: check_binding_energy_rate = 0
     Integer :: check_eos_result = 0
-    Real(dp) :: fraction_tolerance = 0.0_dp
-    Real(dp) :: mass_tolerance = 0.0_dp
-    Real(dp) :: ye_tolerance = 0.0_dp
-    Real(dp) :: inactive_fraction_tolerance = 0.0_dp
-    Real(dp) :: inactive_energy_tolerance = 0.0_dp
-    Real(dp) :: energy_absolute_tolerance = 0.0_dp
-    Real(dp) :: energy_relative_tolerance = 0.0_dp
+    ! Absolute dimensionless slack in -tol <= X_i <= 1+tol.
+    Real(dp) :: fraction_tolerance = -1.0_dp
+    ! Absolute dimensionless limit on |sum_i X_i - 1|.
+    Real(dp) :: mass_tolerance = -1.0_dp
+    ! Absolute dimensionless limit on |Ye_result-Ye_initial|.
+    Real(dp) :: ye_tolerance = -1.0_dp
+    ! Absolute dimensionless limit on max_i |X_result_i-X_initial_i| when inactive.
+    Real(dp) :: inactive_fraction_tolerance = -1.0_dp
+    ! Absolute limit in erg g^-1 s^-1 on |energy_rate| when inactive.
+    Real(dp) :: inactive_energy_tolerance = -1.0_dp
+    ! Absolute term in erg g^-1 s^-1 in the binding-energy-rate comparison.
+    Real(dp) :: energy_absolute_tolerance = -1.0_dp
+    ! Dimensionless relative term scaled by max(|expected_rate|,|energy_rate|).
+    Real(dp) :: energy_relative_tolerance = -1.0_dp
   End Type bn_surrogate_check_config
 
   Type, Public :: bn_surrogate_check_report
+    ! Overall is INVALID before FAILED before PASSED before SKIPPED; individual status fields use
+    ! the public bn_check_* values. Indices are one-based first failures, or zero when none; EOS
+    ! indices refer to the caller-defined ordering of the corresponding EOS array.
     Integer :: overall_status = bn_check_skipped
     Integer :: finite_status = bn_check_skipped
     Integer :: fraction_bounds_status = bn_check_skipped
@@ -46,16 +59,16 @@ Module xnet_surrogate_checks
     Integer :: finite_bad_index = 0
     Integer :: eos_bad_finite_index = 0
     Integer :: eos_bad_positive_index = 0
-    Real(dp) :: minimum_fraction = 0.0_dp
-    Real(dp) :: maximum_fraction = 0.0_dp
-    Real(dp) :: mass_residual = 0.0_dp
-    Real(dp) :: initial_ye = 0.0_dp
-    Real(dp) :: result_ye = 0.0_dp
-    Real(dp) :: ye_residual = 0.0_dp
-    Real(dp) :: inactive_fraction_residual = 0.0_dp
-    Real(dp) :: inactive_energy_residual = 0.0_dp
-    Real(dp) :: expected_energy_rate = 0.0_dp
-    Real(dp) :: energy_rate_residual = 0.0_dp
+    Real(dp) :: minimum_fraction = 0.0_dp ! min_i X_result_i; dimensionless
+    Real(dp) :: maximum_fraction = 0.0_dp ! max_i X_result_i; dimensionless
+    Real(dp) :: mass_residual = 0.0_dp ! signed sum_i X_result_i - 1; dimensionless
+    Real(dp) :: initial_ye = 0.0_dp ! sum_i Z_i X_initial_i/A_i; dimensionless
+    Real(dp) :: result_ye = 0.0_dp ! sum_i Z_i X_result_i/A_i; dimensionless
+    Real(dp) :: ye_residual = 0.0_dp ! signed Ye_result-Ye_initial; dimensionless
+    Real(dp) :: inactive_fraction_residual = 0.0_dp ! nonnegative max component change
+    Real(dp) :: inactive_energy_residual = 0.0_dp ! nonnegative rate; erg g^-1 s^-1
+    Real(dp) :: expected_energy_rate = 0.0_dp ! binding-only rate; erg g^-1 s^-1
+    Real(dp) :: energy_rate_residual = 0.0_dp ! signed reported-expected rate; erg g^-1 s^-1
   End Type bn_surrogate_check_report
 
   Public :: bn_check_binding_energy_rate
@@ -174,6 +187,11 @@ Contains
   End Subroutine bn_check_surrogate_result
 
   Subroutine bn_check_finite_values(values,status,bad_index)
+    !---------------------------------------------------------------------------------------------
+    ! Require a nonempty candidate array containing only finite IEEE binary64 values. This proves
+    ! numerical representability only, not physical bounds, normalization, or accuracy. A
+    ! non-finite candidate is FAILED; an empty array is INVALID.
+    !---------------------------------------------------------------------------------------------
     Implicit None
     Real(dp), Intent(in) :: values(:)
     Integer, Intent(out) :: status, bad_index
@@ -196,6 +214,11 @@ Contains
   End Subroutine bn_check_finite_values
 
   Subroutine bn_check_fraction_bounds(xmass,tolerance,status,minimum_fraction,maximum_fraction)
+    !---------------------------------------------------------------------------------------------
+    ! Require each candidate mass fraction to satisfy -tolerance <= X_i <= 1+tolerance, inclusively.
+    ! The tolerance and fractions are dimensionless. This componentwise gate does not establish
+    ! normalization, conservation of charge, network agreement, or physical trajectory accuracy.
+    !---------------------------------------------------------------------------------------------
     Implicit None
     Real(dp), Intent(in) :: xmass(:), tolerance
     Integer, Intent(out) :: status
@@ -218,7 +241,8 @@ Contains
 
     minimum_fraction = minval(xmass)
     maximum_fraction = maxval(xmass)
-    If ( minimum_fraction >= -tolerance .and. maximum_fraction <= 1.0_dp+tolerance ) Then
+    If ( fraction_within_lower_bound(minimum_fraction,tolerance) .and. &
+      & fraction_within_upper_bound(maximum_fraction,tolerance) ) Then
       status = bn_check_passed
     Else
       status = bn_check_failed
@@ -228,12 +252,18 @@ Contains
   End Subroutine bn_check_fraction_bounds
 
   Subroutine bn_check_mass_normalization(xmass,tolerance,status,residual)
+    !---------------------------------------------------------------------------------------------
+    ! Require |sum_i X_i-1| <= tolerance, inclusively. Residual is the signed dimensionless
+    ! quantity sum_i X_i-1. This scalar identity does not establish component bounds, species-wise
+    ! conservation, network agreement, or physical trajectory accuracy.
+    !---------------------------------------------------------------------------------------------
     Implicit None
     Real(dp), Intent(in) :: xmass(:), tolerance
     Integer, Intent(out) :: status
     Real(dp), Intent(out) :: residual
 
     Integer :: bad_index, finite_status
+    Real(dp) :: mass_sum
 
     status = bn_check_invalid
     residual = 0.0_dp
@@ -248,8 +278,12 @@ Contains
       Return
     EndIf
 
-    residual = sum(xmass) - 1.0_dp
-    If ( .not. finite_value(residual) ) Then
+    If ( .not. safe_sum(xmass,mass_sum) ) Then
+      status = bn_check_failed
+      residual = huge(residual)
+      Return
+    EndIf
+    If ( .not. safe_subtract(mass_sum,1.0_dp,residual) ) Then
       status = bn_check_failed
       residual = huge(residual)
       Return
@@ -265,6 +299,13 @@ Contains
 
   Subroutine bn_check_electron_fraction(x_initial,x_result,aa,zz,tolerance,status, &
     & initial_ye,result_ye,residual)
+    !---------------------------------------------------------------------------------------------
+    ! Require |sum_i Z_i X_result_i/A_i - sum_i Z_i X_initial_i/A_i| <= tolerance, inclusively.
+    ! Values and tolerance are dimensionless. A and Z must be finite with A>0 and 0<=Z<=A;
+    ! integer-valued XNet nuclear metadata is otherwise a trusted caller precondition. Non-finite
+    ! initial/reference data are INVALID; non-finite or overflowing candidate evaluation is FAILED.
+    ! Fixed Ye does not establish mass normalization, energy closure, or agreement with XNet.
+    !---------------------------------------------------------------------------------------------
     Implicit None
     Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), zz(:), tolerance
     Integer, Intent(out) :: status
@@ -285,26 +326,24 @@ Contains
     Call bn_check_finite_values(zz,finite_status,bad_index)
     If ( finite_status /= bn_check_passed ) Return
     If ( any(aa <= 0.0_dp) ) Return
+    If ( any(zz < 0.0_dp) .or. any(zz > aa) ) Return
     Call bn_check_finite_values(x_initial,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Then
-      status = bn_check_failed
-      residual = huge(residual)
-      Return
-    EndIf
+    If ( finite_status /= bn_check_passed ) Return
     Call bn_check_finite_values(x_result,finite_status,bad_index)
     If ( finite_status /= bn_check_passed ) Then
       status = bn_check_failed
       residual = huge(residual)
       Return
     EndIf
-    initial_ye = sum(zz*x_initial/aa)
-    result_ye = sum(zz*x_result/aa)
-    residual = result_ye - initial_ye
-    If ( .not. finite_value(initial_ye) .or. .not. finite_value(result_ye) .or. &
-      & .not. finite_value(residual) ) Then
+    If ( .not. safe_electron_fraction(x_initial,aa,zz,initial_ye) ) Return
+    If ( .not. safe_electron_fraction(x_result,aa,zz,result_ye) ) Then
       status = bn_check_failed
-      initial_ye = 0.0_dp
       result_ye = 0.0_dp
+      residual = huge(residual)
+      Return
+    EndIf
+    If ( .not. safe_subtract(result_ye,initial_ye,residual) ) Then
+      status = bn_check_failed
       residual = huge(residual)
       Return
     EndIf
@@ -319,12 +358,20 @@ Contains
 
   Subroutine bn_check_inactive_identity(x_initial,x_result,energy_rate,fraction_tolerance, &
     & energy_tolerance,status,fraction_residual,energy_residual)
+    !---------------------------------------------------------------------------------------------
+    ! For a caller-declared inactive zone, require max_i |X_result_i-X_initial_i| <= the absolute
+    ! dimensionless fraction tolerance and |energy_rate| <= the absolute energy tolerance in
+    ! erg g^-1 s^-1, inclusively. This detects changes where no burn was requested; it does not
+    ! decide whether a zone should be active or validate EOS, network, or trajectory accuracy.
+    ! Non-finite initial/reference data are INVALID; corrupt candidate data are FAILED.
+    !---------------------------------------------------------------------------------------------
     Implicit None
     Real(dp), Intent(in) :: x_initial(:), x_result(:), energy_rate
     Real(dp), Intent(in) :: fraction_tolerance, energy_tolerance
     Integer, Intent(out) :: status
     Real(dp), Intent(out) :: fraction_residual, energy_residual
-    Integer :: bad_index, finite_status
+    Integer :: bad_index, finite_status, i
+    Real(dp) :: component_residual
 
     status = bn_check_invalid
     fraction_residual = 0.0_dp
@@ -336,11 +383,7 @@ Contains
     If ( energy_tolerance < 0.0_dp ) Return
 
     Call bn_check_finite_values(x_initial,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Then
-      status = bn_check_failed
-      fraction_residual = huge(fraction_residual)
-      Return
-    EndIf
+    If ( finite_status /= bn_check_passed ) Return
     Call bn_check_finite_values(x_result,finite_status,bad_index)
     If ( finite_status /= bn_check_passed .or. .not. finite_value(energy_rate) ) Then
       status = bn_check_failed
@@ -349,14 +392,16 @@ Contains
       Return
     EndIf
 
-    fraction_residual = maxval(abs(x_result-x_initial))
+    Do i = 1, size(x_result)
+      If ( .not. safe_subtract(x_result(i),x_initial(i),component_residual) ) Then
+        status = bn_check_failed
+        fraction_residual = huge(fraction_residual)
+        energy_residual = abs(energy_rate)
+        Return
+      EndIf
+      fraction_residual = max(fraction_residual,abs(component_residual))
+    EndDo
     energy_residual = abs(energy_rate)
-    If ( .not. finite_value(fraction_residual) .or. .not. finite_value(energy_residual) ) Then
-      status = bn_check_failed
-      fraction_residual = huge(fraction_residual)
-      energy_residual = huge(energy_residual)
-      Return
-    EndIf
     If ( fraction_residual <= fraction_tolerance .and. energy_residual <= energy_tolerance ) Then
       status = bn_check_passed
     Else
@@ -371,8 +416,16 @@ Contains
     !---------------------------------------------------------------------------------------------
     ! Check the XNet/Flash-X binding-energy convention
     !   edot = N_A (MeV to erg) sum_i[(X_i'-X_i) B_i/A_i] / dt.
-    ! This is a complete source consistency check only when weak-interaction and neutrino-energy
-    ! terms are excluded from the caller's reported energy rate.
+    ! B_i is the positive binding energy per nucleus, so increasing total binding gives positive
+    ! edot. This routine validates only that binding-energy component. Total XNet mass-excess
+    ! source closure additionally requires fixed Ye to be established separately because proton
+    ! and neutron mass excesses contribute when Ye changes; neutrino losses must also be excluded
+    ! from energy_rate or checked separately. The inclusive acceptance rule is
+    !   |energy_rate-expected_rate| <= absolute_tolerance
+    !     + relative_tolerance*max(|expected_rate|,|energy_rate|).
+    ! Rates and the absolute tolerance are in erg g^-1 s^-1; the relative tolerance is
+    ! dimensionless, dt is in seconds, and A is dimensionless. Passing does not establish fixed Ye,
+    ! EOS consistency, or agreement with a network trajectory.
     !---------------------------------------------------------------------------------------------
     Implicit None
     Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), binding_energy(:)
@@ -380,8 +433,8 @@ Contains
     Integer, Intent(out) :: status
     Real(dp), Intent(out) :: expected_rate, residual
 
-    Integer :: bad_index, finite_status
-    Real(dp) :: allowed_error
+    Integer :: bad_index, finite_status, i
+    Real(dp) :: binding_sum, component, delta_fraction, energy_scale, next_sum, weight
 
     status = bn_check_invalid
     expected_rate = 0.0_dp
@@ -401,11 +454,7 @@ Contains
     If ( finite_status /= bn_check_passed ) Return
     If ( any(aa <= 0.0_dp) ) Return
     Call bn_check_finite_values(x_initial,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Then
-      status = bn_check_failed
-      residual = huge(residual)
-      Return
-    EndIf
+    If ( finite_status /= bn_check_passed ) Return
     Call bn_check_finite_values(x_result,finite_status,bad_index)
     If ( finite_status /= bn_check_passed .or. .not. finite_value(energy_rate) ) Then
       status = bn_check_failed
@@ -413,26 +462,42 @@ Contains
       Return
     EndIf
 
-    expected_rate = avn*epmev*sum((x_result-x_initial)*binding_energy/aa)/tstep
-    If ( .not. finite_value(expected_rate) ) Then
+    If ( .not. safe_multiply(avn,epmev,component) ) Return
+    If ( .not. safe_divide(component,tstep,energy_scale) ) Return
+
+    binding_sum = 0.0_dp
+    Do i = 1, size(x_result)
+      If ( .not. safe_divide(binding_energy(i),aa(i),weight) ) Return
+      If ( .not. safe_subtract(x_result(i),x_initial(i),delta_fraction) ) Then
+        status = bn_check_failed
+        residual = huge(residual)
+        Return
+      EndIf
+      If ( .not. safe_multiply(delta_fraction,weight,component) ) Then
+        status = bn_check_failed
+        residual = huge(residual)
+        Return
+      EndIf
+      If ( .not. safe_add(binding_sum,component,next_sum) ) Then
+        status = bn_check_failed
+        residual = huge(residual)
+        Return
+      EndIf
+      binding_sum = next_sum
+    EndDo
+    If ( .not. safe_multiply(binding_sum,energy_scale,expected_rate) ) Then
       status = bn_check_failed
       residual = huge(residual)
       Return
     EndIf
-    residual = energy_rate - expected_rate
-    If ( .not. finite_value(residual) ) Then
+    If ( .not. safe_subtract(energy_rate,expected_rate,residual) ) Then
       status = bn_check_failed
       residual = huge(residual)
       Return
     EndIf
 
-    allowed_error = absolute_tolerance + &
-      & relative_tolerance*max(abs(expected_rate),abs(energy_rate))
-    If ( .not. finite_value(allowed_error) ) Then
-      status = bn_check_invalid
-      Return
-    EndIf
-    If ( abs(residual) <= allowed_error ) Then
+    If ( within_energy_tolerance(residual,energy_rate,expected_rate,absolute_tolerance, &
+      & relative_tolerance) ) Then
       status = bn_check_passed
     Else
       status = bn_check_failed
@@ -543,6 +608,174 @@ Contains
 
     Return
   End Function valid_flag
+
+  Logical Function fraction_within_lower_bound(value,tolerance)
+    Implicit None
+    Real(dp), Intent(in) :: value, tolerance
+
+    If ( value >= 0.0_dp ) Then
+      fraction_within_lower_bound = .True.
+    Else
+      fraction_within_lower_bound = -value <= tolerance
+    EndIf
+
+    Return
+  End Function fraction_within_lower_bound
+
+  Logical Function fraction_within_upper_bound(value,tolerance)
+    Implicit None
+    Real(dp), Intent(in) :: value, tolerance
+
+    If ( value <= 1.0_dp ) Then
+      fraction_within_upper_bound = .True.
+    Else
+      fraction_within_upper_bound = value-1.0_dp <= tolerance
+    EndIf
+
+    Return
+  End Function fraction_within_upper_bound
+
+  Logical Function safe_add(left,right,result)
+    ! Return false rather than evaluating a binary64 addition that would overflow.
+    Implicit None
+    Real(dp), Intent(in) :: left, right
+    Real(dp), Intent(out) :: result
+    Real(dp) :: largest
+
+    safe_add = .False.
+    result = 0.0_dp
+    If ( .not. finite_value(left) .or. .not. finite_value(right) ) Return
+    largest = huge(result)
+    If ( right > 0.0_dp ) Then
+      If ( left > largest-right ) Return
+    ElseIf ( right < 0.0_dp ) Then
+      If ( left < -largest-right ) Return
+    EndIf
+    result = left+right
+    safe_add = finite_value(result)
+
+    Return
+  End Function safe_add
+
+  Logical Function safe_subtract(left,right,result)
+    ! Return false rather than evaluating a binary64 subtraction that would overflow.
+    Implicit None
+    Real(dp), Intent(in) :: left, right
+    Real(dp), Intent(out) :: result
+
+    safe_subtract = safe_add(left,-right,result)
+
+    Return
+  End Function safe_subtract
+
+  Logical Function safe_multiply(left,right,result)
+    ! Return false rather than evaluating a binary64 multiplication that would overflow.
+    Implicit None
+    Real(dp), Intent(in) :: left, right
+    Real(dp), Intent(out) :: result
+
+    safe_multiply = .False.
+    result = 0.0_dp
+    If ( .not. finite_value(left) .or. .not. finite_value(right) ) Return
+    If ( left == 0.0_dp .or. right == 0.0_dp ) Then
+      safe_multiply = .True.
+      Return
+    EndIf
+    If ( abs(right) > 1.0_dp ) Then
+      If ( abs(left) > huge(result)/abs(right) ) Return
+    ElseIf ( abs(left) > 1.0_dp ) Then
+      If ( abs(right) > huge(result)/abs(left) ) Return
+    EndIf
+    result = left*right
+    safe_multiply = finite_value(result)
+
+    Return
+  End Function safe_multiply
+
+  Logical Function safe_divide(numerator,denominator,result)
+    ! Return false rather than evaluating division by zero or a binary64 quotient overflow.
+    Implicit None
+    Real(dp), Intent(in) :: numerator, denominator
+    Real(dp), Intent(out) :: result
+    Real(dp) :: absolute_denominator
+
+    safe_divide = .False.
+    result = 0.0_dp
+    If ( .not. finite_value(numerator) .or. .not. finite_value(denominator) ) Return
+    If ( denominator == 0.0_dp ) Return
+    absolute_denominator = abs(denominator)
+    If ( absolute_denominator < 1.0_dp ) Then
+      If ( abs(numerator) > huge(result)*absolute_denominator ) Return
+    EndIf
+    result = numerator/denominator
+    safe_divide = finite_value(result)
+
+    Return
+  End Function safe_divide
+
+  Logical Function safe_sum(values,result)
+    Implicit None
+    Real(dp), Intent(in) :: values(:)
+    Real(dp), Intent(out) :: result
+    Integer :: i
+    Real(dp) :: next_sum
+
+    safe_sum = .False.
+    result = 0.0_dp
+    Do i = 1, size(values)
+      If ( .not. safe_add(result,values(i),next_sum) ) Return
+      result = next_sum
+    EndDo
+    safe_sum = .True.
+
+    Return
+  End Function safe_sum
+
+  Logical Function safe_electron_fraction(xmass,aa,zz,ye)
+    Implicit None
+    Real(dp), Intent(in) :: xmass(:), aa(:), zz(:)
+    Real(dp), Intent(out) :: ye
+    Integer :: i
+    Real(dp) :: component, next_ye, proton_fraction
+
+    safe_electron_fraction = .False.
+    ye = 0.0_dp
+    Do i = 1, size(xmass)
+      If ( .not. safe_divide(zz(i),aa(i),proton_fraction) ) Return
+      If ( .not. safe_multiply(xmass(i),proton_fraction,component) ) Return
+      If ( .not. safe_add(ye,component,next_ye) ) Return
+      ye = next_ye
+    EndDo
+    safe_electron_fraction = .True.
+
+    Return
+  End Function safe_electron_fraction
+
+  Logical Function within_energy_tolerance(residual,reported_rate,expected_rate, &
+    & absolute_tolerance,relative_tolerance)
+    ! Compare nonnegative tolerance terms without constructing an overflowing allowed-error sum.
+    Implicit None
+    Real(dp), Intent(in) :: residual, reported_rate, expected_rate
+    Real(dp), Intent(in) :: absolute_tolerance, relative_tolerance
+    Real(dp) :: difference, relative_allowance, remaining, scale
+
+    within_energy_tolerance = .False.
+    difference = abs(residual)
+    If ( difference <= absolute_tolerance ) Then
+      within_energy_tolerance = .True.
+      Return
+    EndIf
+    remaining = difference-absolute_tolerance
+    scale = max(abs(expected_rate),abs(reported_rate))
+    If ( scale == 0.0_dp .or. relative_tolerance == 0.0_dp ) Return
+    If ( .not. safe_multiply(relative_tolerance,scale,relative_allowance) ) Then
+      within_energy_tolerance = .True.
+      Return
+    EndIf
+    within_energy_tolerance = remaining <= relative_allowance
+
+    Return
+  End Function within_energy_tolerance
 
   Logical Function finite_value(value)
     !---------------------------------------------------------------------------------------------

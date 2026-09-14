@@ -12,6 +12,7 @@ include $(XNET_DIR)/Makefile.internal
 
 BUILD_DIR := build/$(shell echo $(CMODE) | tr A-Z a-z)
 TEST_EXE := $(BUILD_DIR)/xnet_contract_tests
+SURROGATE_CHECK_EXE := $(BUILD_DIR)/surrogate_check_tests
 NSE_VALIDATION_EXE := $(BUILD_DIR)/nse_scientific_validation_tests
 NSE_VALIDATION_DIR := $(ROOT_DIR)/test/nse_validation
 NSE_VALIDATION_NETWORK_DIR := $(NSE_VALIDATION_DIR)/network
@@ -24,6 +25,7 @@ PREPROCESS_MODULE_FLAGS := -J$(PREPROCESS_BUILD_DIR) -I$(PREPROCESS_BUILD_DIR) -
 PREPROCESS_DIRECT_EXE := $(PREPROCESS_BUILD_DIR)/preprocess_direct
 PREPROCESS_NET_SETUP_EXE := $(PREPROCESS_BUILD_DIR)/net_setup
 PREPROCESS_VERIFY_EXE := $(PREPROCESS_BUILD_DIR)/verify_preprocess
+SURROGATE_VERIFY_EXE := $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate
 BUILD_NET_READER_EXE := $(PREPROCESS_BUILD_DIR)/verify_build_net_readers
 NUCLEAR_INPUT_MUTATOR_EXE := $(PREPROCESS_BUILD_DIR)/mutate_nuclear_input
 PREPROCESS_WORK_DIR := $(abspath $(BUILD_DIR)/preprocess-work)
@@ -76,6 +78,13 @@ NSE_VALIDATION_OBJECTS := \
   $(BUILD_DIR)/nse_validation_support.o \
   $(BUILD_DIR)/test_nse_scientific_validation.o
 
+SURROGATE_CHECK_OBJECTS := \
+  $(BUILD_DIR)/testdrive.o \
+  $(BUILD_DIR)/xnet_types.o \
+  $(BUILD_DIR)/xnet_constants.o \
+  $(BUILD_DIR)/xnet_surrogate_checks.o \
+  $(BUILD_DIR)/test_surrogate_checks.o
+
 PREPROCESS_CORE_OBJECTS := \
   $(PREPROCESS_BUILD_DIR)/xnet_types.o \
   $(PREPROCESS_BUILD_DIR)/xnet_constants.o \
@@ -99,6 +108,11 @@ PREPROCESS_VERIFY_OBJECTS := \
   $(PREPROCESS_BUILD_DIR)/pardiso_test_stubs.o \
   $(PREPROCESS_BUILD_DIR)/verify_preprocess.o
 
+SURROGATE_VERIFY_OBJECTS := \
+  $(PREPROCESS_CORE_OBJECTS) \
+  $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o \
+  $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate.o
+
 BUILD_NET_OBJECTS := \
   $(BUILD_NET_BUILD_DIR)/net_module.o \
   $(BUILD_NET_BUILD_DIR)/partf_module.o \
@@ -111,12 +125,17 @@ BUILD_NET_OBJECTS := \
 
 .PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet
 
-test: eos-test $(TEST_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
-    $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) \
+test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
+    $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) $(SURROGATE_VERIFY_EXE) \
     $(SPARSE_DATA_EXE) \
     $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(NUCLEAR_INPUT_MUTATOR_EXE) \
     $(BUILD_NET_EXE) production-xnet
 	@$(TEST_EXE)
+	@$(SURROGATE_CHECK_EXE)
+	@PYTHONDONTWRITEBYTECODE=1 python3 run_surrogate_full_net_checks.py \
+	  $(abspath $(BUILD_DIR)/surrogate-full-net-work) $(abspath $(PRODUCTION_XNET_EXE)) \
+	  $(abspath $(SURROGATE_VERIFY_EXE)) $(abspath ../Data_alpha) \
+	  $(abspath ../Data_SN231) $(abspath $(HELM_TABLE))
 	@PYTHONDONTWRITEBYTECODE=1 python3 $(NSE_VALIDATION_DIR)/test_reference_tooling.py
 	@$(NSE_VALIDATION_EXE) $(NSE_VALIDATION_NETWORK_DIR) $(NSE_VALIDATION_REFERENCE)
 	@bash run_preprocess_contracts.sh $(PREPROCESS_FIXTURE_DIR) $(PREPROCESS_WORK_DIR) \
@@ -149,6 +168,9 @@ $(TEST_EXE): $(OBJECTS)
 $(NSE_VALIDATION_EXE): $(NSE_VALIDATION_OBJECTS)
 	$(LDR) -o $@ $(NSE_VALIDATION_OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
+$(SURROGATE_CHECK_EXE): $(SURROGATE_CHECK_OBJECTS)
+	$(LDR) -o $@ $(SURROGATE_CHECK_OBJECTS) $(LDFLAGS)
+
 $(BUILD_DIR):
 	mkdir -p $@
 
@@ -173,6 +195,10 @@ $(BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(BUILD_DIR)
 
 $(BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+    $(BUILD_DIR)/xnet_constants.o $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
 $(BUILD_DIR)/xnet_test_stubs.o: support/xnet_test_stubs.F90 \
@@ -215,6 +241,10 @@ $(BUILD_DIR)/test_xnet_contracts.o: test_xnet_contracts.F90 $(OBJECTS:$(BUILD_DI
     | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
+$(BUILD_DIR)/test_surrogate_checks.o: test_surrogate_checks.F90 \
+    $(BUILD_DIR)/testdrive.o $(BUILD_DIR)/xnet_surrogate_checks.o | $(BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
+
 $(BUILD_DIR)/nse_validation_support.o: support/nse_validation_support.F90 \
     $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
@@ -233,6 +263,9 @@ $(PREPROCESS_NET_SETUP_EXE): $(PREPROCESS_CORE_OBJECTS) $(PREPROCESS_BUILD_DIR)/
 $(PREPROCESS_VERIFY_EXE): $(PREPROCESS_VERIFY_OBJECTS)
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
+$(SURROGATE_VERIFY_EXE): $(SURROGATE_VERIFY_OBJECTS)
+	$(LDR) -o $@ $^ $(LDFLAGS)
+
 $(BUILD_NET_READER_EXE): $(PREPROCESS_VERIFY_OBJECTS:$(PREPROCESS_BUILD_DIR)/verify_preprocess.o=) \
     $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o
 	$(LDR) -o $@ $^ $(LDFLAGS)
@@ -245,6 +278,11 @@ $(PREPROCESS_BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(PREPROCESS_
 
 $(PREPROCESS_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_types.o | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+    $(PREPROCESS_BUILD_DIR)/xnet_constants.o $(PREPROCESS_BUILD_DIR)/xnet_types.o \
+    | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/xnet_parallel_stubs.o: $(XNET_DIR)/xnet_parallel_stubs.F90 \
@@ -332,6 +370,11 @@ $(PREPROCESS_BUILD_DIR)/pardiso_test_stubs.o: support/pardiso_test_stubs.F90 \
 
 $(PREPROCESS_BUILD_DIR)/verify_preprocess.o: support/verify_preprocess.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o $(PREPROCESS_BUILD_DIR)/xnet_match.o \
+    | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate.o: support/verify_surrogate_candidate.F90 \
+    $(PREPROCESS_BUILD_DIR)/xnet_data.o $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 

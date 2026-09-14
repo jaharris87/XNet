@@ -103,11 +103,57 @@ Module xnet_surrogate_checks
   Public :: bn_check_inactive_identity
   Public :: bn_check_mass_normalization
   Public :: bn_check_surrogate_result
+  Public :: bn_check_surrogate_result_with_energy
 
 Contains
 
   Subroutine bn_check_surrogate_result(config,active,x_initial,x_result,aa,zz,binding_energy, &
-    & tstep,energy_rate,report,eos_finite_values,eos_positive_values, &
+    & tstep,energy_rate,report,eos_finite_values,eos_positive_values)
+    !---------------------------------------------------------------------------------------------
+    ! Preserve the original public coordinator procedure characteristics for existing explicit
+    ! interfaces and procedure pointers. Enabling the energy-change-fraction check through this
+    ! entry point is INVALID because no initial specific internal energy is supplied.
+    !---------------------------------------------------------------------------------------------
+    Implicit None
+
+    Type(bn_surrogate_check_config), Intent(in) :: config
+    Integer, Intent(in) :: active
+    Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), zz(:), binding_energy(:)
+    Real(dp), Intent(in) :: tstep, energy_rate
+    Type(bn_surrogate_check_report), Intent(out) :: report
+    Real(dp), Optional, Intent(in) :: eos_finite_values(:), eos_positive_values(:)
+
+    Call bn_check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz,binding_energy, &
+      & tstep,energy_rate,report,eos_finite_values,eos_positive_values)
+
+    Return
+  End Subroutine bn_check_surrogate_result
+
+  Subroutine bn_check_surrogate_result_with_energy(config,active,x_initial,x_result,aa,zz, &
+    & binding_energy,tstep,energy_rate,report,initial_specific_internal_energy, &
+    & eos_finite_values,eos_positive_values)
+    !---------------------------------------------------------------------------------------------
+    ! Coordinate checks when the caller supplies the pre-burn specific internal energy in
+    ! erg g^-1. This distinct entry point leaves the legacy coordinator interface unchanged.
+    !---------------------------------------------------------------------------------------------
+    Implicit None
+
+    Type(bn_surrogate_check_config), Intent(in) :: config
+    Integer, Intent(in) :: active
+    Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), zz(:), binding_energy(:)
+    Real(dp), Intent(in) :: tstep, energy_rate, initial_specific_internal_energy
+    Type(bn_surrogate_check_report), Intent(out) :: report
+    Real(dp), Optional, Intent(in) :: eos_finite_values(:), eos_positive_values(:)
+
+    Call bn_check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz,binding_energy, &
+      & tstep,energy_rate,report,eos_finite_values,eos_positive_values, &
+      & initial_specific_internal_energy)
+
+    Return
+  End Subroutine bn_check_surrogate_result_with_energy
+
+  Subroutine bn_check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz, &
+    & binding_energy,tstep,energy_rate,report,eos_finite_values,eos_positive_values, &
     & initial_specific_internal_energy)
     !---------------------------------------------------------------------------------------------
     ! Coordinate independently selectable checks for one candidate burn result. All candidate
@@ -236,7 +282,7 @@ Contains
     Call update_overall_status(report)
 
     Return
-  End Subroutine bn_check_surrogate_result
+  End Subroutine bn_check_surrogate_result_impl
 
   Subroutine bn_check_finite_values(values,status,bad_index)
     !---------------------------------------------------------------------------------------------
@@ -846,7 +892,9 @@ Contains
   End Function safe_subtract
 
   Logical Function safe_multiply(left,right,result)
-    ! Return false rather than evaluating a binary64 multiplication that would overflow.
+    ! Return false before evaluating a binary64 multiplication that would overflow or produce a
+    ! subnormal result. Treating all would-be subnormal diagnostics as unrepresentable preserves
+    ! report-only behavior for callers that enable IEEE underflow trapping.
     Implicit None
     Real(dp), Intent(in) :: left, right
     Real(dp), Intent(out) :: result
@@ -857,6 +905,11 @@ Contains
     If ( left == 0.0_dp .or. right == 0.0_dp ) Then
       safe_multiply = .True.
       Return
+    EndIf
+    If ( abs(left) < 1.0_dp ) Then
+      If ( abs(right) < tiny(result)/abs(left) ) Return
+    ElseIf ( abs(right) < 1.0_dp ) Then
+      If ( abs(left) < tiny(result)/abs(right) ) Return
     EndIf
     If ( abs(right) > 1.0_dp ) Then
       If ( abs(left) > huge(result)/abs(right) ) Return
@@ -870,7 +923,9 @@ Contains
   End Function safe_multiply
 
   Logical Function safe_divide(numerator,denominator,result)
-    ! Return false rather than evaluating division by zero or a binary64 quotient overflow.
+    ! Return false before evaluating division by zero or a quotient that would overflow or be
+    ! subnormal. Conservative subnormal rejection avoids signaling underflow before a status can
+    ! be returned.
     Implicit None
     Real(dp), Intent(in) :: numerator, denominator
     Real(dp), Intent(out) :: result
@@ -880,7 +935,16 @@ Contains
     result = 0.0_dp
     If ( .not. finite_value(numerator) .or. .not. finite_value(denominator) ) Return
     If ( denominator == 0.0_dp ) Return
+    If ( numerator == 0.0_dp ) Then
+      safe_divide = .True.
+      Return
+    EndIf
     absolute_denominator = abs(denominator)
+    If ( absolute_denominator > 1.0_dp ) Then
+      If ( abs(numerator) < tiny(result)*absolute_denominator ) Return
+    ElseIf ( abs(numerator) < tiny(result) ) Then
+      If ( abs(numerator)/tiny(result) < absolute_denominator ) Return
+    EndIf
     If ( absolute_denominator < 1.0_dp ) Then
       If ( abs(numerator) > huge(result)*absolute_denominator ) Return
     EndIf

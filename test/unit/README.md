@@ -156,7 +156,11 @@ internal consistency, not physical accuracy or agreement with XNet. It does not
 select application tolerances, repair candidate states, trigger fallback, make
 NSE or out-of-distribution decisions, or call an EOS. The caller supplies the
 pre-burn specific internal energy used by the energy-change fraction. The
-fixed-`Ye` check is enabled only when charge-changing weak evolution is excluded.
+legacy `bn_check_surrogate_result` entry point retains its original procedure
+characteristics; callers that supply this energy use the distinct
+`bn_check_surrogate_result_with_energy` entry point. Enabling the energy-change
+check through the legacy entry point reports invalid configuration. The fixed-`Ye`
+check is enabled only when charge-changing weak evolution is excluded.
 The binding-energy check uses XNet's positive-binding convention,
 `N_A * MeV-to-erg * delta(sum(X_i B_i/A_i)) / dt`, and validates only that
 component. Total XNet mass-excess source closure additionally requires fixed
@@ -181,8 +185,10 @@ failure to request a smaller external multiphysics step; retrying XNet over the
 same step does not by itself reduce a genuine splitting-scale change.
 Focused tests cross both sides of every tolerance boundary, select every
 coordinator flag independently, and exercise NaN, infinity, negative reference
-metadata, overflow, and underflow-to-zero inputs under the tracked
-floating-point traps.
+metadata, overflow, and would-be subnormal arithmetic. The checker
+conservatively reports a would-be subnormal diagnostic as unrepresentable so it
+can return failure even when the caller enables IEEE underflow trapping. A
+separate GNU test build runs the focused suite with that trap enabled.
 
 The process tests use Backward Euler, strong reactions only, screening disabled,
 self-heating disabled, and fixed thermodynamic states. The pure-He and imposed
@@ -206,6 +212,10 @@ illustrative policy. The Python runner independently recomputes both the
 component-change metric and `|energy_rate*dt|/e_initial`; the existing
 binding-energy-rate check separately validates the adapter's composition-derived
 rate, with controlled metric and rate perturbations required to be rejected.
+A metamorphic check holds the initial composition, temperature, and density
+fixed while changing the result composition, and requires the reported initial
+energy to remain identical; this detects use of post-burn composition in the
+EOS denominator.
 This small matrix characterizes the metrics but does not establish general
 Flash-X thresholds.
 

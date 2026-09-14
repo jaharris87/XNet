@@ -8,8 +8,8 @@ Program verify_surrogate_candidate
   Use nuclear_data, Only: aa, be, nname, ny, read_nuclear_data, zz
   Use xnet_constants, Only: avn, epmev
   Use xnet_controls, Only: iheat, nzevolve, tid
-  Use xnet_surrogate_checks, Only: bn_check_surrogate_result, bn_surrogate_check_config, &
-    & bn_surrogate_check_report
+  Use xnet_surrogate_checks, Only: bn_check_surrogate_result_with_energy, &
+    & bn_surrogate_check_config, bn_surrogate_check_report
   Use xnet_types, Only: dp
   Implicit None
 
@@ -86,8 +86,8 @@ Program verify_surrogate_candidate
   config%check_energy_change_fraction = step_checks_enabled
   config%energy_absolute_tolerance = 0.0_dp
   config%energy_relative_tolerance = 1.0e-12_dp
-  Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,tstep,energy_rate, &
-    & report,initial_specific_internal_energy=initial_specific_internal_energy)
+  Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,tstep, &
+    & energy_rate,report,initial_specific_internal_energy)
 
   Write(*,'(a,1x,a)') 'verification_token',trim(verification_token)
   Write(*,'(a,1x,i0)') 'metadata_identity',1

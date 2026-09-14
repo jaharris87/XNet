@@ -463,6 +463,43 @@ def require_all_pass(outcomes: list[int], expected_count: int, label: str) -> No
         fail(f"{label} did not all pass: {outcomes}")
 
 
+def require_initial_energy_invariance(
+    verifier: Path,
+    data_directory: Path,
+    work_directory: Path,
+    initial: list[float],
+    reference_values: dict[str, int | float],
+    label: str,
+    *,
+    tstep: float,
+    t9: float,
+    rho: float,
+) -> None:
+    control_values = verify_candidate(
+        verifier,
+        data_directory,
+        work_directory,
+        initial,
+        initial,
+        f"{label}_initial_energy_control",
+        tstep=tstep,
+        t9=t9,
+        rho=rho,
+        step_checks_enabled=False,
+    )
+    if control_values["overall_status"] != PASS or any(
+        control_values[key] != PASS for key in BASE_STATUS_KEYS
+    ):
+        fail(f"{label} initial-energy control candidate did not pass: {control_values}")
+    if (
+        control_values["initial_specific_internal_energy"]
+        != reference_values["initial_specific_internal_energy"]
+    ):
+        fail(
+            f"{label} initial specific internal energy changed with result composition"
+        )
+
+
 def exercise_freshness_guards(
     work_root: Path,
     verifier: Path,
@@ -868,6 +905,29 @@ def main(arguments: list[str]) -> int:
         output_species=SN231_OUTPUT_SPECIES,
         electron_fraction=0.499545454545,
         stop_time=1.0e-6,
+        t9=3.0,
+        rho=1.0e8,
+    )
+
+    require_initial_energy_invariance(
+        verifier.resolve(),
+        alpha_data,
+        alpha_work,
+        alpha_initial,
+        alpha_metrics,
+        "alpha",
+        tstep=1.0e-6,
+        t9=3.0,
+        rho=1.0e8,
+    )
+    require_initial_energy_invariance(
+        verifier.resolve(),
+        sn_data,
+        sn_work,
+        sn_initial,
+        sn_metrics,
+        "SN231",
+        tstep=1.0e-6,
         t9=3.0,
         rho=1.0e8,
     )

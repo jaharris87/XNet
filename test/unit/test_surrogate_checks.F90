@@ -25,6 +25,8 @@ Contains
       & new_unittest('surrogate binding energy rate',test_binding_energy_rate), &
       & new_unittest('surrogate EOS result',test_eos_result), &
       & new_unittest('surrogate coordinator basics',test_coordinator_basics), &
+      & new_unittest('surrogate positional constructor compatibility', &
+      & test_positional_constructor_compatibility), &
       & new_unittest('surrogate coordinator optional data',test_coordinator_optional_data), &
       & new_unittest('surrogate tolerance boundaries',test_tolerance_boundaries), &
       & new_unittest('surrogate explicit tolerance policy',test_explicit_tolerance_policy), &
@@ -564,6 +566,78 @@ Contains
 
     Return
   End Subroutine test_coordinator_basics
+
+  Subroutine test_positional_constructor_compatibility(error)
+    Use xnet_surrogate_checks, Only: bn_check_skipped, bn_surrogate_check_config, &
+      & bn_surrogate_check_report
+    Implicit None
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Integer :: config_flags(7), report_indices(3), report_statuses(8)
+    Real(dp) :: config_tolerances(7), report_diagnostics(10)
+    Type(bn_surrogate_check_config) :: config
+    Type(bn_surrogate_check_report) :: report
+
+    ! These are the complete positional constructors supported before the new step checks were
+    ! appended. Distinct values make any component insertion or reordering visible.
+    config = bn_surrogate_check_config(11,12,13,14,15,16,17, &
+      & 0.11_dp,0.12_dp,0.13_dp,0.14_dp,0.15_dp,0.16_dp,0.17_dp)
+    config_flags = (/ config%check_finite, config%check_fraction_bounds, &
+      & config%check_mass_normalization,config%check_fixed_ye, &
+      & config%check_inactive_identity,config%check_binding_energy_rate, &
+      & config%check_eos_result /)
+    Call check(error,all(config_flags == (/ 11,12,13,14,15,16,17 /)),.True.)
+    If ( allocated(error) ) Return
+    config_tolerances = (/ config%fraction_tolerance,config%mass_tolerance, &
+      & config%ye_tolerance,config%inactive_fraction_tolerance, &
+      & config%inactive_energy_tolerance,config%energy_absolute_tolerance, &
+      & config%energy_relative_tolerance /)
+    Call check(error,maxval(abs(config_tolerances - &
+      & (/ 0.11_dp,0.12_dp,0.13_dp,0.14_dp,0.15_dp,0.16_dp,0.17_dp /))), &
+      & 0.0_dp,thr=tight_tolerance)
+    If ( allocated(error) ) Return
+    Call check(error,config%check_fraction_change,0)
+    If ( allocated(error) ) Return
+    Call check(error,config%check_energy_change_fraction,0)
+    If ( allocated(error) ) Return
+    Call check(error,config%fraction_change_limit,-1.0_dp,thr=tight_tolerance)
+    If ( allocated(error) ) Return
+    Call check(error,config%energy_change_fraction_limit,-1.0_dp,thr=tight_tolerance)
+    If ( allocated(error) ) Return
+
+    report = bn_surrogate_check_report(11,12,13,14,15,16,17,18,21,22,23, &
+      & 0.31_dp,0.32_dp,0.33_dp,0.34_dp,0.35_dp,0.36_dp,0.37_dp,0.38_dp, &
+      & 0.39_dp,0.40_dp)
+    report_statuses = (/ report%overall_status,report%finite_status, &
+      & report%fraction_bounds_status,report%mass_normalization_status, &
+      & report%fixed_ye_status,report%inactive_identity_status, &
+      & report%binding_energy_rate_status,report%eos_result_status /)
+    Call check(error,all(report_statuses == (/ 11,12,13,14,15,16,17,18 /)),.True.)
+    If ( allocated(error) ) Return
+    report_indices = (/ report%finite_bad_index,report%eos_bad_finite_index, &
+      & report%eos_bad_positive_index /)
+    Call check(error,all(report_indices == (/ 21,22,23 /)),.True.)
+    If ( allocated(error) ) Return
+    report_diagnostics = (/ report%minimum_fraction,report%maximum_fraction, &
+      & report%mass_residual,report%initial_ye,report%result_ye,report%ye_residual, &
+      & report%inactive_fraction_residual,report%inactive_energy_residual, &
+      & report%expected_energy_rate,report%energy_rate_residual /)
+    Call check(error,maxval(abs(report_diagnostics - &
+      & (/ 0.31_dp,0.32_dp,0.33_dp,0.34_dp,0.35_dp,0.36_dp,0.37_dp,0.38_dp, &
+      & 0.39_dp,0.40_dp /))),0.0_dp,thr=tight_tolerance)
+    If ( allocated(error) ) Return
+    Call check(error,report%fraction_change_status,bn_check_skipped)
+    If ( allocated(error) ) Return
+    Call check(error,report%energy_change_fraction_status,bn_check_skipped)
+    If ( allocated(error) ) Return
+    Call check(error,report%maximum_fraction_change_index,0)
+    If ( allocated(error) ) Return
+    Call check(error,report%maximum_fraction_change,0.0_dp,thr=tight_tolerance)
+    If ( allocated(error) ) Return
+    Call check(error,report%energy_change_fraction,0.0_dp,thr=tight_tolerance)
+
+    Return
+  End Subroutine test_positional_constructor_compatibility
 
   Subroutine test_coordinator_optional_data(error)
     Use xnet_constants, Only: avn, epmev

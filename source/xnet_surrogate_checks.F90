@@ -28,8 +28,6 @@ Module xnet_surrogate_checks
     Integer :: check_inactive_identity = 0
     Integer :: check_binding_energy_rate = 0
     Integer :: check_eos_result = 0
-    Integer :: check_fraction_change = 0
-    Integer :: check_energy_change_fraction = 0
     ! Absolute dimensionless slack in -tol <= X_i <= 1+tol.
     Real(dp) :: fraction_tolerance = -1.0_dp
     ! Absolute dimensionless limit on |sum_i X_i - 1|.
@@ -44,6 +42,9 @@ Module xnet_surrogate_checks
     Real(dp) :: energy_absolute_tolerance = -1.0_dp
     ! Dimensionless relative term scaled by max(|expected_rate|,|energy_rate|).
     Real(dp) :: energy_relative_tolerance = -1.0_dp
+    ! New components are appended to preserve legacy positional structure constructors.
+    Integer :: check_fraction_change = 0
+    Integer :: check_energy_change_fraction = 0
     ! Absolute dimensionless limit on max_i |X_result_i-X_initial_i| for an active burn step.
     Real(dp) :: fraction_change_limit = -1.0_dp
     ! Dimensionless limit on |energy_rate*tstep|/initial_specific_internal_energy.
@@ -71,12 +72,9 @@ Module xnet_surrogate_checks
     Integer :: inactive_identity_status = bn_check_skipped
     Integer :: binding_energy_rate_status = bn_check_skipped
     Integer :: eos_result_status = bn_check_skipped
-    Integer :: fraction_change_status = bn_check_skipped
-    Integer :: energy_change_fraction_status = bn_check_skipped
     Integer :: finite_bad_index = 0
     Integer :: eos_bad_finite_index = 0
     Integer :: eos_bad_positive_index = 0
-    Integer :: maximum_fraction_change_index = 0
     Real(dp) :: minimum_fraction = 0.0_dp ! safely represented min_i X_result_i; dimensionless
     Real(dp) :: maximum_fraction = 0.0_dp ! safely represented max_i X_result_i; dimensionless
     Real(dp) :: mass_residual = 0.0_dp ! safe signed sum_i X_result_i - 1; dimensionless
@@ -87,6 +85,10 @@ Module xnet_surrogate_checks
     Real(dp) :: inactive_energy_residual = 0.0_dp ! safely represented |rate|; erg g^-1 s^-1
     Real(dp) :: expected_energy_rate = 0.0_dp ! safe binding-only rate; erg g^-1 s^-1
     Real(dp) :: energy_rate_residual = 0.0_dp ! safe signed reported-expected; erg g^-1 s^-1
+    ! New components are appended to preserve legacy positional structure constructors.
+    Integer :: fraction_change_status = bn_check_skipped
+    Integer :: energy_change_fraction_status = bn_check_skipped
+    Integer :: maximum_fraction_change_index = 0
     Real(dp) :: maximum_fraction_change = 0.0_dp ! safe max_i |X_result_i-X_initial_i|
     Real(dp) :: energy_change_fraction = 0.0_dp ! safe |energy_rate*tstep|/initial energy
   End Type bn_surrogate_check_report

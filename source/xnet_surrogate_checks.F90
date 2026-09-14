@@ -50,12 +50,12 @@ Module xnet_surrogate_checks
     ! indices refer to the caller-defined ordering of the corresponding EOS array.
     !
     ! A check's numerical diagnostics have their stated mathematical meaning only when safely
-    ! representable. SKIPPED and INVALID leave them at zero and callers must not interpret them.
-    ! On FAILED candidate arithmetic that is non-finite or cannot be represented, the applicable
-    ! residual is huge() as an explicit "unrepresentable" sentinel; related derived values remain
-    ! zero or the last safely computed partial value. Ordinary finite FAILED and PASSED paths return
-    ! the mathematical diagnostics described below. Status, rather than a diagnostic sentinel,
-    ! controls acceptance and fallback policy.
+    ! representable. SKIPPED leaves them at zero. INVALID may leave zero or the last safely computed
+    ! partial value; callers must not interpret either. On FAILED candidate arithmetic that is
+    ! non-finite or cannot be represented, the applicable residual is huge() as an explicit
+    ! "unrepresentable" sentinel; related derived values remain zero or the last safely computed
+    ! partial value. Ordinary finite FAILED and PASSED paths return the mathematical diagnostics
+    ! described below. Status, rather than a diagnostic sentinel, controls acceptance/fallback.
     Integer :: overall_status = bn_check_skipped
     Integer :: finite_status = bn_check_skipped
     Integer :: fraction_bounds_status = bn_check_skipped

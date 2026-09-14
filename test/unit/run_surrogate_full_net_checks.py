@@ -55,8 +55,16 @@ STATUS_KEYS = (
     "fraction_bounds_status",
     "mass_normalization_status",
     "fixed_ye_status",
+    "binding_energy_rate_status",
     "fraction_change_status",
     "energy_change_fraction_status",
+)
+BASE_STATUS_KEYS = (
+    "finite_status",
+    "fraction_bounds_status",
+    "mass_normalization_status",
+    "fixed_ye_status",
+    "binding_energy_rate_status",
 )
 METRIC_KEYS = (
     "maximum_fraction_change",
@@ -64,6 +72,7 @@ METRIC_KEYS = (
     "energy_change_fraction",
     "initial_specific_internal_energy",
     "energy_rate",
+    "expected_energy_rate",
 )
 SKIP = 0
 PASS = 1
@@ -72,6 +81,29 @@ FAIL = 2
 
 def fail(message: str) -> None:
     raise CheckFailure(message)
+
+
+def mass_number(species_name: str) -> int:
+    light_species = {"n": 1, "p": 1, "d": 2, "t": 3}
+    if species_name in light_species:
+        return light_species[species_name]
+    match = re.search(r"([0-9]+)$", species_name)
+    if match is None:
+        fail(f"cannot determine mass number for {species_name!r}")
+    return int(match.group(1))
+
+
+def write_abundance_file(
+    path: Path, species: tuple[str, ...], mass_fractions: list[float], title: str
+) -> None:
+    if len(species) != len(mass_fractions):
+        fail(f"restart abundance length mismatch for {path}")
+    entries = [
+        f"{name:>5} {mass_fraction / mass_number(name):.17E}"
+        for name, mass_fraction in zip(species, mass_fractions)
+    ]
+    lines = [" ".join(entries[index : index + 4]) for index in range(0, len(entries), 4)]
+    path.write_text(title + "\n" + "\n".join(lines) + "\n", encoding="ascii")
 
 
 def control_text(
@@ -145,12 +177,22 @@ def prepare_case(
     stop_time: float,
     t9: float,
     rho: float,
+    initial_composition: list[float] | None = None,
 ) -> Path:
     work_directory.mkdir(parents=True)
     staged_data = work_directory / source_data.name
     staged_data.mkdir()
-    for name in ("sunet", "netwinv", "netsu", "netweak", abundance_name):
+    for name in ("sunet", "netwinv", "netsu", "netweak"):
         (staged_data / name).symlink_to((source_data / name).resolve())
+    if initial_composition is None:
+        (staged_data / abundance_name).symlink_to((source_data / abundance_name).resolve())
+    else:
+        write_abundance_file(
+            staged_data / abundance_name,
+            read_species(staged_data),
+            initial_composition,
+            "Composition evolved by a preceding fixed-state full_net call",
+        )
     (work_directory / helm_table.name).symlink_to(helm_table.resolve())
     (work_directory / "control").write_text(
         control_text(
@@ -297,6 +339,7 @@ def write_candidate(
     step_checks_enabled: bool = True,
     fraction_change_limit: float = 0.1,
     energy_change_fraction_limit: float = 0.1,
+    energy_rate_scale: float = 1.0,
     tstep: float,
     t9: float,
     rho: float,
@@ -311,7 +354,8 @@ def write_candidate(
         + "\n"
         f"{fraction_tolerance:.17e} {mass_tolerance:.17e} {ye_tolerance:.17e}\n"
         f"{int(step_checks_enabled)} {fraction_change_limit:.17e} "
-        f"{energy_change_fraction_limit:.17e} {tstep:.17e} {t9:.17e} {rho:.17e}\n"
+        f"{energy_change_fraction_limit:.17e} {energy_rate_scale:.17e} "
+        f"{tstep:.17e} {t9:.17e} {rho:.17e}\n"
         + " ".join(value_text(value) for value in initial)
         + "\n"
         + " ".join(value_text(value) for value in result)
@@ -334,6 +378,7 @@ def verify_candidate(
     step_checks_enabled: bool = True,
     fraction_change_limit: float = 0.1,
     energy_change_fraction_limit: float = 0.1,
+    energy_rate_scale: float = 1.0,
 ) -> dict[str, int | float]:
     candidate = work_directory / f"{label}.candidate"
     species = read_species(data_directory)
@@ -347,6 +392,7 @@ def verify_candidate(
         step_checks_enabled=step_checks_enabled,
         fraction_change_limit=fraction_change_limit,
         energy_change_fraction_limit=energy_change_fraction_limit,
+        energy_rate_scale=energy_rate_scale,
         tstep=tstep,
         t9=t9,
         rho=rho,
@@ -384,6 +430,19 @@ def verify_candidate(
         fail(f"{label} verifier output is incomplete: {completed.stdout!r}")
     if any(key not in values for key in METRIC_KEYS):
         fail(f"{label} verifier metrics are incomplete: {completed.stdout!r}")
+    if step_checks_enabled:
+        energy_rate = float(values["energy_rate"])
+        initial_energy = float(values["initial_specific_internal_energy"])
+        expected_fraction = abs(energy_rate * tstep) / initial_energy
+        if not math.isclose(
+            float(values["energy_change_fraction"]),
+            expected_fraction,
+            rel_tol=1.0e-13,
+            abs_tol=1.0e-15,
+        ):
+            fail(
+                f"{label} energy-change metric disagrees with independently calculated ratio"
+            )
     return values
 
 
@@ -399,6 +458,11 @@ def require_only(statuses: dict[str, int | float], failed_key: str, label: str) 
             fail(f"{label} did not isolate {failed_key}: {statuses}")
 
 
+def require_all_pass(outcomes: list[int], expected_count: int, label: str) -> None:
+    if len(outcomes) != expected_count or any(outcome != PASS for outcome in outcomes):
+        fail(f"{label} did not all pass: {outcomes}")
+
+
 def exercise_freshness_guards(
     work_root: Path,
     verifier: Path,
@@ -409,6 +473,14 @@ def exercise_freshness_guards(
     initial: list[float],
     result: list[float],
 ) -> None:
+    try:
+        require_all_pass([PASS, FAIL], 2, "controlled evolved-state outcomes")
+    except CheckFailure as error:
+        if "did not all pass" not in str(error):
+            fail(f"evolved-outcome challenge failed for the wrong reason: {error}")
+    else:
+        fail("one failed evolved-state sample bypassed the all-pass guard")
+
     diagnostic_lines = (alpha_work / "net_diag01").read_text(encoding="utf-8").splitlines()
     token_match = next(
         (re.search(r"token=([0-9a-f]{32})", line) for line in diagnostic_lines if "token=" in line),
@@ -497,6 +569,42 @@ def exercise_freshness_guards(
     else:
         fail("non-reading verifier stub bypassed the candidate-token guard")
 
+    perturbed_metric_verifier = work_root / "perturbed_metric_verifier.py"
+    perturbed_metric_verifier.write_text(
+        "#!/usr/bin/env python3\n"
+        "import subprocess\n"
+        "import sys\n"
+        f"result = subprocess.run([{str(verifier.resolve())!r}, *sys.argv[1:]], "
+        "capture_output=True, text=True, check=False)\n"
+        "for line in result.stdout.splitlines():\n"
+        "    if line.startswith('energy_change_fraction '):\n"
+        "        value = float(line.split()[1])\n"
+        "        print(f'energy_change_fraction {0.5 * value:.16e}')\n"
+        "    else:\n"
+        "        print(line)\n"
+        "sys.stderr.write(result.stderr)\n"
+        "raise SystemExit(result.returncode)\n",
+        encoding="ascii",
+    )
+    perturbed_metric_verifier.chmod(0o755)
+    try:
+        verify_candidate(
+            perturbed_metric_verifier,
+            alpha_data,
+            alpha_work,
+            initial,
+            result,
+            "negative_perturbed_energy_metric",
+            tstep=1.0e-6,
+            t9=3.0,
+            rho=1.0e8,
+        )
+    except CheckFailure as error:
+        if "energy-change metric disagrees" not in str(error):
+            fail(f"perturbed energy metric failed for the wrong reason: {error}")
+    else:
+        fail("perturbed energy metric bypassed the independent ratio guard")
+
 
 def execute_case(
     root: Path,
@@ -514,6 +622,7 @@ def execute_case(
     rho: float,
     step_checks_enabled: bool = True,
     require_material_change: bool = True,
+    initial_composition: list[float] | None = None,
 ) -> tuple[
     Path,
     Path,
@@ -536,6 +645,7 @@ def execute_case(
         stop_time=stop_time,
         t9=t9,
         rho=rho,
+        initial_composition=initial_composition,
     )
     run_process([str(xnet)], work_directory, "xnet")
     diagnostic_path = work_directory / "net_diag01"
@@ -569,7 +679,7 @@ def execute_case(
         rho=rho,
         step_checks_enabled=step_checks_enabled,
     )
-    if any(statuses[key] != PASS for key in STATUS_KEYS[1:5]):
+    if any(statuses[key] != PASS for key in BASE_STATUS_KEYS):
         fail(f"{name} full_net candidate failed base validation: {statuses}")
     if step_checks_enabled:
         expected_fraction = (
@@ -610,44 +720,26 @@ def characterize_evolved_increment(
     tstep: float,
     t9: float,
     rho: float,
+    anchor_case: tuple | None = None,
 ) -> dict[str, int | float]:
-    anchor = execute_case(
-        root,
-        xnet,
-        verifier,
-        source_data,
-        helm_table,
-        name=f"{sample_label}_anchor",
-        abundance_name=abundance_name,
-        output_species=output_species,
-        electron_fraction=electron_fraction,
-        stop_time=anchor_time,
-        t9=t9,
-        rho=rho,
-        step_checks_enabled=False,
-        require_material_change=False,
-    )
-    endpoint = execute_case(
-        root,
-        xnet,
-        verifier,
-        source_data,
-        helm_table,
-        name=f"{sample_label}_endpoint",
-        abundance_name=abundance_name,
-        output_species=output_species,
-        electron_fraction=electron_fraction,
-        stop_time=anchor_time + tstep,
-        t9=t9,
-        rho=rho,
-        step_checks_enabled=False,
-        require_material_change=False,
-    )
-    anchor_work, anchor_data, species, artificial_initial, evolved_initial = anchor[:5]
-    _, _, endpoint_species, repeated_initial, evolved_result = endpoint[:5]
-    if species != endpoint_species or artificial_initial != repeated_initial:
-        fail(f"{sample_label} paired fixed-state runs do not share initial data")
-
+    if anchor_case is None:
+        anchor_case = execute_case(
+            root,
+            xnet,
+            verifier,
+            source_data,
+            helm_table,
+            name=f"{sample_label}_anchor",
+            abundance_name=abundance_name,
+            output_species=output_species,
+            electron_fraction=electron_fraction,
+            stop_time=anchor_time,
+            t9=t9,
+            rho=rho,
+            step_checks_enabled=False,
+            require_material_change=False,
+        )
+    _, _, species, artificial_initial, evolved_initial = anchor_case[:5]
     burn_in_change = max(
         abs(after - before)
         for before, after in zip(artificial_initial, evolved_initial)
@@ -655,18 +747,33 @@ def characterize_evolved_increment(
     if burn_in_change <= 1.0e-8:
         fail(f"{sample_label} burn-in did not produce an evolved starting composition")
 
-    metrics = verify_candidate(
+    restart = execute_case(
+        root,
+        xnet,
         verifier,
-        anchor_data,
-        anchor_work,
-        evolved_initial,
-        evolved_result,
-        "evolved_increment",
-        tstep=tstep,
+        source_data,
+        helm_table,
+        name=f"{sample_label}_restart",
+        abundance_name=abundance_name,
+        output_species=output_species,
+        electron_fraction=electron_fraction,
+        stop_time=tstep,
         t9=t9,
         rho=rho,
+        step_checks_enabled=True,
+        require_material_change=False,
+        initial_composition=evolved_initial,
     )
-    if any(metrics[key] != PASS for key in STATUS_KEYS[1:5]):
+    _, _, restart_species, restarted_initial, evolved_result, metrics = restart
+    if species != restart_species:
+        fail(f"{sample_label} restarted full_net call changed species identity")
+    restart_initial_error = max(
+        abs(expected - actual)
+        for expected, actual in zip(evolved_initial, restarted_initial)
+    )
+    if restart_initial_error > 2.0e-6:
+        fail(f"{sample_label} restarted call did not consume its evolved composition")
+    if any(metrics[key] != PASS for key in BASE_STATUS_KEYS):
         fail(f"{sample_label} evolved increment failed base validation: {metrics}")
     expected_fraction = PASS if metrics["maximum_fraction_change"] <= 0.1 else FAIL
     expected_energy = PASS if metrics["energy_change_fraction"] <= 0.1 else FAIL
@@ -679,7 +786,7 @@ def characterize_evolved_increment(
         fail(f"{sample_label} overall status disagrees with metrics: {metrics}")
 
     component_changes = [
-        abs(after - before) for before, after in zip(evolved_initial, evolved_result)
+        abs(after - before) for before, after in zip(restarted_initial, evolved_result)
     ]
     maximum_index = max(range(len(component_changes)), key=component_changes.__getitem__)
     total_variation = 0.5 * sum(component_changes)
@@ -698,10 +805,11 @@ def characterize_evolved_increment(
         f"network={network_label} sample={sample_label} T9={t9:.6g} rho={rho:.6e} "
         f"anchor={anchor_time:.6e} dt={tstep:.6e} "
         f"burn_in_max_dX={burn_in_change:.8e} "
+        f"restart_initial_max_dX={restart_initial_error:.8e} "
         f"max_dX={component_changes[maximum_index]:.8e} "
         f"species={species[maximum_index]} total_variation={total_variation:.8e} "
         f"energy_fraction={float(metrics['energy_change_fraction']):.8e} "
-        f"illustrative_0.1={outcome}"
+        f"illustrative_0.1={outcome} restarted_full_net=true"
     )
     return metrics
 
@@ -787,6 +895,28 @@ def main(arguments: list[str]) -> int:
             "illustrative_0.1=FAIL artificial_initial=true"
         )
 
+    scaled_rate_metrics = verify_candidate(
+        verifier.resolve(),
+        alpha_data,
+        alpha_work,
+        alpha_initial,
+        alpha_result,
+        "mutate_energy_rate_scale",
+        tstep=1.0e-6,
+        t9=3.0,
+        rho=1.0e8,
+        energy_rate_scale=0.5,
+    )
+    if scaled_rate_metrics["binding_energy_rate_status"] != FAIL:
+        fail(f"scaled energy rate bypassed binding-energy validation: {scaled_rate_metrics}")
+    if math.isclose(
+        float(scaled_rate_metrics["energy_rate"]),
+        float(scaled_rate_metrics["expected_energy_rate"]),
+        rel_tol=1.0e-12,
+        abs_tol=0.0,
+    ):
+        fail("scaled energy-rate challenge did not produce the intended mismatch")
+
     evolved_samples = (
         ("lowT_lowRho", 2.0, 1.0e7, 1.0e-2, 1.0e-3),
         ("lowT_highRho", 2.0, 1.0e9, 1.0e-4, 1.0e-5),
@@ -818,8 +948,76 @@ def main(arguments: list[str]) -> int:
             )
             evolved_outcomes[network_label].append(int(metrics["overall_status"]))
     for network_label, outcomes in evolved_outcomes.items():
-        if PASS not in outcomes:
-            fail(f"{network_label} evolved-state samples have no illustrative accepted path")
+        require_all_pass(outcomes, len(evolved_samples), f"{network_label} evolved-state samples")
+
+    duration_samples = (
+        ("dt_min", 1.0e-8),
+        ("dt_mid", 1.0e-5),
+        ("dt_max", 1.0e-3),
+    )
+    for network_label, source_data, abundance_name, output_species, electron_fraction in (
+        ("alpha", data_alpha, "ab_he", ALPHA_OUTPUT_SPECIES, 0.5),
+        ("SN231", data_sn231, "ab_co", SN231_OUTPUT_SPECIES, 0.499545454545),
+    ):
+        anchor_time = 1.0e-2
+        t9 = 2.0
+        rho = 1.0e7
+        duration_anchor = execute_case(
+            work_root,
+            xnet.resolve(),
+            verifier.resolve(),
+            source_data.resolve(),
+            helm_table.resolve(),
+            name=f"{network_label}_duration_anchor",
+            abundance_name=abundance_name,
+            output_species=output_species,
+            electron_fraction=electron_fraction,
+            stop_time=anchor_time,
+            t9=t9,
+            rho=rho,
+            step_checks_enabled=False,
+            require_material_change=False,
+        )
+        duration_metrics = []
+        for duration_label, duration in duration_samples:
+            metrics = characterize_evolved_increment(
+                work_root,
+                xnet.resolve(),
+                verifier.resolve(),
+                source_data.resolve(),
+                helm_table.resolve(),
+                network_label=network_label,
+                sample_label=f"{network_label}_duration_{duration_label}",
+                abundance_name=abundance_name,
+                output_species=output_species,
+                electron_fraction=electron_fraction,
+                anchor_time=anchor_time,
+                tstep=duration,
+                t9=t9,
+                rho=rho,
+                anchor_case=duration_anchor,
+            )
+            if metrics["overall_status"] != PASS:
+                fail(
+                    f"{network_label} duration sample {duration_label} did not pass: {metrics}"
+                )
+            duration_metrics.append(
+                (
+                    float(metrics["maximum_fraction_change"]),
+                    float(metrics["energy_change_fraction"]),
+                )
+            )
+        if any(
+            later[metric_index] < earlier[metric_index]
+            for earlier, later in zip(duration_metrics, duration_metrics[1:])
+            for metric_index in range(2)
+        ):
+            fail(f"{network_label} fixed-anchor metrics are not monotone with duration")
+        if any(
+            duration_metrics[-1][metric_index] <= duration_metrics[0][metric_index]
+            for metric_index in range(2)
+        ):
+            fail(f"{network_label} fixed-anchor metrics did not each depend on duration")
 
     finite_mutation = alpha_result.copy()
     finite_mutation[0] = math.nan

@@ -221,14 +221,15 @@ Contains
   End Subroutine test_inactive_identity
 
   Subroutine test_fraction_change(error)
-    Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_negative_inf, ieee_positive_inf, &
+      & ieee_quiet_nan, ieee_value
     Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_fraction_change, &
       & bn_check_invalid, bn_check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: maximum_index, status
-    Real(dp) :: empty(0), maximum_change, x_initial(3), x_result(3)
+    Real(dp) :: empty(0), infinity, maximum_change, x_initial(3), x_result(3)
 
     x_initial = (/ 0.00_dp, 0.50_dp, 0.50_dp /)
     x_result = (/ 0.10_dp, 0.40_dp, 0.50_dp /)
@@ -257,6 +258,29 @@ Contains
     Call check(error,maximum_index,2)
     If ( allocated(error) ) Return
 
+    x_initial = (/ 0.00_dp, 0.50_dp, 0.50_dp /)
+    x_result = x_initial
+    infinity = ieee_value(0.0_dp,ieee_positive_inf)
+    x_result(2) = infinity
+    Call bn_check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,bn_check_failed)
+    If ( allocated(error) ) Return
+    Call check(error,maximum_change,huge(maximum_change))
+    If ( allocated(error) ) Return
+    Call check(error,maximum_index,2)
+    If ( allocated(error) ) Return
+
+    x_result = x_initial
+    x_initial(1) = ieee_value(0.0_dp,ieee_negative_inf)
+    Call bn_check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,bn_check_invalid)
+    If ( allocated(error) ) Return
+
+    x_initial = (/ 0.00_dp, 0.50_dp, 0.50_dp /)
+    Call bn_check_fraction_change(x_initial,x_initial,infinity,status,maximum_change,maximum_index)
+    Call check(error,status,bn_check_invalid)
+    If ( allocated(error) ) Return
+
     Call bn_check_fraction_change(x_initial,x_initial(1:2),0.20_dp,status,maximum_change, &
       & maximum_index)
     Call check(error,status,bn_check_invalid)
@@ -279,14 +303,18 @@ Contains
   End Subroutine test_fraction_change
 
   Subroutine test_energy_change_fraction(error)
-    Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_negative_inf, ieee_positive_inf, &
+      & ieee_quiet_nan, ieee_value
     Use xnet_surrogate_checks, Only: bn_check_energy_change_fraction, bn_check_failed, &
       & bn_check_invalid, bn_check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: status
-    Real(dp) :: change_fraction
+    Real(dp) :: change_fraction, negative_infinity, positive_infinity
+
+    negative_infinity = ieee_value(0.0_dp,ieee_negative_inf)
+    positive_infinity = ieee_value(0.0_dp,ieee_positive_inf)
 
     Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,0.10_dp,status, &
       & change_fraction)
@@ -314,11 +342,27 @@ Contains
       & change_fraction)
     Call check(error,status,bn_check_invalid)
     If ( allocated(error) ) Return
+    Call bn_check_energy_change_fraction(2.0_dp,-0.5_dp,10.0_dp,0.10_dp,status, &
+      & change_fraction)
+    Call check(error,status,bn_check_invalid)
+    If ( allocated(error) ) Return
+    Call bn_check_energy_change_fraction(2.0_dp,positive_infinity,10.0_dp,0.10_dp,status, &
+      & change_fraction)
+    Call check(error,status,bn_check_invalid)
+    If ( allocated(error) ) Return
     Call bn_check_energy_change_fraction(2.0_dp,ieee_value(0.0_dp,ieee_quiet_nan), &
       & 10.0_dp,0.10_dp,status,change_fraction)
     Call check(error,status,bn_check_invalid)
     If ( allocated(error) ) Return
     Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,0.0_dp,0.10_dp,status, &
+      & change_fraction)
+    Call check(error,status,bn_check_invalid)
+    If ( allocated(error) ) Return
+    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,-10.0_dp,0.10_dp,status, &
+      & change_fraction)
+    Call check(error,status,bn_check_invalid)
+    If ( allocated(error) ) Return
+    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,negative_infinity,0.10_dp,status, &
       & change_fraction)
     Call check(error,status,bn_check_invalid)
     If ( allocated(error) ) Return
@@ -334,8 +378,18 @@ Contains
       & ieee_value(0.0_dp,ieee_quiet_nan),status,change_fraction)
     Call check(error,status,bn_check_invalid)
     If ( allocated(error) ) Return
+    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,positive_infinity,status, &
+      & change_fraction)
+    Call check(error,status,bn_check_invalid)
+    If ( allocated(error) ) Return
     Call bn_check_energy_change_fraction(ieee_value(0.0_dp,ieee_quiet_nan),0.5_dp, &
       & 10.0_dp,0.10_dp,status,change_fraction)
+    Call check(error,status,bn_check_failed)
+    If ( allocated(error) ) Return
+    Call check(error,change_fraction,huge(change_fraction))
+    If ( allocated(error) ) Return
+    Call bn_check_energy_change_fraction(negative_infinity,0.5_dp,10.0_dp,0.10_dp,status, &
+      & change_fraction)
     Call check(error,status,bn_check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,huge(change_fraction))
@@ -896,6 +950,14 @@ Contains
     Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
     Call check(error,report%energy_change_fraction_status,bn_check_invalid)
     If ( allocated(error) ) Return
+    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,-1.0_dp,0.0_dp, &
+      & report,initial_specific_internal_energy=1.0_dp)
+    Call check(error,report%energy_change_fraction_status,bn_check_invalid)
+    If ( allocated(error) ) Return
+    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp, &
+      & report,initial_specific_internal_energy=-1.0_dp)
+    Call check(error,report%energy_change_fraction_status,bn_check_invalid)
+    If ( allocated(error) ) Return
 
     x_initial = x_result
     zz = (/ -1.0_dp, 2.0_dp /)
@@ -976,6 +1038,31 @@ Contains
     Call check(error,status,bn_check_failed)
     If ( allocated(error) ) Return
 
+    Call bn_check_energy_change_fraction(tiny(0.0_dp),tiny(0.0_dp),1.0_dp,0.0_dp, &
+      & status,change_fraction)
+    Call check(error,status,bn_check_failed)
+    If ( allocated(error) ) Return
+    Call check(error,change_fraction,large)
+    If ( allocated(error) ) Return
+    Call bn_check_energy_change_fraction(tiny(0.0_dp),1.0_dp,large,0.0_dp,status, &
+      & change_fraction)
+    Call check(error,status,bn_check_failed)
+    If ( allocated(error) ) Return
+    Call check(error,change_fraction,large)
+    If ( allocated(error) ) Return
+
+    config = bn_surrogate_check_config()
+    config%check_energy_change_fraction = 1
+    config%energy_change_fraction_limit = 0.0_dp
+    x_initial = (/ 0.5_dp, 0.5_dp /)
+    x_result = x_initial
+    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,tiny(0.0_dp), &
+      & tiny(0.0_dp),report,initial_specific_internal_energy=1.0_dp)
+    Call check(error,report%energy_change_fraction_status,bn_check_failed)
+    If ( allocated(error) ) Return
+    Call check(error,report%energy_change_fraction,large)
+    If ( allocated(error) ) Return
+
     x_initial = 0.0_dp
     x_result = large
     Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,0.0_dp, &
@@ -1000,6 +1087,7 @@ Contains
     Call check(error,status,bn_check_passed)
     If ( allocated(error) ) Return
 
+    config = bn_surrogate_check_config()
     config%check_finite = 1
     config%check_fraction_bounds = 1
     config%check_mass_normalization = 1

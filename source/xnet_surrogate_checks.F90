@@ -555,8 +555,18 @@ Contains
       change_fraction = huge(change_fraction)
       Return
     EndIf
+    If ( energy_rate /= 0.0_dp .and. energy_change == 0.0_dp ) Then
+      status = bn_check_failed
+      change_fraction = huge(change_fraction)
+      Return
+    EndIf
     If ( .not. safe_divide(abs(energy_change),initial_specific_internal_energy, &
       & change_fraction) ) Then
+      status = bn_check_failed
+      change_fraction = huge(change_fraction)
+      Return
+    EndIf
+    If ( energy_change /= 0.0_dp .and. change_fraction == 0.0_dp ) Then
       status = bn_check_failed
       change_fraction = huge(change_fraction)
       Return

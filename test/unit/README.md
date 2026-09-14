@@ -180,21 +180,34 @@ a production default or calibrated Flash-X value. A later application can use a
 failure to request a smaller external multiphysics step; retrying XNet over the
 same step does not by itself reduce a genuine splitting-scale change.
 Focused tests cross both sides of every tolerance boundary, select every
-coordinator flag independently, and exercise finite-extreme inputs under the
-tracked floating-point traps.
+coordinator flag independently, and exercise NaN, infinity, negative reference
+metadata, overflow, and underflow-to-zero inputs under the tracked
+floating-point traps.
 
-The process tests use strong reactions only and fixed thermodynamic states. The
-pure-He and imposed C/O `1e-6` s endpoints at `T9=3`, `rho=1e8 g cm^-3` are
-reported as artificial ignition/stress fixtures, not threshold-calibration
-states. Additional samples cover `T9=2,3,5` and `rho=1e7,1e8,1e9 g cm^-3`.
-For each sample, two fixed-state integrations provide `X(anchor)` and
-`X(anchor+dt)`; the former was therefore produced by prior physical evolution
-before it is checked as the initial composition of the later increment. The
-tested increments span `1e-8` through `1e-3` s, matching the stated range for
-hydrodynamic CFL-limited burn calls. Output records the state, anchor, increment,
+The process tests use Backward Euler, strong reactions only, screening disabled,
+self-heating disabled, and fixed thermodynamic states. The pure-He and imposed
+C/O `1e-6` s endpoints at `T9=3`, `rho=1e8 g cm^-3` are reported as artificial
+ignition/stress fixtures, not threshold-calibration states. Additional samples
+cover `T9=2,3,5` and `rho=1e7,1e8,1e9 g cm^-3`. For each sample, a burn-in call
+produces `X(anchor)`, that composition is written as the initial abundance of a
+new `full_net` call, and the new call evolves it for the external increment
+`dt`. Thus the checked initial composition is the result of prior physical
+evolution and the process exercises the same call boundary that a multiphysics
+application would use. A separate study holds the network, `T9=2`,
+`rho=1e7 g cm^-3`, anchor time, and evolved initial composition fixed while
+sweeping `dt=1e-8,1e-5,1e-3` s for each network. The runner requires both metrics
+to be nondecreasing and observably duration-dependent across that sweep.
+
+Output records the state, anchor, increment, restart-composition discrepancy,
 maximum component change and species, total variation, energy-change fraction,
-and outcome under the illustrative `0.1` policy. This small matrix characterizes
-the metrics but does not establish general Flash-X thresholds.
+and outcome under the illustrative `0.1` policy. All five state-plane samples
+and all three fixed-anchor duration samples per network must pass that
+illustrative policy. The Python runner independently recomputes both the
+component-change metric and `|energy_rate*dt|/e_initial`; the existing
+binding-energy-rate check separately validates the adapter's composition-derived
+rate, with controlled metric and rate perturbations required to be rejected.
+This small matrix characterizes the metrics but does not establish general
+Flash-X thresholds.
 
 The process checks tolerate `2e-6` mass and `Ye` residuals because the diagnostic
 endpoint format emits seven digits after the decimal in scientific notation;

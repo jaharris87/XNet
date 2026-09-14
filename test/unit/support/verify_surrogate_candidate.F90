@@ -18,7 +18,7 @@ Program verify_surrogate_candidate
   Character(80) :: data_desc
   Character(256) :: candidate_file, data_dir
   Integer :: candidate_ny, ierr, lun_candidate, step_checks_enabled
-  Real(dp) :: electron_fraction, energy_rate, initial_specific_internal_energy
+  Real(dp) :: electron_fraction, energy_rate, energy_rate_scale, initial_specific_internal_energy
   Real(dp) :: rho, t9, tstep, total_molar_abundance
   Real(dp), Allocatable :: x_initial(:), x_result(:)
   Type(eos_t) :: eos_state
@@ -52,7 +52,7 @@ Program verify_surrogate_candidate
     & config%ye_tolerance
   Call require(ierr == 0,'failed to read candidate tolerances')
   Read(lun_candidate,*,iostat=ierr) step_checks_enabled,config%fraction_change_limit, &
-    & config%energy_change_fraction_limit,tstep,t9,rho
+    & config%energy_change_fraction_limit,energy_rate_scale,tstep,t9,rho
   Call require(ierr == 0,'failed to read candidate step-check metadata')
   Call require(step_checks_enabled == 0 .or. step_checks_enabled == 1, &
     & 'invalid step-check selection')
@@ -75,14 +75,17 @@ Program verify_surrogate_candidate
   Call actual_eos(eos_input_rt,eos_state)
   Call actual_eos_finalize()
   initial_specific_internal_energy = eos_state%e
-  energy_rate = avn*epmev*sum((x_result-x_initial)*be/aa)/tstep
+  energy_rate = energy_rate_scale*avn*epmev*sum((x_result-x_initial)*be/aa)/tstep
 
   config%check_finite = 1
   config%check_fraction_bounds = 1
   config%check_mass_normalization = 1
   config%check_fixed_ye = 1
+  config%check_binding_energy_rate = 1
   config%check_fraction_change = step_checks_enabled
   config%check_energy_change_fraction = step_checks_enabled
+  config%energy_absolute_tolerance = 0.0_dp
+  config%energy_relative_tolerance = 1.0e-12_dp
   Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,tstep,energy_rate, &
     & report,initial_specific_internal_energy=initial_specific_internal_energy)
 
@@ -93,6 +96,7 @@ Program verify_surrogate_candidate
   Write(*,'(a,1x,i0)') 'fraction_bounds_status',report%fraction_bounds_status
   Write(*,'(a,1x,i0)') 'mass_normalization_status',report%mass_normalization_status
   Write(*,'(a,1x,i0)') 'fixed_ye_status',report%fixed_ye_status
+  Write(*,'(a,1x,i0)') 'binding_energy_rate_status',report%binding_energy_rate_status
   Write(*,'(a,1x,i0)') 'fraction_change_status',report%fraction_change_status
   Write(*,'(a,1x,i0)') 'energy_change_fraction_status',report%energy_change_fraction_status
   Write(*,'(a,1x,es24.16)') 'mass_residual',report%mass_residual
@@ -103,6 +107,7 @@ Program verify_surrogate_candidate
   Write(*,'(a,1x,es24.16)') 'initial_specific_internal_energy', &
     & initial_specific_internal_energy
   Write(*,'(a,1x,es24.16)') 'energy_rate',energy_rate
+  Write(*,'(a,1x,es24.16)') 'expected_energy_rate',report%expected_energy_rate
 
 Contains
 

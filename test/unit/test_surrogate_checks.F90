@@ -575,7 +575,8 @@ Contains
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
-    Integer :: check_index, other_index, statuses(7)
+    Integer :: check_index, invalid_index, other_index, statuses(7)
+    Integer, Parameter :: invalid_values(2) = (/ -1, 2 /)
     Real(dp) :: aa(2), be(2), eos_finite(1), eos_positive(1), x_initial(2), x_result(2), zz(2)
     Type(bn_surrogate_check_config) :: config
     Type(bn_surrogate_check_report) :: report
@@ -625,19 +626,21 @@ Contains
       EndDo
     EndDo
 
-    Do check_index = 1, 7
-      config = bn_surrogate_check_config()
-      Call set_check_flag(config,check_index,2)
-      x_initial = (/ 0.0_dp, 1.0_dp /)
-      Call bn_check_surrogate_result(config,1,x_initial,x_initial,aa,zz,be,1.0_dp,0.0_dp, &
-        & report,eos_finite,(/ 1.0_dp /))
-      statuses = report_statuses(report)
-      Call check(error,statuses(check_index),bn_check_invalid)
-      If ( allocated(error) ) Return
-      Do other_index = 1, 7
-        If ( other_index == check_index ) Cycle
-        Call check(error,statuses(other_index),bn_check_skipped)
+    Do invalid_index = 1, size(invalid_values)
+      Do check_index = 1, 7
+        config = bn_surrogate_check_config()
+        Call set_check_flag(config,check_index,invalid_values(invalid_index))
+        x_initial = (/ 0.0_dp, 1.0_dp /)
+        Call bn_check_surrogate_result(config,1,x_initial,x_initial,aa,zz,be,1.0_dp,0.0_dp, &
+          & report,eos_finite,(/ 1.0_dp /))
+        statuses = report_statuses(report)
+        Call check(error,statuses(check_index),bn_check_invalid)
         If ( allocated(error) ) Return
+        Do other_index = 1, 7
+          If ( other_index == check_index ) Cycle
+          Call check(error,statuses(other_index),bn_check_skipped)
+          If ( allocated(error) ) Return
+        EndDo
       EndDo
     EndDo
 

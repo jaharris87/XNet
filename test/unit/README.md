@@ -173,10 +173,13 @@ tracked floating-point traps.
 The process tests use strong reactions only and tolerate `2e-6` mass and `Ye`
 residuals because the diagnostic endpoint format emits seven digits after the
 decimal in scientific notation; observed unmodified residuals are approximately
-`2e-9` or smaller. Per-run challenge tokens, complete endpoint/counter records,
-and a verifier-echoed species identity reject replayed XNet output or a
-substituted status producer. The standard Make target also forcibly rebuilds
-the production executable and relinks the verifier before this evidence is run.
+`2e-9` or smaller. Per-run challenge tokens, exact endpoint/counter cardinality,
+and a verifier-echoed species identity reject stale/static replay and status
+stubs that do not process the candidate. They do not authenticate executables
+against an actor able to rewrite programs and their outputs after a build. The
+trusted CI boundary starts from a clean exact-candidate checkout; the standard
+Make target also forcibly rebuilds production XNet and recompiles and relinks
+the checker/verifier before this evidence is run.
 
 ## Network preprocessing component
 

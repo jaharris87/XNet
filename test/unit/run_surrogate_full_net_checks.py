@@ -229,6 +229,9 @@ def validate_production_run(lines: list[str], run_token: str, label: str) -> int
     counter_headers = [i for i, line in enumerate(lines) if line.startswith("Counters:")]
     if len(start_lines) != 1 or len(end_lines) != 1 or len(counter_headers) != 1:
         fail(f"{label} diagnostic has incomplete or duplicate endpoint records")
+    counter_index = counter_headers[0]
+    if counter_index + 2 >= len(lines) or lines[counter_index + 2].strip() != "Timers Summary:":
+        fail(f"{label} diagnostic does not contain exactly one one-zone counter row")
     if len(start_lines[0]) != 7 or len(end_lines[0]) != 8:
         fail(f"{label} diagnostic endpoint header has the wrong field count")
     try:
@@ -236,7 +239,7 @@ def validate_production_run(lines: list[str], run_token: str, label: str) -> int
         start_values = [float(value) for value in start_lines[0][3:]]
         end_zone, end_step = (int(value) for value in end_lines[0][1:3])
         end_values = [float(value) for value in end_lines[0][3:]]
-        counter_values = [int(value) for value in lines[counter_headers[0] + 1].split()]
+        counter_values = [int(value) for value in lines[counter_index + 1].split()]
     except (IndexError, ValueError) as error:
         fail(f"{label} diagnostic endpoint/counter record is malformed: {error}")
     if any(not math.isfinite(value) for value in start_values + end_values):
@@ -326,7 +329,7 @@ def require_only(statuses: dict[str, int], failed_key: str, label: str) -> None:
             fail(f"{label} did not isolate {failed_key}: {statuses}")
 
 
-def exercise_substitution_guards(
+def exercise_freshness_guards(
     work_root: Path,
     verifier: Path,
     alpha_work: Path,
@@ -336,6 +339,26 @@ def exercise_substitution_guards(
     initial: list[float],
     result: list[float],
 ) -> None:
+    diagnostic_lines = (alpha_work / "net_diag01").read_text(encoding="utf-8").splitlines()
+    token_match = next(
+        (re.search(r"token=([0-9a-f]{32})", line) for line in diagnostic_lines if "token=" in line),
+        None,
+    )
+    if token_match is None:
+        fail("genuine alpha diagnostic is missing its run token")
+    counter_index = next(
+        i for i, line in enumerate(diagnostic_lines) if line.startswith("Counters:")
+    )
+    duplicate_counter_lines = diagnostic_lines.copy()
+    duplicate_counter_lines.insert(counter_index + 2, diagnostic_lines[counter_index + 1])
+    try:
+        validate_production_run(duplicate_counter_lines, token_match.group(1), "duplicate counter")
+    except CheckFailure as error:
+        if "exactly one one-zone counter row" not in str(error):
+            fail(f"duplicate counter row failed for the wrong reason: {error}")
+    else:
+        fail("duplicate one-zone counter row bypassed the cardinality guard")
+
     replay_xnet = work_root / "replay_xnet.py"
     replay_source = alpha_work / "net_diag01"
     replay_xnet.write_text(
@@ -361,7 +384,7 @@ def exercise_substitution_guards(
         if "unique run token" not in str(error):
             fail(f"replayed XNet output failed for the wrong reason: {error}")
     else:
-        fail("replayed XNet output bypassed the unique-run guard")
+        fail("static replayed XNet output bypassed the unique-run guard")
 
     fake_verifier = work_root / "fake_verifier.py"
     fake_verifier.write_text(
@@ -387,7 +410,7 @@ def exercise_substitution_guards(
         if "unique candidate token" not in str(error):
             fail(f"substituted verifier failed for the wrong reason: {error}")
     else:
-        fail("substituted verifier bypassed the candidate-token guard")
+        fail("non-reading verifier stub bypassed the candidate-token guard")
 
 
 def execute_case(
@@ -541,7 +564,7 @@ def main(arguments: list[str]) -> int:
     )
     require_only(ye_statuses, "fixed_ye_status", "electron-fraction mutation")
 
-    exercise_substitution_guards(
+    exercise_freshness_guards(
         work_root,
         verifier.resolve(),
         alpha_work,

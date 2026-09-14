@@ -268,6 +268,12 @@ $(SURROGATE_VERIFY_EXE): $(SURROGATE_VERIFY_OBJECTS)
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
 surrogate-verifier: $(SURROGATE_VERIFY_OBJECTS)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) \
+	  -c $(XNET_DIR)/xnet_surrogate_checks.F90 \
+	  -o $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) \
+	  -c support/verify_surrogate_candidate.F90 \
+	  -o $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate.o
 	$(LDR) -o $(SURROGATE_VERIFY_EXE) $^ $(LDFLAGS)
 
 $(BUILD_NET_READER_EXE): $(PREPROCESS_VERIFY_OBJECTS:$(PREPROCESS_BUILD_DIR)/verify_preprocess.o=) \

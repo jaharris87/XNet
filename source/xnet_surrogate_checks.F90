@@ -48,6 +48,14 @@ Module xnet_surrogate_checks
     ! Overall is INVALID before FAILED before PASSED before SKIPPED; individual status fields use
     ! the public bn_check_* values. Indices are one-based first failures, or zero when none; EOS
     ! indices refer to the caller-defined ordering of the corresponding EOS array.
+    !
+    ! A check's numerical diagnostics have their stated mathematical meaning only when safely
+    ! representable. SKIPPED and INVALID leave them at zero and callers must not interpret them.
+    ! On FAILED candidate arithmetic that is non-finite or cannot be represented, the applicable
+    ! residual is huge() as an explicit "unrepresentable" sentinel; related derived values remain
+    ! zero or the last safely computed partial value. Ordinary finite FAILED and PASSED paths return
+    ! the mathematical diagnostics described below. Status, rather than a diagnostic sentinel,
+    ! controls acceptance and fallback policy.
     Integer :: overall_status = bn_check_skipped
     Integer :: finite_status = bn_check_skipped
     Integer :: fraction_bounds_status = bn_check_skipped
@@ -59,16 +67,16 @@ Module xnet_surrogate_checks
     Integer :: finite_bad_index = 0
     Integer :: eos_bad_finite_index = 0
     Integer :: eos_bad_positive_index = 0
-    Real(dp) :: minimum_fraction = 0.0_dp ! min_i X_result_i; dimensionless
-    Real(dp) :: maximum_fraction = 0.0_dp ! max_i X_result_i; dimensionless
-    Real(dp) :: mass_residual = 0.0_dp ! signed sum_i X_result_i - 1; dimensionless
-    Real(dp) :: initial_ye = 0.0_dp ! sum_i Z_i X_initial_i/A_i; dimensionless
-    Real(dp) :: result_ye = 0.0_dp ! sum_i Z_i X_result_i/A_i; dimensionless
-    Real(dp) :: ye_residual = 0.0_dp ! signed Ye_result-Ye_initial; dimensionless
-    Real(dp) :: inactive_fraction_residual = 0.0_dp ! nonnegative max component change
-    Real(dp) :: inactive_energy_residual = 0.0_dp ! nonnegative rate; erg g^-1 s^-1
-    Real(dp) :: expected_energy_rate = 0.0_dp ! binding-only rate; erg g^-1 s^-1
-    Real(dp) :: energy_rate_residual = 0.0_dp ! signed reported-expected rate; erg g^-1 s^-1
+    Real(dp) :: minimum_fraction = 0.0_dp ! safely represented min_i X_result_i; dimensionless
+    Real(dp) :: maximum_fraction = 0.0_dp ! safely represented max_i X_result_i; dimensionless
+    Real(dp) :: mass_residual = 0.0_dp ! safe signed sum_i X_result_i - 1; dimensionless
+    Real(dp) :: initial_ye = 0.0_dp ! safe sum_i Z_i X_initial_i/A_i; dimensionless
+    Real(dp) :: result_ye = 0.0_dp ! safe sum_i Z_i X_result_i/A_i; dimensionless
+    Real(dp) :: ye_residual = 0.0_dp ! safe signed Ye_result-Ye_initial; dimensionless
+    Real(dp) :: inactive_fraction_residual = 0.0_dp ! safe max component change; dimensionless
+    Real(dp) :: inactive_energy_residual = 0.0_dp ! safely represented |rate|; erg g^-1 s^-1
+    Real(dp) :: expected_energy_rate = 0.0_dp ! safe binding-only rate; erg g^-1 s^-1
+    Real(dp) :: energy_rate_residual = 0.0_dp ! safe signed reported-expected; erg g^-1 s^-1
   End Type bn_surrogate_check_report
 
   Public :: bn_check_binding_energy_rate

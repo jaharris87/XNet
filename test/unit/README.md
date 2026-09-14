@@ -75,17 +75,19 @@ The suite checks:
 
 - ordinary, vector, and upper/lower-clamped `safe_exp` results;
 - read-only post-surrogate composition checks for finite values, fraction bounds,
-  mass normalization, fixed electron fraction, inactive-zone identity, and
-  binding-energy/source-rate consistency, plus caller-selected finite and
+  mass normalization, fixed electron fraction, inactive-zone identity, maximum
+  absolute component change, energy change relative to initial internal energy,
+  and binding-energy/source-rate consistency, plus caller-selected finite and
   positive post-EOS quantities;
 - independent check selection and reporting, invalid configuration and missing
   optional-data handling, diagnostic residuals and bad-value indices, and
   preservation of input arrays;
-- isolated short `full_net` runs using both the 14-species `Data_alpha` and
-  231-species `Data_SN231` inputs, followed by the same Fortran validator using
-  production nuclear metadata; controlled endpoint mutations independently
-  prove the fraction-bound, normalization, and fixed-`Ye` gates, while a NaN
-  mutation proves the finite-value gate under the optimized fast-math build;
+- isolated fixed-state `full_net` runs using both the 14-species `Data_alpha`
+  and 231-species `Data_SN231` inputs, followed by the same Fortran validator
+  using production nuclear metadata and the tracked Helmholtz EOS; controlled
+  endpoint mutations independently prove the fraction-bound, normalization,
+  and fixed-`Ye` gates, while a NaN mutation proves the finite-value gate under
+  the optimized fast-math build;
 - exact mass normalization and exact mass/charge normalization;
 - one- and two-digit output suffixes, including zero padding;
 - scalar trajectory interpolation at the lower bound, an exact knot, an
@@ -152,9 +154,10 @@ The suite checks:
 The post-surrogate component establishes numerical admissibility and selected
 internal consistency, not physical accuracy or agreement with XNet. It does not
 select application tolerances, repair candidate states, trigger fallback, make
-NSE or out-of-distribution decisions, or call an EOS. The fixed-`Ye` check is
-enabled only when charge-changing weak evolution is excluded. The binding-energy
-check uses XNet's positive-binding convention,
+NSE or out-of-distribution decisions, or call an EOS. The caller supplies the
+pre-burn specific internal energy used by the energy-change fraction. The
+fixed-`Ye` check is enabled only when charge-changing weak evolution is excluded.
+The binding-energy check uses XNet's positive-binding convention,
 `N_A * MeV-to-erg * delta(sum(X_i B_i/A_i)) / dt`, and validates only that
 component. Total XNet mass-excess source closure additionally requires fixed
 `Ye`, because proton and neutron mass excesses contribute when `Ye` changes;
@@ -166,20 +169,43 @@ exact comparison. Fraction bounds, mass normalization, fixed `Ye`, and inactive
 composition use absolute dimensionless tolerances. Inactive energy and the
 absolute binding-rate term use `erg g^-1 s^-1`; the relative binding-rate term
 is dimensionless and scales with the larger absolute expected/reported rate.
+The active-step component limit is the absolute quantity
+`max_i |X_result(i)-X_initial(i)|`, not a relative change that would be singular
+for initially absent or trace species. The energy-change fraction is
+`|energy_rate*tstep|/initial_specific_internal_energy`. These two inexpensive
+endpoint checks use one candidate result. They are operator-splitting policy
+signals, not surrogate error estimates, and the module supplies no recommended
+threshold. In particular, the `0.1` used in tests is illustrative rather than
+a production default or calibrated Flash-X value. A later application can use a
+failure to request a smaller external multiphysics step; retrying XNet over the
+same step does not by itself reduce a genuine splitting-scale change.
 Focused tests cross both sides of every tolerance boundary, select every
 coordinator flag independently, and exercise finite-extreme inputs under the
 tracked floating-point traps.
 
-The process tests use strong reactions only and tolerate `2e-6` mass and `Ye`
-residuals because the diagnostic endpoint format emits seven digits after the
-decimal in scientific notation; observed unmodified residuals are approximately
-`2e-9` or smaller. Per-run challenge tokens, exact endpoint/counter cardinality,
-and a verifier-echoed species identity reject stale/static replay and status
-stubs that do not process the candidate. They do not authenticate executables
-against an actor able to rewrite programs and their outputs after a build. The
-trusted CI boundary starts from a clean exact-candidate checkout; the standard
-Make target also forcibly rebuilds production XNet and recompiles and relinks
-the checker/verifier before this evidence is run.
+The process tests use strong reactions only and fixed thermodynamic states. The
+pure-He and imposed C/O `1e-6` s endpoints at `T9=3`, `rho=1e8 g cm^-3` are
+reported as artificial ignition/stress fixtures, not threshold-calibration
+states. Additional samples cover `T9=2,3,5` and `rho=1e7,1e8,1e9 g cm^-3`.
+For each sample, two fixed-state integrations provide `X(anchor)` and
+`X(anchor+dt)`; the former was therefore produced by prior physical evolution
+before it is checked as the initial composition of the later increment. The
+tested increments span `1e-8` through `1e-3` s, matching the stated range for
+hydrodynamic CFL-limited burn calls. Output records the state, anchor, increment,
+maximum component change and species, total variation, energy-change fraction,
+and outcome under the illustrative `0.1` policy. This small matrix characterizes
+the metrics but does not establish general Flash-X thresholds.
+
+The process checks tolerate `2e-6` mass and `Ye` residuals because the diagnostic
+endpoint format emits seven digits after the decimal in scientific notation;
+observed unmodified residuals are approximately `2e-9` or smaller. Per-run
+challenge tokens, exact endpoint/counter cardinality, and a verifier-echoed
+species identity reject stale/static replay and status stubs that do not process
+the candidate. They do not authenticate executables against an actor able to
+rewrite programs and their outputs after a build. The trusted CI boundary starts
+from a clean exact-candidate checkout; the standard Make target also forcibly
+rebuilds production XNet and recompiles and relinks the checker/verifier before
+this evidence is run.
 
 ## Network preprocessing component
 

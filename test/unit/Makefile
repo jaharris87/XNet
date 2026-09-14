@@ -110,6 +110,8 @@ PREPROCESS_VERIFY_OBJECTS := \
 
 SURROGATE_VERIFY_OBJECTS := \
   $(PREPROCESS_CORE_OBJECTS) \
+  $(PREPROCESS_BUILD_DIR)/eos_type.o \
+  $(PREPROCESS_BUILD_DIR)/actual_eos.o \
   $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o \
   $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate.o
 
@@ -295,6 +297,16 @@ $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_chec
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
+$(PREPROCESS_BUILD_DIR)/eos_type.o: $(STARKILLER_DIR)/eos_type.F90 \
+    $(PREPROCESS_BUILD_DIR)/xnet_types.o $(PREPROCESS_BUILD_DIR)/xnet_util.o \
+    | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -I$(XNET_DIR) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/actual_eos.o: $(STARKILLER_DIR)/actual_eos.F90 \
+    $(PREPROCESS_BUILD_DIR)/eos_type.o $(PREPROCESS_BUILD_DIR)/xnet_parallel_stubs.o \
+    $(PREPROCESS_BUILD_DIR)/xnet_util.o | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -I$(XNET_DIR) -c $< -o $@
+
 $(PREPROCESS_BUILD_DIR)/xnet_parallel_stubs.o: $(XNET_DIR)/xnet_parallel_stubs.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_types.o | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
@@ -384,6 +396,7 @@ $(PREPROCESS_BUILD_DIR)/verify_preprocess.o: support/verify_preprocess.F90 \
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate.o: support/verify_surrogate_candidate.F90 \
+    $(PREPROCESS_BUILD_DIR)/actual_eos.o $(PREPROCESS_BUILD_DIR)/eos_type.o \
     $(PREPROCESS_BUILD_DIR)/xnet_data.o $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@

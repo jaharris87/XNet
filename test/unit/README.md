@@ -156,9 +156,9 @@ internal consistency, not physical accuracy or agreement with XNet. It does not
 select application tolerances, repair candidate states, trigger fallback, make
 NSE or out-of-distribution decisions, or call an EOS. The caller supplies the
 pre-burn specific internal energy used by the energy-change fraction. The
-legacy `bn_check_surrogate_result` entry point retains its original procedure
+legacy `check_surrogate_result` entry point retains its original procedure
 characteristics; callers that supply this energy use the distinct
-`bn_check_surrogate_result_with_energy` entry point. Enabling the energy-change
+`check_surrogate_result_with_energy` entry point. Enabling the energy-change
 check through the legacy entry point reports invalid configuration. The fixed-`Ye`
 check is enabled only when charge-changing weak evolution is excluded.
 The binding-energy check uses XNet's positive-binding convention,

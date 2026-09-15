@@ -12,12 +12,12 @@ Module xnet_surrogate_checks
 
   ! A skipped check was disabled or not applicable. A failed check rejected candidate data. An
   ! invalid check had unusable configuration or metadata and therefore could not assess the data.
-  Integer, Parameter, Public :: bn_check_skipped = 0
-  Integer, Parameter, Public :: bn_check_passed  = 1
-  Integer, Parameter, Public :: bn_check_failed  = 2
-  Integer, Parameter, Public :: bn_check_invalid = 3
+  Integer, Parameter, Public :: check_skipped = 0
+  Integer, Parameter, Public :: check_passed  = 1
+  Integer, Parameter, Public :: check_failed  = 2
+  Integer, Parameter, Public :: check_invalid = 3
 
-  Type, Public :: bn_surrogate_check_config
+  Type, Public :: surrogate_check_config
     ! Flags must be zero (disabled) or one (enabled); any other value is invalid. Tolerances and
     ! limits use -1 as an unset sentinel so enabling a threshold-bearing check requires explicit
     ! caller policy. Explicit zero is valid and requests an inclusive exact comparison.
@@ -49,11 +49,11 @@ Module xnet_surrogate_checks
     Real(dp) :: fraction_change_limit = -1.0_dp
     ! Dimensionless limit on |energy_rate*tstep|/initial_specific_internal_energy.
     Real(dp) :: energy_change_fraction_limit = -1.0_dp
-  End Type bn_surrogate_check_config
+  End Type surrogate_check_config
 
-  Type, Public :: bn_surrogate_check_report
+  Type, Public :: surrogate_check_report
     ! Overall is INVALID before FAILED before PASSED before SKIPPED; individual status fields use
-    ! the public bn_check_* values. Bad-value indices are one-based first failures, or zero when
+    ! the public check_* values. Bad-value indices are one-based first failures, or zero when
     ! none; EOS indices refer to the caller-defined ordering of the corresponding EOS array. The
     ! maximum-change index is the first maximum and can therefore be nonzero on PASSED results.
     !
@@ -64,14 +64,14 @@ Module xnet_surrogate_checks
     ! "unrepresentable" sentinel; related derived values remain zero or the last safely computed
     ! partial value. Ordinary finite FAILED and PASSED paths return the mathematical diagnostics
     ! described below. Status, rather than a diagnostic sentinel, controls acceptance/fallback.
-    Integer :: overall_status = bn_check_skipped
-    Integer :: finite_status = bn_check_skipped
-    Integer :: fraction_bounds_status = bn_check_skipped
-    Integer :: mass_normalization_status = bn_check_skipped
-    Integer :: fixed_ye_status = bn_check_skipped
-    Integer :: inactive_identity_status = bn_check_skipped
-    Integer :: binding_energy_rate_status = bn_check_skipped
-    Integer :: eos_result_status = bn_check_skipped
+    Integer :: overall_status = check_skipped
+    Integer :: finite_status = check_skipped
+    Integer :: fraction_bounds_status = check_skipped
+    Integer :: mass_normalization_status = check_skipped
+    Integer :: fixed_ye_status = check_skipped
+    Integer :: inactive_identity_status = check_skipped
+    Integer :: binding_energy_rate_status = check_skipped
+    Integer :: eos_result_status = check_skipped
     Integer :: finite_bad_index = 0
     Integer :: eos_bad_finite_index = 0
     Integer :: eos_bad_positive_index = 0
@@ -86,28 +86,28 @@ Module xnet_surrogate_checks
     Real(dp) :: expected_energy_rate = 0.0_dp ! safe binding-only rate; erg g^-1 s^-1
     Real(dp) :: energy_rate_residual = 0.0_dp ! safe signed reported-expected; erg g^-1 s^-1
     ! New components are appended to preserve legacy positional structure constructors.
-    Integer :: fraction_change_status = bn_check_skipped
-    Integer :: energy_change_fraction_status = bn_check_skipped
+    Integer :: fraction_change_status = check_skipped
+    Integer :: energy_change_fraction_status = check_skipped
     Integer :: maximum_fraction_change_index = 0
     Real(dp) :: maximum_fraction_change = 0.0_dp ! safe max_i |X_result_i-X_initial_i|
     Real(dp) :: energy_change_fraction = 0.0_dp ! safe |energy_rate*tstep|/initial energy
-  End Type bn_surrogate_check_report
+  End Type surrogate_check_report
 
-  Public :: bn_check_binding_energy_rate
-  Public :: bn_check_electron_fraction
-  Public :: bn_check_energy_change_fraction
-  Public :: bn_check_eos_result
-  Public :: bn_check_finite_values
-  Public :: bn_check_fraction_bounds
-  Public :: bn_check_fraction_change
-  Public :: bn_check_inactive_identity
-  Public :: bn_check_mass_normalization
-  Public :: bn_check_surrogate_result
-  Public :: bn_check_surrogate_result_with_energy
+  Public :: check_binding_energy_rate
+  Public :: check_electron_fraction
+  Public :: check_energy_change_fraction
+  Public :: check_eos_result
+  Public :: check_finite_values
+  Public :: check_fraction_bounds
+  Public :: check_fraction_change
+  Public :: check_inactive_identity
+  Public :: check_mass_normalization
+  Public :: check_surrogate_result
+  Public :: check_surrogate_result_with_energy
 
 Contains
 
-  Subroutine bn_check_surrogate_result(config,active,x_initial,x_result,aa,zz,binding_energy, &
+  Subroutine check_surrogate_result(config,active,x_initial,x_result,aa,zz,binding_energy, &
     & tstep,energy_rate,report,eos_finite_values,eos_positive_values)
     !---------------------------------------------------------------------------------------------
     ! Preserve the original public coordinator procedure characteristics for existing explicit
@@ -116,20 +116,20 @@ Contains
     !---------------------------------------------------------------------------------------------
     Implicit None
 
-    Type(bn_surrogate_check_config), Intent(in) :: config
+    Type(surrogate_check_config), Intent(in) :: config
     Integer, Intent(in) :: active
     Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), zz(:), binding_energy(:)
     Real(dp), Intent(in) :: tstep, energy_rate
-    Type(bn_surrogate_check_report), Intent(out) :: report
+    Type(surrogate_check_report), Intent(out) :: report
     Real(dp), Optional, Intent(in) :: eos_finite_values(:), eos_positive_values(:)
 
-    Call bn_check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz,binding_energy, &
+    Call check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz,binding_energy, &
       & tstep,energy_rate,report,eos_finite_values,eos_positive_values)
 
     Return
-  End Subroutine bn_check_surrogate_result
+  End Subroutine check_surrogate_result
 
-  Subroutine bn_check_surrogate_result_with_energy(config,active,x_initial,x_result,aa,zz, &
+  Subroutine check_surrogate_result_with_energy(config,active,x_initial,x_result,aa,zz, &
     & binding_energy,tstep,energy_rate,report,initial_specific_internal_energy, &
     & eos_finite_values,eos_positive_values)
     !---------------------------------------------------------------------------------------------
@@ -138,21 +138,21 @@ Contains
     !---------------------------------------------------------------------------------------------
     Implicit None
 
-    Type(bn_surrogate_check_config), Intent(in) :: config
+    Type(surrogate_check_config), Intent(in) :: config
     Integer, Intent(in) :: active
     Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), zz(:), binding_energy(:)
     Real(dp), Intent(in) :: tstep, energy_rate, initial_specific_internal_energy
-    Type(bn_surrogate_check_report), Intent(out) :: report
+    Type(surrogate_check_report), Intent(out) :: report
     Real(dp), Optional, Intent(in) :: eos_finite_values(:), eos_positive_values(:)
 
-    Call bn_check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz,binding_energy, &
+    Call check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz,binding_energy, &
       & tstep,energy_rate,report,eos_finite_values,eos_positive_values, &
       & initial_specific_internal_energy)
 
     Return
-  End Subroutine bn_check_surrogate_result_with_energy
+  End Subroutine check_surrogate_result_with_energy
 
-  Subroutine bn_check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz, &
+  Subroutine check_surrogate_result_impl(config,active,x_initial,x_result,aa,zz, &
     & binding_energy,tstep,energy_rate,report,eos_finite_values,eos_positive_values, &
     & initial_specific_internal_energy)
     !---------------------------------------------------------------------------------------------
@@ -166,13 +166,13 @@ Contains
     Implicit None
 
     ! Input variables
-    Type(bn_surrogate_check_config), Intent(in) :: config
+    Type(surrogate_check_config), Intent(in) :: config
     Integer, Intent(in) :: active
     Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), zz(:), binding_energy(:)
     Real(dp), Intent(in) :: tstep, energy_rate
 
     ! Output variables
-    Type(bn_surrogate_check_report), Intent(out) :: report
+    Type(surrogate_check_report), Intent(out) :: report
 
     ! Optional variables
     Real(dp), Optional, Intent(in) :: eos_finite_values(:), eos_positive_values(:)
@@ -182,109 +182,109 @@ Contains
 
     If ( valid_flag(config%check_finite) ) Then
       If ( config%check_finite == 1 ) Then
-        Call bn_check_finite_values(x_result,report%finite_status,report%finite_bad_index)
+        Call check_finite_values(x_result,report%finite_status,report%finite_bad_index)
       EndIf
     Else
-      report%finite_status = bn_check_invalid
+      report%finite_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_fraction_bounds) ) Then
       If ( config%check_fraction_bounds == 1 ) Then
-        Call bn_check_fraction_bounds(x_result,config%fraction_tolerance, &
+        Call check_fraction_bounds(x_result,config%fraction_tolerance, &
           & report%fraction_bounds_status,report%minimum_fraction,report%maximum_fraction)
       EndIf
     Else
-      report%fraction_bounds_status = bn_check_invalid
+      report%fraction_bounds_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_mass_normalization) ) Then
       If ( config%check_mass_normalization == 1 ) Then
-        Call bn_check_mass_normalization(x_result,config%mass_tolerance, &
+        Call check_mass_normalization(x_result,config%mass_tolerance, &
           & report%mass_normalization_status,report%mass_residual)
       EndIf
     Else
-      report%mass_normalization_status = bn_check_invalid
+      report%mass_normalization_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_fixed_ye) ) Then
       If ( config%check_fixed_ye == 1 ) Then
-        Call bn_check_electron_fraction(x_initial,x_result,aa,zz,config%ye_tolerance, &
+        Call check_electron_fraction(x_initial,x_result,aa,zz,config%ye_tolerance, &
           & report%fixed_ye_status,report%initial_ye,report%result_ye,report%ye_residual)
       EndIf
     Else
-      report%fixed_ye_status = bn_check_invalid
+      report%fixed_ye_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_inactive_identity) ) Then
       If ( config%check_inactive_identity == 1 ) Then
         If ( active == 0 ) Then
-          Call bn_check_inactive_identity(x_initial,x_result,energy_rate, &
+          Call check_inactive_identity(x_initial,x_result,energy_rate, &
             & config%inactive_fraction_tolerance,config%inactive_energy_tolerance, &
             & report%inactive_identity_status,report%inactive_fraction_residual, &
             & report%inactive_energy_residual)
         ElseIf ( active /= 1 ) Then
-          report%inactive_identity_status = bn_check_invalid
+          report%inactive_identity_status = check_invalid
         EndIf
       EndIf
     Else
-      report%inactive_identity_status = bn_check_invalid
+      report%inactive_identity_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_binding_energy_rate) ) Then
       If ( config%check_binding_energy_rate == 1 ) Then
-        Call bn_check_binding_energy_rate(x_initial,x_result,aa,binding_energy,tstep, &
+        Call check_binding_energy_rate(x_initial,x_result,aa,binding_energy,tstep, &
           & energy_rate,config%energy_absolute_tolerance,config%energy_relative_tolerance, &
           & report%binding_energy_rate_status,report%expected_energy_rate, &
           & report%energy_rate_residual)
       EndIf
     Else
-      report%binding_energy_rate_status = bn_check_invalid
+      report%binding_energy_rate_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_eos_result) ) Then
       If ( config%check_eos_result == 1 ) Then
         If ( present(eos_finite_values) .and. present(eos_positive_values) ) Then
-          Call bn_check_eos_result(eos_finite_values,eos_positive_values, &
+          Call check_eos_result(eos_finite_values,eos_positive_values, &
             & report%eos_result_status,report%eos_bad_finite_index, &
             & report%eos_bad_positive_index)
         Else
-          report%eos_result_status = bn_check_invalid
+          report%eos_result_status = check_invalid
         EndIf
       EndIf
     Else
-      report%eos_result_status = bn_check_invalid
+      report%eos_result_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_fraction_change) ) Then
       If ( config%check_fraction_change == 1 ) Then
-        Call bn_check_fraction_change(x_initial,x_result,config%fraction_change_limit, &
+        Call check_fraction_change(x_initial,x_result,config%fraction_change_limit, &
           & report%fraction_change_status,report%maximum_fraction_change, &
           & report%maximum_fraction_change_index)
       EndIf
     Else
-      report%fraction_change_status = bn_check_invalid
+      report%fraction_change_status = check_invalid
     EndIf
 
     If ( valid_flag(config%check_energy_change_fraction) ) Then
       If ( config%check_energy_change_fraction == 1 ) Then
         If ( present(initial_specific_internal_energy) ) Then
-          Call bn_check_energy_change_fraction(energy_rate,tstep, &
+          Call check_energy_change_fraction(energy_rate,tstep, &
             & initial_specific_internal_energy,config%energy_change_fraction_limit, &
             & report%energy_change_fraction_status,report%energy_change_fraction)
         Else
-          report%energy_change_fraction_status = bn_check_invalid
+          report%energy_change_fraction_status = check_invalid
         EndIf
       EndIf
     Else
-      report%energy_change_fraction_status = bn_check_invalid
+      report%energy_change_fraction_status = check_invalid
     EndIf
 
     Call update_overall_status(report)
 
     Return
-  End Subroutine bn_check_surrogate_result_impl
+  End Subroutine check_surrogate_result_impl
 
-  Subroutine bn_check_finite_values(values,status,bad_index)
+  Subroutine check_finite_values(values,status,bad_index)
     !---------------------------------------------------------------------------------------------
     ! Require a nonempty candidate array containing only finite IEEE binary64 values. This proves
     ! numerical representability only, not physical bounds, normalization, or accuracy. A
@@ -295,23 +295,23 @@ Contains
     Integer, Intent(out) :: status, bad_index
 
     Integer :: i
-    status = bn_check_invalid
+    status = check_invalid
     bad_index = 0
     If ( size(values) < 1 ) Return
 
-    status = bn_check_passed
+    status = check_passed
     Do i = 1, size(values)
       If ( .not. finite_value(values(i)) ) Then
-        status = bn_check_failed
+        status = check_failed
         bad_index = i
         Exit
       EndIf
     EndDo
 
     Return
-  End Subroutine bn_check_finite_values
+  End Subroutine check_finite_values
 
-  Subroutine bn_check_fraction_bounds(xmass,tolerance,status,minimum_fraction,maximum_fraction)
+  Subroutine check_fraction_bounds(xmass,tolerance,status,minimum_fraction,maximum_fraction)
     !---------------------------------------------------------------------------------------------
     ! Require each candidate mass fraction to satisfy -tolerance <= X_i <= 1+tolerance, inclusively.
     ! The tolerance and fractions are dimensionless. This componentwise gate does not establish
@@ -324,16 +324,16 @@ Contains
 
     Integer :: bad_index, finite_status
 
-    status = bn_check_invalid
+    status = check_invalid
     minimum_fraction = 0.0_dp
     maximum_fraction = 0.0_dp
     If ( size(xmass) < 1 ) Return
     If ( .not. finite_value(tolerance) ) Return
     If ( tolerance < 0.0_dp ) Return
 
-    Call bn_check_finite_values(xmass,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Then
-      status = bn_check_failed
+    Call check_finite_values(xmass,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Then
+      status = check_failed
       Return
     EndIf
 
@@ -341,15 +341,15 @@ Contains
     maximum_fraction = maxval(xmass)
     If ( fraction_within_lower_bound(minimum_fraction,tolerance) .and. &
       & fraction_within_upper_bound(maximum_fraction,tolerance) ) Then
-      status = bn_check_passed
+      status = check_passed
     Else
-      status = bn_check_failed
+      status = check_failed
     EndIf
 
     Return
-  End Subroutine bn_check_fraction_bounds
+  End Subroutine check_fraction_bounds
 
-  Subroutine bn_check_mass_normalization(xmass,tolerance,status,residual)
+  Subroutine check_mass_normalization(xmass,tolerance,status,residual)
     !---------------------------------------------------------------------------------------------
     ! Require |sum_i X_i-1| <= tolerance, inclusively. Residual is the signed dimensionless
     ! quantity sum_i X_i-1. This scalar identity does not establish component bounds, species-wise
@@ -363,39 +363,39 @@ Contains
     Integer :: bad_index, finite_status
     Real(dp) :: mass_sum
 
-    status = bn_check_invalid
+    status = check_invalid
     residual = 0.0_dp
     If ( size(xmass) < 1 ) Return
     If ( .not. finite_value(tolerance) ) Return
     If ( tolerance < 0.0_dp ) Return
 
-    Call bn_check_finite_values(xmass,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Then
-      status = bn_check_failed
+    Call check_finite_values(xmass,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Then
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
 
     If ( .not. safe_sum(xmass,mass_sum) ) Then
-      status = bn_check_failed
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
     If ( .not. safe_subtract(mass_sum,1.0_dp,residual) ) Then
-      status = bn_check_failed
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
     If ( abs(residual) <= tolerance ) Then
-      status = bn_check_passed
+      status = check_passed
     Else
-      status = bn_check_failed
+      status = check_failed
     EndIf
 
     Return
-  End Subroutine bn_check_mass_normalization
+  End Subroutine check_mass_normalization
 
-  Subroutine bn_check_electron_fraction(x_initial,x_result,aa,zz,tolerance,status, &
+  Subroutine check_electron_fraction(x_initial,x_result,aa,zz,tolerance,status, &
     & initial_ye,result_ye,residual)
     !---------------------------------------------------------------------------------------------
     ! Require |sum_i Z_i X_result_i/A_i - sum_i Z_i X_initial_i/A_i| <= tolerance, inclusively.
@@ -410,7 +410,7 @@ Contains
     Real(dp), Intent(out) :: initial_ye, result_ye, residual
     Integer :: bad_index, finite_status
 
-    status = bn_check_invalid
+    status = check_invalid
     initial_ye = 0.0_dp
     result_ye = 0.0_dp
     residual = 0.0_dp
@@ -419,42 +419,42 @@ Contains
     If ( .not. finite_value(tolerance) ) Return
     If ( tolerance < 0.0_dp ) Return
 
-    Call bn_check_finite_values(aa,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
-    Call bn_check_finite_values(zz,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
+    Call check_finite_values(aa,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
+    Call check_finite_values(zz,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
     If ( any(aa <= 0.0_dp) ) Return
     If ( any(zz < 0.0_dp) .or. any(zz > aa) ) Return
-    Call bn_check_finite_values(x_initial,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
-    Call bn_check_finite_values(x_result,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Then
-      status = bn_check_failed
+    Call check_finite_values(x_initial,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
+    Call check_finite_values(x_result,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Then
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
     If ( .not. safe_electron_fraction(x_initial,aa,zz,initial_ye) ) Return
     If ( .not. safe_electron_fraction(x_result,aa,zz,result_ye) ) Then
-      status = bn_check_failed
+      status = check_failed
       result_ye = 0.0_dp
       residual = huge(residual)
       Return
     EndIf
     If ( .not. safe_subtract(result_ye,initial_ye,residual) ) Then
-      status = bn_check_failed
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
     If ( abs(residual) <= tolerance ) Then
-      status = bn_check_passed
+      status = check_passed
     Else
-      status = bn_check_failed
+      status = check_failed
     EndIf
 
     Return
-  End Subroutine bn_check_electron_fraction
+  End Subroutine check_electron_fraction
 
-  Subroutine bn_check_inactive_identity(x_initial,x_result,energy_rate,fraction_tolerance, &
+  Subroutine check_inactive_identity(x_initial,x_result,energy_rate,fraction_tolerance, &
     & energy_tolerance,status,fraction_residual,energy_residual)
     !---------------------------------------------------------------------------------------------
     ! For a caller-declared inactive zone, require max_i |X_result_i-X_initial_i| <= the absolute
@@ -471,7 +471,7 @@ Contains
     Integer :: bad_index, finite_status, i
     Real(dp) :: component_residual
 
-    status = bn_check_invalid
+    status = check_invalid
     fraction_residual = 0.0_dp
     energy_residual = 0.0_dp
     If ( size(x_initial) < 1 .or. size(x_result) /= size(x_initial) ) Return
@@ -480,11 +480,11 @@ Contains
     If ( .not. finite_value(energy_tolerance) ) Return
     If ( energy_tolerance < 0.0_dp ) Return
 
-    Call bn_check_finite_values(x_initial,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
-    Call bn_check_finite_values(x_result,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed .or. .not. finite_value(energy_rate) ) Then
-      status = bn_check_failed
+    Call check_finite_values(x_initial,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
+    Call check_finite_values(x_result,finite_status,bad_index)
+    If ( finite_status /= check_passed .or. .not. finite_value(energy_rate) ) Then
+      status = check_failed
       fraction_residual = huge(fraction_residual)
       energy_residual = huge(energy_residual)
       Return
@@ -492,7 +492,7 @@ Contains
 
     Do i = 1, size(x_result)
       If ( .not. safe_subtract(x_result(i),x_initial(i),component_residual) ) Then
-        status = bn_check_failed
+        status = check_failed
         fraction_residual = huge(fraction_residual)
         energy_residual = abs(energy_rate)
         Return
@@ -501,15 +501,15 @@ Contains
     EndDo
     energy_residual = abs(energy_rate)
     If ( fraction_residual <= fraction_tolerance .and. energy_residual <= energy_tolerance ) Then
-      status = bn_check_passed
+      status = check_passed
     Else
-      status = bn_check_failed
+      status = check_failed
     EndIf
 
     Return
-  End Subroutine bn_check_inactive_identity
+  End Subroutine check_inactive_identity
 
-  Subroutine bn_check_fraction_change(x_initial,x_result,change_limit,status,maximum_change, &
+  Subroutine check_fraction_change(x_initial,x_result,change_limit,status,maximum_change, &
     & maximum_change_index)
     !---------------------------------------------------------------------------------------------
     ! Require max_i |X_result_i-X_initial_i| <= change_limit, inclusively. The limit and result are
@@ -527,18 +527,18 @@ Contains
     Integer :: bad_index, finite_status, i
     Real(dp) :: component_change, delta_fraction
 
-    status = bn_check_invalid
+    status = check_invalid
     maximum_change = 0.0_dp
     maximum_change_index = 0
     If ( size(x_initial) < 1 .or. size(x_result) /= size(x_initial) ) Return
     If ( .not. finite_value(change_limit) ) Return
     If ( change_limit < 0.0_dp ) Return
 
-    Call bn_check_finite_values(x_initial,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
-    Call bn_check_finite_values(x_result,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Then
-      status = bn_check_failed
+    Call check_finite_values(x_initial,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
+    Call check_finite_values(x_result,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Then
+      status = check_failed
       maximum_change = huge(maximum_change)
       maximum_change_index = bad_index
       Return
@@ -546,7 +546,7 @@ Contains
 
     Do i = 1, size(x_result)
       If ( .not. safe_subtract(x_result(i),x_initial(i),delta_fraction) ) Then
-        status = bn_check_failed
+        status = check_failed
         maximum_change = huge(maximum_change)
         maximum_change_index = i
         Return
@@ -558,15 +558,15 @@ Contains
       EndIf
     EndDo
     If ( maximum_change <= change_limit ) Then
-      status = bn_check_passed
+      status = check_passed
     Else
-      status = bn_check_failed
+      status = check_failed
     EndIf
 
     Return
-  End Subroutine bn_check_fraction_change
+  End Subroutine check_fraction_change
 
-  Subroutine bn_check_energy_change_fraction(energy_rate,tstep, &
+  Subroutine check_energy_change_fraction(energy_rate,tstep, &
     & initial_specific_internal_energy,change_limit,status,change_fraction)
     !---------------------------------------------------------------------------------------------
     ! Require |energy_rate*tstep|/initial_specific_internal_energy <= change_limit, inclusively.
@@ -584,7 +584,7 @@ Contains
 
     Real(dp) :: energy_change
 
-    status = bn_check_invalid
+    status = check_invalid
     change_fraction = 0.0_dp
     If ( .not. finite_value(tstep) ) Return
     If ( tstep <= 0.0_dp ) Return
@@ -593,42 +593,42 @@ Contains
     If ( .not. finite_value(change_limit) ) Return
     If ( change_limit < 0.0_dp ) Return
     If ( .not. finite_value(energy_rate) ) Then
-      status = bn_check_failed
+      status = check_failed
       change_fraction = huge(change_fraction)
       Return
     EndIf
 
     If ( .not. safe_multiply(energy_rate,tstep,energy_change) ) Then
-      status = bn_check_failed
+      status = check_failed
       change_fraction = huge(change_fraction)
       Return
     EndIf
     If ( energy_rate /= 0.0_dp .and. energy_change == 0.0_dp ) Then
-      status = bn_check_failed
+      status = check_failed
       change_fraction = huge(change_fraction)
       Return
     EndIf
     If ( .not. safe_divide(abs(energy_change),initial_specific_internal_energy, &
       & change_fraction) ) Then
-      status = bn_check_failed
+      status = check_failed
       change_fraction = huge(change_fraction)
       Return
     EndIf
     If ( energy_change /= 0.0_dp .and. change_fraction == 0.0_dp ) Then
-      status = bn_check_failed
+      status = check_failed
       change_fraction = huge(change_fraction)
       Return
     EndIf
     If ( change_fraction <= change_limit ) Then
-      status = bn_check_passed
+      status = check_passed
     Else
-      status = bn_check_failed
+      status = check_failed
     EndIf
 
     Return
-  End Subroutine bn_check_energy_change_fraction
+  End Subroutine check_energy_change_fraction
 
-  Subroutine bn_check_binding_energy_rate(x_initial,x_result,aa,binding_energy,tstep, &
+  Subroutine check_binding_energy_rate(x_initial,x_result,aa,binding_energy,tstep, &
     & energy_rate,absolute_tolerance,relative_tolerance,status,expected_rate,residual)
     !---------------------------------------------------------------------------------------------
     ! Check the XNet/Flash-X binding-energy convention
@@ -653,7 +653,7 @@ Contains
     Integer :: bad_index, finite_status, i
     Real(dp) :: binding_sum, component, delta_fraction, energy_scale, next_sum, weight
 
-    status = bn_check_invalid
+    status = check_invalid
     expected_rate = 0.0_dp
     residual = 0.0_dp
     If ( size(x_initial) < 1 .or. size(x_result) /= size(x_initial) .or. &
@@ -665,16 +665,16 @@ Contains
     If ( .not. finite_value(relative_tolerance) ) Return
     If ( relative_tolerance < 0.0_dp ) Return
 
-    Call bn_check_finite_values(aa,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
-    Call bn_check_finite_values(binding_energy,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
+    Call check_finite_values(aa,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
+    Call check_finite_values(binding_energy,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
     If ( any(aa <= 0.0_dp) ) Return
-    Call bn_check_finite_values(x_initial,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed ) Return
-    Call bn_check_finite_values(x_result,finite_status,bad_index)
-    If ( finite_status /= bn_check_passed .or. .not. finite_value(energy_rate) ) Then
-      status = bn_check_failed
+    Call check_finite_values(x_initial,finite_status,bad_index)
+    If ( finite_status /= check_passed ) Return
+    Call check_finite_values(x_result,finite_status,bad_index)
+    If ( finite_status /= check_passed .or. .not. finite_value(energy_rate) ) Then
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
@@ -686,44 +686,44 @@ Contains
     Do i = 1, size(x_result)
       If ( .not. safe_divide(binding_energy(i),aa(i),weight) ) Return
       If ( .not. safe_subtract(x_result(i),x_initial(i),delta_fraction) ) Then
-        status = bn_check_failed
+        status = check_failed
         residual = huge(residual)
         Return
       EndIf
       If ( .not. safe_multiply(delta_fraction,weight,component) ) Then
-        status = bn_check_failed
+        status = check_failed
         residual = huge(residual)
         Return
       EndIf
       If ( .not. safe_add(binding_sum,component,next_sum) ) Then
-        status = bn_check_failed
+        status = check_failed
         residual = huge(residual)
         Return
       EndIf
       binding_sum = next_sum
     EndDo
     If ( .not. safe_multiply(binding_sum,energy_scale,expected_rate) ) Then
-      status = bn_check_failed
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
     If ( .not. safe_subtract(energy_rate,expected_rate,residual) ) Then
-      status = bn_check_failed
+      status = check_failed
       residual = huge(residual)
       Return
     EndIf
 
     If ( within_energy_tolerance(residual,energy_rate,expected_rate,absolute_tolerance, &
       & relative_tolerance) ) Then
-      status = bn_check_passed
+      status = check_passed
     Else
-      status = bn_check_failed
+      status = check_failed
     EndIf
 
     Return
-  End Subroutine bn_check_binding_energy_rate
+  End Subroutine check_binding_energy_rate
 
-  Subroutine bn_check_eos_result(finite_values,positive_values,status,bad_finite_index, &
+  Subroutine check_eos_result(finite_values,positive_values,status,bad_finite_index, &
     & bad_positive_index)
     !---------------------------------------------------------------------------------------------
     ! Check caller-selected post-burn EOS outputs without depending on a particular EOS interface.
@@ -736,49 +736,49 @@ Contains
 
     Integer :: i
 
-    status = bn_check_invalid
+    status = check_invalid
     bad_finite_index = 0
     bad_positive_index = 0
     If ( size(finite_values)+size(positive_values) < 1 ) Return
 
-    status = bn_check_passed
+    status = check_passed
     Do i = 1, size(finite_values)
       If ( .not. finite_value(finite_values(i)) ) Then
-        status = bn_check_failed
+        status = check_failed
         bad_finite_index = i
         Return
       EndIf
     EndDo
     Do i = 1, size(positive_values)
       If ( .not. finite_value(positive_values(i)) ) Then
-        status = bn_check_failed
+        status = check_failed
         bad_positive_index = i
         Return
       EndIf
       If ( positive_values(i) <= 0.0_dp ) Then
-        status = bn_check_failed
+        status = check_failed
         bad_positive_index = i
         Return
       EndIf
     EndDo
 
     Return
-  End Subroutine bn_check_eos_result
+  End Subroutine check_eos_result
 
   Subroutine reset_report(report)
     Implicit None
-    Type(bn_surrogate_check_report), Intent(out) :: report
+    Type(surrogate_check_report), Intent(out) :: report
 
-    report%overall_status = bn_check_skipped
-    report%finite_status = bn_check_skipped
-    report%fraction_bounds_status = bn_check_skipped
-    report%mass_normalization_status = bn_check_skipped
-    report%fixed_ye_status = bn_check_skipped
-    report%inactive_identity_status = bn_check_skipped
-    report%binding_energy_rate_status = bn_check_skipped
-    report%eos_result_status = bn_check_skipped
-    report%fraction_change_status = bn_check_skipped
-    report%energy_change_fraction_status = bn_check_skipped
+    report%overall_status = check_skipped
+    report%finite_status = check_skipped
+    report%fraction_bounds_status = check_skipped
+    report%mass_normalization_status = check_skipped
+    report%fixed_ye_status = check_skipped
+    report%inactive_identity_status = check_skipped
+    report%binding_energy_rate_status = check_skipped
+    report%eos_result_status = check_skipped
+    report%fraction_change_status = check_skipped
+    report%energy_change_fraction_status = check_skipped
     report%finite_bad_index = 0
     report%eos_bad_finite_index = 0
     report%eos_bad_positive_index = 0
@@ -801,7 +801,7 @@ Contains
 
   Subroutine update_overall_status(report)
     Implicit None
-    Type(bn_surrogate_check_report), Intent(inout) :: report
+    Type(surrogate_check_report), Intent(inout) :: report
 
     Integer :: statuses(9)
 
@@ -810,14 +810,14 @@ Contains
       & report%inactive_identity_status, report%binding_energy_rate_status, &
       & report%eos_result_status, report%fraction_change_status, &
       & report%energy_change_fraction_status /)
-    If ( any(statuses == bn_check_invalid) ) Then
-      report%overall_status = bn_check_invalid
-    ElseIf ( any(statuses == bn_check_failed) ) Then
-      report%overall_status = bn_check_failed
-    ElseIf ( any(statuses == bn_check_passed) ) Then
-      report%overall_status = bn_check_passed
+    If ( any(statuses == check_invalid) ) Then
+      report%overall_status = check_invalid
+    ElseIf ( any(statuses == check_failed) ) Then
+      report%overall_status = check_failed
+    ElseIf ( any(statuses == check_passed) ) Then
+      report%overall_status = check_passed
     Else
-      report%overall_status = bn_check_skipped
+      report%overall_status = check_skipped
     EndIf
 
     Return

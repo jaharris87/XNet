@@ -42,28 +42,28 @@ Contains
 
   Subroutine test_finite_values(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_finite_values, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_failed, check_finite_values, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: bad_index, status
     Real(dp) :: empty(0), values(3)
 
-    Call bn_check_finite_values(empty,status,bad_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_finite_values(empty,status,bad_index)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
     values = (/ 0.0_dp, 0.25_dp, 0.75_dp /)
-    Call bn_check_finite_values(values,status,bad_index)
-    Call check(error,status,bn_check_passed)
+    Call check_finite_values(values,status,bad_index)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,bad_index,0)
     If ( allocated(error) ) Return
 
     values(2) = ieee_value(values(2),ieee_quiet_nan)
-    Call bn_check_finite_values(values,status,bad_index)
-    Call check(error,status,bn_check_failed)
+    Call check_finite_values(values,status,bad_index)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,bad_index,2)
 
@@ -72,8 +72,8 @@ Contains
 
   Subroutine test_fraction_bounds(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_fraction_bounds, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_failed, check_fraction_bounds, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -81,8 +81,8 @@ Contains
     Real(dp) :: maximum_fraction, minimum_fraction, xmass(3)
 
     xmass = (/ -1.0e-15_dp, 0.25_dp, 0.75_dp /)
-    Call bn_check_fraction_bounds(xmass,1.0e-14_dp,status,minimum_fraction,maximum_fraction)
-    Call check(error,status,bn_check_passed)
+    Call check_fraction_bounds(xmass,1.0e-14_dp,status,minimum_fraction,maximum_fraction)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,minimum_fraction,-1.0e-15_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
@@ -90,24 +90,24 @@ Contains
     If ( allocated(error) ) Return
 
     xmass(1) = -1.0e-4_dp
-    Call bn_check_fraction_bounds(xmass,1.0e-14_dp,status,minimum_fraction,maximum_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check_fraction_bounds(xmass,1.0e-14_dp,status,minimum_fraction,maximum_fraction)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
-    Call bn_check_fraction_bounds(xmass,-1.0_dp,status,minimum_fraction,maximum_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check_fraction_bounds(xmass,-1.0_dp,status,minimum_fraction,maximum_fraction)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
-    Call bn_check_fraction_bounds(xmass,ieee_value(0.0_dp,ieee_quiet_nan),status, &
+    Call check_fraction_bounds(xmass,ieee_value(0.0_dp,ieee_quiet_nan),status, &
       & minimum_fraction,maximum_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_fraction_bounds
 
   Subroutine test_mass_normalization(error)
-    Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_invalid, &
-      & bn_check_mass_normalization, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_failed, check_invalid, &
+      & check_mass_normalization, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -115,29 +115,29 @@ Contains
     Real(dp) :: residual, xmass(3)
 
     xmass = (/ 0.20_dp, 0.30_dp, 0.50_dp /)
-    Call bn_check_mass_normalization(xmass,1.0e-14_dp,status,residual)
-    Call check(error,status,bn_check_passed)
+    Call check_mass_normalization(xmass,1.0e-14_dp,status,residual)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,residual,0.0_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
     xmass(3) = 0.49_dp
-    Call bn_check_mass_normalization(xmass,1.0e-14_dp,status,residual)
-    Call check(error,status,bn_check_failed)
+    Call check_mass_normalization(xmass,1.0e-14_dp,status,residual)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,residual,-1.0e-2_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
-    Call bn_check_mass_normalization(xmass,-1.0_dp,status,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check_mass_normalization(xmass,-1.0_dp,status,residual)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_mass_normalization
 
   Subroutine test_electron_fraction(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_electron_fraction, bn_check_failed, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_electron_fraction, check_failed, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -148,9 +148,9 @@ Contains
     zz = (/ 0.0_dp, 1.0_dp, 2.0_dp /)
     x_initial = (/ 0.10_dp, 0.10_dp, 0.80_dp /)
     x_result = (/ 0.0_dp, 0.0_dp, 1.0_dp /)
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,initial_ye,0.50_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
@@ -160,30 +160,30 @@ Contains
     If ( allocated(error) ) Return
 
     x_result = (/ 0.10_dp, 0.20_dp, 0.70_dp /)
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,residual,0.05_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
     aa(1) = 0.0_dp
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
     aa(1) = ieee_value(aa(1),ieee_quiet_nan)
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,tight_tolerance,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_electron_fraction
 
   Subroutine test_inactive_identity(error)
-    Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_inactive_identity, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_failed, check_inactive_identity, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -192,9 +192,9 @@ Contains
 
     x_initial = (/ 0.20_dp, 0.30_dp, 0.50_dp /)
     x_result = x_initial
-    Call bn_check_inactive_identity(x_initial,x_result,0.0_dp,tight_tolerance, &
+    Call check_inactive_identity(x_initial,x_result,0.0_dp,tight_tolerance, &
       & tight_tolerance,status,fraction_residual,energy_residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,fraction_residual,0.0_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
@@ -202,24 +202,24 @@ Contains
     If ( allocated(error) ) Return
 
     x_result(2) = x_result(2) + 1.0e-4_dp
-    Call bn_check_inactive_identity(x_initial,x_result,0.0_dp,tight_tolerance, &
+    Call check_inactive_identity(x_initial,x_result,0.0_dp,tight_tolerance, &
       & tight_tolerance,status,fraction_residual,energy_residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,fraction_residual,1.0e-4_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
     x_result = x_initial
-    Call bn_check_inactive_identity(x_initial,x_result,1.0_dp,tight_tolerance, &
+    Call check_inactive_identity(x_initial,x_result,1.0_dp,tight_tolerance, &
       & tight_tolerance,status,fraction_residual,energy_residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,energy_residual,1.0_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
-    Call bn_check_inactive_identity(x_initial,x_result,0.0_dp,-1.0_dp, &
+    Call check_inactive_identity(x_initial,x_result,0.0_dp,-1.0_dp, &
       & tight_tolerance,status,fraction_residual,energy_residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_inactive_identity
@@ -227,8 +227,8 @@ Contains
   Subroutine test_fraction_change(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_negative_inf, ieee_positive_inf, &
       & ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_fraction_change, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_failed, check_fraction_change, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -237,25 +237,25 @@ Contains
 
     x_initial = (/ 0.00_dp, 0.50_dp, 0.50_dp /)
     x_result = (/ 0.10_dp, 0.40_dp, 0.50_dp /)
-    Call bn_check_fraction_change(x_initial,x_result,0.10_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_passed)
+    Call check_fraction_change(x_initial,x_result,0.10_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,maximum_change,0.10_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
     Call check(error,maximum_index,1)
     If ( allocated(error) ) Return
 
-    Call bn_check_fraction_change(x_initial,x_result,nearest(0.10_dp,-1.0_dp),status, &
+    Call check_fraction_change(x_initial,x_result,nearest(0.10_dp,-1.0_dp),status, &
       & maximum_change,maximum_index)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
-    Call bn_check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_passed)
+    Call check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
 
     x_result(2) = ieee_value(0.0_dp,ieee_quiet_nan)
-    Call bn_check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_failed)
+    Call check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,maximum_change,huge(maximum_change))
     If ( allocated(error) ) Return
@@ -266,8 +266,8 @@ Contains
     x_result = x_initial
     infinity = ieee_value(0.0_dp,ieee_positive_inf)
     x_result(2) = infinity
-    Call bn_check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_failed)
+    Call check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,maximum_change,huge(maximum_change))
     If ( allocated(error) ) Return
@@ -276,32 +276,32 @@ Contains
 
     x_result = x_initial
     x_initial(1) = ieee_value(0.0_dp,ieee_negative_inf)
-    Call bn_check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
     x_initial = (/ 0.00_dp, 0.50_dp, 0.50_dp /)
-    Call bn_check_fraction_change(x_initial,x_initial,infinity,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_fraction_change(x_initial,x_initial,infinity,status,maximum_change,maximum_index)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
-    Call bn_check_fraction_change(x_initial,x_initial(1:2),0.20_dp,status,maximum_change, &
+    Call check_fraction_change(x_initial,x_initial(1:2),0.20_dp,status,maximum_change, &
       & maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_fraction_change(empty,empty,0.20_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_fraction_change(empty,empty,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_fraction_change(x_initial,x_initial,-1.0_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_fraction_change(x_initial,x_initial,-1.0_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_fraction_change(x_initial,x_initial, &
+    Call check_fraction_change(x_initial,x_initial, &
       & ieee_value(0.0_dp,ieee_quiet_nan),status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
     x_initial(1) = ieee_value(0.0_dp,ieee_quiet_nan)
-    Call bn_check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_fraction_change(x_initial,x_result,0.20_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_fraction_change
@@ -309,8 +309,8 @@ Contains
   Subroutine test_energy_change_fraction(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_negative_inf, ieee_positive_inf, &
       & ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_energy_change_fraction, bn_check_failed, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_energy_change_fraction, check_failed, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -320,81 +320,81 @@ Contains
     negative_infinity = ieee_value(0.0_dp,ieee_negative_inf)
     positive_infinity = ieee_value(0.0_dp,ieee_positive_inf)
 
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,0.10_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,0.10_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(-2.0_dp,0.5_dp,10.0_dp, &
+    Call check_energy_change_fraction(-2.0_dp,0.5_dp,10.0_dp, &
       & nearest(0.10_dp,-1.0_dp),status,change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,0.20_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,0.20_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
 
-    Call bn_check_energy_change_fraction(1.0e16_dp,1.0e-8_dp,1.0e10_dp,0.01_dp,status, &
+    Call check_energy_change_fraction(1.0e16_dp,1.0e-8_dp,1.0e10_dp,0.01_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,0.01_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
-    Call bn_check_energy_change_fraction(2.0_dp,0.0_dp,10.0_dp,0.10_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,0.0_dp,10.0_dp,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,-0.5_dp,10.0_dp,0.10_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,-0.5_dp,10.0_dp,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,positive_infinity,10.0_dp,0.10_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,positive_infinity,10.0_dp,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,ieee_value(0.0_dp,ieee_quiet_nan), &
+    Call check_energy_change_fraction(2.0_dp,ieee_value(0.0_dp,ieee_quiet_nan), &
       & 10.0_dp,0.10_dp,status,change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,0.0_dp,0.10_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,0.0_dp,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,-10.0_dp,0.10_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,-10.0_dp,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,negative_infinity,0.10_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,negative_infinity,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp, &
       & ieee_value(0.0_dp,ieee_quiet_nan),0.10_dp,status,change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,-1.0_dp,status, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,-1.0_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp, &
       & ieee_value(0.0_dp,ieee_quiet_nan),status,change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,positive_infinity,status, &
+    Call check_energy_change_fraction(2.0_dp,0.5_dp,10.0_dp,positive_infinity,status, &
       & change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(ieee_value(0.0_dp,ieee_quiet_nan),0.5_dp, &
+    Call check_energy_change_fraction(ieee_value(0.0_dp,ieee_quiet_nan),0.5_dp, &
       & 10.0_dp,0.10_dp,status,change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,huge(change_fraction))
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(negative_infinity,0.5_dp,10.0_dp,0.10_dp,status, &
+    Call check_energy_change_fraction(negative_infinity,0.5_dp,10.0_dp,0.10_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,huge(change_fraction))
 
@@ -404,8 +404,8 @@ Contains
   Subroutine test_binding_energy_rate(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
     Use xnet_constants, Only: avn, epmev
-    Use xnet_surrogate_checks, Only: bn_check_binding_energy_rate, bn_check_failed, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_binding_energy_rate, check_failed, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -417,37 +417,37 @@ Contains
     x_initial = (/ 1.0_dp, 0.0_dp /)
     x_result = (/ 0.0_dp, 1.0_dp /)
     energy_rate = 0.5_dp*avn*epmev
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,2.0_dp,energy_rate, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,2.0_dp,energy_rate, &
       & 0.0_dp,tight_tolerance,status,expected_rate,residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,expected_rate,energy_rate,thr=tight_tolerance*abs(energy_rate))
     If ( allocated(error) ) Return
     Call check(error,residual,0.0_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,2.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,2.0_dp, &
       & energy_rate*(1.0_dp+1.0e-4_dp),0.0_dp,1.0e-6_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,0.0_dp,energy_rate, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,0.0_dp,energy_rate, &
       & 0.0_dp,tight_tolerance,status,expected_rate,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be, &
       & ieee_value(0.0_dp,ieee_quiet_nan),energy_rate,0.0_dp,tight_tolerance,status, &
       & expected_rate,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_binding_energy_rate
 
   Subroutine test_eos_result(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_eos_result, bn_check_failed, &
-      & bn_check_invalid, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_eos_result, check_failed, &
+      & check_invalid, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -456,9 +456,9 @@ Contains
 
     finite_values = (/ -2.0_dp, 0.0_dp, 3.0_dp /)
     positive_values = (/ 1.0_dp, 2.0_dp, 3.0_dp /)
-    Call bn_check_eos_result(finite_values,positive_values,status,bad_finite_index, &
+    Call check_eos_result(finite_values,positive_values,status,bad_finite_index, &
       & bad_positive_index)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,bad_finite_index,0)
     If ( allocated(error) ) Return
@@ -466,46 +466,46 @@ Contains
     If ( allocated(error) ) Return
 
     finite_values(2) = ieee_value(finite_values(2),ieee_quiet_nan)
-    Call bn_check_eos_result(finite_values,positive_values,status,bad_finite_index, &
+    Call check_eos_result(finite_values,positive_values,status,bad_finite_index, &
       & bad_positive_index)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,bad_finite_index,2)
     If ( allocated(error) ) Return
 
     finite_values(2) = 0.0_dp
     positive_values(3) = 0.0_dp
-    Call bn_check_eos_result(finite_values,positive_values,status,bad_finite_index, &
+    Call check_eos_result(finite_values,positive_values,status,bad_finite_index, &
       & bad_positive_index)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,bad_positive_index,3)
     If ( allocated(error) ) Return
 
     positive_values(3) = ieee_value(positive_values(3),ieee_quiet_nan)
-    Call bn_check_eos_result(finite_values,positive_values,status,bad_finite_index, &
+    Call check_eos_result(finite_values,positive_values,status,bad_finite_index, &
       & bad_positive_index)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,bad_positive_index,3)
     If ( allocated(error) ) Return
 
-    Call bn_check_eos_result(empty,empty,status,bad_finite_index,bad_positive_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_eos_result(empty,empty,status,bad_finite_index,bad_positive_index)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_eos_result
 
   Subroutine test_coordinator_basics(error)
-    Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_invalid, bn_check_passed, &
-      & bn_check_skipped, bn_check_surrogate_result, bn_check_surrogate_result_with_energy, &
-      & bn_surrogate_check_config, bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_failed, check_invalid, check_passed, &
+      & check_skipped, check_surrogate_result, check_surrogate_result_with_energy, &
+      & surrogate_check_config, surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Real(dp) :: aa(3), be(3), x_initial(3), x_initial_copy(3), x_result(3), x_result_copy(3), zz(3)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     aa = (/ 4.0_dp, 12.0_dp, 16.0_dp /)
     zz = (/ 2.0_dp, 6.0_dp, 8.0_dp /)
@@ -515,8 +515,8 @@ Contains
     x_initial_copy = x_initial
     x_result_copy = x_result
 
-    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%overall_status,bn_check_skipped)
+    Call check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
+    Call check(error,report%overall_status,check_skipped)
     If ( allocated(error) ) Return
 
     config%check_finite = 1
@@ -528,19 +528,19 @@ Contains
     config%mass_tolerance = tight_tolerance
     config%fraction_change_limit = 0.10_dp
     config%energy_change_fraction_limit = 0.0_dp
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & 0.0_dp,report,1.0_dp)
-    Call check(error,report%overall_status,bn_check_passed)
+    Call check(error,report%overall_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%finite_status,bn_check_passed)
+    Call check(error,report%finite_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%fraction_bounds_status,bn_check_passed)
+    Call check(error,report%fraction_bounds_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%mass_normalization_status,bn_check_passed)
+    Call check(error,report%mass_normalization_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%fraction_change_status,bn_check_passed)
+    Call check(error,report%fraction_change_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%energy_change_fraction_status,bn_check_passed)
+    Call check(error,report%energy_change_fraction_status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,report%maximum_fraction_change,0.10_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
@@ -552,37 +552,37 @@ Contains
     If ( allocated(error) ) Return
 
     x_result(1) = -1.0e-3_dp
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & 0.0_dp,report,1.0_dp)
-    Call check(error,report%overall_status,bn_check_failed)
+    Call check(error,report%overall_status,check_failed)
     If ( allocated(error) ) Return
-    Call check(error,report%fraction_bounds_status,bn_check_failed)
+    Call check(error,report%fraction_bounds_status,check_failed)
     If ( allocated(error) ) Return
 
     config%check_finite = 2
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & 0.0_dp,report,1.0_dp)
-    Call check(error,report%overall_status,bn_check_invalid)
+    Call check(error,report%overall_status,check_invalid)
     If ( allocated(error) ) Return
-    Call check(error,report%finite_status,bn_check_invalid)
+    Call check(error,report%finite_status,check_invalid)
 
     Return
   End Subroutine test_coordinator_basics
 
   Subroutine test_positional_constructor_compatibility(error)
-    Use xnet_surrogate_checks, Only: bn_check_skipped, bn_surrogate_check_config, &
-      & bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_skipped, surrogate_check_config, &
+      & surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: config_flags(7), report_indices(3), report_statuses(8)
     Real(dp) :: config_tolerances(7), report_diagnostics(10)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     ! These are the complete positional constructors supported before the new step checks were
     ! appended. Distinct values make any component insertion or reordering visible.
-    config = bn_surrogate_check_config(11,12,13,14,15,16,17, &
+    config = surrogate_check_config(11,12,13,14,15,16,17, &
       & 0.11_dp,0.12_dp,0.13_dp,0.14_dp,0.15_dp,0.16_dp,0.17_dp)
     config_flags = (/ config%check_finite, config%check_fraction_bounds, &
       & config%check_mass_normalization,config%check_fixed_ye, &
@@ -607,7 +607,7 @@ Contains
     Call check(error,config%energy_change_fraction_limit,-1.0_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
-    report = bn_surrogate_check_report(11,12,13,14,15,16,17,18,21,22,23, &
+    report = surrogate_check_report(11,12,13,14,15,16,17,18,21,22,23, &
       & 0.31_dp,0.32_dp,0.33_dp,0.34_dp,0.35_dp,0.36_dp,0.37_dp,0.38_dp, &
       & 0.39_dp,0.40_dp)
     report_statuses = (/ report%overall_status,report%finite_status, &
@@ -628,9 +628,9 @@ Contains
       & (/ 0.31_dp,0.32_dp,0.33_dp,0.34_dp,0.35_dp,0.36_dp,0.37_dp,0.38_dp, &
       & 0.39_dp,0.40_dp /))),0.0_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
-    Call check(error,report%fraction_change_status,bn_check_skipped)
+    Call check(error,report%fraction_change_status,check_skipped)
     If ( allocated(error) ) Return
-    Call check(error,report%energy_change_fraction_status,bn_check_skipped)
+    Call check(error,report%energy_change_fraction_status,check_skipped)
     If ( allocated(error) ) Return
     Call check(error,report%maximum_fraction_change_index,0)
     If ( allocated(error) ) Return
@@ -642,19 +642,19 @@ Contains
   End Subroutine test_positional_constructor_compatibility
 
   Subroutine test_legacy_coordinator_interface(error)
-    Use xnet_surrogate_checks, Only: bn_check_skipped, bn_check_surrogate_result, &
-      & bn_surrogate_check_config, bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_skipped, check_surrogate_result, &
+      & surrogate_check_config, surrogate_check_report
     Implicit None
 
     Abstract Interface
       Subroutine legacy_coordinator(config,active,x_initial,x_result,aa,zz,binding_energy, &
         & tstep,energy_rate,report,eos_finite_values,eos_positive_values)
-        Import :: bn_surrogate_check_config, bn_surrogate_check_report, dp
-        Type(bn_surrogate_check_config), Intent(in) :: config
+        Import :: surrogate_check_config, surrogate_check_report, dp
+        Type(surrogate_check_config), Intent(in) :: config
         Integer, Intent(in) :: active
         Real(dp), Intent(in) :: x_initial(:), x_result(:), aa(:), zz(:), binding_energy(:)
         Real(dp), Intent(in) :: tstep, energy_rate
-        Type(bn_surrogate_check_report), Intent(out) :: report
+        Type(surrogate_check_report), Intent(out) :: report
         Real(dp), Optional, Intent(in) :: eos_finite_values(:), eos_positive_values(:)
       End Subroutine legacy_coordinator
     End Interface
@@ -662,34 +662,34 @@ Contains
     Type(error_type), Allocatable, Intent(out) :: error
     Procedure(legacy_coordinator), Pointer :: coordinator
     Real(dp) :: aa(1), be(1), xmass(1), zz(1)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     aa = 1.0_dp
     be = 0.0_dp
     xmass = 1.0_dp
     zz = 0.0_dp
-    coordinator => bn_check_surrogate_result
+    coordinator => check_surrogate_result
     Call check(error,associated(coordinator),.True.)
     If ( allocated(error) ) Return
     Call coordinator(config,1,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%overall_status,bn_check_skipped)
+    Call check(error,report%overall_status,check_skipped)
 
     Return
   End Subroutine test_legacy_coordinator_interface
 
   Subroutine test_coordinator_optional_data(error)
     Use xnet_constants, Only: avn, epmev
-    Use xnet_surrogate_checks, Only: bn_check_invalid, bn_check_passed, bn_check_skipped, &
-      & bn_check_surrogate_result, bn_check_surrogate_result_with_energy, &
-      & bn_surrogate_check_config, bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_invalid, check_passed, check_skipped, &
+      & check_surrogate_result, check_surrogate_result_with_energy, &
+      & surrogate_check_config, surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Real(dp) :: aa(2), be(2), energy_rate, eos_finite(2), eos_positive(2)
     Real(dp) :: x_initial(2), x_result(2), zz(2)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     aa = (/ 4.0_dp, 12.0_dp /)
     zz = (/ 2.0_dp, 6.0_dp /)
@@ -711,48 +711,48 @@ Contains
     config%energy_relative_tolerance = tight_tolerance
     config%energy_change_fraction_limit = 0.10_dp
 
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & energy_rate,report,10.0_dp*abs(energy_rate),eos_finite,eos_positive)
-    Call check(error,report%overall_status,bn_check_passed)
+    Call check(error,report%overall_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%fixed_ye_status,bn_check_passed)
+    Call check(error,report%fixed_ye_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%inactive_identity_status,bn_check_skipped)
+    Call check(error,report%inactive_identity_status,check_skipped)
     If ( allocated(error) ) Return
-    Call check(error,report%binding_energy_rate_status,bn_check_passed)
+    Call check(error,report%binding_energy_rate_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%eos_result_status,bn_check_passed)
+    Call check(error,report%eos_result_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%energy_change_fraction_status,bn_check_passed)
+    Call check(error,report%energy_change_fraction_status,check_passed)
     If ( allocated(error) ) Return
     Call check(error,report%energy_change_fraction,0.10_dp,thr=tight_tolerance)
     If ( allocated(error) ) Return
 
-    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & energy_rate,report,eos_finite,eos_positive)
-    Call check(error,report%overall_status,bn_check_invalid)
+    Call check(error,report%overall_status,check_invalid)
     If ( allocated(error) ) Return
-    Call check(error,report%eos_result_status,bn_check_passed)
+    Call check(error,report%eos_result_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%energy_change_fraction_status,bn_check_invalid)
+    Call check(error,report%energy_change_fraction_status,check_invalid)
     If ( allocated(error) ) Return
 
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & energy_rate,report,10.0_dp*abs(energy_rate))
-    Call check(error,report%overall_status,bn_check_invalid)
+    Call check(error,report%overall_status,check_invalid)
     If ( allocated(error) ) Return
-    Call check(error,report%eos_result_status,bn_check_invalid)
+    Call check(error,report%eos_result_status,check_invalid)
     If ( allocated(error) ) Return
-    Call check(error,report%energy_change_fraction_status,bn_check_passed)
+    Call check(error,report%energy_change_fraction_status,check_passed)
 
     Return
   End Subroutine test_coordinator_optional_data
 
   Subroutine test_tolerance_boundaries(error)
     Use xnet_constants, Only: avn, epmev
-    Use xnet_surrogate_checks, Only: bn_check_binding_energy_rate, &
-      & bn_check_electron_fraction, bn_check_failed, bn_check_fraction_bounds, &
-      & bn_check_inactive_identity, bn_check_mass_normalization, bn_check_passed
+    Use xnet_surrogate_checks, Only: check_binding_energy_rate, &
+      & check_electron_fraction, check_failed, check_fraction_bounds, &
+      & check_inactive_identity, check_mass_normalization, check_passed
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -762,85 +762,85 @@ Contains
     Real(dp) :: x_initial(2), x_result(2), zz(2)
 
     x_result = (/ -1.0e-2_dp, 0.5_dp /)
-    Call bn_check_fraction_bounds(x_result,1.1e-2_dp,status,minimum_fraction,maximum_fraction)
-    Call check(error,status,bn_check_passed)
+    Call check_fraction_bounds(x_result,1.1e-2_dp,status,minimum_fraction,maximum_fraction)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
-    Call bn_check_fraction_bounds(x_result,9.0e-3_dp,status,minimum_fraction,maximum_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check_fraction_bounds(x_result,9.0e-3_dp,status,minimum_fraction,maximum_fraction)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     x_result = (/ 0.50_dp, 0.51_dp /)
-    Call bn_check_mass_normalization(x_result,1.1e-2_dp,status,residual)
-    Call check(error,status,bn_check_passed)
+    Call check_mass_normalization(x_result,1.1e-2_dp,status,residual)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
-    Call bn_check_mass_normalization(x_result,9.0e-3_dp,status,residual)
-    Call check(error,status,bn_check_failed)
+    Call check_mass_normalization(x_result,9.0e-3_dp,status,residual)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     aa = 1.0_dp
     zz = (/ 0.0_dp, 1.0_dp /)
     x_initial = (/ 0.50_dp, 0.50_dp /)
     x_result = (/ 0.45_dp, 0.55_dp /)
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,5.1e-2_dp,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,5.1e-2_dp,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,4.9e-2_dp,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,4.9e-2_dp,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     x_result = (/ 0.51_dp, 0.49_dp /)
-    Call bn_check_inactive_identity(x_initial,x_result,2.0_dp,1.1e-2_dp,2.1_dp,status, &
+    Call check_inactive_identity(x_initial,x_result,2.0_dp,1.1e-2_dp,2.1_dp,status, &
       & fraction_residual,energy_residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
-    Call bn_check_inactive_identity(x_initial,x_result,2.0_dp,9.0e-3_dp,2.1_dp,status, &
+    Call check_inactive_identity(x_initial,x_result,2.0_dp,9.0e-3_dp,2.1_dp,status, &
       & fraction_residual,energy_residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
-    Call bn_check_inactive_identity(x_initial,x_result,2.0_dp,1.1e-2_dp,1.9_dp,status, &
+    Call check_inactive_identity(x_initial,x_result,2.0_dp,1.1e-2_dp,1.9_dp,status, &
       & fraction_residual,energy_residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     be = (/ 0.0_dp, 2.0_dp /)
     x_result = x_initial
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,10.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,10.0_dp, &
       & 10.0_dp,0.0_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,10.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,10.0_dp, &
       & 9.0_dp,0.0_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     x_initial = (/ 1.0_dp, 0.0_dp /)
     x_result = (/ 0.0_dp, 1.0_dp /)
     aa = (/ 1.0_dp, 2.0_dp /)
     expected_rate = avn*epmev
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp, &
       & 1.1_dp*expected_rate,0.0_dp,9.1e-2_dp,status,energy_residual,residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp, &
       & 1.1_dp*expected_rate,0.0_dp,9.0e-2_dp,status,energy_residual,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
 
     Return
   End Subroutine test_tolerance_boundaries
 
   Subroutine test_explicit_tolerance_policy(error)
-    Use xnet_surrogate_checks, Only: bn_check_invalid, bn_check_passed, &
-      & bn_check_surrogate_result, bn_check_surrogate_result_with_energy, &
-      & bn_surrogate_check_config, bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_invalid, check_passed, &
+      & check_surrogate_result, check_surrogate_result_with_energy, &
+      & surrogate_check_config, surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: check_index
     Real(dp) :: aa(2), be(2), xmass(2), zz(2)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     aa = (/ 1.0_dp, 4.0_dp /)
     zz = (/ 0.0_dp, 2.0_dp /)
@@ -848,10 +848,10 @@ Contains
     xmass = (/ 0.0_dp, 1.0_dp /)
 
     Do check_index = 2, 6
-      config = bn_surrogate_check_config()
+      config = surrogate_check_config()
       Call set_check_flag(config,check_index,1)
-      Call bn_check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-      Call check(error,report%overall_status,bn_check_invalid)
+      Call check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+      Call check(error,report%overall_status,check_invalid)
       If ( allocated(error) ) Return
 
       Select Case (check_index)
@@ -863,71 +863,71 @@ Contains
         config%ye_tolerance = 0.0_dp
       Case (5)
         config%inactive_fraction_tolerance = 0.0_dp
-        Call bn_check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-        Call check(error,report%overall_status,bn_check_invalid)
+        Call check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+        Call check(error,report%overall_status,check_invalid)
         If ( allocated(error) ) Return
-        config = bn_surrogate_check_config()
+        config = surrogate_check_config()
         config%check_inactive_identity = 1
         config%inactive_energy_tolerance = 0.0_dp
-        Call bn_check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-        Call check(error,report%overall_status,bn_check_invalid)
+        Call check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+        Call check(error,report%overall_status,check_invalid)
         If ( allocated(error) ) Return
         config%inactive_fraction_tolerance = 0.0_dp
       Case (6)
         config%energy_absolute_tolerance = 0.0_dp
-        Call bn_check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-        Call check(error,report%overall_status,bn_check_invalid)
+        Call check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+        Call check(error,report%overall_status,check_invalid)
         If ( allocated(error) ) Return
-        config = bn_surrogate_check_config()
+        config = surrogate_check_config()
         config%check_binding_energy_rate = 1
         config%energy_relative_tolerance = 0.0_dp
-        Call bn_check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-        Call check(error,report%overall_status,bn_check_invalid)
+        Call check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+        Call check(error,report%overall_status,check_invalid)
         If ( allocated(error) ) Return
         config%energy_absolute_tolerance = 0.0_dp
       End Select
-      Call bn_check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-      Call check(error,report%overall_status,bn_check_passed)
+      Call check_surrogate_result(config,0,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+      Call check(error,report%overall_status,check_passed)
       If ( allocated(error) ) Return
     EndDo
 
-    config = bn_surrogate_check_config()
+    config = surrogate_check_config()
     config%check_fraction_change = 1
-    Call bn_check_surrogate_result(config,1,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%overall_status,bn_check_invalid)
+    Call check_surrogate_result(config,1,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+    Call check(error,report%overall_status,check_invalid)
     If ( allocated(error) ) Return
     config%fraction_change_limit = 0.0_dp
-    Call bn_check_surrogate_result(config,1,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%overall_status,bn_check_passed)
+    Call check_surrogate_result(config,1,xmass,xmass,aa,zz,be,1.0_dp,0.0_dp,report)
+    Call check(error,report%overall_status,check_passed)
     If ( allocated(error) ) Return
 
-    config = bn_surrogate_check_config()
+    config = surrogate_check_config()
     config%check_energy_change_fraction = 1
-    Call bn_check_surrogate_result_with_energy(config,1,xmass,xmass,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,xmass,xmass,aa,zz,be,1.0_dp, &
       & 0.0_dp,report,1.0_dp)
-    Call check(error,report%overall_status,bn_check_invalid)
+    Call check(error,report%overall_status,check_invalid)
     If ( allocated(error) ) Return
     config%energy_change_fraction_limit = 0.0_dp
-    Call bn_check_surrogate_result_with_energy(config,1,xmass,xmass,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,xmass,xmass,aa,zz,be,1.0_dp, &
       & 0.0_dp,report,1.0_dp)
-    Call check(error,report%overall_status,bn_check_passed)
+    Call check(error,report%overall_status,check_passed)
 
     Return
   End Subroutine test_explicit_tolerance_policy
 
   Subroutine test_coordinator_selection(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_failed, bn_check_invalid, bn_check_passed, &
-      & bn_check_skipped, bn_check_surrogate_result_with_energy, &
-      & bn_surrogate_check_config, bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_failed, check_invalid, check_passed, &
+      & check_skipped, check_surrogate_result_with_energy, &
+      & surrogate_check_config, surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: check_index, invalid_index, other_index, statuses(9)
     Integer, Parameter :: invalid_values(2) = (/ -1, 2 /)
     Real(dp) :: aa(2), be(2), eos_finite(1), eos_positive(1), x_initial(2), x_result(2), zz(2)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     aa = (/ 1.0_dp, 4.0_dp /)
     zz = (/ 0.0_dp, 2.0_dp /)
@@ -935,7 +935,7 @@ Contains
     eos_finite = 0.0_dp
 
     Do check_index = 1, 9
-      config = bn_surrogate_check_config()
+      config = surrogate_check_config()
       Call set_check_flag(config,check_index,1)
       x_initial = (/ 0.0_dp, 1.0_dp /)
       x_result = x_initial
@@ -967,85 +967,85 @@ Contains
       Case (9)
         config%energy_change_fraction_limit = 0.0_dp
       End Select
-      Call bn_check_surrogate_result_with_energy(config,0,x_initial,x_result,aa,zz,be, &
+      Call check_surrogate_result_with_energy(config,0,x_initial,x_result,aa,zz,be, &
         & 1.0_dp,1.0_dp,report,1.0_dp,eos_finite,eos_positive)
       statuses = report_statuses(report)
-      Call check(error,statuses(check_index),bn_check_failed)
+      Call check(error,statuses(check_index),check_failed)
       If ( allocated(error) ) Return
-      Call check(error,report%overall_status,bn_check_failed)
+      Call check(error,report%overall_status,check_failed)
       If ( allocated(error) ) Return
       Do other_index = 1, 9
         If ( other_index == check_index ) Cycle
-        Call check(error,statuses(other_index),bn_check_skipped)
+        Call check(error,statuses(other_index),check_skipped)
         If ( allocated(error) ) Return
       EndDo
     EndDo
 
     Do invalid_index = 1, size(invalid_values)
       Do check_index = 1, 9
-        config = bn_surrogate_check_config()
+        config = surrogate_check_config()
         Call set_check_flag(config,check_index,invalid_values(invalid_index))
         x_initial = (/ 0.0_dp, 1.0_dp /)
-        Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_initial,aa,zz,be, &
+        Call check_surrogate_result_with_energy(config,1,x_initial,x_initial,aa,zz,be, &
           & 1.0_dp,0.0_dp,report,1.0_dp,eos_finite,(/ 1.0_dp /))
         statuses = report_statuses(report)
-        Call check(error,statuses(check_index),bn_check_invalid)
+        Call check(error,statuses(check_index),check_invalid)
         If ( allocated(error) ) Return
-        Call check(error,report%overall_status,bn_check_invalid)
+        Call check(error,report%overall_status,check_invalid)
         If ( allocated(error) ) Return
         Do other_index = 1, 9
           If ( other_index == check_index ) Cycle
-          Call check(error,statuses(other_index),bn_check_skipped)
+          Call check(error,statuses(other_index),check_skipped)
           If ( allocated(error) ) Return
         EndDo
       EndDo
     EndDo
 
     ! Exercise aggregate precedence when both new checks run but only one rejects the candidate.
-    config = bn_surrogate_check_config()
+    config = surrogate_check_config()
     config%check_fraction_change = 1
     config%check_energy_change_fraction = 1
     config%fraction_change_limit = 0.0_dp
     config%energy_change_fraction_limit = 1.0_dp
     x_initial = (/ 0.0_dp, 1.0_dp /)
     x_result = (/ 0.1_dp, 0.9_dp /)
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & 1.0_dp,report,1.0_dp)
-    Call check(error,report%fraction_change_status,bn_check_failed)
+    Call check(error,report%fraction_change_status,check_failed)
     If ( allocated(error) ) Return
-    Call check(error,report%energy_change_fraction_status,bn_check_passed)
+    Call check(error,report%energy_change_fraction_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%overall_status,bn_check_failed)
+    Call check(error,report%overall_status,check_failed)
     If ( allocated(error) ) Return
 
     config%fraction_change_limit = 0.1_dp
     config%energy_change_fraction_limit = 0.0_dp
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,1.0_dp, &
       & 1.0_dp,report,1.0_dp)
-    Call check(error,report%fraction_change_status,bn_check_passed)
+    Call check(error,report%fraction_change_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%energy_change_fraction_status,bn_check_failed)
+    Call check(error,report%energy_change_fraction_status,check_failed)
     If ( allocated(error) ) Return
-    Call check(error,report%overall_status,bn_check_failed)
+    Call check(error,report%overall_status,check_failed)
 
     Return
   End Subroutine test_coordinator_selection
 
   Subroutine test_reference_validation(error)
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_quiet_nan, ieee_value
-    Use xnet_surrogate_checks, Only: bn_check_binding_energy_rate, &
-      & bn_check_electron_fraction, bn_check_energy_change_fraction, bn_check_fraction_change, &
-      & bn_check_inactive_identity, bn_check_invalid, bn_check_surrogate_result, &
-      & bn_check_surrogate_result_with_energy, bn_surrogate_check_config, &
-      & bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_binding_energy_rate, &
+      & check_electron_fraction, check_energy_change_fraction, check_fraction_change, &
+      & check_inactive_identity, check_invalid, check_surrogate_result, &
+      & check_surrogate_result_with_energy, surrogate_check_config, &
+      & surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: maximum_index, status
     Real(dp) :: aa(2), be(2), change_fraction, energy_residual, expected_rate, fraction_residual
     Real(dp) :: initial_ye, maximum_change, residual, result_ye, x_initial(2), x_result(2), zz(2)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     aa = (/ 1.0_dp, 4.0_dp /)
     zz = (/ 0.0_dp, 2.0_dp /)
@@ -1054,23 +1054,23 @@ Contains
     x_result = x_initial
     x_initial(1) = ieee_value(0.0_dp,ieee_quiet_nan)
 
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_inactive_identity(x_initial,x_result,0.0_dp,0.0_dp,0.0_dp,status, &
+    Call check_inactive_identity(x_initial,x_result,0.0_dp,0.0_dp,0.0_dp,status, &
       & fraction_residual,energy_residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,0.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,0.0_dp, &
       & 0.0_dp,0.0_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_fraction_change(x_initial,x_result,0.0_dp,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_invalid)
+    Call check_fraction_change(x_initial,x_result,0.0_dp,status,maximum_change,maximum_index)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(0.0_dp,1.0_dp,0.0_dp,0.0_dp,status,change_fraction)
-    Call check(error,status,bn_check_invalid)
+    Call check_energy_change_fraction(0.0_dp,1.0_dp,0.0_dp,0.0_dp,status,change_fraction)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
     config%check_fixed_ye = 1
@@ -1081,60 +1081,60 @@ Contains
     config%inactive_energy_tolerance = 0.0_dp
     config%energy_absolute_tolerance = 0.0_dp
     config%energy_relative_tolerance = 0.0_dp
-    Call bn_check_surrogate_result(config,0,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%overall_status,bn_check_invalid)
+    Call check_surrogate_result(config,0,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
+    Call check(error,report%overall_status,check_invalid)
     If ( allocated(error) ) Return
-    Call check(error,report%fixed_ye_status,bn_check_invalid)
+    Call check(error,report%fixed_ye_status,check_invalid)
     If ( allocated(error) ) Return
-    Call check(error,report%inactive_identity_status,bn_check_invalid)
+    Call check(error,report%inactive_identity_status,check_invalid)
     If ( allocated(error) ) Return
-    Call check(error,report%binding_energy_rate_status,bn_check_invalid)
+    Call check(error,report%binding_energy_rate_status,check_invalid)
     If ( allocated(error) ) Return
 
-    config = bn_surrogate_check_config()
+    config = surrogate_check_config()
     config%check_energy_change_fraction = 1
     config%energy_change_fraction_limit = 0.0_dp
     x_initial = x_result
-    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%energy_change_fraction_status,bn_check_invalid)
+    Call check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
+    Call check(error,report%energy_change_fraction_status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be, &
       & -1.0_dp,0.0_dp,report,1.0_dp)
-    Call check(error,report%energy_change_fraction_status,bn_check_invalid)
+    Call check(error,report%energy_change_fraction_status,check_invalid)
     If ( allocated(error) ) Return
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be, &
       & 1.0_dp,0.0_dp,report,-1.0_dp)
-    Call check(error,report%energy_change_fraction_status,bn_check_invalid)
+    Call check(error,report%energy_change_fraction_status,check_invalid)
     If ( allocated(error) ) Return
 
     x_initial = x_result
     zz = (/ -1.0_dp, 2.0_dp /)
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
     zz = (/ 2.0_dp, 2.0_dp /)
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
     aa = (/ 2.0_dp, 6.0_dp /)
     zz = (/ 4.0_dp, 12.0_dp /)
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
 
     Return
   End Subroutine test_reference_validation
 
   Subroutine test_finite_extreme_arithmetic(error)
     Use xnet_constants, Only: avn, epmev
-    Use xnet_surrogate_checks, Only: bn_check_binding_energy_rate, &
-      & bn_check_electron_fraction, bn_check_energy_change_fraction, bn_check_failed, &
-      & bn_check_fraction_change, bn_check_inactive_identity, bn_check_invalid, &
-      & bn_check_mass_normalization, bn_check_passed, bn_check_surrogate_result, &
-      & bn_check_surrogate_result_with_energy, bn_surrogate_check_config, &
-      & bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_binding_energy_rate, &
+      & check_electron_fraction, check_energy_change_fraction, check_failed, &
+      & check_fraction_change, check_inactive_identity, check_invalid, &
+      & check_mass_normalization, check_passed, check_surrogate_result, &
+      & check_surrogate_result_with_energy, surrogate_check_config, &
+      & surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
@@ -1142,153 +1142,153 @@ Contains
     Real(dp) :: aa(2), be(2), change_fraction, energy_residual, expected_rate, fraction_residual
     Real(dp) :: large, maximum_change
     Real(dp) :: initial_ye, residual, result_ye, x_initial(2), x_result(2), zz(2)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     large = huge(0.0_dp)
     aa = 1.0_dp
     zz = 1.0_dp
     be = 1.0_dp
     x_result = large
-    Call bn_check_mass_normalization(x_result,0.0_dp,status,residual)
-    Call check(error,status,bn_check_failed)
+    Call check_mass_normalization(x_result,0.0_dp,status,residual)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
-    Call bn_check_mass_normalization((/ -large /),0.0_dp,status,residual)
-    Call check(error,status,bn_check_failed)
+    Call check_mass_normalization((/ -large /),0.0_dp,status,residual)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     x_initial = 0.5_dp
-    Call bn_check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
+    Call check_electron_fraction(x_initial,x_result,aa,zz,0.0_dp,status, &
       & initial_ye,result_ye,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     x_initial = (/ -large, 0.0_dp /)
     x_result = (/ large, 0.0_dp /)
-    Call bn_check_inactive_identity(x_initial,x_result,0.0_dp,large,0.0_dp,status, &
+    Call check_inactive_identity(x_initial,x_result,0.0_dp,large,0.0_dp,status, &
       & fraction_residual,energy_residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
-    Call bn_check_fraction_change(x_initial,x_result,large,status,maximum_change,maximum_index)
-    Call check(error,status,bn_check_failed)
+    Call check_fraction_change(x_initial,x_result,large,status,maximum_change,maximum_index)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,maximum_change,large)
     If ( allocated(error) ) Return
     Call check(error,maximum_index,1)
     If ( allocated(error) ) Return
 
-    Call bn_check_energy_change_fraction(large,2.0_dp,1.0_dp,large,status,change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check_energy_change_fraction(large,2.0_dp,1.0_dp,large,status,change_fraction)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,large)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(large,1.0_dp,0.5_dp,large,status, &
+    Call check_energy_change_fraction(large,1.0_dp,0.5_dp,large,status, &
       & change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
-    Call bn_check_energy_change_fraction(tiny(0.0_dp),tiny(0.0_dp),1.0_dp,0.0_dp, &
+    Call check_energy_change_fraction(tiny(0.0_dp),tiny(0.0_dp),1.0_dp,0.0_dp, &
       & status,change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,large)
     If ( allocated(error) ) Return
     ! Would-be subnormal diagnostics are conservatively rejected before arithmetic so an
     ! underflow-trapping caller still receives a report instead of a process signal.
-    Call bn_check_energy_change_fraction(tiny(0.0_dp),0.5_dp,1.0_dp,0.0_dp,status, &
+    Call check_energy_change_fraction(tiny(0.0_dp),0.5_dp,1.0_dp,0.0_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,large)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(tiny(0.0_dp),1.0_dp,large,0.0_dp,status, &
+    Call check_energy_change_fraction(tiny(0.0_dp),1.0_dp,large,0.0_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,large)
     If ( allocated(error) ) Return
-    Call bn_check_energy_change_fraction(tiny(0.0_dp),1.0_dp,2.0_dp,0.0_dp,status, &
+    Call check_energy_change_fraction(tiny(0.0_dp),1.0_dp,2.0_dp,0.0_dp,status, &
       & change_fraction)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,change_fraction,large)
     If ( allocated(error) ) Return
 
-    config = bn_surrogate_check_config()
+    config = surrogate_check_config()
     config%check_energy_change_fraction = 1
     config%energy_change_fraction_limit = 0.0_dp
     x_initial = (/ 0.5_dp, 0.5_dp /)
     x_result = x_initial
-    Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be, &
+    Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be, &
       & tiny(0.0_dp),tiny(0.0_dp),report,1.0_dp)
-    Call check(error,report%energy_change_fraction_status,bn_check_failed)
+    Call check(error,report%energy_change_fraction_status,check_failed)
     If ( allocated(error) ) Return
     Call check(error,report%energy_change_fraction,large)
     If ( allocated(error) ) Return
 
     x_initial = 0.0_dp
     x_result = large
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,0.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,0.0_dp, &
       & 0.0_dp,0.0_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
 
     x_result = 0.0_dp
     x_result(1) = 0.5_dp*large/(avn*epmev)
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,-large, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,-large, &
       & 0.0_dp,0.0_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_failed)
+    Call check(error,status,check_failed)
     If ( allocated(error) ) Return
-    Call bn_check_binding_energy_rate(x_initial,x_initial,aa,be,tiny(0.0_dp),0.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_initial,aa,be,tiny(0.0_dp),0.0_dp, &
       & 0.0_dp,0.0_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_invalid)
+    Call check(error,status,check_invalid)
     If ( allocated(error) ) Return
 
     x_result = x_initial
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,large, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,large, &
       & 0.0_dp,large,status,expected_rate,residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
 
-    config = bn_surrogate_check_config()
+    config = surrogate_check_config()
     config%check_finite = 1
     config%check_fraction_bounds = 1
     config%check_mass_normalization = 1
     config%fraction_tolerance = 0.0_dp
     config%mass_tolerance = 0.0_dp
     x_result = large
-    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%overall_status,bn_check_failed)
+    Call check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
+    Call check(error,report%overall_status,check_failed)
     If ( allocated(error) ) Return
-    Call check(error,report%finite_status,bn_check_passed)
+    Call check(error,report%finite_status,check_passed)
     If ( allocated(error) ) Return
-    Call check(error,report%fraction_bounds_status,bn_check_failed)
+    Call check(error,report%fraction_bounds_status,check_failed)
     If ( allocated(error) ) Return
-    Call check(error,report%mass_normalization_status,bn_check_failed)
+    Call check(error,report%mass_normalization_status,check_failed)
 
     Return
   End Subroutine test_finite_extreme_arithmetic
 
   Subroutine test_binding_fixed_ye_scope(error)
-    Use xnet_surrogate_checks, Only: bn_check_binding_energy_rate, bn_check_failed, &
-      & bn_check_passed, bn_check_surrogate_result, bn_surrogate_check_config, &
-      & bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: check_binding_energy_rate, check_failed, &
+      & check_passed, check_surrogate_result, surrogate_check_config, &
+      & surrogate_check_report
     Implicit None
     Type(error_type), Allocatable, Intent(out) :: error
 
     Integer :: status
     Real(dp) :: aa(2), be(2), expected_rate, residual, x_initial(2), x_result(2), zz(2)
-    Type(bn_surrogate_check_config) :: config
-    Type(bn_surrogate_check_report) :: report
+    Type(surrogate_check_config) :: config
+    Type(surrogate_check_report) :: report
 
     aa = 1.0_dp
     zz = (/ 1.0_dp, 0.0_dp /)
     be = 0.0_dp
     x_initial = (/ 1.0_dp, 0.0_dp /)
     x_result = (/ 0.0_dp, 1.0_dp /)
-    Call bn_check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,0.0_dp, &
+    Call check_binding_energy_rate(x_initial,x_result,aa,be,1.0_dp,0.0_dp, &
       & 0.0_dp,0.0_dp,status,expected_rate,residual)
-    Call check(error,status,bn_check_passed)
+    Call check(error,status,check_passed)
     If ( allocated(error) ) Return
 
     config%check_fixed_ye = 1
@@ -1296,20 +1296,20 @@ Contains
     config%ye_tolerance = 0.0_dp
     config%energy_absolute_tolerance = 0.0_dp
     config%energy_relative_tolerance = 0.0_dp
-    Call bn_check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
-    Call check(error,report%overall_status,bn_check_failed)
+    Call check_surrogate_result(config,1,x_initial,x_result,aa,zz,be,1.0_dp,0.0_dp,report)
+    Call check(error,report%overall_status,check_failed)
     If ( allocated(error) ) Return
-    Call check(error,report%fixed_ye_status,bn_check_failed)
+    Call check(error,report%fixed_ye_status,check_failed)
     If ( allocated(error) ) Return
-    Call check(error,report%binding_energy_rate_status,bn_check_passed)
+    Call check(error,report%binding_energy_rate_status,check_passed)
 
     Return
   End Subroutine test_binding_fixed_ye_scope
 
   Subroutine set_check_flag(config,index,value)
-    Use xnet_surrogate_checks, Only: bn_surrogate_check_config
+    Use xnet_surrogate_checks, Only: surrogate_check_config
     Implicit None
-    Type(bn_surrogate_check_config), Intent(inout) :: config
+    Type(surrogate_check_config), Intent(inout) :: config
     Integer, Intent(in) :: index, value
 
     Select Case (index)
@@ -1337,9 +1337,9 @@ Contains
   End Subroutine set_check_flag
 
   Function report_statuses(report) Result(statuses)
-    Use xnet_surrogate_checks, Only: bn_surrogate_check_report
+    Use xnet_surrogate_checks, Only: surrogate_check_report
     Implicit None
-    Type(bn_surrogate_check_report), Intent(in) :: report
+    Type(surrogate_check_report), Intent(in) :: report
     Integer :: statuses(9)
 
     statuses = (/ report%finite_status, report%fraction_bounds_status, &

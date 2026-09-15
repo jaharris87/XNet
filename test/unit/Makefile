@@ -13,6 +13,9 @@ include $(XNET_DIR)/Makefile.internal
 BUILD_DIR := build/$(shell echo $(CMODE) | tr A-Z a-z)
 TEST_EXE := $(BUILD_DIR)/xnet_contract_tests
 SURROGATE_CHECK_EXE := $(BUILD_DIR)/surrogate_check_tests
+UNDERFLOW_BUILD_DIR := $(BUILD_DIR)/underflow
+UNDERFLOW_SURROGATE_CHECK_EXE := $(UNDERFLOW_BUILD_DIR)/surrogate_check_tests
+UNDERFLOW_MODULE_FLAGS := -J$(UNDERFLOW_BUILD_DIR) -I$(UNDERFLOW_BUILD_DIR) -I$(XNET_DIR)
 NSE_VALIDATION_EXE := $(BUILD_DIR)/nse_scientific_validation_tests
 NSE_VALIDATION_DIR := $(ROOT_DIR)/test/nse_validation
 NSE_VALIDATION_NETWORK_DIR := $(NSE_VALIDATION_DIR)/network
@@ -85,6 +88,19 @@ SURROGATE_CHECK_OBJECTS := \
   $(BUILD_DIR)/xnet_surrogate_checks.o \
   $(BUILD_DIR)/test_surrogate_checks.o
 
+UNDERFLOW_SURROGATE_CHECK_OBJECTS := \
+  $(UNDERFLOW_BUILD_DIR)/testdrive.o \
+  $(UNDERFLOW_BUILD_DIR)/xnet_types.o \
+  $(UNDERFLOW_BUILD_DIR)/xnet_constants.o \
+  $(UNDERFLOW_BUILD_DIR)/xnet_surrogate_checks.o \
+  $(UNDERFLOW_BUILD_DIR)/test_surrogate_checks.o
+
+ifeq ($(PE_ENV),GNU)
+SURROGATE_UNDERFLOW_TEST := surrogate-underflow-trap-test
+else
+SURROGATE_UNDERFLOW_TEST :=
+endif
+
 PREPROCESS_CORE_OBJECTS := \
   $(PREPROCESS_BUILD_DIR)/xnet_types.o \
   $(PREPROCESS_BUILD_DIR)/xnet_constants.o \
@@ -110,6 +126,8 @@ PREPROCESS_VERIFY_OBJECTS := \
 
 SURROGATE_VERIFY_OBJECTS := \
   $(PREPROCESS_CORE_OBJECTS) \
+  $(PREPROCESS_BUILD_DIR)/eos_type.o \
+  $(PREPROCESS_BUILD_DIR)/actual_eos.o \
   $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o \
   $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate.o
 
@@ -124,10 +142,11 @@ BUILD_NET_OBJECTS := \
 .DEFAULT_GOAL := test
 
 .PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet \
-  surrogate-verifier
+  surrogate-underflow-trap-test surrogate-verifier
 
 test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
     $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
+    $(SURROGATE_UNDERFLOW_TEST) \
     $(SPARSE_DATA_EXE) \
     $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(NUCLEAR_INPUT_MUTATOR_EXE) \
     $(BUILD_NET_EXE) production-xnet
@@ -172,7 +191,16 @@ $(NSE_VALIDATION_EXE): $(NSE_VALIDATION_OBJECTS)
 $(SURROGATE_CHECK_EXE): $(SURROGATE_CHECK_OBJECTS)
 	$(LDR) -o $@ $(SURROGATE_CHECK_OBJECTS) $(LDFLAGS)
 
+surrogate-underflow-trap-test: $(UNDERFLOW_SURROGATE_CHECK_EXE)
+	@$(UNDERFLOW_SURROGATE_CHECK_EXE)
+
+$(UNDERFLOW_SURROGATE_CHECK_EXE): $(UNDERFLOW_SURROGATE_CHECK_OBJECTS)
+	$(LDR) -o $@ $(UNDERFLOW_SURROGATE_CHECK_OBJECTS) $(LDFLAGS) -ffpe-trap=underflow
+
 $(BUILD_DIR):
+	mkdir -p $@
+
+$(UNDERFLOW_BUILD_DIR):
 	mkdir -p $@
 
 $(BUILD_DIR)/lapack:
@@ -246,6 +274,26 @@ $(BUILD_DIR)/test_surrogate_checks.o: test_surrogate_checks.F90 \
     $(BUILD_DIR)/testdrive.o $(BUILD_DIR)/xnet_surrogate_checks.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
+$(UNDERFLOW_BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(UNDERFLOW_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
+
+$(UNDERFLOW_BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(UNDERFLOW_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
+
+$(UNDERFLOW_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
+    $(UNDERFLOW_BUILD_DIR)/xnet_types.o | $(UNDERFLOW_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
+
+$(UNDERFLOW_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+    $(UNDERFLOW_BUILD_DIR)/xnet_constants.o $(UNDERFLOW_BUILD_DIR)/xnet_types.o \
+    | $(UNDERFLOW_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
+
+$(UNDERFLOW_BUILD_DIR)/test_surrogate_checks.o: test_surrogate_checks.F90 \
+    $(UNDERFLOW_BUILD_DIR)/testdrive.o $(UNDERFLOW_BUILD_DIR)/xnet_surrogate_checks.o \
+    | $(UNDERFLOW_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
+
 $(BUILD_DIR)/nse_validation_support.o: support/nse_validation_support.F90 \
     $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
@@ -294,6 +342,16 @@ $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_chec
     $(PREPROCESS_BUILD_DIR)/xnet_constants.o $(PREPROCESS_BUILD_DIR)/xnet_types.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/eos_type.o: $(STARKILLER_DIR)/eos_type.F90 \
+    $(PREPROCESS_BUILD_DIR)/xnet_types.o $(PREPROCESS_BUILD_DIR)/xnet_util.o \
+    | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -I$(XNET_DIR) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/actual_eos.o: $(STARKILLER_DIR)/actual_eos.F90 \
+    $(PREPROCESS_BUILD_DIR)/eos_type.o $(PREPROCESS_BUILD_DIR)/xnet_parallel_stubs.o \
+    $(PREPROCESS_BUILD_DIR)/xnet_util.o | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -I$(XNET_DIR) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/xnet_parallel_stubs.o: $(XNET_DIR)/xnet_parallel_stubs.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_types.o | $(PREPROCESS_BUILD_DIR)
@@ -384,6 +442,7 @@ $(PREPROCESS_BUILD_DIR)/verify_preprocess.o: support/verify_preprocess.F90 \
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate.o: support/verify_surrogate_candidate.F90 \
+    $(PREPROCESS_BUILD_DIR)/actual_eos.o $(PREPROCESS_BUILD_DIR)/eos_type.o \
     $(PREPROCESS_BUILD_DIR)/xnet_data.o $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@

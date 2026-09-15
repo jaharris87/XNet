@@ -8,8 +8,8 @@ Program verify_surrogate_candidate
   Use nuclear_data, Only: aa, be, nname, ny, read_nuclear_data, zz
   Use xnet_constants, Only: avn, epmev
   Use xnet_controls, Only: iheat, nzevolve, tid
-  Use xnet_surrogate_checks, Only: bn_check_surrogate_result_with_energy, &
-    & bn_surrogate_check_config, bn_surrogate_check_report
+  Use xnet_surrogate_checks, Only: check_surrogate_result_with_energy, &
+    & surrogate_check_config, surrogate_check_report
   Use xnet_types, Only: dp
   Implicit None
 
@@ -22,8 +22,8 @@ Program verify_surrogate_candidate
   Real(dp) :: rho, t9, tstep, total_molar_abundance
   Real(dp), Allocatable :: x_initial(:), x_result(:)
   Type(eos_t) :: eos_state
-  Type(bn_surrogate_check_config) :: config
-  Type(bn_surrogate_check_report) :: report
+  Type(surrogate_check_config) :: config
+  Type(surrogate_check_report) :: report
 
   If ( command_argument_count() /= 2 ) Then
     Write(*,*) 'usage: verify_surrogate_candidate DATA_DIR CANDIDATE_FILE'
@@ -86,7 +86,7 @@ Program verify_surrogate_candidate
   config%check_energy_change_fraction = step_checks_enabled
   config%energy_absolute_tolerance = 0.0_dp
   config%energy_relative_tolerance = 1.0e-12_dp
-  Call bn_check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,tstep, &
+  Call check_surrogate_result_with_energy(config,1,x_initial,x_result,aa,zz,be,tstep, &
     & energy_rate,report,initial_specific_internal_energy)
 
   Write(*,'(a,1x,a)') 'verification_token',trim(verification_token)

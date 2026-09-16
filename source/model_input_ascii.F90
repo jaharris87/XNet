@@ -121,7 +121,7 @@ Module model_input_ascii
       lzactive, iaux
     Use xnet_nse, Only: nse_solve, ynse
     Use xnet_types, Only: dp
-    Use xnet_util, Only: norm
+    Use xnet_util, Only: norm, xnet_terminate
     Implicit None
 
     ! Input variables
@@ -183,6 +183,7 @@ Module model_input_ascii
        
         If ( t9start(izb) <= t9nse .or. yestart(izb) <= 0.0 .or. yestart(izb) >= 1.0 ) Then
           Call read_inab_file(inab_file(izone),abund_desc(izb),yein,yin,xext_loc,aext_loc,zext_loc,xnorm,ierr)
+          If ( ierr /= 0 ) Call xnet_terminate('Failed to open initial abundance file: '//trim(inab_file(izone)),ierr)
           If ( iaux(izb) == 0 ) then ! Turn off aux nucleus
               yin = yin / xnorm
               Write(lun_diag,"(a)") 'Normalizing initial abundances.'
@@ -248,11 +249,15 @@ Module model_input_ascii
     Integer :: i, inuc
 
     ! Initialize
+    abund_desc = ' '
     yein = 0.0
     yin = 0.0
+    xext = 0.0
     yext = 0.0
     aext = 1.0
     zext = 0.0
+    xnet = 0.0
+    ierr = 0
 
     !$omp critical(ab_read)
     Open(newunit=lun_ab, file=trim(inab_file), action='read', status='old', iostat=ierr)
@@ -315,6 +320,7 @@ Module model_input_ascii
         EndIf
       EndDo
       Close(lun_ab)
+      ierr = 0
 
       ! Total mass fraction inside network
       xnet = sum(yin*aa)

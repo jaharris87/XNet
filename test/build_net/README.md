@@ -78,11 +78,14 @@ and local SHA-256 values:
 | `reaclib_data/reaclib_JINAv22` | `0a492936abae2808d3f27b4ed71d04294a7bb70a` | `15e670a5b39a0ffce6a3f06db0d76c355dff7c8b3ff2280dd819004d9756214b` |
 
 The official JINA REACLIB site identifies ReaclibV2.2 as a public snapshot
-dated 2016-11-14 and cites Cyburt et al., *ApJS* 189 (2010) 240:
+dated 2016-11-14 and cites Cyburt et al., *ApJS* 189 (2010) 240. This is
+contextual scientific provenance for the `JINAv22` filenames:
 <https://reaclib.jinaweb.org/library.php?action=details&libindex=ReaclibV2.2>.
-The retained `reaclib_JINAv22` and `winvne_JINAv22` files are therefore
-identified with that snapshot at the library level; the Git and SHA-256
-values above establish the retained bytes.
+The retained `reaclib_JINAv22` and `winvne_JINAv22` filenames associate them
+with that snapshot at the library level. The Git and SHA-256 values above
+prove their retained bytes only against `build_net@77141ca`; no immutable
+official release artifact or checksum was retained to establish byte identity
+with JINA or a complete derivative chain.
 
 The original JINA download timestamp and per-record release or publication
 identifier for the `reac1` mass evaluation are not preserved. The AME03,

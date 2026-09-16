@@ -1,3 +1,7 @@
+XNET_ISOLATED_GRAPH ?= yes
+ifeq ($(XNET_ISOLATED_GRAPH),yes)
+include $(dir $(lastword $(MAKEFILE_LIST)))Makefile.isolated
+else
 ##
 ## Makefile for XNet and associated programs
 ##
@@ -259,3 +263,4 @@ net.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_evol
 net_setup.o: xnet_controls.o xnet_preprocess.o
 
 nse_slice.o: xnet_controls.o xnet_match.o xnet_nse.o xnet_preprocess.o xnet_types.o xnet_data.o xnet_timers.o $(EOS_OBJ)
+endif

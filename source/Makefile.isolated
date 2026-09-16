@@ -1,0 +1,215 @@
+# The canonical graph is selected by the small public Makefile wrapper.  It
+# keeps all generated state under ../build and uses retained preprocessing.
+SHELL := /bin/bash
+XNET_DIR := $(abspath .)
+ROOT_DIR := $(abspath ..)
+BUILD_PARENT := $(ROOT_DIR)/build
+TOOLS_BUILD := $(ROOT_DIR)/tools/build
+PYTHON ?= python3
+include $(XNET_DIR)/Makefile.opt
+MPI_MODE ?= OFF
+OPENMP_MODE ?= OFF
+GPU_MODE ?= OFF
+OPENACC_MODE ?= OFF
+OPENMP_OL_MODE ?= OFF
+GPU_BACKEND ?= CUDA
+GPU_LAPACK_VER ?= CUBLAS
+GPU_TARGET ?= Volta
+MACHINE ?= unknown
+
+# Compatibility product names select one concrete graph during initial parsing.
+# They never replay MAKECMDGOALS recursively; conflicting explicit selections
+# fail before any build directory is considered.
+SOLVER_GOALS := $(filter xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO,$(MAKECMDGOALS))
+ifneq ($(words $(SOLVER_GOALS)),0)
+  ifneq ($(words $(SOLVER_GOALS)),1)
+    $(error select at most one solver compatibility target)
+  endif
+  IMPLIED_SOLVER := $(patsubst xnet_%,%,$(SOLVER_GOALS))
+  ifeq ($(origin MATRIX_SOLVER),command line)
+    ifneq ($(MATRIX_SOLVER),$(IMPLIED_SOLVER))
+      $(error $(SOLVER_GOALS) conflicts with MATRIX_SOLVER=$(MATRIX_SOLVER))
+    endif
+  endif
+  MATRIX_SOLVER := $(IMPLIED_SOLVER)
+endif
+
+VALID_PE := GNU INTEL PGI NVIDIA NVHPC LLVM CCE CRAY XL
+VALID_EOS := STARKILLER BAHCALL HELMHOLTZ
+VALID_SOLVER := dense MA41 MA48 PARDISO
+ifneq ($(filter $(PE_ENV),$(VALID_PE)),$(PE_ENV))
+  $(error unsupported PE_ENV '$(PE_ENV)')
+endif
+ifneq ($(filter $(CMODE),OPT DEBUG),$(CMODE))
+  $(error unsupported CMODE '$(CMODE)')
+endif
+ifneq ($(filter $(MPI_MODE),ON OFF),$(MPI_MODE))
+  $(error MPI_MODE must be ON or OFF)
+endif
+ifneq ($(filter $(OPENMP_MODE),ON OFF),$(OPENMP_MODE))
+  $(error OPENMP_MODE must be ON or OFF)
+endif
+ifneq ($(filter $(EOS),$(VALID_EOS)),$(EOS))
+  $(error unsupported EOS '$(EOS)')
+endif
+ifneq ($(filter $(MATRIX_SOLVER),$(VALID_SOLVER)),$(MATRIX_SOLVER))
+  $(error unsupported MATRIX_SOLVER '$(MATRIX_SOLVER)')
+endif
+ifeq ($(MATRIX_SOLVER),PARDISO)
+  ifneq ($(LAPACK_VER),MKL)
+    $(error unsupported standalone PARDISO: use LAPACK_VER=MKL)
+  endif
+endif
+ifeq ($(GPU_MODE),OFF)
+  ifneq ($(filter ON,$(OPENACC_MODE) $(OPENMP_OL_MODE)),)
+    $(error accelerator directives require GPU_MODE=ON)
+  endif
+  GPU_BACKEND := inactive
+  GPU_LAPACK_VER := inactive
+  GPU_TARGET := inactive
+else
+  ifeq ($(filter $(GPU_BACKEND),CUDA HIP),)
+    $(error unsupported GPU_BACKEND '$(GPU_BACKEND)')
+  endif
+  ifneq ($(words $(filter ON,$(OPENACC_MODE) $(OPENMP_OL_MODE))),1)
+    $(error GPU_MODE=ON requires exactly one accelerator directive mode)
+  endif
+  ifeq ($(GPU_BACKEND),CUDA)
+    ifeq ($(filter $(GPU_LAPACK_VER),CUBLAS MAGMA),)
+      $(error CUDA requires CUBLAS or MAGMA)
+    endif
+  endif
+  ifeq ($(GPU_BACKEND),HIP)
+    ifneq ($(GPU_LAPACK_VER),ROCM)
+      $(error HIP requires ROCM)
+    endif
+  endif
+endif
+ifeq ($(EOS),HELMHOLTZ)
+  ifndef HELMHOLTZ_PATH
+    $(error HELMHOLTZ_PATH must be set for EOS=HELMHOLTZ)
+  endif
+endif
+
+include $(XNET_DIR)/Makefile.internal
+ifeq ($(GPU_MODE),ON)
+  -include $(XNET_DIR)/Makefile.dev
+endif
+XNET_CPP := $(or $(XNET_CPP),cpp)
+ifeq ($(MPI_MODE),ON)
+MPI_SRC := $(XNET_DIR)/xnet_parallel.F90
+else
+MPI_SRC := $(XNET_DIR)/xnet_parallel_stubs.F90
+endif
+ifeq ($(EOS),STARKILLER)
+STARKILLER_HELMHOLTZ_PATH ?= $(ROOT_DIR)/tools/starkiller-helmholtz
+EOS_SRC := $(STARKILLER_HELMHOLTZ_PATH)/actual_eos.F90 $(STARKILLER_HELMHOLTZ_PATH)/eos_type.F90 $(XNET_DIR)/xnet_eos_starkiller.F90
+else ifeq ($(EOS),BAHCALL)
+EOS_SRC := $(XNET_DIR)/xnet_eos_bahcall.F90
+else
+EOS_SRC := $(XNET_DIR)/xnet_eos_helm.F90 $(abspath $(HELMHOLTZ_PATH))/helmholtz.F90
+endif
+ifeq ($(MATRIX_SOLVER),dense)
+JAC_SRC := $(XNET_DIR)/xnet_jacobian_dense.F90
+else ifeq ($(MATRIX_SOLVER),MA41)
+JAC_SRC := $(XNET_DIR)/xnet_jacobian_MA41.F90
+else ifeq ($(MATRIX_SOLVER),MA48)
+JAC_SRC := $(XNET_DIR)/xnet_jacobian_MA48.F90
+else
+JAC_SRC := $(XNET_DIR)/xnet_jacobian_$(PARDISO).F90
+endif
+CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_controls.F90 xnet_data.F90 xnet_output.F90 xnet_abundances.F90 xnet_conditions.F90 xnet_constants.F90 xnet_evolve.F90 xnet_fd.F90 xnet_ffn.F90 xnet_flux.F90 xnet_gpu.F90 xnet_integrate.F90 xnet_integrate_bdf.F90 xnet_integrate_be.F90 xnet_linalg.F90 xnet_match.F90 xnet_nnu.F90 xnet_nse.F90 xnet_preprocess.F90 xnet_screening.F90 xnet_timers.F90 xnet_types.F90 xnet_util.F90)
+DRIVER_SRC := $(addprefix $(XNET_DIR)/,model_input_ascii.F90 net.F90)
+NSE_SRC := $(XNET_DIR)/nse_slice.F90
+SETUP_SRC := $(XNET_DIR)/net_setup.F90
+SPARSE_SRC := $(if $(filter MA48 PARDISO,$(MATRIX_SOLVER)),$(XNET_DIR)/xnet_sparse.F90)
+F90_SRC := $(sort $(CORE_SRC) $(DRIVER_SRC) $(NSE_SRC) $(SETUP_SRC) $(MPI_SRC) $(EOS_SRC) $(JAC_SRC) $(SPARSE_SRC))
+FIXED_SRC := $(sort $(LAPACK_SRC) $(SOLVER_SRC))
+
+empty :=
+space := $(empty) $(empty)
+list_token = $(subst $(space),:,$(strip $(1)))
+FIELDS := CMODE=$(CMODE) PE_ENV=$(PE_ENV) MPI_MODE=$(MPI_MODE) OPENMP_MODE=$(OPENMP_MODE) GPU_MODE=$(GPU_MODE) GPU_BACKEND=$(GPU_BACKEND) GPU_LAPACK_VER=$(GPU_LAPACK_VER) GPU_TARGET=$(GPU_TARGET) OPENACC_MODE=$(OPENACC_MODE) OPENMP_OL_MODE=$(OPENMP_OL_MODE) EOS=$(EOS) MATRIX_SOLVER=$(MATRIX_SOLVER) LAPACK_VER=$(LAPACK_VER) MACHINE=$(MACHINE) MPI_PROVIDER=$(notdir $(MPI_SRC)) EOS_PROVIDER=$(call list_token,$(notdir $(EOS_SRC))) JACOBIAN_PROVIDER=$(notdir $(JAC_SRC))
+field_args = $(foreach f,$(FIELDS),--field '$(f)')
+export XNET_FP_FC := $(FC)
+export XNET_FP_LDR := $(LDR)
+export XNET_FP_CPP := $(XNET_CPP)
+export XNET_FP_FFLAGS := $(FFLAGS)
+export XNET_FP_F90FLAGS := $(F90FLAGS)
+export XNET_FP_F77FLAGS := $(F77FLAGS)
+export XNET_FP_LDFLAGS := $(LDFLAGS)
+export XNET_FP_LAPACK := $(LAPACK_INC) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+export XNET_FP_SOLVER := $(SOLVER_INC) $(SOLVER_LIBDIR) $(SOLVER_LIBS)
+export XNET_FP_MODULES := $(LOADEDMODULES) $(LMOD_SYSTEM_NAME)
+export XNET_FP_WRAPPER := $(XNET_CRAY_FTN)
+export XNET_FP_EXTERNAL_SOURCES := $(filter-out $(XNET_DIR)/%,$(EOS_SRC) $(SOLVER_SRC))
+export XNET_FP_EXTERNAL_LIBRARIES := $(LAPACK_LIBDIR) $(SOLVER_LIBDIR)
+fingerprint_args = $(call field_args) --command XNET_FP_FC=fortran_command --command XNET_FP_LDR=link_command --command XNET_FP_CPP=preprocess_command --environment XNET_FP_FFLAGS=fflags --environment XNET_FP_F90FLAGS=f90flags --environment XNET_FP_F77FLAGS=f77flags --environment XNET_FP_LDFLAGS=ldflags --environment XNET_FP_LAPACK=lapack_flags --environment XNET_FP_SOLVER=solver_flags --environment XNET_FP_MODULES=module_state --environment XNET_FP_WRAPPER=cray_wrapper --path-list XNET_FP_EXTERNAL_SOURCES=external_sources --path-list XNET_FP_EXTERNAL_LIBRARIES=external_libraries
+fingerprint_env = XNET_FP_FC='$(FC)' XNET_FP_LDR='$(LDR)' XNET_FP_CPP='$(XNET_CPP)' XNET_FP_FFLAGS='$(FFLAGS)' XNET_FP_F90FLAGS='$(F90FLAGS)' XNET_FP_F77FLAGS='$(F77FLAGS)' XNET_FP_LDFLAGS='$(LDFLAGS)' XNET_FP_LAPACK='$(LAPACK_INC) $(LAPACK_LIBDIR) $(LAPACK_LIBS)' XNET_FP_SOLVER='$(SOLVER_INC) $(SOLVER_LIBDIR) $(SOLVER_LIBS)' XNET_FP_MODULES='$(LOADEDMODULES) $(LMOD_SYSTEM_NAME)' XNET_FP_WRAPPER='$(XNET_CRAY_FTN)' XNET_FP_EXTERNAL_SOURCES='$(filter-out $(XNET_DIR)/%,$(EOS_SRC) $(SOLVER_SRC))' XNET_FP_EXTERNAL_LIBRARIES='$(LAPACK_LIBDIR) $(SOLVER_LIBDIR)'
+DIGEST := $(shell $(fingerprint_env) $(PYTHON) $(TOOLS_BUILD)/config_fingerprint.py $(call fingerprint_args) --digest)
+LABEL := $(shell printf '%s' '$(PE_ENV)-$(CMODE)-mpi$(MPI_MODE)-omp$(OPENMP_MODE)-gpu$(GPU_MODE)-$(EOS)-$(MATRIX_SOLVER)' | tr A-Z a-z)
+BUILD_ROOT := $(BUILD_PARENT)/$(LABEL)-$(shell printf %.12s $(DIGEST))
+OBJ_DIR := $(BUILD_ROOT)/obj
+MOD_DIR := $(BUILD_ROOT)/mod
+PP_DIR := $(BUILD_ROOT)/pp
+DEP_DIR := $(BUILD_ROOT)/dep
+BIN_DIR := $(BUILD_ROOT)/bin
+MANIFEST := $(BUILD_ROOT)/manifest.json
+DEPS := $(DEP_DIR)/fortran.d
+obj = $(OBJ_DIR)/$(basename $(notdir $(1))).o
+pp = $(PP_DIR)/$(basename $(notdir $(1))).F90
+CORE_OBJ := $(foreach s,$(CORE_SRC) $(MPI_SRC) $(EOS_SRC),$(call obj,$(s)))
+XNET_OBJ := $(CORE_OBJ) $(foreach s,$(DRIVER_SRC) $(JAC_SRC) $(SPARSE_SRC) $(FIXED_SRC),$(call obj,$(s)))
+XNSE_OBJ := $(foreach s,$(XNET_DIR)/xnet_abundances.F90 $(XNET_DIR)/xnet_conditions.F90 $(XNET_DIR)/xnet_controls.F90 $(XNET_DIR)/xnet_data.F90 $(XNET_DIR)/xnet_constants.F90 $(XNET_DIR)/xnet_fd.F90 $(XNET_DIR)/xnet_ffn.F90 $(XNET_DIR)/xnet_match.F90 $(XNET_DIR)/xnet_nse.F90 $(XNET_DIR)/xnet_preprocess.F90 $(XNET_DIR)/xnet_util.F90 $(XNET_DIR)/xnet_nnu.F90 $(XNET_DIR)/xnet_timers.F90 $(XNET_DIR)/xnet_types.F90 $(MPI_SRC) $(EOS_SRC) $(NSE_SRC) $(FIXED_SRC),$(call obj,$(s)))
+SETUP_OBJ := $(foreach s,$(XNET_DIR)/xnet_conditions.F90 $(XNET_DIR)/xnet_controls.F90 $(XNET_DIR)/xnet_data.F90 $(XNET_DIR)/net_setup.F90 $(XNET_DIR)/xnet_constants.F90 $(XNET_DIR)/xnet_fd.F90 $(XNET_DIR)/xnet_ffn.F90 $(XNET_DIR)/xnet_nnu.F90 $(XNET_DIR)/xnet_preprocess.F90 $(XNET_DIR)/xnet_util.F90 $(XNET_DIR)/xnet_types.F90 $(MPI_SRC),$(call obj,$(s)))
+XNET_EXE := $(BIN_DIR)/xnet
+XNSE_EXE := $(BIN_DIR)/xnse
+SETUP_EXE := $(BIN_DIR)/net_setup
+.DEFAULT_GOAL := xnet
+.PHONY: xnet xnse net_setup all xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO xinab xnet_gpu clean clean-all print-%
+xnet: $(XNET_EXE)
+xnse: $(XNSE_EXE)
+net_setup: $(SETUP_EXE)
+all: xnet xnse net_setup
+xinab:
+	@echo 'xinab is unsupported: init_abund.F90 is not tracked' >&2; exit 2
+xnet_gpu:
+	@echo 'xnet_gpu is unsupported; use xnet with explicit GPU selectors' >&2; exit 2
+xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO: $(XNET_EXE)
+$(MANIFEST): $(TOOLS_BUILD)/config_fingerprint.py
+	@mkdir -p $(BUILD_ROOT)
+	@$(fingerprint_env) $(PYTHON) $(TOOLS_BUILD)/config_fingerprint.py $(call fingerprint_args) --write $@ --root $(ROOT_DIR)
+$(OBJ_DIR) $(MOD_DIR) $(PP_DIR) $(DEP_DIR) $(BIN_DIR): | $(MANIFEST)
+	@mkdir -p $@
+define PP_rule
+$(call pp,$(1)): $(1) $(XNET_DIR)/xnet_macros.fh | $(PP_DIR)
+	@$(XNET_CPP) -P -C -nostdinc -I$(XNET_DIR) -I$(dir $(1)) $(1) > $$@.tmp && mv $$@.tmp $$@
+endef
+$(foreach s,$(F90_SRC),$(eval $(call PP_rule,$(s))))
+DEP_MAP := $(foreach s,$(F90_SRC),--mapping '$(call obj,$(s))=$(call pp,$(s))')
+$(DEPS): $(foreach s,$(F90_SRC),$(call pp,$(s))) $(TOOLS_BUILD)/generate_fortran_deps.py | $(DEP_DIR)
+	@$(PYTHON) $(TOOLS_BUILD)/generate_fortran_deps.py --output $@ $(DEP_MAP) --external-module iso_c_binding --external-module iso_fortran_env --external-module omp_lib --external-module mpi --external-module mpi_f08
+-include $(DEPS)
+define OBJ_rule
+$(call obj,$(1)): $(call pp,$(1)) $(MANIFEST) | $(OBJ_DIR) $(MOD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) -J$(MOD_DIR) -I$(MOD_DIR) $(LAPACK_INC) $(SOLVER_INC) -c $$< -o $$@
+endef
+$(foreach s,$(F90_SRC),$(eval $(call OBJ_rule,$(s))))
+define FIXED_rule
+$(call obj,$(1)): $(1) $(MANIFEST) | $(OBJ_DIR) $(MOD_DIR)
+	$(FC) $(FFLAGS) $(F77FLAGS) -J$(MOD_DIR) -I$(MOD_DIR) $(LAPACK_INC) $(SOLVER_INC) -c $$< -o $$@
+endef
+$(foreach s,$(FIXED_SRC),$(eval $(call FIXED_rule,$(s))))
+$(XNET_EXE): $(XNET_OBJ) $(MANIFEST) | $(BIN_DIR)
+	$(LDR) $(LDFLAGS) -o $@ $(XNET_OBJ) $(SOLVER_LIBDIR) $(SOLVER_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+$(XNSE_EXE): $(XNSE_OBJ) $(MANIFEST) | $(BIN_DIR)
+	$(LDR) $(LDFLAGS) -o $@ $(XNSE_OBJ) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+$(SETUP_EXE): $(SETUP_OBJ) $(MANIFEST) | $(BIN_DIR)
+	$(LDR) $(LDFLAGS) -o $@ $(SETUP_OBJ)
+clean:
+	@test -n "$(BUILD_ROOT)" && rm -rf "$(BUILD_ROOT)"
+clean-all:
+	@test "$(CONFIRM_CLEAN_ALL)" = yes || { echo 'set CONFIRM_CLEAN_ALL=yes to remove all isolated builds' >&2; exit 2; }
+	rm -rf "$(BUILD_PARENT)"
+print-%:
+	@echo $* = $($*)

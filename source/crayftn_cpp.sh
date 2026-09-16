@@ -48,8 +48,13 @@ if [[ -z ${source_file} ]]; then
   exec "${compiler}" "$@"
 fi
 
-temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/xnet-crayftn-cpp.XXXXXX")
-trap 'rm -rf -- "${temporary_directory}"' EXIT HUP INT TERM
+if [[ -n ${XNET_CPP_OUTPUT_DIR:-} ]]; then
+  temporary_directory=${XNET_CPP_OUTPUT_DIR}
+  mkdir -p -- "${temporary_directory}"
+else
+  temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/xnet-crayftn-cpp.XXXXXX")
+  trap 'rm -rf -- "${temporary_directory}"' EXIT HUP INT TERM
+fi
 source_basename=${source_file##*/}
 source_stem=${source_basename%.*}
 preprocessed_source="${temporary_directory}/${source_stem}.f90"

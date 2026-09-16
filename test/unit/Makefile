@@ -60,7 +60,7 @@ BUILD_NET_BUILD_DIR := $(BUILD_DIR)/build-net
 BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
 BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
 BUILD_NET_WORK_DIR := $(abspath $(BUILD_DIR)/build-net-work)
-PRODUCTION_XNET_EXE := $(XNET_DIR)/xnet
+PRODUCTION_XNET_EXE := $(shell $(MAKE) -C $(XNET_DIR) --no-print-directory print-XNET_EXE 2>/dev/null | sed -n 's/^XNET_EXE = //p')
 
 OBJECTS := \
   $(BUILD_DIR)/testdrive.o \
@@ -213,8 +213,7 @@ $(BUILD_NET_BUILD_DIR):
 	mkdir -p $@
 
 production-xnet: | $(BUILD_DIR)
-	$(MAKE) -C $(XNET_DIR) clean
-	$(MAKE) -C $(XNET_DIR) -j CMODE=$(CMODE)
+	$(MAKE) -C $(XNET_DIR) -j CMODE=$(CMODE) xnet
 
 $(BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@

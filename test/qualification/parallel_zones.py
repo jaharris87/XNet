@@ -576,7 +576,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
 
     failure_directory = prepare_work_directory(work_root / "mpi-nonroot-failure")
     # With three rank-strided batches, two ranks assign zones 5-8 to rank 1.
-    (failure_directory / "inputs" / "thermo_05").unlink()
+    (failure_directory / "inputs" / "abundance_05").unlink()
     run_process(
         mpi_command,
         failure_directory,
@@ -614,7 +614,11 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
                 "fixture": "ten distinguishable zones, nzbatchmx=4",
                 "comparison": "exact normalized diagnostic and ASCII endpoints by global zone",
                 "serial": {"runs": 1, "workers": 1},
-                "mpi": {"runs": 1, "ranks": 2, "nonroot_failure_probe": "nonzero"},
+                "mpi": {
+                    "runs": 1,
+                    "ranks": 2,
+                    "nonroot_missing_abundance_probe": "nonzero",
+                },
                 "openmp": {"runs": 3, "threads": 2, "OMP_DYNAMIC": "FALSE"},
                 "inactive_final_batch_lanes": 2,
                 "status": "passed",

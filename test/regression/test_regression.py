@@ -3,6 +3,7 @@
 import json
 import math
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -14,6 +15,7 @@ from xnet_regression import (
     heat_alpha_case,
     heat_sn160_case,
     nse_sn160_case,
+    prepare_work_directory,
     run_and_compare,
     tnsn_alpha_case,
     tnsn_torch47_case,
@@ -134,6 +136,34 @@ def test_batch_alpha(
         tmp_path,
         batch_alpha_case(REPOSITORY_ROOT),
     )
+
+
+def test_missing_required_abundance_terminates_at_caller(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    case = batch_alpha_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "missing-abundance")
+    missing_abundance = work_directory / "Data_alpha" / "ab_batch" / "ab_batch_01"
+    missing_abundance.unlink()
+
+    completed = subprocess.run(
+        [str(xnet_executable)],
+        cwd=work_directory,
+        capture_output=True,
+        text=True,
+        timeout=xnet_timeout,
+        check=False,
+    )
+
+    combined_output = completed.stdout + completed.stderr
+    assert completed.returncode != 0
+    assert (
+        "Failed to open initial abundance file: Data_alpha/ab_batch/ab_batch_01"
+        in combined_output
+    )
+    diagnostic = (work_directory / "net_diag01").read_text(encoding="utf-8")
+    assert "Normalizing initial abundances" not in diagnostic
+    assert "Zone     1 Initial abundances" not in diagnostic
 
 
 def test_tnsn_torch47(

@@ -90,6 +90,7 @@ The suite checks:
   the optimized fast-math build;
 - exact mass normalization and exact mass/charge normalization;
 - one- and two-digit output suffixes, including zero padding;
+- initial-abundance reader defaults and open status for a missing file, plus valid-file composition preservation;
 - scalar trajectory interpolation at the lower bound, an exact knot, an
   interior point, the upper bound, and beyond the history;
 - scalar/vector trajectory equivalence and inactive-lane preservation;

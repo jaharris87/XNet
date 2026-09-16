@@ -61,6 +61,9 @@ BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
 BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
 BUILD_NET_WORK_DIR := $(abspath $(BUILD_DIR)/build-net-work)
 PRODUCTION_XNET_EXE := $(XNET_DIR)/xnet
+MODEL_INPUT_BUILD_DIR := $(BUILD_DIR)/model-input
+MODEL_INPUT_MODULE_FLAGS := -J$(MODEL_INPUT_BUILD_DIR) -I$(MODEL_INPUT_BUILD_DIR) -I$(XNET_DIR)
+MODEL_INPUT_TEST_EXE := $(MODEL_INPUT_BUILD_DIR)/model_input_contract_tests
 
 OBJECTS := \
   $(BUILD_DIR)/testdrive.o \
@@ -141,7 +144,7 @@ BUILD_NET_OBJECTS := \
 
 .DEFAULT_GOAL := test
 
-.PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet \
+.PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet model-input-test \
   surrogate-underflow-trap-test surrogate-verifier
 
 test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
@@ -149,7 +152,7 @@ test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPRO
     $(SURROGATE_UNDERFLOW_TEST) \
     $(SPARSE_DATA_EXE) \
     $(SPARSE_CONTRACT_EXES) $(BUILD_NET_READER_EXE) $(NUCLEAR_INPUT_MUTATOR_EXE) \
-    $(BUILD_NET_EXE) production-xnet
+    $(BUILD_NET_EXE) model-input-test production-xnet
 	@$(TEST_EXE)
 	@$(SURROGATE_CHECK_EXE)
 	@PYTHONDONTWRITEBYTECODE=1 python3 run_surrogate_full_net_checks.py \
@@ -169,6 +172,10 @@ test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPRO
 	  $(abspath $(PREPROCESS_NET_SETUP_EXE)) $(abspath $(BUILD_NET_READER_EXE)) \
 	  $(abspath $(NUCLEAR_INPUT_MUTATOR_EXE)) $(abspath $(PRODUCTION_XNET_EXE)) \
 	  $(abspath $(HELM_TABLE))
+
+model-input-test: $(MODEL_INPUT_TEST_EXE)
+
+	@bash run_model_input_contracts.sh $(MODEL_INPUT_BUILD_DIR) $(MODEL_INPUT_TEST_EXE)
 
 eos-test: $(EOS_CONTRACT_EXES)
 	@bash run_eos_contracts.sh $(EOS_WORK_DIR) $(abspath $(STARKILLER_EOS_EXE)) \
@@ -199,6 +206,45 @@ $(UNDERFLOW_SURROGATE_CHECK_EXE): $(UNDERFLOW_SURROGATE_CHECK_OBJECTS)
 
 $(BUILD_DIR):
 	mkdir -p $@
+
+$(MODEL_INPUT_BUILD_DIR):
+	mkdir -p $@
+
+$(MODEL_INPUT_BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
+    $(MODEL_INPUT_BUILD_DIR)/xnet_types.o | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_BUILD_DIR)/xnet_parallel_stubs.o: $(XNET_DIR)/xnet_parallel_stubs.F90 \
+    $(MODEL_INPUT_BUILD_DIR)/xnet_types.o | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_BUILD_DIR)/model_input_component_stubs.o: support/model_input_component_stubs.F90 \
+    $(MODEL_INPUT_BUILD_DIR)/xnet_types.o | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_BUILD_DIR)/xnet_util.o: $(XNET_DIR)/xnet_util.F90 \
+    $(MODEL_INPUT_BUILD_DIR)/xnet_constants.o $(MODEL_INPUT_BUILD_DIR)/xnet_parallel_stubs.o | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_BUILD_DIR)/model_input_ascii.o: $(XNET_DIR)/model_input_ascii.F90 \
+    $(MODEL_INPUT_BUILD_DIR)/model_input_component_stubs.o $(MODEL_INPUT_BUILD_DIR)/xnet_util.o | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_BUILD_DIR)/test_model_input_contracts.o: test_model_input_contracts.F90 \
+    $(MODEL_INPUT_BUILD_DIR)/testdrive.o $(MODEL_INPUT_BUILD_DIR)/model_input_ascii.o | $(MODEL_INPUT_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODEL_INPUT_MODULE_FLAGS) -c $< -o $@
+
+$(MODEL_INPUT_TEST_EXE): $(MODEL_INPUT_BUILD_DIR)/testdrive.o $(MODEL_INPUT_BUILD_DIR)/xnet_types.o \
+    $(MODEL_INPUT_BUILD_DIR)/xnet_constants.o $(MODEL_INPUT_BUILD_DIR)/xnet_parallel_stubs.o \
+    $(MODEL_INPUT_BUILD_DIR)/model_input_component_stubs.o $(MODEL_INPUT_BUILD_DIR)/xnet_util.o \
+    $(MODEL_INPUT_BUILD_DIR)/model_input_ascii.o $(MODEL_INPUT_BUILD_DIR)/test_model_input_contracts.o
+	$(LDR) -o $@ $^ $(LDFLAGS)
 
 $(UNDERFLOW_BUILD_DIR):
 	mkdir -p $@

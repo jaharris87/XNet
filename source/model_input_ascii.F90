@@ -249,19 +249,18 @@ Module model_input_ascii
     Integer :: i, inuc
 
     ! Initialize
-    abund_desc = ' '
     yein = 0.0
     yin = 0.0
-    xext = 0.0
     yext = 0.0
     aext = 1.0
     zext = 0.0
-    xnet = 0.0
-    ierr = 0
 
     !$omp critical(ab_read)
     Open(newunit=lun_ab, file=trim(inab_file), action='read', status='old', iostat=ierr)
     If ( ierr /= 0 ) Then
+      abund_desc = ' '
+      xext = 0.0
+      xnet = 0.0
       Write(lun_stderr,"(2a)") 'Failed to open input file: ',trim(inab_file)
     Else
 

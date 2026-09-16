@@ -24,7 +24,7 @@ non-root input-failure probe, and three two-thread OpenMP runs. It requires:
   final ASCII energy-generation, neutrino-loss, and timestep fields, using the
   established `batch_alpha` endpoint policy and ignoring worker order;
 - exact equality across the three OpenMP repetitions; and
-- nonzero, bounded completion when zone 5's trajectory is removed. With the
+- nonzero, bounded completion when zone 5's required abundance is removed. With the
   current three rank-strided batches and two ranks, zones 5-8 belong to rank 1.
 
 The present `OPENMP_MODE=ON` implementation distributes the coarse `ibatch`

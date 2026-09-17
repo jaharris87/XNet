@@ -8,6 +8,7 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "source"
+PRODUCTION_MAKEFILE = SOURCE / "Makefile.production"
 
 
 def make(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -24,6 +25,14 @@ def require_success(result: subprocess.CompletedProcess[str]) -> None:
 
 
 def main() -> int:
+    makefile = PRODUCTION_MAKEFILE.read_text(encoding="utf-8")
+    sparse_jacobian_rule = next(
+        line for line in makefile.splitlines() if "$(call solver_obj,$(JAC_SRC)):" in line
+    )
+    assert "$(call source_obj,$(MPI_SRC))" in sparse_jacobian_rule
+    for name in ("xnet_jacobian_MA48.F90", "xnet_jacobian_PARDISO_MKL.F90"):
+        assert "Use xnet_parallel" in (SOURCE / name).read_text(encoding="utf-8")
+
     with tempfile.TemporaryDirectory(prefix="xnet-build-graph-") as temporary:
         build = pathlib.Path(temporary) / "gnu"
         products = make(f"BUILD_DIR={build}", "-j4", "xnet", "xnse", "net_setup")

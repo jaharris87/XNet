@@ -29,8 +29,7 @@ make -C source BUILD_DIR=/scratch/$USER/xnet-frontier -j xnet
 The Makefile fragments have distinct roles:
 
 - `source/Makefile` is the small public entry point. Its included
-  `source/make/build.mk` defines the one production graph and isolated output
-  layout; production builds do not invoke Python.
+  `source/make/build.mk` defines the production build and its output layout.
 - `source/make/configuration.mk` validates compiler/platform selectors.
 - `source/make/providers.mk` selects MPI, EOS, solver, accelerator, and
   numerical-library providers.
@@ -163,7 +162,7 @@ make -C source -j xnse
 - `net_setup` preprocesses network data.
 - `xnse` is the stand-alone NSE state calculator.
 
-`all` builds the three canonical programs in one graph. Solver-named `xnet_*`
+`all` builds the three canonical programs together. Solver-named `xnet_*`
 aliases select that solver directly and reject conflicting selectors.
 `xinab` and `xnet_gpu` are unsupported and fail early; accelerator builds use
 `xnet` with explicit supported selectors. Target presence records a build

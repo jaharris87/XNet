@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused effectiveness checks for the direct isolated GNU Make graph."""
+"""Focused checks for the production GNU Make build."""
 from __future__ import annotations
 
 import os
@@ -38,7 +38,7 @@ def main() -> int:
     for name in ("xnet_jacobian_MA48.F90", "xnet_jacobian_PARDISO_MKL.F90"):
         assert "Use xnet_parallel" in (SOURCE / name).read_text(encoding="utf-8")
 
-    with tempfile.TemporaryDirectory(prefix="xnet-build-graph-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="xnet-build-system-") as temporary:
         build = pathlib.Path(temporary) / "gnu"
         tools = build.parent / "tools"
         tools.mkdir()
@@ -83,7 +83,7 @@ def main() -> int:
         clean = make(f"BUILD_DIR={build}", "clean")
         require_success(clean)
         assert not build.exists()
-    print("direct isolated GNU Make graph checks passed")
+    print("production GNU Make checks passed")
     return 0
 
 

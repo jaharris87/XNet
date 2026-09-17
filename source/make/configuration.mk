@@ -16,8 +16,8 @@ MISSING_EXTERNAL_MODULE_DIRS := $(filter-out $(wildcard $(XNET_EXTERNAL_MODULE_D
 ifneq ($(strip $(MISSING_EXTERNAL_MODULE_DIRS)),)
   $(error external module directory does not exist: $(MISSING_EXTERNAL_MODULE_DIRS))
 endif
-# Compatibility solver names select the same concrete graph without recursive
-# goal replay. Conflicting selectors fail while Make is still parsing.
+# Compatibility solver names select the same build configuration without
+# recursive goal replay. Conflicting selectors fail while Make is still parsing.
 SOLVER_GOALS := $(filter xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO,$(REQUESTED_GOALS))
 ifneq ($(SOLVER_GOALS),)
   ifneq ($(words $(SOLVER_GOALS)),1)

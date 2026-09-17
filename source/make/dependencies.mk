@@ -1,7 +1,6 @@
 # Explicit Fortran module prerequisites for ordinary single-invocation make -j.
-# XNet's module graph is intentionally explicit.  Keep this conventional list
-# beside the selected providers so an ordinary single `make -j` orders module
-# creation without compiler-specific dependency generation.
+# Keep this conventional list beside the selected providers so `make -j`
+# compiles modules in the required order.
 SOBJ = $(call source_obj,$(XNET_DIR)/$(1).F90)
 EOBJ = $(call eos_obj,$(STARKILLER_HELMHOLTZ_PATH)/$(1).F90)
 $(call SOBJ,xnet_constants): $(call SOBJ,xnet_types)

@@ -65,12 +65,21 @@ reviewer a read-only brief containing:
 - the applicable repository documents and required evidence; and
 - a precise context boundary: the PR diff and evidence supplied, plus any
   files, platforms, or checks unavailable to the reviewer.
+- an explicit request to challenge unnecessary complexity, new dependencies,
+  hypothetical generalized infrastructure, unsupported-use protection, and
+  machinery that can be deleted without weakening safeguards.
 
 Do not give a favorable implementation narrative, prior reviewer conclusions,
 or instructions to repair the candidate. Ask the reviewer to check the issue
 and claims directly, seek counterexamples and false passes, and report only
 evidence needed to understand the result. A local checkout may supplement the
 open PR but cannot replace it as the review source of record.
+
+For implementation or design work, reviewers treat unwarranted complexity,
+new required dependencies, speculative generalization, and unnecessary
+misuse-protection machinery as consequential findings. They should identify
+the smallest deletion or simpler conventional approach that preserves required
+testing, error checking, portability, and scientific safeguards.
 
 Record each invocation without retaining private reasoning or complete
 prompts:

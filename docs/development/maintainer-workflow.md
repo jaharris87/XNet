@@ -63,6 +63,15 @@ for merge. A useful issue states:
 Separate the problem and acceptance criteria from a speculative implementation
 when the solution still requires investigation.
 
+New implementation or design issues include a short section with this heading:
+
+### Simplicity / HPC design constraints
+
+State the concrete problem, simplest credible solution class, applicable
+conventional practice, non-goals, and dependencies or abstractions forbidden
+absent evidence. Record reasonable unsupported-use constraints rather than
+requiring speculative misuse protection.
+
 ## Authority, live status, and supersession records
 
 Use the native GitHub parent/subissue relationship for every new finite

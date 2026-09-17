@@ -47,7 +47,9 @@ The Makefile fragments have distinct roles:
   visible mapping entry only when a real repository-supported machine needs
   concrete overrides. Perlmutter is the current NERSC production system, and
   Frontier is the retained OLCF accelerator qualification system. Summit and
-  Cori names remain only in retired-host compatibility lists.
+  Cori names remain only in retired-host compatibility lists. The maintainer
+  currently uses no IBM system; `summit`, `summitdev`, and `mira` remain only
+  as retired compatibility settings.
 
 Inspect the conditional path through these files for any configuration being
 changed. Variable names and commented examples provide orientation; the
@@ -110,6 +112,7 @@ The exact opt-in component and same-source dense comparison commands are in
 | Frontier HIP/ROCm OpenMP offload | Retained qualification applies to source `97174bc0b382ed2c580eb517b05479e0ee63b184`, CCE 20.0.2, ROCm 6.4.2, hipfort 6.4.2, and MI250X. The Phase-5 build-directory changes have not been rerun on Frontier and are unverified there. |
 | Perlmutter | Current NERSC host selection is maintained, but no Perlmutter qualification is recorded for this revision. |
 | Summit and Cori host names | Retired compatibility settings only. |
+| Retired IBM host names | No current IBM system or qualification. `summit`, `summitdev`, and `mira` remain as compatibility settings only. |
 
 The exact commands, source revision, and any launcher-specific options belong
 in the issue or pull-request evidence for each run. A successful build alone
@@ -233,8 +236,8 @@ runs. It has unreliable pass/fail reporting.
 
 - selects problems by numeric ID;
 - combines settings and setup files into `test/control`;
-- runs a supplied executable or `source/build/default/bin/xnet`;
-- looks for an MPI build at `source/build/mpi/bin/xnet`; set `XNET_MPI` to use
+- runs a supplied executable or `build/default/bin/xnet`;
+- looks for an MPI build at `build/mpi/bin/xnet`; set `XNET_MPI` to use
   another predictable build directory;
 - moves diagnostics into `test/Test_Results/`;
 - removes timer sections before comparison;

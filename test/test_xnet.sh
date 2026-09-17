@@ -9,7 +9,7 @@
 ##
 ## Description:
 ##   <xnet executables to test> (Optional)
-##     default: ../source/build/default/bin/xnet
+##     default: ../build/default/bin/xnet
 ##     Paths to XNet exeuctables to test.
 ##     This is useful for testing custom builds of that do not correspond to a specific Makefile target.
 ##     Currently, this only works with serial tests.
@@ -58,10 +58,10 @@
 ##
 ###############################################################################
 
-xnet_default=../source/build/default/bin/xnet
-xnet_mpi=${XNET_MPI:-../source/build/mpi/bin/xnet}
+xnet_default=../build/default/bin/xnet
+xnet_mpi=${XNET_MPI:-../build/mpi/bin/xnet}
 xnet_nse=${XNET_NSE:-$xnet_default}
-xnse=${XNSE:-../source/build/default/bin/xnse}
+xnse=${XNSE:-../build/default/bin/xnse}
 
 function test_diff {
   # Remove timers from files for diff

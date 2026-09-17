@@ -107,6 +107,11 @@ source paths. Reusing the directory with different material settings fails
 before preprocessing or compilation and directs the user to clean or choose
 another directory.
 
+The line-oriented record accepts ordinary single-line Make values. Embedded
+single quotes and line breaks in recorded commands, flags, providers, or paths
+are rejected with a clear diagnostic; select an equivalent spelling or another
+build directory.
+
 Use a different readable directory for a different configuration:
 
 ```bash
@@ -116,9 +121,9 @@ make -C source BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
 
 `clean` removes only the selected marked build directory and does not require
 the old configuration to be restated. `clean-all` removes only marked direct
-children of `BUILD_BASE`, requires `CONFIRM_CLEAN_ALL=yes`, and refuses to run
-while another invocation uses the same directory. Run cleaning and building as separate
-commands; mixed cleaning/product goals are rejected.
+children of `BUILD_BASE` and requires `CONFIRM_CLEAN_ALL=yes`. Do not clean
+while a build uses that directory; run cleaning and building as separate
+commands. Mixed cleaning/product goals are rejected.
 
 Pass local configuration choices on the Make command line and leave tracked
 defaults unchanged. The main selection variables include:

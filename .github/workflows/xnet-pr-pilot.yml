@@ -324,11 +324,10 @@ jobs:
       - name: Build serial executables
         shell: bash
         run: |
-          make -C source clean 2>&1 | tee pilot-logs/serial-clean.log
-          make -C source -j xnet xnse 2>&1 | tee pilot-logs/serial-build.log
-          xnet_executable=$(make -C source --no-print-directory print-XNET_EXE | sed -n 's/^XNET_EXE = //p')
-          xnse_executable=$(make -C source --no-print-directory print-XNSE_EXE | sed -n 's/^XNSE_EXE = //p')
-          test -n "$xnet_executable" && test -n "$xnse_executable"
+          make -C source BUILD_NAME=ci-gnu clean 2>&1 | tee pilot-logs/serial-clean.log
+          make -C source BUILD_NAME=ci-gnu -j xnet xnse 2>&1 | tee pilot-logs/serial-build.log
+          xnet_executable="$GITHUB_WORKSPACE/build/ci-gnu/bin/xnet"
+          xnse_executable="$GITHUB_WORKSPACE/build/ci-gnu/bin/xnse"
           test -x "$xnet_executable" && test -x "$xnse_executable"
           ls -l "$xnet_executable" "$xnse_executable" | tee -a pilot-logs/serial-build.log
           printf 'XNET_EXECUTABLE=%s\nXNSE_EXECUTABLE=%s\n' "$xnet_executable" "$xnse_executable" >> "$GITHUB_ENV"

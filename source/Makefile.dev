@@ -1,5 +1,6 @@
 ## Legacy/reference accelerator recipes.  Makefile.production does not include
-## this file; it is retained only as historical source material.
+## this file.  It remains only as historical, unincorporated legacy recipe
+## material and cannot form a production build path.
 ##
 ## Instructions and compiler/library flags for features under development
 ##

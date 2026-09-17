@@ -28,15 +28,26 @@ make -C source BUILD_DIR=/scratch/$USER/xnet-frontier -j xnet
 
 The Makefile fragments have distinct roles:
 
-- `source/Makefile` is the small public entry point.
-- `source/Makefile.production` defines the one production target and provider
-  graph, retained preprocessing, explicit Fortran module prerequisites, and
-  isolated output layout. Production builds do not invoke Python.
+- `source/Makefile` is the small public entry point. Its included
+  `source/make/build.mk` defines the one production graph and isolated output
+  layout; production builds do not invoke Python.
+- `source/make/configuration.mk` validates compiler/platform selectors.
+- `source/make/providers.mk` selects MPI, EOS, solver, accelerator, and
+  numerical-library providers.
+- `source/make/sources.mk` lists sources, maps them to artifacts, and records
+  configuration reuse.
+- `source/make/dependencies.mk` records explicit Fortran module prerequisites.
+- `source/make/rules.mk` contains preprocessing, compilation, link, and public
+  target rules.
 - `source/Makefile.opt` defines tracked user-selectable defaults.
 - `source/Makefile.internal` maps configuration choices to compilers, flags,
   libraries, source files, and solver objects.
-- `source/Makefile.dev` remains historical source material; the production
-  graph selects accelerator providers explicitly and does not include it.
+- `source/make/machines.mk` detects the current host and explicitly selects
+  the tracked generic or Cray Programming Environment defaults. Compiler
+  defaults remain in `Makefile.internal`; add a machine fragment and one
+  visible mapping entry only when a real repository-supported machine needs
+  concrete overrides. Perlmutter and Frontier are current Cray-PE examples;
+  legacy host compatibility is not a support claim.
 
 Inspect the conditional path through these files for any configuration being
 changed. Variable names and commented examples provide orientation; the

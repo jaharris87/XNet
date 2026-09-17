@@ -97,10 +97,14 @@ the selected Jacobian file together when changing this path.
 `source/Makefile.opt` exposes compiler environment, compile mode, MPI,
 threading, accelerator mode, EOS, matrix solver, and CPU/GPU linear-algebra
 choices. `source/Makefile.internal` maps those choices to compilers, flags,
-sources, and libraries. `source/Makefile.production` selects the concrete
-providers, including accelerator bindings and directive selections.
-`source/Makefile.dev` is an inactive historical reference and is not included
-by the production graph.
+sources, and libraries. The conventional fragments under `source/make/`
+separate provider selection, source inventories, explicit module
+prerequisites, and build rules. In particular, `providers.mk` selects the
+concrete providers, including accelerator bindings and directive selections.
+`machines.mk` retains hostname/LMOD detection and explicitly selects the
+tracked generic or Cray Programming Environment defaults; compiler-family
+flags and the legacy Cori Intel compatibility exception remain in
+`Makefile.internal`.
 
 Important selections change which file is intended to supply a common module
 name:

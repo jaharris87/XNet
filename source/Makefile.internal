@@ -5,25 +5,9 @@
 ## Determine OS kernel (Linux or Darwin)
 UNAME_S ?= $(shell uname -s)
 
-## Define programming envionment if not set or on a Cray machine
-ifdef LMOD_SYSTEM_NAME
-    MACHINE=$(LMOD_SYSTEM_NAME)
-else
-    MACHINE=$(shell uname -n | sed 's/\..*//; s/\(-[a-zA-Z0-9]*\)\?[0-9]*$$//')
-endif
-CRAY_MACHINE = \
-               frontier \
-               titan \
-               perlmutter \
-               edison \
-               cori \
-               chester \
-               beacon
-
-IBM_MACHINE = \
-              summit \
-              summitdev \
-              mira
+## Host detection and concrete family defaults are conventional, tracked
+## fragments.  Compiler-family flags remain in this file.
+include $(XNET_DIR)/make/machines.mk
 
 ## Get PE_ENV from LMOD if being used
 ifndef PE_ENV
@@ -33,31 +17,6 @@ ifndef PE_ENV
           PE_ENV = GNU
       endif
   endif
-endif
-
-FC_MPI  = mpifort
-CC_MPI  = mpicc
-CXX_MPI = mpic++
-LDR_MPI = mpifort
-
-ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-    LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
-else ifeq ($(findstring $(MACHINE),$(CRAY_MACHINE)),$(MACHINE))
-    FC      = ftn
-    CC      = cc
-    CXX     = CC
-    LDR     = ftn
-    FC_MPI  = ftn
-    CC_MPI  = cc
-    CXX_MPI = CC
-    LDR_MPI = ftn
-
-    LAPACK_VER     ?= LIBSCI
-    GPU_LAPACK_VER ?= CUBLAS
-else
-    LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
 endif
 
 #-------------------------------------------------------------------------------
@@ -74,6 +33,7 @@ ifeq ($(PE_ENV),INTEL)
 
         ARCHOPT = -xHost
     else ifeq ($(MACHINE),cori)
+        # Retained legacy Cori compatibility exception; not a support claim.
         ARCHOPT = -align array64byte
     endif
     INLINE        = -ipo
@@ -118,7 +78,7 @@ else ifeq ($(PE_ENV),PGI)
 
         ARCHOPT   =
     endif
-    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+    ifneq ($(findstring $(MACHINE),$(LEGACY_IBM_HOSTS)),$(MACHINE))
         INLINE    = -Mipa=fast,inline,safe
     else
         INLINE    =
@@ -164,7 +124,7 @@ else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
 
         ARCHOPT   = -tp=pwr9
     endif
-    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+    ifneq ($(findstring $(MACHINE),$(LEGACY_IBM_HOSTS)),$(MACHINE))
         INLINE    =# -Mipa=fast,inline,safe
     else
         INLINE    =
@@ -208,7 +168,7 @@ else ifeq ($(PE_ENV),GNU)
         CXX       = g++
         LDR       = gfortran
 
-        ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+        ifeq ($(findstring $(MACHINE),$(LEGACY_IBM_HOSTS)),$(MACHINE))
           ARCHOPT   = -mtune=native
         else
           ARCHOPT   = -march=native

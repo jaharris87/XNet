@@ -72,7 +72,7 @@ for XNet work may include:
 - comparisons with trusted data or historical outputs whose provenance and
   applicability are known.
 
-These are candidate methods. The governing issue defines the applicable
+These are possible methods. The governing issue defines the applicable
 physical invariant, comparison quantity, regime, and expected result. Record
 uncertainty when current behavior has limited characterization.
 
@@ -85,8 +85,8 @@ results.
 
 Describe which captured behavior represents a scientific requirement, which
 represents an interface expectation, and which simply records the current
-implementation. This distinction keeps historical output from acquiring
-unsupported scientific authority.
+implementation. This distinction keeps historical output from being treated
+as evidence of scientific validity without justification.
 
 ## Tolerances and floating-point behavior
 
@@ -142,7 +142,7 @@ Compare fixed revisions and equivalent workloads. Explain the expected source
 of improvement or regression. Keep numerical validation alongside performance
 measurements so the benchmark exercises acceptable results.
 
-## Scientific and architectural authority
+## Scientific and architecture decisions
 
 Agents prepare evidence, identify assumptions, and expose uncertainty. The
 human maintainer decides whether a physical model, algorithm, tolerance,

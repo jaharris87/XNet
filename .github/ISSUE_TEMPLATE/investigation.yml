@@ -1,5 +1,5 @@
 name: Investigation
-description: Answer a bounded technical or scientific software question before implementation
+description: Answer a focused technical or scientific question before implementation
 labels: []
 body:
   - type: textarea
@@ -56,16 +56,16 @@ body:
     attributes:
       label: Deliverable or decision
       description: What should the investigation produce?
-      placeholder: A written conclusion, recommendation, reproduction, bounded implementation issue, decision among alternatives, or finding that no code change is warranted.
+      placeholder: A written conclusion, recommendation, reproduction, focused implementation issue, decision among alternatives, or finding that no code change is warranted.
     validations:
       required: true
 
   - type: checkboxes
-    id: implementation_authority
+    id: implementation_scope
     attributes:
-      label: Implementation authority
+      label: Implementation scope
       options:
-        - label: This issue authorizes investigation and reporting only. Implementation requires explicit bounded scope, completion criteria, and evidence requirements in this issue or a separate bug or change issue.
+        - label: This issue covers investigation and reporting only. Implementation requires explicit scope, completion criteria, and evidence requirements here or in a separate bug or change issue.
           required: true
     validations:
       required: true
@@ -74,13 +74,13 @@ body:
     id: coordination_handoff
     attributes:
       label: Coordination and handoff record
-      description: For medium/high-risk work, identify current status, governing and parent issue, authorized scope, explicit non-goals, applicable playbook risk classes and risk-selected review roles, required checks, current exact pushed candidate SHA when known, requested decision, limitations, and blocking questions. Omit for trivial work.
+      description: For medium/high-risk work, identify current status, governing and parent issue, scope, non-goals, applicable playbook risk classes and review roles, required checks, current pushed PR commit when known, requested decision, limitations, and blocking questions. Omit for trivial work.
 
   - type: textarea
     id: review_follow_up
     attributes:
       label: Review-generated follow-up record
-      description: If this investigation follows a review finding, record the originating PR, reviewed exact candidate SHA and stable finding ID when known, disposition, non-blocking reason, accepted-claim effect, bounded scope, non-goals, trigger or priority, completion evidence, and parent relationship.
+      description: If this investigation follows a review finding, record the originating PR, reviewed commit and stable finding ID when known, response to the finding, non-blocking reason, effect on accepted claims, issue scope, non-goals, priority, completion evidence, and parent relationship.
 
   - type: textarea
     id: additional_context

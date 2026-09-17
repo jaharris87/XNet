@@ -4,8 +4,8 @@
 > for merge. Apply it in proportion to the change; do not activate every role
 > for a low-risk change.
 
-This playbook turns recurring XNet review experience into a small, composable
-protocol. It supplements the [maintainer workflow](maintainer-workflow.md).
+This playbook records the review approach developed from recurring XNet
+experience. It supplements the [maintainer workflow](maintainer-workflow.md).
 The governing issue remains the source of authority, and human maintainers
 retain scientific, numerical, architectural, support, and repository-setting
 decisions.
@@ -25,14 +25,14 @@ unless it makes scientific, support, or operational claims.
 | `P` — production behavior | Production code, runtime interfaces, diagnostics, error handling, or dependencies change | requirements/scope; software correctness/maintainability; test effectiveness | clean build, direct execution where applicable, focused behavior and preservation checks | architecture, public-interface, support, and consequential compatibility choices |
 | `S` — scientific/numerical/reference | Physics, rates, solvers, convergence, tolerances, scientific inputs, references, or accepted results change | requirements/scope; scientific/numerical behavior; test effectiveness; provenance/operational evidence for references or retained data | applicable scientific-validation record, independent comparisons, explicit tolerances and identities, controlled scientific mutations | scientific validity, numerical policy, reference acceptance, and interpretation |
 | `B` — build/portability/concurrency | Make logic, compiler selection, MPI, threading, accelerator, solver library, configuration, or concurrent behavior changes | requirements/scope; build/portability/concurrency; software correctness/maintainability; test effectiveness | clean requested builds, exact resolved configuration, configuration-specific execution, relevant negative or substitution probes | compiler/platform support claims and consequential concurrency or dependency policy |
-| `H` — manual/HPC qualification | Evidence requires an allocation, specialized hardware, site software, or a manual retained run | requirements/scope; provenance/operational evidence; build/portability/concurrency; any role for the behavior being qualified | exact candidate-to-run binding, requested and resolved environment, complete status and artifact record, independently recomputed claims where practical | qualification scope, platform support, exceptions, and unavailable reruns |
+| `H` — manual/HPC qualification | Evidence requires an allocation, specialized hardware, site software, or a manual retained run | requirements/scope; provenance/operational evidence; build/portability/concurrency; any role for the behavior being qualified | source commit, executable, and run binding; requested and resolved environment; complete status and retained files; independently recomputed claims where practical | qualification scope, platform support, exceptions, and unavailable reruns |
 
 The roles are review viewpoints, not required people or agents:
 
 - **requirements/scope:** checks the governing issue, exclusions, interfaces,
   acceptance criteria, and claims against the complete diff;
 - **software correctness/maintainability:** traces behavior, failure paths,
-  state, interfaces, and bounded maintenance consequences;
+  state, interfaces, and maintenance effects;
 - **test effectiveness:** asks whether a check can fail for the claimed defect
   and pass for the corrected behavior, including the reason for rejection;
 - **scientific/numerical behavior:** checks scientific inputs, equations,
@@ -43,9 +43,10 @@ The roles are review viewpoints, not required people or agents:
 - **provenance/operational evidence:** binds claims to the exact source,
   executable, run, inventory, environment, and immutable retained evidence.
 
-Keep evidence categories distinct. A build shows that a compiler produced
-requested artifacts. Execution shows that the requested artifact and
-configuration ran and completed. Software evidence shows required behavior
+Keep evidence categories distinct. A build shows that the compiler and linker
+produced the requested configuration's executable and required object and
+module files. Execution shows that the executable and configuration ran and
+completed. Software evidence shows required behavior
 and failure handling. Numerical evidence compares values under stated rules.
 Scientific evidence supports the physical interpretation, inputs, and
 method. Portability evidence applies only to checked configurations unless a
@@ -63,11 +64,13 @@ reviewer a read-only brief containing:
 - the applicable risk classes and assigned review role;
 - this playbook at an identified repository revision;
 - the applicable repository documents and required evidence; and
-- a precise context boundary: the PR diff and evidence supplied, plus any
+- the supplied material: the PR diff and evidence, plus any
   files, platforms, or checks unavailable to the reviewer.
-- an explicit request to challenge unnecessary complexity, new dependencies,
-  hypothetical generalized infrastructure, unsupported-use protection, and
-  machinery that can be deleted without weakening safeguards.
+- an explicit request to challenge unnecessary Fortran wrapper modules,
+  generic dispatch layers, GNU Make include or variable indirection,
+  configuration switches, required dependencies, or support for unrequired
+  MPI, OpenMP, and GPU use cases when those additions can be removed without
+  weakening safeguards.
 
 Do not give a favorable implementation narrative, prior reviewer conclusions,
 or instructions to repair the candidate. Ask the reviewer to check the issue
@@ -76,8 +79,8 @@ evidence needed to understand the result. A local checkout may supplement the
 open PR but cannot replace it as the review source of record.
 
 For implementation or design work, reviewers treat unwarranted complexity,
-new required dependencies, speculative generalization, and unnecessary
-misuse-protection machinery as consequential findings. They should identify
+new required dependencies, speculative generalization, and code that exists
+only to protect unsupported use as consequential findings. They should identify
 the smallest deletion or simpler conventional approach that preserves required
 testing, error checking, portability, and scientific safeguards.
 
@@ -131,7 +134,7 @@ Give every finding one disposition:
   code, checks, results, or an authoritative source.
 - **Defer:** record why it is outside the PR, its consequence, and the linked
   follow-up location.
-- **Accepted limitation:** preserve the bounded gap and identify the human
+- **Accepted limitation:** preserve the documented gap and identify the human
   authority accepting it; this cannot silently waive an acceptance criterion.
 
 Substantive repairs receive a new pushed candidate. Re-review records the
@@ -170,7 +173,7 @@ thresholds, style gates, or authorship detection.
 ## Proportionate walkthroughs
 
 - A documentation-only change normally uses class `D`, one requirements/scope
-  reviewer, Markdown/link or schema evidence, and a `PASS` or bounded finding
+  reviewer, Markdown/link or schema evidence, and a `PASS` or focused finding
   record.
 - Test or validation infrastructure uses `T`; add `B` for configuration
   claims, `S` for numerical/scientific policy, and `H` for retained manual
@@ -184,6 +187,6 @@ thresholds, style gates, or authorship detection.
   requested configuration. One checked compiler or platform does not create a
   general support claim.
 - Manual HPC qualification uses `H` plus the behavior's other risk classes.
-  Review binds the exact pushed source, resolved environment, executable, run,
-  and finalized artifacts; unavailable hardware and rerun limits remain
+  Review binds the pushed source commit, resolved environment, executable,
+  run, and finalized retained files; unavailable hardware and rerun limits remain
   visible.

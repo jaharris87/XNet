@@ -1,5 +1,5 @@
 ##
-## System configurations and architecture/installation specific MACROS
+## System configuration and machine- or installation-specific macros
 ##
 
 ## Determine OS kernel (Linux or Darwin)

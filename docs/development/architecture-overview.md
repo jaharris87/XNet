@@ -98,9 +98,9 @@ the selected Jacobian file together when changing this path.
 threading, accelerator mode, EOS, matrix solver, and CPU/GPU linear-algebra
 choices. `source/Makefile.internal` maps those choices to compilers, flags,
 sources, and libraries. The conventional fragments under `source/make/`
-separate provider selection, source inventories, explicit module
-prerequisites, and build rules. In particular, `providers.mk` selects the
-concrete providers, including accelerator bindings and directive selections.
+separate implementation selection, source lists, explicit module
+prerequisites, and build rules. In particular, `providers.mk` selects the MPI,
+EOS, solver, numerical-library, and accelerator implementations.
 `machines.mk` retains hostname/LMOD detection and explicitly selects the
 tracked generic or Cray Programming Environment defaults; compiler-family
 flags and the legacy Cori Intel compatibility exception remain in

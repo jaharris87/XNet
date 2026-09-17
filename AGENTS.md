@@ -86,7 +86,7 @@ utility targets, runtime inputs, test side effects, and evidence requirements.
 
 ## Core change rules
 
-- Keep changes bounded to the issue. Separate functional work from unrelated
+- Keep changes within the issue. Separate functional work from unrelated
   cleanup, reformatting, file moves, and renames.
 - Preserve current behavior before refactoring it. Add characterization
   evidence when behavior lacks clear coverage.
@@ -115,15 +115,17 @@ those decisions.
 Prefer the simplest technically sound solution that meets demonstrated XNet
 requirements and remains familiar to scientific-HPC maintainers. Favor
 conventional Make, Fortran, POSIX, and existing interface practices. New
-required dependencies, generalized frameworks, or abstractions need concrete
-evidence of a requirement and maintainer escalation before adoption.
+required dependencies, extra Fortran wrapper or dispatch layers, additional
+GNU Make indirection, or new runtime-selection mechanisms need a demonstrated
+XNet requirement and maintainer escalation before adoption.
 
 Document reasonable unsupported-use constraints instead of engineering around
 speculative cases. Keep Flash-X and CHIMERA integration proportional to
-observed consumer requirements; seek a second real use case before generalizing
-shared infrastructure. A maintainer should be able to understand the local
-change without a new framework. This policy does not weaken testing, error
-checking, portability, or scientific safeguards.
+observed consumer requirements; seek a second real use case before adding a
+shared interface or selection mechanism. A maintainer should be able to
+understand the local change without learning a new project-specific system.
+This policy does not weaken testing, error checking, portability, or scientific
+safeguards.
 
 ## Fortran essentials
 
@@ -178,6 +180,11 @@ progress; report the blocker when handing off incomplete work.
 Use plain, direct language in issues, plans, PRs, review comments,
 documentation, and reports. Name the file, behavior, limit, test, or affected
 user directly.
+
+Prefer terms familiar to scientific-HPC and Fortran developers. Name the
+routine, module, file, Make target, compiler option, test, or numerical
+behavior directly. Keep agent-workflow terms in workflow and review guidance
+unless they add precision to source comments or developer documentation.
 
 Prefer concrete phrases such as `quick test`, `initial setup`, `requirement`,
 `required check`, `reference result`, and `basic verification` when those are

@@ -3,7 +3,7 @@
 > Read this document when creating or changing issues, branches, pull
 > requests, review findings, coordinated work, or repository integration.
 
-This workflow keeps development bounded, evidence-oriented, independently
+This workflow keeps development focused, evidence-oriented, independently
 reviewed, and ready for human scientific judgment. Apply its detail in
 proportion to the risk and size of the task.
 
@@ -67,15 +67,17 @@ New implementation or design issues include a short section with this heading:
 
 ### Simplicity / HPC design constraints
 
-State the concrete problem, simplest credible solution class, applicable
-conventional practice, non-goals, and dependencies or abstractions forbidden
-absent evidence. Record reasonable unsupported-use constraints rather than
-requiring speculative misuse protection.
+State the concrete problem; the smallest plausible change to Fortran source,
+GNU Make configuration, runtime input/output, or test tooling; the established
+XNet, Fortran, Make, MPI, or accelerator practice to follow; non-goals; and any
+new dependency, module layer, build-selection path, or runtime mechanism that
+requires additional evidence. Record reasonable unsupported-use constraints
+rather than requiring speculative misuse protection.
 
 ## Authority, live status, and supersession records
 
 Use the native GitHub parent/subissue relationship for every new finite
-initiative and its bounded components. A Markdown checklist may mirror the
+coordinated project and its component issues. A Markdown checklist may mirror the
 component set, but it does not replace the native relationship. Record the
 parent, child status, and dependencies in GitHub so the relationship remains
 queryable outside a single issue body.
@@ -84,7 +86,7 @@ For a medium- or high-risk issue or PR, add a concise current-status or
 handoff record. It identifies the current status; governing and parent issue;
 authorized scope and explicit non-goals; applicable risk classes and
 risk-selected review roles from the [review playbook](review-playbook.md);
-required checks; current exact pushed candidate SHA, when one exists;
+required checks; current pushed PR commit, when one exists;
 requested decision; limitations; and blocking questions. Do not require this
 packet for trivial work, and do not replace detailed evidence or review rounds
 with it.
@@ -96,8 +98,8 @@ assumption, or unresolved question into accepted authority.
 
 At component closeout and final initiative integration, update the parent
 record with the as-of date and current `development` SHA; completed, active,
-and blocked native children; changed dependencies; and remaining closure
-gates. Keep detailed evidence in immutable issue or PR comments, or in other
+and blocked native children; changed dependencies; and remaining work. Keep
+detailed evidence in immutable issue or PR comments, or in other
 durable records linked from the summary.
 
 When an issue or PR is superseded or abandoned, make that state visible in its
@@ -147,7 +149,7 @@ practical. See `scientific-validation.md` for numerical and physics changes.
 
 Successful implementation and local verification are not a terminal state for
 work intended for merge. Continue through self-review, commit, push, draft PR,
-independent review, findings disposition, and maintainer handoff unless the
+independent review, responses to findings, and maintainer handoff unless the
 maintainer explicitly requested local-only work or a documented blocker
 prevents progress. Report any such blocker with the incomplete handoff.
 
@@ -224,7 +226,7 @@ Give every consequential finding one disposition:
   numerical results, or authoritative references.
 - **Defer with reason:** explain why the work is outside the PR, record the
   consequence, and create or identify an appropriate follow-up location.
-- **Accepted limitation:** preserve the bounded gap and identify the human
+- **Accepted limitation:** preserve the documented gap and identify the human
   authority accepting it. This does not silently waive an acceptance
   criterion.
 
@@ -235,7 +237,7 @@ scientific understanding.
 When a disposition creates a review-generated follow-up, record the
 originating PR; reviewed exact candidate SHA and stable finding ID when known;
 the disposition; why the finding is non-blocking; effect on the accepted
-claim; bounded scope and non-goals; trigger or priority; completion evidence;
+claim; issue scope and non-goals; trigger or priority; completion evidence;
 and parent relationship. Use a native parent/subissue relationship when the
 follow-up belongs to a finite initiative. The follow-up record complements the
 preserved finding and does not replace it.
@@ -303,8 +305,8 @@ commit message merged into `main`.
 ## Coordinated umbrella work
 
 Use an orchestrating agent when an explicitly authorized umbrella issue
-contains bounded sub-issues whose work can proceed through separate
-development cycles. A single bounded PR remains the normal shape for ordinary
+contains finite sub-issues whose work can proceed through separate
+development cycles. A single focused PR remains the normal shape for ordinary
 tasks.
 
 The orchestrator:

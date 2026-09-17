@@ -18,12 +18,12 @@ investigation findings, or implementation plan.
 
 ## Live status and handoff
 
-For medium/high-risk work, record the following concise current-state packet.
+For medium/high-risk work, record the following concise status summary.
 Omit it for trivial work. It complements rather than replaces detailed review
 rounds and verification evidence.
 
 - Status:
-- Governing issue and parent initiative, if any:
+- Governing issue and parent issue, if any:
 - Authorized scope:
 - Explicit non-goals:
 - Applicable playbook risk classes:

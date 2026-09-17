@@ -4,8 +4,8 @@
 > for merge. Apply it in proportion to the change; do not activate every role
 > for a low-risk change.
 
-This playbook turns recurring XNet review experience into a small, composable
-protocol. It supplements the [maintainer workflow](maintainer-workflow.md).
+This playbook records the review approach developed from recurring XNet
+experience. It supplements the [maintainer workflow](maintainer-workflow.md).
 The governing issue remains the source of authority, and human maintainers
 retain scientific, numerical, architectural, support, and repository-setting
 decisions.
@@ -32,7 +32,7 @@ The roles are review viewpoints, not required people or agents:
 - **requirements/scope:** checks the governing issue, exclusions, interfaces,
   acceptance criteria, and claims against the complete diff;
 - **software correctness/maintainability:** traces behavior, failure paths,
-  state, interfaces, and bounded maintenance consequences;
+  state, interfaces, and maintenance effects;
 - **test effectiveness:** asks whether a check can fail for the claimed defect
   and pass for the corrected behavior, including the reason for rejection;
 - **scientific/numerical behavior:** checks scientific inputs, equations,
@@ -43,9 +43,10 @@ The roles are review viewpoints, not required people or agents:
 - **provenance/operational evidence:** binds claims to the exact source,
   executable, run, inventory, environment, and immutable retained evidence.
 
-Keep evidence categories distinct. A build shows that a compiler produced
-requested artifacts. Execution shows that the requested artifact and
-configuration ran and completed. Software evidence shows required behavior
+Keep evidence categories distinct. A build shows that the compiler and linker
+produced the requested configuration's executable and required object and
+module files. Execution shows that the executable and configuration ran and
+completed. Software evidence shows required behavior
 and failure handling. Numerical evidence compares values under stated rules.
 Scientific evidence supports the physical interpretation, inputs, and
 method. Portability evidence applies only to checked configurations unless a
@@ -65,9 +66,11 @@ reviewer a read-only brief containing:
 - the applicable repository documents and required evidence; and
 - a precise context boundary: the PR diff and evidence supplied, plus any
   files, platforms, or checks unavailable to the reviewer.
-- an explicit request to challenge unnecessary complexity, new dependencies,
-  hypothetical generalized infrastructure, unsupported-use protection, and
-  machinery that can be deleted without weakening safeguards.
+- an explicit request to challenge unnecessary Fortran wrapper modules,
+  generic dispatch layers, GNU Make include or variable indirection,
+  configuration switches, required dependencies, or support for unrequired
+  MPI, OpenMP, and GPU use cases when those additions can be removed without
+  weakening safeguards.
 
 Do not give a favorable implementation narrative, prior reviewer conclusions,
 or instructions to repair the candidate. Ask the reviewer to check the issue
@@ -76,8 +79,8 @@ evidence needed to understand the result. A local checkout may supplement the
 open PR but cannot replace it as the review source of record.
 
 For implementation or design work, reviewers treat unwarranted complexity,
-new required dependencies, speculative generalization, and unnecessary
-misuse-protection machinery as consequential findings. They should identify
+new required dependencies, speculative generalization, and code that exists
+only to protect unsupported use as consequential findings. They should identify
 the smallest deletion or simpler conventional approach that preserves required
 testing, error checking, portability, and scientific safeguards.
 

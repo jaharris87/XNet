@@ -3,7 +3,7 @@
 > Read this document when creating or changing issues, branches, pull
 > requests, review findings, coordinated work, or repository integration.
 
-This workflow keeps development bounded, evidence-oriented, independently
+This workflow keeps development focused, evidence-oriented, independently
 reviewed, and ready for human scientific judgment. Apply its detail in
 proportion to the risk and size of the task.
 
@@ -67,15 +67,17 @@ New implementation or design issues include a short section with this heading:
 
 ### Simplicity / HPC design constraints
 
-State the concrete problem, simplest credible solution class, applicable
-conventional practice, non-goals, and dependencies or abstractions forbidden
-absent evidence. Record reasonable unsupported-use constraints rather than
-requiring speculative misuse protection.
+State the concrete problem; the smallest plausible change to Fortran source,
+GNU Make configuration, runtime input/output, or test tooling; the established
+XNet, Fortran, Make, MPI, or accelerator practice to follow; non-goals; and any
+new dependency, module layer, build-selection path, or runtime mechanism that
+requires additional evidence. Record reasonable unsupported-use constraints
+rather than requiring speculative misuse protection.
 
 ## Authority, live status, and supersession records
 
 Use the native GitHub parent/subissue relationship for every new finite
-initiative and its bounded components. A Markdown checklist may mirror the
+coordinated project and its component issues. A Markdown checklist may mirror the
 component set, but it does not replace the native relationship. Record the
 parent, child status, and dependencies in GitHub so the relationship remains
 queryable outside a single issue body.
@@ -96,8 +98,8 @@ assumption, or unresolved question into accepted authority.
 
 At component closeout and final initiative integration, update the parent
 record with the as-of date and current `development` SHA; completed, active,
-and blocked native children; changed dependencies; and remaining closure
-gates. Keep detailed evidence in immutable issue or PR comments, or in other
+and blocked native children; changed dependencies; and remaining work. Keep
+detailed evidence in immutable issue or PR comments, or in other
 durable records linked from the summary.
 
 When an issue or PR is superseded or abandoned, make that state visible in its

@@ -1,5 +1,5 @@
 name: Investigation
-description: Answer a bounded technical or scientific software question before implementation
+description: Answer a focused technical or scientific question before implementation
 labels: []
 body:
   - type: textarea
@@ -56,7 +56,7 @@ body:
     attributes:
       label: Deliverable or decision
       description: What should the investigation produce?
-      placeholder: A written conclusion, recommendation, reproduction, bounded implementation issue, decision among alternatives, or finding that no code change is warranted.
+      placeholder: A written conclusion, recommendation, reproduction, focused implementation issue, decision among alternatives, or finding that no code change is warranted.
     validations:
       required: true
 

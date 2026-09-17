@@ -1,12 +1,12 @@
-name: Initiative
-description: Coordinate a larger objective through bounded component issues
+name: Coordinated work
+description: Coordinate a larger objective through focused component issues
 labels: []
 body:
   - type: textarea
     id: objective
     attributes:
       label: Objective
-      description: What overall outcome is this initiative intended to achieve?
+      description: What overall outcome should this coordinated work achieve?
     validations:
       required: true
 
@@ -22,7 +22,7 @@ body:
     id: authority_and_boundaries
     attributes:
       label: Authority and boundaries
-      description: What work does this initiative authorize, and which decisions remain with the human maintainer? The initiative does not authorize redesign or implementation beyond these stated limits.
+      description: What work does this parent issue authorize, and which decisions remain with the human maintainer? It does not authorize redesign or implementation beyond these stated limits.
     validations:
       required: true
 
@@ -41,7 +41,7 @@ body:
     id: native_subissues
     attributes:
       label: Native GitHub subissues and live status
-      description: For finite component work, state the planned native parent/subissue relationships and where the live parent status will be kept. Create the native relationships after opening the initiative; a Markdown checklist may mirror them but cannot replace them.
+      description: State the planned native parent/subissue relationships and where the live parent status will be kept. Create the native relationships after opening the parent issue; a Markdown checklist may mirror them but cannot replace them.
     validations:
       required: true
 
@@ -55,7 +55,7 @@ body:
     id: integration_criteria
     attributes:
       label: Integration criteria
-      description: What must be true after the component work is combined?
+      description: What must be true after the component changes are combined?
     validations:
       required: true
 
@@ -63,7 +63,7 @@ body:
     id: final_validation
     attributes:
       label: Final validation
-      description: What repository-level, numerical, scientific, portability, or performance checks are needed before this initiative is complete?
+      description: What repository-level, numerical, scientific, portability, or performance checks are needed before this work is complete?
     validations:
       required: true
 
@@ -77,18 +77,18 @@ body:
     id: completion_conditions
     attributes:
       label: Completion conditions
-      description: State the clear conditions under which this umbrella issue may be closed. Do not treat the initiative as one large implementation prompt.
+      description: State the clear conditions under which this parent issue may be closed. Do not treat it as one large implementation prompt.
     validations:
       required: true
 
   - type: textarea
     id: status_record
     attributes:
-      label: Parent status and closure record
-      description: For active coordination, record the as-of date, current development SHA, completed/active/blocked native children, changed dependencies, and remaining closure gates. Leave the initial record brief and update it in issue comments as work proceeds.
+      label: Parent status
+      description: Record the date, current development SHA, completed/active/blocked native children, changed dependencies, and remaining work. Leave the initial record brief and update it in issue comments as work proceeds.
 
   - type: textarea
     id: additional_context
     attributes:
       label: Additional context
-      description: Add any other information needed to understand or coordinate the initiative.
+      description: Add any other information needed to understand or coordinate the work.

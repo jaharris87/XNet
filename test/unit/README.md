@@ -1,4 +1,4 @@
-# Focused deterministic contract tests
+# Focused component tests
 
 From the repository root, the fast offline suite is built and run with:
 
@@ -20,10 +20,10 @@ actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
 `xnet_nnu.F90`, `xnet_timers.F90`, and `xnet_nse.F90` sources, plus the
 selected LAPACK routines or libraries required by the NSE solver. It also
 compiles the production network preprocessing, data, match, and PARDISO
-sparse-reader modules. Backend-isolated executables compile the production
-dense, MA48, standalone PARDISO, and MKL PARDISO Jacobian providers in separate
+sparse-reader modules. Separate executables compile the production dense,
+MA48, standalone PARDISO, and MKL PARDISO Jacobian implementations in separate
 module directories because those sources intentionally provide the same
-`xnet_jacobian` module name. Provider-isolated EOS executables likewise compile
+`xnet_jacobian` module name. Separate EOS executables likewise compile
 the production STARKILLER and Bahcall implementations in separate module
 directories because both provide `xnet_eos`. The build-net interoperability
 component cleans and rebuilds the tracked production configuration because
@@ -31,7 +31,7 @@ its final check is a real one-zone executable smoke. It resolves the canonical
 `XNET_EXE` path from Make; production objects and executables remain below the
 ignored repository `build/` directory.
 
-## Bounded support and coverage
+## Support and coverage
 
 `support/xnet_test_stubs.F90` supplies only the controls, zone mask, tiny
 `nuclear_data` arrays, diagnostic units, serial abort service, and deterministic
@@ -45,8 +45,8 @@ module state; production code still compiles with the selected OpenMP flags.
 The issue #41 scientific NSE executable is separate from that eight-species
 software fixture.  It loads the retained 489-species `torch489` network and
 independently generated complete compositions under `test/nse_validation/`,
-then calls the same production `nse_initialize`/`nse_solve` seam.  Its
-scientific authority, exact inputs, tolerance derivation, reproduction steps,
+then calls the production `nse_initialize` and `nse_solve` routines directly.
+Its scientific basis, exact inputs, tolerance derivation, reproduction steps,
 and limitations are documented in `test/nse_validation/README.md`.
 
 The solver-adapter executables use a three-equation nonsymmetric fixture in two
@@ -57,8 +57,8 @@ received dense or reconstructed matrix to the vendored NETLIB `dgesv`; they do
 not represent or qualify any licensed solver implementation.
 
 Issue #44 adds two opt-in real-library targets that reuse the same production
-providers and known-system fixture without entering the dependency-free default
-suite:
+implementations and known-system fixture without entering the dependency-free
+default suite:
 
 ```text
 make -C test/unit clean real-ma48-test HSL_MA48_SOURCE=/approved/path/MA48.f
@@ -68,7 +68,7 @@ make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
 The first requires maintainer-licensed HSL source outside the repository; the
 second requires an initialized oneMKL environment. Each runs base and
 self-heating residual checks, tracked controls, a real solver-error status path,
-and a controlled result-perturbation effectiveness check. Provider support
+and a controlled result-perturbation effectiveness check. Sparse-solver support
 status, complete build/run commands, and license limits are documented under
 `test/qualification/sparse_backends/`.
 
@@ -105,7 +105,7 @@ The suite checks:
   reconstruction, and solver counters;
 - repeatability between the default NSE roots and a materially different
   supplied initial guess; and
-- screened NSE execution through a deterministic software-only EOS seam;
+- screened NSE execution through a deterministic test-only EOS;
 - complete unscreened 489-species NSE compositions at symmetric,
   neutron-rich, and proton-rich/lower-density states against the independent
   issue #41 reference, including conservation, identity, invalid-value,
@@ -123,11 +123,11 @@ The suite checks:
   multiplicities, recomputed Q values, match associations, and the full CRS
   structure and reaction-to-entry maps;
 - detectable failure for truncated rates, inconsistent participant layouts,
-  and an unreadable generated reaction artifact;
+  and an unreadable generated reaction file;
 - storage-order-independent agreement between dense, MA48 coordinate, and
   PARDISO CRS matrices, including identity entries and every fixture reaction
   map;
-- exact self-heating structure for each sparse provider, covering the
+- exact self-heating structure for each sparse implementation, covering the
   abundance-temperature column, temperature-abundance row, and temperature
   diagonal;
 - MA48 control translation plus analysis/factor/solve sequencing, reuse, and
@@ -200,8 +200,8 @@ cover `T9=2,3,5` and `rho=1e7,1e8,1e9 g cm^-3`. For each sample, a burn-in call
 produces `X(anchor)`, that composition is written as the initial abundance of a
 new `full_net` call, and the new call evolves it for the external increment
 `dt`. Thus the checked initial composition is the result of prior physical
-evolution and the process exercises the same call boundary that a multiphysics
-application would use. A separate study holds the network, `T9=2`,
+evolution and the process calls the same production routines that a
+multiphysics application would use. A separate study holds the network, `T9=2`,
 `rho=1e7 g cm^-3`, anchor time, and evolved initial composition fixed while
 sweeping `dt=1e-8,1e-5,1e-3` s for each network. The runner requires both metrics
 to be nondecreasing and observably duration-dependent across that sweep.
@@ -226,9 +226,9 @@ endpoint format emits seven digits after the decimal in scientific notation;
 observed unmodified residuals are approximately `2e-9` or smaller. Per-run
 challenge tokens, exact endpoint/counter cardinality, and a verifier-echoed
 species identity reject stale/static replay and status stubs that do not process
-the candidate. They do not authenticate executables against an actor able to
-rewrite programs and their outputs after a build. The trusted CI boundary starts
-from a clean exact-candidate checkout; the standard Make target also forcibly
+the tested result. They do not authenticate executables against an actor able to
+rewrite programs and their outputs after a build. CI starts from a clean checkout
+at the tested commit; the standard Make target also forcibly
 rebuilds production XNet and recompiles and relinks the checker/verifier before
 this evidence is run.
 
@@ -243,7 +243,7 @@ compare compiler-specific sequential-unformatted bytes.
 
 The generated-file inventory is:
 
-| Artifact | Check |
+| Generated file | Check |
 | --- | --- |
 | `nuc_data` | Test-side decoder matches species, nuclear values, temperature grid, partition functions, and spins loaded by production nuclear-data code. |
 | `nets3`, `nets4` | Production reaction reader plus reaction, index, and multiplicity checks. |
@@ -261,7 +261,7 @@ claimed. Controlled in-memory corruptions must reject a wrong extended
 reaction index, missing diagonal, out-of-range column, nonmonotone row
 pointer, and reversed match association. Separate subprocesses require
 nonzero results for truncated and inconsistent ASCII inputs and for an
-unreadable `nets3` artifact.
+unreadable `nets3` file.
 
 ## Build-net construction and interoperability
 

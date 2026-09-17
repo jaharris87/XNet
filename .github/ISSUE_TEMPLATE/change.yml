@@ -22,7 +22,7 @@ body:
     id: scope
     attributes:
       label: Scope
-      description: What cohesive implementation work is included? Do not use this issue for a broad modernization objective.
+      description: What cohesive implementation work is included? Do not use this issue for a wholesale Fortran rewrite, GNU Make replacement, or broad modernization objective.
     validations:
       required: true
 
@@ -47,7 +47,7 @@ body:
     id: required_evidence
     attributes:
       label: Required evidence
-      description: State the build, execution, numerical, scientific, portability, interface, or performance evidence needed. Mark categories that do not apply.
+      description: State the needed GNU Make build, direct executable run, numerical comparison, scientific, MPI/OpenMP/GPU, interface, or performance evidence. Mark categories that do not apply.
     validations:
       required: true
 
@@ -65,7 +65,7 @@ body:
         - label: Public interfaces
         - label: Portability
         - label: Performance
-        - label: Dependencies or language requirements
+        - label: Dependencies, Fortran compiler/language, or GNU Make requirements
 
   - type: textarea
     id: review_risk

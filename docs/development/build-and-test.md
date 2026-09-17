@@ -17,7 +17,7 @@ default with:
 make -C source -j
 ```
 
-The default artifact is `build/default/bin/xnet`. Set a readable `BUILD_NAME`
+The default executable is `build/default/bin/xnet`. Set a readable `BUILD_NAME`
 for a directory below `build/`, or set `BUILD_DIR` directly. Relative paths
 are interpreted from the repository root:
 
@@ -31,9 +31,9 @@ The Makefile fragments have distinct roles:
 - `source/Makefile` is the small public entry point. Its included
   `source/make/build.mk` defines the production build and its output layout.
 - `source/make/configuration.mk` validates compiler/platform selectors.
-- `source/make/providers.mk` selects MPI, EOS, solver, accelerator, and
+- `source/make/providers.mk` selects the MPI, EOS, solver, accelerator, and
   numerical-library providers.
-- `source/make/sources.mk` lists sources, maps them to artifacts, and records
+- `source/make/sources.mk` lists sources and output files and records
   configuration reuse.
 - `source/make/dependencies.mk` records explicit Fortran module prerequisites.
 - `source/make/rules.mk` contains preprocessing, compilation, link, and public
@@ -112,8 +112,8 @@ make -C source --no-print-directory print-MATRIX_SOLVER
 
 Each build directory contains predictable `obj/`, `mod/`, `pp/`, and
 `bin/` subdirectories plus `config.txt`. The configuration record preserves
-the exact effective selectors, commands, flags, provider paths, and external
-source paths. Reusing the directory with different material settings fails
+the exact effective selectors, commands, flags, provider paths, and
+external source paths. Reusing the directory with different material settings fails
 before preprocessing or compilation and directs the user to clean or choose
 another directory.
 
@@ -168,9 +168,9 @@ aliases select that solver directly and reject conflicting selectors.
 `xnet` with explicit supported selectors. Target presence records a build
 recipe, not a support claim.
 
-## Focused deterministic contract tests
+## Focused component and executable tests
 
-The bounded Fortran component suite includes a complete serial XNet executable
+The Fortran component suite includes a complete serial XNet executable
 smoke:
 
 ```bash
@@ -188,7 +188,7 @@ the bounds-checking configuration with:
 make -C test/unit clean test CMODE=DEBUG
 ```
 
-See `test/unit/README.md` for the exact tested contracts, narrow test-only
+See `test/unit/README.md` for the tested behavior, narrow test-only
 state and stubs, vendored `test-drive` revision and license, update procedure,
 and issue-specific effectiveness evidence.
 
@@ -284,6 +284,7 @@ physics, numerical behavior, tolerances, convergence, or performance.
 
 Keep build objects, module files, executables, diagnostic outputs, comparison
 files, temporary control files, local installation paths, and machine-specific
-settings out of commits. Production artifacts remain below `BUILD_DIR`, but
-legacy problem drivers can still write into `test/`; review ignored files as
-well as `git status` after runs.
+settings out of commits. Production objects, module files, preprocessing
+output, `config.txt`, and executables remain below `BUILD_DIR`, but legacy
+problem drivers can still write into `test/`; review ignored files as well as
+`git status` after runs.

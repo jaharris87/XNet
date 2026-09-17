@@ -26,9 +26,10 @@ module directories because those sources intentionally provide the same
 `xnet_jacobian` module name. Provider-isolated EOS executables likewise compile
 the production STARKILLER and Bahcall implementations in separate module
 directories because both provide `xnet_eos`. The build-net interoperability
-component cleans and rebuilds the tracked `source/xnet` configuration because
-its final check is a real one-zone executable smoke; production objects and
-executables therefore remain in the ignored in-place `source/` build location.
+component cleans and rebuilds the tracked production configuration because
+its final check is a real one-zone executable smoke. It resolves the canonical
+`XNET_EXE` path from Make; production objects and executables remain below the
+ignored repository `build/` directory.
 
 ## Bounded support and coverage
 
@@ -289,7 +290,7 @@ reaction, match, and PARDISO sparse-data readers. Fixture-specific checks cover
 the selected nuclear and partition values, reaction participants and
 coefficients, recomputed Q and weak/reverse flags, match associations, exact
 CRS coordinates, and every reaction-to-entry map before the tracked serial GNU
-`source/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
+`build/default/bin/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
 requires normal target-time completion and emitted counters; it is an
 interoperability check, not a stored scientific endpoint comparison.
 
@@ -358,7 +359,7 @@ The serial-runner review fix was checked with a clean
 executable passed 500 consecutive runs with `OMP_NUM_THREADS=9`. The runner
 therefore remains serial even when the production modules are compiled with
 OpenMP enabled. `make -C source -j` also recompiled the changed production
-modules and linked the tracked default `source/xnet` target successfully.
+modules and linked the then-current tracked default `source/xnet` target successfully.
 Preprocessor inspection showed the masked `y_moment` entry/exit mapping as
 OpenACC `copyin`/`copyout` and OpenMP offload `map(to:)`/`map(from:)` for all
 six result arrays. A GNU OpenACC host-fallback build of that expanded
@@ -423,7 +424,7 @@ passed:
 
 ```text
 .venv/bin/python -m pytest -q test/regression \
-    --xnet-executable=/absolute/path/to/source/xnet
+    --xnet-executable=/absolute/path/to/build/default/bin/xnet
 172 passed in 16.97s
 ```
 
@@ -457,8 +458,8 @@ external-process preservation suite:
 
 ```text
 python3 -m pytest -q test/regression \
-    --xnet-executable=/absolute/path/to/source/xnet \
-    --xnse-executable=/absolute/path/to/source/xnse
+    --xnet-executable=/absolute/path/to/build/default/bin/xnet \
+    --xnse-executable=/absolute/path/to/build/default/bin/xnse
 182 passed in 22.28s
 ```
 

@@ -23,9 +23,10 @@ dedicated design document.
 - `doc/` contains formatting guidance and scientific or solver references.
 - `docs/development/` contains task-oriented development guidance.
 
-Production builds are in-source. Objects, module files, and executables are
-written under `source/`. The Makefiles use `VPATH` to compile selected
-dependencies from `tools/`.
+Production builds place objects, module files, retained preprocessing, and
+executables under the caller-selected `BUILD_DIR` (default `build/default`).
+The graph compiles selected dependencies from `tools/` without generating
+source-tree products.
 
 ## Production areas
 
@@ -96,8 +97,10 @@ the selected Jacobian file together when changing this path.
 `source/Makefile.opt` exposes compiler environment, compile mode, MPI,
 threading, accelerator mode, EOS, matrix solver, and CPU/GPU linear-algebra
 choices. `source/Makefile.internal` maps those choices to compilers, flags,
-sources, and libraries. `source/Makefile.dev` adds the accelerator-specific
-bindings and directive selections.
+sources, and libraries. `source/Makefile.production` selects the concrete
+providers, including accelerator bindings and directive selections.
+`source/Makefile.dev` is an inactive historical reference and is not included
+by the production graph.
 
 Important selections change which file is intended to supply a common module
 name:
@@ -108,14 +111,7 @@ name:
   `xnet_eos_bahcall.F90` supplies `xnet_eos`.
 - one `xnet_jacobian_*.F90` file supplies `xnet_jacobian`.
 
-The current `xnet_output.o` prerequisite names `xnet_parallel.o` directly.
-Consequently, a forced build with `MPI_MODE=OFF` can compile both
-`xnet_parallel.F90` and `xnet_parallel_stubs.F90`, even though the linked
-driver selects the stubs. Both define the same module. See
-`build-and-test.md` for the clean-build consequence.
-
-Consequently, source inspection and tests must follow the configuration named
-by the task. See `build-and-test.md` for clean-build requirements.
+Source inspection and tests must follow the configuration named by the task.
 
 ## Shared state and interfaces
 

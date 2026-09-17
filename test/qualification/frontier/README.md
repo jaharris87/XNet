@@ -98,8 +98,10 @@ root must be absent or empty and outside the repository.
 The source worktree must be clean because `git archive HEAD` is the executable
 source of record. The archive SHA-256, embedded archive commit, and verified
 extracted-tree hash bind every build and test to that commit. Extraction occurs
-inside the allocated job, after queue wait. CPU and GPU builds are clean and
-sequential because `source/` uses shared object and module names.
+inside the allocated job, after queue wait. CPU and GPU builds use separate
+caller-selected build directories. Different directories may run concurrently;
+do not run two top-level Make invocations or a clean concurrently in one
+affected directory.
 
 The explicit build selections are:
 

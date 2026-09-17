@@ -70,10 +70,12 @@ Build the tracked default configuration from the repository root:
 make -C source -j
 ```
 
-Builds are in-place, and configurations share object and module filenames.
-Run `make -C source clean` before changing compiler, numerical flags, parallel
-mode, accelerator mode, EOS, linear-algebra library, or matrix solver, then
-rebuild the requested target.
+Build products are isolated under the caller-selected `BUILD_DIR` (default
+`build/default`), including distinct object and module directories. Use a
+different `BUILD_DIR` for a different compiler or configuration; incompatible
+reuse is rejected. Different build directories may run concurrently, but run
+only one top-level Make invocation per directory and do not clean it while it
+is in use.
 
 The legacy test commands provide useful run recipes and comparisons with
 unreliable pass/fail behavior. Treat the wrapper's exit status as wrapper

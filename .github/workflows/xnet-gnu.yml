@@ -12,7 +12,7 @@ on:
       - ready_for_review
   push:
     branches:
-      - main
+      - codex/96-hosted-validation
 
 permissions:
   contents: read
@@ -39,6 +39,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: 727570e7dcc5bd99022f2456b0ff94ff5ab1a7a7
           persist-credentials: false
 
       - name: Install pytest
@@ -125,6 +126,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: 727570e7dcc5bd99022f2456b0ff94ff5ab1a7a7
           persist-credentials: false
 
       - name: Install GNU Fortran and MPI wrapper
@@ -276,6 +278,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: 727570e7dcc5bd99022f2456b0ff94ff5ab1a7a7
           persist-credentials: false
 
       - name: Install GNU Fortran and MPI wrapper

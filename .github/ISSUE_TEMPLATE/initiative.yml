@@ -19,10 +19,10 @@ body:
       required: true
 
   - type: textarea
-    id: scope_and_maintainer_decisions
+    id: authority_and_boundaries
     attributes:
-      label: Scope and maintainer decisions
-      description: What work is included, and which decisions remain with the human maintainer? Do not redesign or implement beyond these stated limits.
+      label: Authority and boundaries
+      description: What work does this parent issue authorize, and which decisions remain with the human maintainer? It does not authorize redesign or implementation beyond these stated limits.
     validations:
       required: true
 
@@ -30,7 +30,7 @@ body:
     id: component_work
     attributes:
       label: Component work
-      description: List expected investigations, changes, or decision points. Component code changes should normally use their own focused issue and pull request.
+      description: List expected investigations, changes, or decision points. Component code changes should normally use their own bounded issue and pull request.
       placeholder: |
         - [ ] Investigation or component issue:
         - [ ] Investigation or component issue:

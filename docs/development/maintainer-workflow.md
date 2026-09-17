@@ -86,7 +86,7 @@ For a medium- or high-risk issue or PR, add a concise current-status or
 handoff record. It identifies the current status; governing and parent issue;
 authorized scope and explicit non-goals; applicable risk classes and
 risk-selected review roles from the [review playbook](review-playbook.md);
-required checks; current pushed PR commit, when one exists;
+required checks; current exact pushed candidate SHA, when one exists;
 requested decision; limitations; and blocking questions. Do not require this
 packet for trivial work, and do not replace detailed evidence or review rounds
 with it.
@@ -149,7 +149,7 @@ practical. See `scientific-validation.md` for numerical and physics changes.
 
 Successful implementation and local verification are not a terminal state for
 work intended for merge. Continue through self-review, commit, push, draft PR,
-independent review, responses to findings, and maintainer handoff unless the
+independent review, findings disposition, and maintainer handoff unless the
 maintainer explicitly requested local-only work or a documented blocker
 prevents progress. Report any such blocker with the incomplete handoff.
 
@@ -226,7 +226,7 @@ Give every consequential finding one disposition:
   numerical results, or authoritative references.
 - **Defer with reason:** explain why the work is outside the PR, record the
   consequence, and create or identify an appropriate follow-up location.
-- **Accepted limitation:** preserve the documented gap and identify the human
+- **Accepted limitation:** preserve the bounded gap and identify the human
   authority accepting it. This does not silently waive an acceptance
   criterion.
 
@@ -237,7 +237,7 @@ scientific understanding.
 When a disposition creates a review-generated follow-up, record the
 originating PR; reviewed exact candidate SHA and stable finding ID when known;
 the disposition; why the finding is non-blocking; effect on the accepted
-claim; issue scope and non-goals; trigger or priority; completion evidence;
+claim; bounded scope and non-goals; trigger or priority; completion evidence;
 and parent relationship. Use a native parent/subissue relationship when the
 follow-up belongs to a finite initiative. The follow-up record complements the
 preserved finding and does not replace it.
@@ -305,8 +305,8 @@ commit message merged into `main`.
 ## Coordinated umbrella work
 
 Use an orchestrating agent when an explicitly authorized umbrella issue
-contains finite sub-issues whose work can proceed through separate
-development cycles. A single focused PR remains the normal shape for ordinary
+contains bounded sub-issues whose work can proceed through separate
+development cycles. A single bounded PR remains the normal shape for ordinary
 tasks.
 
 The orchestrator:

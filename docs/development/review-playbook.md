@@ -25,7 +25,7 @@ unless it makes scientific, support, or operational claims.
 | `P` — production behavior | Production code, runtime interfaces, diagnostics, error handling, or dependencies change | requirements/scope; software correctness/maintainability; test effectiveness | clean build, direct execution where applicable, focused behavior and preservation checks | architecture, public-interface, support, and consequential compatibility choices |
 | `S` — scientific/numerical/reference | Physics, rates, solvers, convergence, tolerances, scientific inputs, references, or accepted results change | requirements/scope; scientific/numerical behavior; test effectiveness; provenance/operational evidence for references or retained data | applicable scientific-validation record, independent comparisons, explicit tolerances and identities, controlled scientific mutations | scientific validity, numerical policy, reference acceptance, and interpretation |
 | `B` — build/portability/concurrency | Make logic, compiler selection, MPI, threading, accelerator, solver library, configuration, or concurrent behavior changes | requirements/scope; build/portability/concurrency; software correctness/maintainability; test effectiveness | clean requested builds, exact resolved configuration, configuration-specific execution, relevant negative or substitution probes | compiler/platform support claims and consequential concurrency or dependency policy |
-| `H` — manual/HPC qualification | Evidence requires an allocation, specialized hardware, site software, or a manual retained run | requirements/scope; provenance/operational evidence; build/portability/concurrency; any role for the behavior being qualified | source commit, executable, and run binding; requested and resolved environment; complete status and retained files; independently recomputed claims where practical | qualification scope, platform support, exceptions, and unavailable reruns |
+| `H` — manual/HPC qualification | Evidence requires an allocation, specialized hardware, site software, or a manual retained run | requirements/scope; provenance/operational evidence; build/portability/concurrency; any role for the behavior being qualified | exact candidate-to-run binding, requested and resolved environment, complete status and artifact record, independently recomputed claims where practical | qualification scope, platform support, exceptions, and unavailable reruns |
 
 The roles are review viewpoints, not required people or agents:
 
@@ -64,7 +64,7 @@ reviewer a read-only brief containing:
 - the applicable risk classes and assigned review role;
 - this playbook at an identified repository revision;
 - the applicable repository documents and required evidence; and
-- the supplied material: the PR diff and evidence, plus any
+- a precise context boundary: the PR diff and evidence supplied, plus any
   files, platforms, or checks unavailable to the reviewer.
 - an explicit request to challenge unnecessary Fortran wrapper modules,
   generic dispatch layers, GNU Make include or variable indirection,
@@ -134,7 +134,7 @@ Give every finding one disposition:
   code, checks, results, or an authoritative source.
 - **Defer:** record why it is outside the PR, its consequence, and the linked
   follow-up location.
-- **Accepted limitation:** preserve the documented gap and identify the human
+- **Accepted limitation:** preserve the bounded gap and identify the human
   authority accepting it; this cannot silently waive an acceptance criterion.
 
 Substantive repairs receive a new pushed candidate. Re-review records the
@@ -173,7 +173,7 @@ thresholds, style gates, or authorship detection.
 ## Proportionate walkthroughs
 
 - A documentation-only change normally uses class `D`, one requirements/scope
-  reviewer, Markdown/link or schema evidence, and a `PASS` or focused finding
+  reviewer, Markdown/link or schema evidence, and a `PASS` or bounded finding
   record.
 - Test or validation infrastructure uses `T`; add `B` for configuration
   claims, `S` for numerical/scientific policy, and `H` for retained manual
@@ -187,6 +187,6 @@ thresholds, style gates, or authorship detection.
   requested configuration. One checked compiler or platform does not create a
   general support claim.
 - Manual HPC qualification uses `H` plus the behavior's other risk classes.
-  Review binds the pushed source commit, resolved environment, executable,
-  run, and finalized retained files; unavailable hardware and rerun limits remain
+  Review binds the exact pushed source, resolved environment, executable, run,
+  and finalized artifacts; unavailable hardware and rerun limits remain
   visible.

@@ -24,11 +24,11 @@ rounds and verification evidence.
 
 - Status:
 - Governing issue and parent issue, if any:
-- Scope:
+- Authorized scope:
 - Explicit non-goals:
 - Applicable playbook risk classes:
-- Review roles and required checks:
-- Current pushed PR commit:
+- Risk-selected review roles and required checks:
+- Current exact pushed candidate SHA:
 - Requested decision:
 - Limitations:
 - Blocking questions:
@@ -116,9 +116,9 @@ change that deserve particular attention.
 ## Independent review record
 
 - Reviewed PR:
-- Reviewed commit:
+- Candidate commit:
 - Playbook revision:
-- Invocation records (role, supplied files and evidence, reviewer/session class, read-only status, independent checks, result, and limitations):
+- Invocation records (role, supplied context boundary, reviewer/session class, read-only status, independent checks, result, and limitations):
 - Stable finding IDs and original-finding links:
 - Disposition and verification links:
 - Prior and replacement SHAs for re-review, verified finding IDs, repair-risk result, or why re-review was not required:
@@ -127,12 +127,12 @@ change that deserve particular attention.
 
 Complete before ready-to-merge handoff.
 
-- Reviewed PR commit:
+- Reviewed exact candidate SHA:
 - Current `development` SHA:
 - Intervening changes:
 - Base update method:
 - Checks rerun:
-- Substantive changes since the reviewed commit:
+- Substantive delta from the reviewed candidate:
 - Independent re-review required, with prior/replacement SHAs, stable finding IDs, and repair risk:
 
 ## Checks not run
@@ -142,7 +142,7 @@ scope of this change.
 
 ## Checklist
 
-- [ ] The change stays within the governing issue.
+- [ ] The change is bounded to the governing issue.
 - [ ] Unrelated cleanup, renaming, file movement, and reformatting have been excluded.
 - [ ] Generated files, runtime outputs, local paths, and machine-specific settings are not included.
 - [ ] Documentation was updated where current behavior or interfaces changed.

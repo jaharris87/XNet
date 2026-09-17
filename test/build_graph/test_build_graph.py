@@ -10,7 +10,7 @@ from typing import Dict, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "source"
-PRODUCTION_MAKEFILE = SOURCE / "Makefile.production"
+DEPENDENCIES_MAKEFILE = SOURCE / "make" / "dependencies.mk"
 
 
 def make(
@@ -30,7 +30,7 @@ def require_success(result: subprocess.CompletedProcess[str]) -> None:
 
 
 def main() -> int:
-    makefile = PRODUCTION_MAKEFILE.read_text(encoding="utf-8")
+    makefile = DEPENDENCIES_MAKEFILE.read_text(encoding="utf-8")
     sparse_jacobian_rule = next(
         line for line in makefile.splitlines() if "$(call solver_obj,$(JAC_SRC)):" in line
     )

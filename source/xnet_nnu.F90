@@ -122,10 +122,10 @@ Contains
   End Subroutine nnu_match
 
   Subroutine nnu_flux(tf,nf,ltnuf,fluxf,ts,ns,tnus,fluxs)
-    !XDIR XROUTINE_SEQ
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Integer, Intent(in) :: ns
@@ -149,7 +149,9 @@ Contains
         If ( tf <= ts(n) ) Exit
       EndDo
       nf = n
-      rdt = ( tf - ts(nf-1)) / ( ts(nf) - ts(nf-1) )
+      If ( nf > 1 .and. nf <= ns ) Then
+        rdt = ( tf - ts(nf-1)) / ( ts(nf) - ts(nf-1) )
+      EndIf
     EndIf
 
     Do j = 1, nnuspec

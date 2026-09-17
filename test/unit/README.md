@@ -1,0 +1,426 @@
+# Focused component tests
+
+From the repository root, the fast offline suite is built and run with:
+
+```bash
+make -C test/unit
+```
+
+The default uses the tracked GNU `CMODE=OPT` configuration. A bounds-checking
+run uses the same target with `CMODE=DEBUG`:
+
+```bash
+make -C test/unit clean test CMODE=DEBUG
+```
+
+The Makefile puts its generated fixtures and focused-test objects under the
+ignored `test/unit/build/` directory. It includes the production GNU
+configuration and compiles the
+actual `xnet_util.F90`, `xnet_conditions.F90`, `xnet_abundances.F90`, and
+`xnet_nnu.F90`, `xnet_timers.F90`, and `xnet_nse.F90` sources, plus the
+selected LAPACK routines or libraries required by the NSE solver. It also
+compiles the production network preprocessing, data, match, and PARDISO
+sparse-reader modules. Separate executables compile the production dense,
+MA48, standalone PARDISO, and MKL PARDISO Jacobian implementations in separate
+module directories because those sources intentionally provide the same
+`xnet_jacobian` module name. Separate EOS executables likewise compile
+the production STARKILLER and Bahcall implementations in separate module
+directories because both provide `xnet_eos`. The build-net interoperability
+component cleans and rebuilds the tracked production configuration because
+its final check is a real one-zone executable smoke. It resolves the canonical
+`XNET_EXE` path from Make; production objects and executables remain below the
+ignored repository `build/` directory.
+
+## Support and coverage
+
+`support/xnet_test_stubs.F90` supplies only the controls, zone mask, tiny
+`nuclear_data` arrays, diagnostic units, serial abort service, and deterministic
+EOS behavior needed to link the selected production modules. Most tests
+initialize two nuclei and three zones directly. The NSE tests use a compact
+eight-species fixture with physical mass and binding inputs; they do not copy
+a production algorithm or provide a generic mock framework. The runner explicitly disables `test-drive` test-level
+parallelism because the component fixtures intentionally share this small
+module state; production code still compiles with the selected OpenMP flags.
+
+The issue #41 scientific NSE executable is separate from that eight-species
+software fixture.  It loads the retained 489-species `torch489` network and
+independently generated complete compositions under `test/nse_validation/`,
+then calls the production `nse_initialize` and `nse_solve` routines directly.
+Its scientific basis, exact inputs, tolerance derivation, reproduction steps,
+and limitations are documented in `test/nse_validation/README.md`.
+
+The solver-adapter executables use a three-equation nonsymmetric fixture in two
+zones, with an optional fourth temperature equation. Test-only MA48 and
+PARDISO external symbols record ABI arguments, phases, controls, and zone
+association. The dense linear-algebra stub and sparse solver stubs pass the
+received dense or reconstructed matrix to the vendored NETLIB `dgesv`; they do
+not represent or qualify any licensed solver implementation.
+
+Issue #44 adds two opt-in real-library targets that reuse the same production
+implementations and known-system fixture without entering the dependency-free
+default suite:
+
+```text
+make -C test/unit clean real-ma48-test HSL_MA48_SOURCE=/approved/path/MA48.f
+make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
+```
+
+The first requires maintainer-licensed HSL source outside the repository; the
+second requires an initialized oneMKL environment. Each runs base and
+self-heating residual checks, tracked controls, a real solver-error status path,
+and a controlled result-perturbation effectiveness check. Sparse-solver support
+status, complete build/run commands, and license limits are documented under
+`test/qualification/sparse_backends/`.
+
+The suite checks:
+
+- ordinary, vector, and upper/lower-clamped `safe_exp` results;
+- exact mass normalization and exact mass/charge normalization;
+- one- and two-digit output suffixes, including zero padding;
+- initial-abundance reader defaults and open status for a missing file, plus valid-file composition preservation;
+- scalar trajectory interpolation at the lower bound, an exact knot, an
+  interior point, the upper bound, and beyond the history;
+- scalar/vector trajectory equivalence and inactive-lane preservation;
+- scalar/vector abundance moments, including an auxiliary contribution, and
+  inactive-lane preservation;
+- constant neutrino histories, zero/zero, zero/nonzero, and logarithmic
+  positive-flux interpolation, exact knots, endpoints, and both sides of the
+  supplied time range;
+- unscreened NSE states across three density, temperature, and electron-fraction
+  combinations, including finite/nonnegative composition, mass and charge
+  reconstruction, and solver counters;
+- repeatability between the default NSE roots and a materially different
+  supplied initial guess; and
+- screened NSE execution through a deterministic test-only EOS;
+- complete unscreened 489-species NSE compositions at symmetric,
+  neutron-rich, and proton-rich/lower-density states against the independent
+  issue #41 reference, including conservation, identity, invalid-value,
+  supplied-guess, binding-input, and tolerance-boundary effectiveness checks;
+- STARKILLER and Bahcall initialization, scalar/vector equivalence, argument
+  order, finite/sign/range invariants, repeatability, and masked-lane
+  preservation for the EOS and screening interfaces;
+- STARKILLER failure with a missing `helm_table.dat` and agreement of its
+  table-based Helmholtz EOS at five density, temperature, and composition
+  states with direct Timmes EOS values independently generated from the
+  authoritative Cococubed source documented under `fixtures/eos/`;
+- direct `net_preprocess` and standalone `net_setup` semantic equivalence for
+  the synthetic fixture described under `fixtures/preprocess/`;
+- nuclear/reaction translation, weak/reverse flags, repeated-participant
+  multiplicities, recomputed Q values, match associations, and the full CRS
+  structure and reaction-to-entry maps;
+- detectable failure for truncated rates, inconsistent participant layouts,
+  and an unreadable generated reaction file;
+- storage-order-independent agreement between dense, MA48 coordinate, and
+  PARDISO CRS matrices, including identity entries and every fixture reaction
+  map;
+- exact self-heating structure for each sparse implementation, covering the
+  abundance-temperature column, temperature-abundance row, and temperature
+  diagonal;
+- MA48 control translation plus analysis/factor/solve sequencing, reuse, and
+  one-shot warning/storage recovery;
+- standalone and MKL PARDISO initialization ABI, adapter-owned option and
+  one-based-index invariants, phase, symbolic/numeric reuse, and copy-back
+  differences; and
+- two-zone known-system solutions with residual checks and fatal subprocess
+  checks for injected initialization, storage, singularity, factorization, and
+  solve failures;
+- deterministic `build_net` selection from tiny public synthetic mass,
+  partition-function, REACLIB, and weak-rate catalogs, both with and without
+  weak rates and without private neutrino data;
+- generated species order, selected mass and partition data, retained and
+  excluded reactions, weak/reverse metadata, and mass-consistent Q values;
+- early production-reader rejection when `sunet` and `netwinv` disagree on
+  nuclei counts or order, including the final nucleus, or when `nets4`
+  disagrees with installed nuclear data;
+- early rejection when any `match_data` reaction count disagrees with
+  `nets4`;
+- nonzero `build_net` status for missing, duplicate, unavailable, malformed,
+  and truncated inputs; and
+- `build_net` output interoperability through `net_setup`, the production
+  nuclear/reaction/match/sparse readers, and a short production `xnet` run.
+
+## Network preprocessing component
+
+The process-integration part runs in isolated directories below `build/` and
+does not alter tracked network data. The fixture is synthetic, contains no
+private data, and deliberately includes one rate with an unavailable species
+that production preprocessing must drop. The suite compares formatted
+semantic summaries from direct preprocessing and `net_setup`; it does not
+compare compiler-specific sequential-unformatted bytes.
+
+The generated-file inventory is:
+
+| Generated file | Check |
+| --- | --- |
+| `nuc_data` | Test-side decoder matches species, nuclear values, temperature grid, partition functions, and spins loaded by production nuclear-data code. |
+| `nets3`, `nets4` | Production reaction reader plus reaction, index, and multiplicity checks. |
+| `match_data` | Production match reader plus participant, sign, Q, weak-flag, and reverse-association checks. |
+| `sparse_ind` | Production PARDISO reader plus CRS and every reaction-to-entry map check. |
+| `ab_blank` | Species order and zero abundances. |
+| `match_read` | Every participant, descriptor, endpoint coordinate, scale, and record order. |
+| `matr_shape` | Trial right-hand side plus exact ordered coordinates and values reconstructed from the sparse reaction maps. |
+| `net_desc` | Description payload, species and reaction dimensions, chapter ranges, non-REACLIB counts, and sparse widths. |
+| `net_diag` | Fixture Q corrections, matched reaction diagnostics, and every sparse-row diagnostic. |
+
+The PARDISO library entry points are narrow test stubs because only the
+production sparse-file reader is invoked; no solver result is simulated or
+claimed. Controlled in-memory corruptions must reject a wrong extended
+reaction index, missing diagonal, out-of-range column, nonmonotone row
+pointer, and reversed match association. Separate subprocesses require
+nonzero results for truncated and inconsistent ASCII inputs and for an
+unreadable `nets3` file.
+
+## Build-net construction and interoperability
+
+`fixtures/build_net/README.md` defines the five-species output assembled from
+tiny generated source catalogs. The catalog also contains one unrequested
+species and a strong rate involving an unavailable participant so the suite
+can prove that selection occurred. The public-format weak fixture contains two
+directional rates; a second successful run disables weak rates and requires no
+weak source. No private neutrino data is used.
+
+The runner executes identical positive construction twice and compares parsed
+semantics, then checks every expected output field rather than comparing raw
+files.  Its mass catalog includes a valid selected mass with an unavailable
+`#` uncertainty, an unselected unavailable `#` mass, a selected unavailable
+mass, and a malformed row containing `#`, so the reader must distinguish the
+required field.  It requires nonzero status and an error diagnostic for a normalized
+duplicate, blank or unavailable requested species, malformed namelist,
+malformed initial or later REACLIB data, missing required mass input, and
+missing explicitly enabled weak input. Controlled output
+mutations must be rejected for a retained reaction with an absent participant,
+changed species order, changed mass, and changed Q value.
+
+The unmodified positive output passes through the real `net_setup` program.
+The resulting binary artifacts are then loaded by production nuclear,
+reaction, match, and PARDISO sparse-data readers. Fixture-specific checks cover
+the selected nuclear and partition values, reaction participants and
+coefficients, recomputed Q and weak/reverse flags, match associations, exact
+CRS coordinates, and every reaction-to-entry map before the tracked serial GNU
+`build/default/bin/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
+requires normal target-time completion and emitted counters; it is an
+interoperability check, not a stored scientific endpoint comparison.
+
+The production-reader check also exercises isolated malformed copies of the
+same generated bundle. Data after each changed count/order boundary is removed,
+so the expected file-specific diagnostic must reach the reader's termination
+path before dependent payload reads. Head and final-nucleus order changes check
+the complete ordered list. A padding-only `sunet` variant remains valid and
+preserves the canonical names read from `netwinv`.
+
+## Vendored test-drive dependency
+
+The suite vendors the single-file upstream `test-drive` v0.5.0 release at
+commit `fd66b4bca683c5fa5d92536075734f0792824d37`:
+
+- `vendor/test-drive/testdrive.F90`, SHA-256
+  `e8765129ba304f28c4bcfc20860cb49e0046e76527e4c240eeb54a5fea22837d`;
+- `vendor/test-drive/LICENSE-MIT`, SHA-256
+  `d34e0235cb56e251ea1c23f9c803857267d083459aeedcd06b538c0335d69e46`.
+
+Upstream explicitly permits redistribution of `src/testdrive.F90` and offers
+Apache-2.0 or MIT terms. This repository uses the MIT option and retains that
+license beside the vendored source. Version 0.5.0 supplies the small
+procedural API needed here. Version 0.6.0 was also evaluated, but test-suite
+construction aborted with `SIGABRT` under both tracked GNU configurations
+with GNU Fortran 16.1.0; no root cause is claimed here.
+
+Normal build and test execution makes no network request. To update the
+dependency, select and review an upstream release, verify its tag commit,
+replace `src/testdrive.F90` and the selected license in `vendor/test-drive/`,
+update the version, commit, and SHA-256 values above, and rerun both GNU
+configurations plus the controlled effectiveness checks below.
+
+## Issue 37 effectiveness record
+
+On 2026-08-07, GNU Fortran 16.1.0 and GNU Make 3.81 on macOS were used for the
+following checks. One production correction restricts calculation of the
+neutrino interpolation ratio to an interior or exact-upper-knot interval.
+Before that correction, the DEBUG suite stopped in `nnu_flux` with status 2:
+
+```text
+Fortran runtime error: Index '0' of dimension 1 of array 'ts' below lower bound of 1
+Fortran runtime error: Index '4' of dimension 1 of array 'ts' above upper bound of 3
+```
+
+The other production correction changes the masked vector `y_moment` result
+arrays from `Intent(out)` to `Intent(inout)`. With `Intent(out)`, Fortran made
+every result undefined on entry, so skipping an inactive lane could not
+contractually preserve its incoming value. The corrected interface matches
+the masked implementation and the sentinel checks. Its accelerator data entry
+also copies incoming result values to the device before active lanes are
+updated, so the whole-array copyout preserves inactive lanes.
+
+After the corrections, both tracked configurations passed all nine tests. The
+clean build-and-run wall times measured with `/usr/bin/time -p` were 1.27
+seconds for the final DEBUG run and 2.08 seconds for the final OPT run. The
+existing helper-only suite also passed unchanged:
+
+```text
+.venv/bin/python -m pytest -q test/regression/test_xnet_regression.py
+166 passed in 12.83s
+```
+
+The serial-runner review fix was checked with a clean
+`CMODE=DEBUG OPENMP_MODE=ON` build. After that build passed 9/9, the test
+executable passed 500 consecutive runs with `OMP_NUM_THREADS=9`. The runner
+therefore remains serial even when the production modules are compiled with
+OpenMP enabled. `make -C source -j` also recompiled the changed production
+modules and linked the then-current tracked default `source/xnet` target successfully.
+Preprocessor inspection showed the masked `y_moment` entry/exit mapping as
+OpenACC `copyin`/`copyout` and OpenMP offload `map(to:)`/`map(from:)` for all
+six result arrays. A GNU OpenACC host-fallback build of that expanded
+production routine passed 9/9, including the inactive sentinels. No
+accelerator-device runtime was available.
+
+Six additional controlled source mutations were applied only in temporary
+copies and each made the named test fail:
+
+| Controlled mutation | Detecting test |
+| --- | --- |
+| Swap the old/new weights in neutrino temperature interpolation | `neutrino interpolation` |
+| Omit the abundance rescaling in `norm` | `mass normalization` |
+| Remove the integer-format precision used for zero padding | `ordered output suffix` |
+| Pass density history as the vector temperature history | `trajectory vector mask` |
+| Execute the trajectory vector body for an inactive lane | `trajectory vector mask` |
+| Return zero instead of the lower `safe_exp` clamp | `safe exponential` |
+
+The pre-fix range failure was reproduced separately by restoring the original
+unconditional ratio calculation in a temporary copy. These mutations and the
+pre-fix reproduction all returned nonzero status under `CMODE=DEBUG`; the
+repository sources were restored before the final verification runs.
+
+## Issue 40 effectiveness record
+
+The NSE additions exercise the production `nse_solve` calculation directly.
+They use the same finite-state, mass-normalization, reconstructed-charge, and
+counter checks for screened and unscreened calls. A separate bounded process
+test drives `xnse` with three ordered SN160 rows and rejects malformed input,
+invalid solver states, incomplete output, and row/counter misassociation.
+
+That process coverage exposed an existing serial termination defect: both
+malformed `xnse` input and NSE nonconvergence printed fatal diagnostics but
+returned process status 0. `xnet_parallel_stubs.F90` now uses `stop 1` in its
+two serial abort paths. The MPI implementation is unchanged.
+
+## Issue 38 effectiveness record
+
+On 2026-08-07, GNU Fortran 16.1.0 and GNU Make 3.81 on macOS were used for
+clean OPT and DEBUG/bounds-checking runs. Both configurations passed the nine
+existing deterministic tests and the preprocessing process-integration
+component; each clean build-and-run completed in seconds.
+
+Before the production correction, EOF after a reaction header was treated as
+normal end-of-input and could silently produce an incomplete network. The
+corrected path rejects that truncation, rejects participant counts that do not
+match the active chapter, reports a missing `netsu`, and makes serial
+`parallel_abort` return nonzero. The final suite observed nonzero status for
+both direct and standalone truncated-input runs, for the inconsistent fixture,
+and for production reaction-reader failure with an unreadable `nets3`.
+
+Five controlled in-memory corruptions were each rejected: a wrong extended
+reaction index, missing diagonal, out-of-range sparse column, nonmonotone row
+pointer, and reversed match association. The fixture's unavailable `mg24`
+participant was dropped and the expected reaction and extended-map counts
+were retained. Direct and standalone formatted semantic summaries were
+identical.
+
+The tracked default production build linked successfully. The complete
+external-process regression suite, including all six maintained cases, also
+passed:
+
+```text
+.venv/bin/python -m pytest -q test/regression \
+    --xnet-executable=/absolute/path/to/build/default/bin/xnet
+172 passed in 16.97s
+```
+
+The checks are limited to the tracked serial GNU CPU configuration. They make
+no raw-byte portability, optional sparse-solver execution, scientific-rate,
+or accelerator claim.
+
+## Issue 39 effectiveness record
+
+On 2026-08-07, GNU Fortran 16.1.0, GNU Make 3.81, Python 3.13.0, and pytest
+9.1.1 on macOS were used for the final checks. Before the production changes,
+running the existing optimized `build_net` in an empty directory printed the
+missing `sunet.sn160` diagnostic but returned process status 0. The corrected
+required-input and parsing paths return nonzero status with a specific error.
+
+Clean tracked configurations passed the complete deterministic suite,
+including construction, preprocessing readers, and the one-zone smoke:
+
+```text
+make -C test/unit clean test CMODE=DEBUG
+build_net construction, preprocessing, and one-zone smoke contracts passed
+real 15.01
+
+make -C test/unit clean test
+build_net construction, preprocessing, and one-zone smoke contracts passed
+real 24.26
+```
+
+The optimized production `xnet` and `xnse` executables also passed the complete
+external-process preservation suite:
+
+```text
+python3 -m pytest -q test/regression \
+    --xnet-executable=/absolute/path/to/build/default/bin/xnet \
+    --xnse-executable=/absolute/path/to/build/default/bin/xnse
+182 passed in 22.28s
+```
+
+All four controlled semantic output mutations and every invalid-input case
+were detected. A fifth controlled production mutation restoring the old
+raw-mass weak-Q calculation failed with `weak Q value is inconsistent with
+copied masses for ('p', 'n')`. Repeated positive construction produced the
+same parsed semantics. The legacy `test/build_net` Makefile also built
+successfully with its ordinary sequential `make` invocation. These checks cover the tracked
+serial GNU CPU configuration and synthetic source formats only; they do not
+validate production nuclear-data quality, private neutrino data, MPI,
+accelerators, other compilers, or a long scientific result.
+
+## Issue 42 effectiveness record
+
+The EOS-only command is:
+
+```text
+make -C test/unit clean eos-test
+make -C test/unit clean eos-test CMODE=DEBUG
+```
+
+The tracked GNU configuration uses `PE_ENV=GNU`, `FC=gfortran`,
+`LDR=gfortran`, serial CPU execution, the in-tree NETLIB objects, and either
+`CMODE=OPT` or bounds-checking `CMODE=DEBUG`. Both providers are compiled with
+the same selected variables in their isolated module directories.
+
+Both provider executables compile production sources behind their shared
+`xnet_eos` module name. The STARKILLER run exercises the table-based Helmholtz
+EOS and compares its XNet fields at five states with values from a separate,
+direct Timmes EOS calculation. The Cococubed archive provenance, exact
+relationship between the implementations, and field mappings are documented
+in `fixtures/eos/README.md`. The Bahcall run is an interface and anti-bit-rot
+component; it is not an independent scientific qualification.
+
+Before the production correction, Bahcall failed scalar/vector agreement
+because its scalar procedure declared `(rho,t9,...)` while the generic call
+contract and vector procedure use `(t9,rho,...)`. The masked vector result
+arguments were also `Intent(out)`, which made inactive-lane preservation
+undefined on procedure entry even when a host compiler happened to retain the
+incoming bits. They now use `Intent(inout)`; the STARKILLER accelerator data
+regions copy those incoming values before active lanes are updated.
+
+Four test-only effectiveness mutations return nonzero status through
+`XNET_EOS_MUTATION`: `mask` executes the nominally inactive lane,
+`argument_swap` reverses the scalar state inputs, `unit_conversion` omits the
+GK factor from the independent `cv` mapping, and `reference` perturbs one eta
+value by one percent. Missing-table initialization also returns nonzero and
+names `helm_table.dat`.
+
+`EOS=HELMHOLTZ` is explicitly unqualified and unsupported by this repository
+state. This separate build choice requires source through `HELMHOLTZ_PATH`;
+the source is not tracked and the Cococubed archive was used here only as the
+authoritative upstream reference, not added as a production dependency. The
+component therefore does not stub that provider or claim qualification. A
+future support decision requires an approved maintained integration and a real
+provider-isolated run of the shared contract.

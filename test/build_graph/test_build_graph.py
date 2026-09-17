@@ -36,6 +36,14 @@ def main() -> int:
         assert mismatch.returncode != 0
         assert "incompatible BUILD_DIR configuration" in mismatch.stderr
 
+        invalid_record = make(
+            f"BUILD_DIR={build.parent / 'invalid-record'}",
+            "FFLAGS=safe_flag\nINJECTED=1",
+            "xnet",
+        )
+        assert invalid_record.returncode != 0
+        assert "cannot represent single quotes or line breaks" in invalid_record.stderr
+
         clean = make(f"BUILD_DIR={build}", "clean")
         require_success(clean)
         assert not build.exists()

@@ -2,7 +2,6 @@
 # One direct GNU Make graph.  Do not run two top-level Make processes in one
 # BUILD_DIR, and do not clean a directory while another invocation uses it.
 SHELL := /bin/sh
-XNET_NEW_GRAPH := yes
 XNET_DIR := $(abspath .)
 ROOT_DIR := $(abspath ..)
 BUILD_BASE ?= build
@@ -86,7 +85,6 @@ OPENMP_OL_MODE ?= OFF
 GPU_BACKEND ?= CUDA
 GPU_LAPACK_VER ?= CUBLAS
 GPU_TARGET ?= Volta
-XNET_EXTERNAL_MODULES ?= iso_c_binding iso_fortran_env omp_lib openacc mpi mpi_f08
 XNET_EXTERNAL_MODULE_DIRS ?=
 XNET_CPP ?= cpp
 NVCC ?= nvcc
@@ -202,7 +200,7 @@ endif
 include $(XNET_DIR)/Makefile.internal
 
 PRIVATE_PROVIDER_VARIABLES := MPI_SRC EOS_SRC JAC_SRC GPU_PROVIDER_SRC LAPACK_SRC SOLVER_SRC \
-  CORE_SRC DRIVER_SRC XNSE_MAIN_SRC SETUP_MAIN_SRC PROBE_SRC SPARSE_SRC XNSE_CORE_SRC SETUP_CORE_SRC
+  CORE_SRC DRIVER_SRC XNSE_MAIN_SRC PROBE_SRC SPARSE_SRC XNSE_CORE_SRC SETUP_CORE_SRC
 PROVIDER_OVERRIDES := $(strip $(foreach variable,$(PRIVATE_PROVIDER_VARIABLES),\
   $(if $(filter command line,$(origin $(variable))),$(variable))))
 ifneq ($(PROVIDER_OVERRIDES),)
@@ -335,7 +333,6 @@ CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_controls.F90 xnet_data.F90 xnet_output
   xnet_preprocess.F90 xnet_screening.F90 xnet_timers.F90 xnet_types.F90 xnet_util.F90)
 DRIVER_SRC := $(addprefix $(XNET_DIR)/,model_input_ascii.F90 net.F90)
 XNSE_MAIN_SRC := $(XNET_DIR)/nse_slice.F90
-SETUP_MAIN_SRC := $(XNET_DIR)/net_setup.F90
 PROBE_SRC := $(ROOT_DIR)/test/qualification/frontier/gpu_linalg_probe.F90
 SPARSE_SRC := $(if $(filter MA48 PARDISO,$(MATRIX_SOLVER)),$(XNET_DIR)/xnet_sparse.F90)
 XNSE_CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_abundances.F90 xnet_conditions.F90 xnet_controls.F90 \
@@ -345,7 +342,7 @@ SETUP_CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_conditions.F90 xnet_controls.F90
   net_setup.F90 xnet_constants.F90 xnet_fd.F90 xnet_ffn.F90 xnet_nnu.F90 \
   xnet_preprocess.F90 xnet_util.F90 xnet_types.F90)
 SOURCE_FREE_SRC := $(sort $(CORE_SRC) $(DRIVER_SRC) $(XNSE_CORE_SRC) $(SETUP_CORE_SRC) \
-                   $(XNSE_MAIN_SRC) $(SETUP_MAIN_SRC) $(MPI_SRC) $(PROBE_SRC))
+                   $(XNSE_MAIN_SRC) $(MPI_SRC) $(PROBE_SRC))
 EOS_FREE_SRC := $(sort $(EOS_SRC))
 SOLVER_FREE_SRC := $(sort $(JAC_SRC) $(SPARSE_SRC) $(filter %.F90 %.f90,$(SOLVER_SRC)))
 LAPACK_FREE_SRC := $(sort $(filter %.F90 %.f90,$(LAPACK_SRC)))
@@ -403,10 +400,8 @@ CPP_DEFINITION_FLAGS := $(filter -D% -U%,$(FFLAGS) $(F90FLAGS)) $(GPU_DEFINES)
 CPP_EFFECTIVE_FLAGS := -P -C -nostdinc $(CPP_INCLUDE_FLAGS) $(CPP_DEFINITION_FLAGS)
 ifneq ($(filter CCE CRAY,$(PE_ENV)),)
   CRAY_RETAINED_PP := yes
-  PREPROCESS_COMMAND := env XNET_CPP=$(XNET_CPP) $(XNET_DIR)/crayftn_cpp.sh
 else
   CRAY_RETAINED_PP := no
-  PREPROCESS_COMMAND := $(XNET_CPP)
 endif
 
 SOURCE_OBJ_DIR := $(OBJ_DIR)/source
@@ -474,13 +469,24 @@ XNET_CFG_OPENMP_OL_MODE := $(OPENMP_OL_MODE)
 XNET_CFG_EOS := $(EOS)
 XNET_CFG_MATRIX_SOLVER := $(MATRIX_SOLVER)
 XNET_CFG_LAPACK_VER := $(LAPACK_VER)
-CONFIG_UNSUPPORTED := $(findstring ',$(COMPILE_FC) $(CC) $(CXX) $(NVCC) $(XNET_CPP) $(LDR) \
+define XNET_CONFIG_NEWLINE
+
+
+endef
+XNET_CONFIG_CR := $(shell printf '\r')
+CONFIG_RECORD_VALUES := $(XNET_CFG_SOURCE_ROOT) $(XNET_CFG_PE_ENV) $(XNET_CFG_CMODE) $(XNET_CFG_MACHINE) \
+  $(XNET_CFG_MPI_MODE) $(XNET_CFG_OPENMP_MODE) $(XNET_CFG_GPU_MODE) $(XNET_CFG_GPU_BACKEND) \
+  $(XNET_CFG_GPU_LAPACK_VER) $(XNET_CFG_GPU_TARGET) $(XNET_CFG_OPENACC_MODE) $(XNET_CFG_OPENMP_OL_MODE) \
+  $(XNET_CFG_EOS) $(XNET_CFG_MATRIX_SOLVER) $(XNET_CFG_LAPACK_VER) $(COMPILE_FC) $(CC) $(CXX) $(NVCC) $(XNET_CPP) $(LDR) \
   $(COMPILE_FFLAGS) $(COMPILE_F90FLAGS) $(F77FLAGS) $(CFLAGS) $(CXXFLAGS) $(NVCCFLAGS) \
   $(CPP_EFFECTIVE_FLAGS) $(LDFLAGS) $(LAPACK_INC) $(LAPACK_LIBDIR) $(LAPACK_LIBS) \
   $(SOLVER_INC) $(SOLVER_LIBDIR) $(SOLVER_LIBS) $(GPU_PROVIDER_SRC) $(SELECTED_EXTERNAL_MODULE_DIRS) $(MPI_SRC) $(EOS_SRC) $(JAC_SRC) \
-  $(SOLVER_PROVIDER_ID) $(LAPACK_PROVIDER_ID))
-ifneq ($(strip $(CONFIG_UNSUPPORTED)),)
-  $(error config.txt cannot represent single quotes in recorded settings; choose a different spelling or BUILD_DIR)
+  $(SOLVER_PROVIDER_ID) $(LAPACK_PROVIDER_ID)
+CONFIG_UNSUPPORTED_QUOTE := $(findstring ',$(CONFIG_RECORD_VALUES))
+CONFIG_UNSUPPORTED_LF := $(if $(findstring $(XNET_CONFIG_NEWLINE),$(CONFIG_RECORD_VALUES)),yes)
+CONFIG_UNSUPPORTED_CR := $(if $(findstring $(XNET_CONFIG_CR),$(CONFIG_RECORD_VALUES)),yes)
+ifneq ($(strip $(CONFIG_UNSUPPORTED_QUOTE)$(CONFIG_UNSUPPORTED_LF)$(CONFIG_UNSUPPORTED_CR)),)
+  $(error config.txt cannot represent single quotes or line breaks in recorded settings; choose a different spelling or BUILD_DIR)
 endif
 
 .PHONY: $(PUBLIC_TARGETS) FORCE

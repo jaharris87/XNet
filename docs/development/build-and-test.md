@@ -31,8 +31,8 @@ The Makefile fragments have distinct roles:
 - `source/Makefile` is the small public entry point. Its included
   `source/make/build.mk` defines the production build and its output layout.
 - `source/make/configuration.mk` validates compiler/platform selectors.
-- `source/make/providers.mk` selects MPI, EOS, solver, accelerator, and
-  numerical-library implementations.
+- `source/make/providers.mk` selects the MPI, EOS, solver, accelerator, and
+  numerical-library providers.
 - `source/make/sources.mk` lists sources and output files and records
   configuration reuse.
 - `source/make/dependencies.mk` records explicit Fortran module prerequisites.
@@ -86,7 +86,7 @@ environment, result, and date.
 A named Make target records a build recipe, not a support claim. The current
 serial CPU support dispositions are:
 
-| Implementation | Selection | Status and limit |
+| Provider | Selection | Status and limit |
 | --- | --- | --- |
 | HSL MA48 2.2.0 | `MATRIX_SOLVER=MA48` with external `MA48.f` | Qualified on macOS arm64 with GNU Fortran 16.1.0. The maintainer-supplied source is used under a maintainer-held non-redistributable HSL licence and must remain outside the repository. Other HSL versions, compilers, and platforms are unqualified. |
 | Standalone PARDISO | `MATRIX_SOLVER=PARDISO` with `LAPACK_VER` other than `MKL` | Unsupported and unqualified. No approved compatible standalone dependency is maintained, and the legacy `/usr/local/pardiso` library-name defaults are not evidence of support. |
@@ -112,7 +112,7 @@ make -C source --no-print-directory print-MATRIX_SOLVER
 
 Each build directory contains predictable `obj/`, `mod/`, `pp/`, and
 `bin/` subdirectories plus `config.txt`. The configuration record preserves
-the exact effective selectors, commands, flags, selected source paths, and
+the exact effective selectors, commands, flags, provider paths, and
 external source paths. Reusing the directory with different material settings fails
 before preprocessing or compilation and directs the user to clean or choose
 another directory.
@@ -284,6 +284,7 @@ physics, numerical behavior, tolerances, convergence, or performance.
 
 Keep build objects, module files, executables, diagnostic outputs, comparison
 files, temporary control files, local installation paths, and machine-specific
-settings out of commits. Production build files remain below `BUILD_DIR`, but
-legacy problem drivers can still write into `test/`; review ignored files as
-well as `git status` after runs.
+settings out of commits. Production objects, module files, preprocessing
+output, `config.txt`, and executables remain below `BUILD_DIR`, but legacy
+problem drivers can still write into `test/`; review ignored files as well as
+`git status` after runs.

@@ -2,21 +2,26 @@
 """Focused effectiveness checks for the direct isolated GNU Make graph."""
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 import tempfile
+from typing import Dict, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "source"
 PRODUCTION_MAKEFILE = SOURCE / "Makefile.production"
 
 
-def make(*arguments: str) -> subprocess.CompletedProcess[str]:
+def make(
+    *arguments: str, environment: Optional[Dict[str, str]] = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["make", "-C", str(SOURCE), "--no-print-directory", *arguments],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=environment,
     )
 
 
@@ -35,6 +40,28 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="xnet-build-graph-") as temporary:
         build = pathlib.Path(temporary) / "gnu"
+        tools = build.parent / "tools"
+        tools.mkdir()
+        uname = tools / "uname"
+        uname.write_text(
+            "#!/bin/sh\ncase $1 in -n) echo generic42.example.invalid;; -s) echo Linux;; esac\n",
+            encoding="utf-8",
+        )
+        uname.chmod(0o755)
+        hostname_environment = dict(os.environ)
+        hostname_environment.pop("HOSTNAME", None)
+        hostname_environment["PATH"] = f"{tools}{os.pathsep}{hostname_environment['PATH']}"
+        architecture = make(
+            f"BUILD_DIR={build.parent / 'hostname'}",
+            "PE_ENV=GNU",
+            "print-MACHINE",
+            "print-ARCHOPT",
+            environment=hostname_environment,
+        )
+        require_success(architecture)
+        assert "MACHINE = generic" in architecture.stdout
+        assert "ARCHOPT = -march=native" in architecture.stdout
+
         products = make(f"BUILD_DIR={build}", "-j4", "xnet", "xnse", "net_setup")
         require_success(products)
         assert "python" not in (products.stdout + products.stderr).lower()

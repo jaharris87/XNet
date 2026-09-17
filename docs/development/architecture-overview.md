@@ -25,7 +25,7 @@ dedicated design document.
 
 Production builds place objects, module files, retained preprocessing, and
 executables under the caller-selected `BUILD_DIR` (default `build/default`).
-The graph compiles selected dependencies from `tools/` without generating
+The build compiles selected dependencies from `tools/` without generating
 source-tree products.
 
 ## Production areas

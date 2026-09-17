@@ -5,8 +5,8 @@
 ## Determine OS kernel (Linux or Darwin)
 UNAME_S ?= $(shell uname -s)
 
-## Host detection and concrete family defaults are conventional, tracked
-## fragments.  Compiler-family flags remain in this file.
+## Host detection and machine defaults are conventional, tracked fragments.
+## Compiler-family flags remain in this file.
 include $(XNET_DIR)/make/machines.mk
 
 ## Get PE_ENV from LMOD if being used

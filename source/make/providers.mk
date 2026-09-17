@@ -1,5 +1,5 @@
 # MPI, EOS, solver, accelerator, and numerical-library provider selection.
-# Accelerator providers are selected explicitly in this production graph.
+# The accelerator implementation is selected explicitly for the production build.
 override GPU_PROVIDER_SRC :=
 override GPU_DEFINES :=
 override GPU_INC :=

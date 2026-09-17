@@ -1,6 +1,6 @@
-# Configuration-isolated XNet production graph.
-# One direct GNU Make graph.  Do not run two top-level Make processes in one
-# BUILD_DIR, and do not clean a directory while another invocation uses it.
+# XNet production build.
+# One top-level GNU Make invocation owns a BUILD_DIR. Do not clean that
+# directory while the build is running.
 SHELL := /bin/sh
 XNET_DIR := $(abspath .)
 ROOT_DIR := $(abspath ..)

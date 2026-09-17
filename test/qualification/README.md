@@ -47,28 +47,21 @@ state leakage, a zero-status failure probe, and a process-group timeout.
 
 ## Configuration run
 
-Objects and modules are shared in `source/`, so each configuration must start
-with a clean build. Preserve each executable outside `source/` before cleaning
-for the next configuration. One example is:
+Use a different explicit build name for each configuration. The executable
+paths below are predictable and may be passed to the runner directly:
 
 ```bash
-mkdir -p /tmp/xnet-parallel-zone-bin
-make -C source clean
-make -C source -j CMODE=OPT PE_ENV=GNU MPI_MODE=OFF OPENMP_MODE=OFF
-cp source/xnet /tmp/xnet-parallel-zone-bin/xnet-serial
-
-make -C source clean
-make -C source -j CMODE=OPT PE_ENV=GNU MPI_MODE=ON OPENMP_MODE=OFF
-cp source/xnet /tmp/xnet-parallel-zone-bin/xnet-mpi
-
-make -C source clean
-make -C source -j CMODE=OPT PE_ENV=GNU MPI_MODE=OFF OPENMP_MODE=ON
-cp source/xnet /tmp/xnet-parallel-zone-bin/xnet-openmp
+make -C source BUILD_NAME=parallel-zone-serial -j \
+  CMODE=OPT PE_ENV=GNU MPI_MODE=OFF OPENMP_MODE=OFF xnet
+make -C source BUILD_NAME=parallel-zone-mpi -j \
+  CMODE=OPT PE_ENV=GNU MPI_MODE=ON OPENMP_MODE=OFF xnet
+make -C source BUILD_NAME=parallel-zone-openmp -j \
+  CMODE=OPT PE_ENV=GNU MPI_MODE=OFF OPENMP_MODE=ON xnet
 
 python3 test/qualification/parallel_zones.py \
-  --serial-executable=/tmp/xnet-parallel-zone-bin/xnet-serial \
-  --mpi-executable=/tmp/xnet-parallel-zone-bin/xnet-mpi \
-  --openmp-executable=/tmp/xnet-parallel-zone-bin/xnet-openmp \
+  --serial-executable="$PWD/build/parallel-zone-serial/bin/xnet" \
+  --mpi-executable="$PWD/build/parallel-zone-mpi/bin/xnet" \
+  --openmp-executable="$PWD/build/parallel-zone-openmp/bin/xnet" \
   --mpi-launcher="$(command -v mpiexec)" \
   --work-root=/tmp/xnet-parallel-zone-work \
   --timeout=60

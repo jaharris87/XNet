@@ -70,8 +70,9 @@ and account data remain in the external artifact directory.
 
 Use the current Frontier defaults unless the qualification is intentionally
 testing another recorded module set. OLCF's Frontier guide requires the
-`craype-accel-amd-gfx90a` module for Cray OpenMP offload and documents hipfort
-as an OLCF module. The checked configuration uses the Cray compiler wrappers,
+`craype-accel-amd-gfx90a` module for HPE Cray Programming Environment OpenMP
+offload and documents hipfort as an OLCF module. The checked configuration uses
+the Cray compiler wrappers,
 ROCm, OpenMP target offload, and HIP/rocBLAS bindings.
 
 After authenticating interactively on Frontier:
@@ -107,6 +108,7 @@ The explicit build selections are:
 
 | Selection | CPU | GPU |
 | --- | --- | --- |
+| Build directory | `build/frontier-cpu` | `build/frontier-gpu` |
 | Compiler/mode | `PE_ENV=CRAY`, `CMODE=OPT` | same |
 | Parallel modes | MPI/OpenMP off | MPI/host OpenMP off |
 | Accelerator | off | `GPU_MODE=ON`, `GPU_BACKEND=HIP` |
@@ -117,6 +119,10 @@ The explicit build selections are:
 The loaded accelerator target module makes `ftn -fopenmp` target the MI250X
 `gfx90a` device. GPU runs set `OMP_TARGET_OFFLOAD=MANDATORY`, so host fallback
 is a failure rather than a misleading pass.
+
+The runner passes `BUILD_NAME=frontier-cpu` and `BUILD_NAME=frontier-gpu` to
+the production Makefile, then collects the selected executables from the
+corresponding `build/<name>/bin/` directories in the extracted source tree.
 
 OpenMP-offload builds currently treat the shared `XASYNC` and `XWAIT` markers
 as no-ops and execute synchronously. Mapping XNet's queue-oriented OpenACC

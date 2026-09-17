@@ -51,15 +51,13 @@ directory:
 make -C test/unit clean real-ma48-test \
   HSL_MA48_SOURCE="$HSL_MA48_DIR/MA48.f"
 
-make -C source clean
-make -C source -j xnet_dense
-make -C source clean
-make -C source -j xnet_MA48 MA48_DIR="$HSL_MA48_DIR"
+make -C source BUILD_NAME=ma48-dense -j xnet_dense
+make -C source BUILD_NAME=ma48-sparse -j xnet_MA48 MA48_DIR="$HSL_MA48_DIR"
 
 python3 test/qualification/sparse_backends/compare_heat_sn160.py \
   --provider=ma48 \
-  --dense-executable="$PWD/source/xnetd" \
-  --sparse-executable="$PWD/source/xnetm" \
+  --dense-executable="$PWD/build/ma48-dense/bin/xnet" \
+  --sparse-executable="$PWD/build/ma48-sparse/bin/xnet" \
   --work-directory=/private/tmp/xnet-44-ma48
 ```
 
@@ -84,15 +82,13 @@ source /opt/intel/oneapi/setvars.sh
 
 make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
 
-make -C source clean
-make -C source -j xnet_dense LAPACK_VER=MKL
-make -C source clean
-make -C source -j xnet_PARDISO LAPACK_VER=MKL
+make -C source BUILD_NAME=pardiso-mkl-dense -j xnet_dense LAPACK_VER=MKL
+make -C source BUILD_NAME=pardiso-mkl-sparse -j xnet_PARDISO LAPACK_VER=MKL
 
 python3 test/qualification/sparse_backends/compare_heat_sn160.py \
   --provider=pardiso-mkl \
-  --dense-executable="$PWD/source/xnetd" \
-  --sparse-executable="$PWD/source/xnetp" \
+  --dense-executable="$PWD/build/pardiso-mkl-dense/bin/xnet" \
+  --sparse-executable="$PWD/build/pardiso-mkl-sparse/bin/xnet" \
   --work-directory=/tmp/xnet-44-pardiso-mkl
 ```
 

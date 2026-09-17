@@ -97,15 +97,40 @@ else
     ifeq ($(filter $(GPU_LAPACK_VER),CUBLAS MAGMA),)
       $(error CUDA requires GPU_LAPACK_VER=CUBLAS or MAGMA)
     endif
-    ifneq ($(filter Ampere sm80,$(GPU_TARGET)),)
-      $(error GPU_TARGET=$(GPU_TARGET) uses the broken sm80 mapping deferred to issue #100)
+    ifneq ($(filter Tesla,$(GPU_TARGET)),)
+      override GPU_TARGET := $(filter-out Tesla,$(GPU_TARGET)) sm10 sm13
     endif
-    ifneq ($(filter-out Tesla Fermi Kepler Maxwell Pascal Volta sm10 sm13 sm20 sm30 sm35 sm50 sm60 sm70,$(GPU_TARGET)),)
+    ifneq ($(filter Fermi,$(GPU_TARGET)),)
+      override GPU_TARGET := $(filter-out Fermi,$(GPU_TARGET)) sm20
+    endif
+    ifneq ($(filter Kepler,$(GPU_TARGET)),)
+      override GPU_TARGET := $(filter-out Kepler,$(GPU_TARGET)) sm30 sm35
+    endif
+    ifneq ($(filter Maxwell,$(GPU_TARGET)),)
+      override GPU_TARGET := $(filter-out Maxwell,$(GPU_TARGET)) sm50
+    endif
+    ifneq ($(filter Pascal,$(GPU_TARGET)),)
+      override GPU_TARGET := $(filter-out Pascal,$(GPU_TARGET)) sm60
+    endif
+    ifneq ($(filter Volta,$(GPU_TARGET)),)
+      override GPU_TARGET := $(filter-out Volta,$(GPU_TARGET)) sm70
+    endif
+    ifneq ($(filter Ampere,$(GPU_TARGET)),)
+      override GPU_TARGET := $(filter-out Ampere,$(GPU_TARGET)) sm80
+    endif
+    override GPU_TARGET := $(sort $(GPU_TARGET))
+    ifneq ($(filter-out sm10 sm13 sm20 sm30 sm35 sm50 sm60 sm70 sm80,$(GPU_TARGET)),)
       $(error unsupported CUDA GPU_TARGET '$(GPU_TARGET)')
     endif
+    override NVCCFLAGS += $(foreach target,$(GPU_TARGET),-gencode arch=compute_$(patsubst sm%,%,$(target)),code=sm_$(patsubst sm%,%,$(target)))
   else
     ifneq ($(GPU_LAPACK_VER),ROCM)
       $(error HIP requires GPU_LAPACK_VER=ROCM)
+    endif
+    ifeq ($(origin GPU_TARGET),command line)
+      ifneq ($(GPU_TARGET),inactive)
+        $(error GPU_TARGET is valid only with GPU_BACKEND=CUDA)
+      endif
     endif
     override GPU_TARGET := inactive
   endif

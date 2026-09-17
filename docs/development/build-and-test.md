@@ -45,8 +45,11 @@ The Makefile fragments have distinct roles:
   the tracked generic or Cray Programming Environment defaults. Compiler
   defaults remain in `Makefile.internal`; add a machine fragment and one
   visible mapping entry only when a real repository-supported machine needs
-  concrete overrides. Perlmutter and Frontier are current Cray-PE examples;
-  legacy host compatibility is not a support claim.
+  concrete overrides. Perlmutter is the current NERSC production system, and
+  Frontier is the retained OLCF accelerator qualification system. Summit and
+  Cori names remain only in retired-host compatibility lists. The maintainer
+  currently uses no IBM system; `summit`, `summitdev`, and `mira` remain only
+  as retired compatibility settings.
 
 Inspect the conditional path through these files for any configuration being
 changed. Variable names and commented examples provide orientation; the
@@ -88,9 +91,9 @@ serial CPU support dispositions are:
 
 | Provider | Selection | Status and limit |
 | --- | --- | --- |
-| HSL MA48 2.2.0 | `MATRIX_SOLVER=MA48` with external `MA48.f` | Qualified on macOS arm64 with GNU Fortran 16.1.0. The maintainer-supplied source is used under a maintainer-held non-redistributable HSL licence and must remain outside the repository. Other HSL versions, compilers, and platforms are unqualified. |
+| HSL MA48 2.2.0 | `MATRIX_SOLVER=MA48` with external `MA48.f` | Qualified on macOS arm64 with GNU Fortran 16.2.0 using the production build. The maintainer-supplied source is used under a maintainer-held non-redistributable HSL licence and must remain outside the repository. Other HSL versions, compilers, and platforms are unqualified. |
 | Standalone PARDISO | `MATRIX_SOLVER=PARDISO` with `LAPACK_VER` other than `MKL` | Unsupported and unqualified. No approved compatible standalone dependency is maintained, and the legacy `/usr/local/pardiso` library-name defaults are not evidence of support. |
-| Intel oneMKL PARDISO | `MATRIX_SOLVER=PARDISO LAPACK_VER=MKL` | Qualified on the `etacar` Linux x86_64 host with GNU Fortran 11.4.0 and oneMKL 2026.1. Other oneMKL versions, compilers, platforms, and parallel modes are unqualified. |
+| Intel oneMKL PARDISO | `MATRIX_SOLVER=PARDISO LAPACK_VER=MKL` | Previously qualified on the `etacar` Linux x86_64 host with GNU Fortran 11.4.0 and oneMKL 2026.1. The Phase-5 production build has not been checked there because the host is currently unreachable, so this revision remains unverified for oneMKL. Other oneMKL versions, compilers, platforms, and parallel modes are unqualified. |
 
 MA48 source must not be copied, committed, archived, or attached to an issue or
 pull request. HSL describes MA48 2.2.0 and its licensing restrictions in the
@@ -99,6 +102,21 @@ pull request. HSL describes MA48 2.2.0 and its licensing restrictions in the
 Intel's [Simplified Software License](https://www.intel.com/content/www/us/en/developer/articles/tool/onemkl-license-faq.html).
 The exact opt-in component and same-source dense comparison commands are in
 [`test/qualification/sparse_backends/README.md`](../../test/qualification/sparse_backends/README.md).
+
+## Platform status
+
+| Configuration | Current status |
+| --- | --- |
+| GNU serial OPT and DEBUG | Built and tested on macOS arm64 with GNU Fortran 16.2.0; the hosted GNU serial jobs provide the Linux check. |
+| GNU MPI and OpenMP | Serial, two-rank MPI, and two-thread OpenMP results agreed on the ten-zone qualification problem on macOS arm64 with GNU Fortran 16.2.0 and Open MPI 5.0.10. |
+| Frontier HIP/ROCm OpenMP offload | Retained qualification applies to source `97174bc0b382ed2c580eb517b05479e0ee63b184`, CCE 20.0.2, ROCm 6.4.2, hipfort 6.4.2, and MI250X. The Phase-5 build-directory changes have not been rerun on Frontier and are unverified there. |
+| Perlmutter | Current NERSC host selection is maintained, but no Perlmutter qualification is recorded for this revision. |
+| Summit and Cori host names | Retired compatibility settings only. |
+| Retired IBM host names | No current IBM system or qualification. `summit`, `summitdev`, and `mira` remain as compatibility settings only. |
+
+The exact commands, source revision, and any launcher-specific options belong
+in the issue or pull-request evidence for each run. A successful build alone
+does not establish runtime or numerical agreement.
 
 Make can display resolved values through the existing `print-%` target. For
 example:
@@ -218,7 +236,9 @@ runs. It has unreliable pass/fail reporting.
 
 - selects problems by numeric ID;
 - combines settings and setup files into `test/control`;
-- runs a supplied executable or a historical default;
+- runs a supplied executable or `build/default/bin/xnet`;
+- looks for an MPI build at `build/mpi/bin/xnet`; set `XNET_MPI` to use
+  another predictable build directory;
 - moves diagnostics into `test/Test_Results/`;
 - removes timer sections before comparison;
 - prints a warning and writes `diff_*` when results differ.

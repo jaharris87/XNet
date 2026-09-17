@@ -1,4 +1,4 @@
-# Cray Programming Environment wrappers and default numerical libraries.
+# HPE Cray Programming Environment wrappers and default numerical libraries.
 FC = ftn
 CC = cc
 CXX = CC

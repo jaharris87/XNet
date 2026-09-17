@@ -14,6 +14,7 @@ import pytest
 FRONTIER_DIRECTORY = Path(__file__).with_name("frontier")
 sys.path.insert(0, str(FRONTIER_DIRECTORY))
 
+import frontier_qualification as frontier_module  # noqa: E402
 from frontier_qualification import (  # noqa: E402
     CPU_BUILD_VARIABLES,
     GPU_BUILD_VARIABLES,
@@ -750,8 +751,14 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     assert "\n!$omp\n" not in preprocessed
 
 
-def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override() -> None:
+def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override(
+    tmp_path: Path,
+) -> None:
     repository = FRONTIER_DIRECTORY.parents[2]
+    hipfort = tmp_path / "hipfort"
+    (hipfort / "include" / "hipfort" / "amdgcn").mkdir(parents=True)
+    rocm = tmp_path / "rocm"
+    rocm.mkdir()
     completed = subprocess.run(
         [
             "make",
@@ -760,7 +767,13 @@ def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override() -> None
             "--no-print-directory",
             "MACHINE=frontier",
             "PE_ENV=CRAY",
+            f"BUILD_DIR={tmp_path / 'frontier-wrapper'}",
             "GPU_MODE=ON",
+            "GPU_BACKEND=HIP",
+            "GPU_LAPACK_VER=ROCM",
+            f"HIPFORT_DIR={hipfort}",
+            f"ROCM_DIR={rocm}",
+            "OPENMP_OL_MODE=ON",
             "MPI_MODE=ON",
             "print-FC",
             "print-XNET_CRAY_FTN",
@@ -771,10 +784,79 @@ def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override() -> None
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "FC = env XNET_CRAY_FTN=ftn" in completed.stdout
+    assert 'FC = env XNET_CRAY_FTN="ftn"' in completed.stdout
     assert "crayftn_cpp.sh" in completed.stdout
     assert "XNET_CRAY_FTN = ftn" in completed.stdout
     assert "LDR = ftn" in completed.stdout
+
+
+@pytest.mark.parametrize(
+    ("label", "variables", "targets"),
+    (
+        ("cpu", CPU_BUILD_VARIABLES, ("xnet",)),
+        ("gpu", GPU_BUILD_VARIABLES, ("xnet", "frontier_gpu_linalg_probe")),
+    ),
+)
+def test_frontier_build_uses_selected_build_name_and_separate_evidence_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    label: str,
+    variables: dict[str, str],
+    targets: tuple[str, ...],
+) -> None:
+    source_root = tmp_path / "source-tree"
+    artifact_root = tmp_path / "qualification-output"
+    (source_root / "source").mkdir(parents=True)
+    artifact_root.mkdir()
+    for target in targets:
+        executable = source_root / "build" / variables["BUILD_NAME"] / "bin" / target
+        executable.parent.mkdir(parents=True, exist_ok=True)
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o755)
+
+    calls: list[tuple[list[str], Path, Path, str]] = []
+
+    def record_command(
+        command: list[str],
+        working_directory: Path,
+        evidence_directory: Path,
+        command_label: str,
+        timeout_seconds: float,
+    ) -> tuple[subprocess.CompletedProcess[str], float]:
+        del timeout_seconds
+        calls.append((command, working_directory, evidence_directory, command_label))
+        if command_label == "resolved-variables":
+            names = [
+                argument.removeprefix("print-")
+                for argument in command
+                if argument.startswith("print-")
+            ]
+            stdout = "".join(f"{name} = checked-{name}\n" for name in names)
+        elif command_label.endswith("-link"):
+            stdout = "/lib/libc.so\n"
+        else:
+            stdout = ""
+        return subprocess.CompletedProcess(command, 0, stdout, ""), 0.25
+
+    monkeypatch.setattr(frontier_module, "_record_command", record_command)
+    result = frontier_module._build_configuration(
+        source_root,
+        artifact_root,
+        label,
+        variables,
+        jobs=8,
+        targets=targets,
+    )
+
+    expected_evidence = artifact_root / "build" / label
+    make_calls = [call for call in calls if call[0][0] == "make"]
+    assert [call[3] for call in make_calls] == ["clean", "build", "resolved-variables"]
+    assert all(f"BUILD_NAME={variables['BUILD_NAME']}" in call[0] for call in make_calls)
+    assert all(call[1] == source_root for call in calls)
+    assert all(call[2] == expected_evidence for call in calls)
+    for target in targets:
+        assert (artifact_root / "bin" / f"{target}-{label}").is_file()
+    assert result["status"] == "passed"
 
 
 def test_accelerator_routine_directives_follow_ordered_specification_statements() -> None:

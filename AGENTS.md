@@ -108,6 +108,21 @@ Scientific validity and consequential numerical or architectural choices
 remain human maintainer decisions. Agents expose assumptions and evidence for
 those decisions.
 
+## Simplicity and scientific-HPC design
+
+Prefer the simplest technically sound solution that meets demonstrated XNet
+requirements and remains familiar to scientific-HPC maintainers. Favor
+conventional Make, Fortran, POSIX, and existing interface practices. New
+required dependencies, generalized frameworks, or abstractions need concrete
+evidence of a requirement and maintainer escalation before adoption.
+
+Document reasonable unsupported-use constraints instead of engineering around
+speculative cases. Keep Flash-X and CHIMERA integration proportional to
+observed consumer requirements; seek a second real use case before generalizing
+shared infrastructure. A maintainer should be able to understand the local
+change without a new framework. This policy does not weaken testing, error
+checking, portability, or scientific safeguards.
+
 ## Fortran essentials
 
 Use surrounding production source as the primary style reference and

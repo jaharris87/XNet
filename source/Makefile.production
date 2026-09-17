@@ -1,12 +1,10 @@
 # Configuration-isolated XNet production graph.
-# The public invocation acquires one build-directory lock and dispatches back
-# into this same file; the locked invocation owns the one production DAG.
-SHELL := /bin/bash
+# One direct GNU Make graph.  Do not run two top-level Make processes in one
+# BUILD_DIR, and do not clean a directory while another invocation uses it.
+SHELL := /bin/sh
 XNET_NEW_GRAPH := yes
 XNET_DIR := $(abspath .)
 ROOT_DIR := $(abspath ..)
-TOOLS_BUILD := $(ROOT_DIR)/tools/build
-PYTHON ?= python3
 BUILD_BASE ?= build
 ifeq ($(filter /%,$(BUILD_BASE)),)
   BUILD_BASE := $(abspath $(ROOT_DIR)/$(BUILD_BASE))
@@ -32,6 +30,15 @@ endif
 ifneq ($(words $(BUILD_DIR)),1)
   $(error BUILD_DIR paths containing whitespace are not supported)
 endif
+ifeq ($(BUILD_DIR),$(ROOT_DIR))
+  $(error BUILD_DIR may not be the repository root)
+endif
+ifeq ($(BUILD_DIR),$(XNET_DIR))
+  $(error BUILD_DIR may not be the source directory)
+endif
+ifeq ($(BUILD_DIR),$(BUILD_BASE))
+  $(error BUILD_DIR may not equal BUILD_BASE)
+endif
 
 OBJ_DIR := $(BUILD_DIR)/obj
 MOD_DIR := $(BUILD_DIR)/mod
@@ -39,9 +46,6 @@ PP_DIR := $(BUILD_DIR)/pp
 DEP_DIR := $(BUILD_DIR)/dep
 BIN_DIR := $(BUILD_DIR)/bin
 CONFIG := $(BUILD_DIR)/config.txt
-DEPS := $(DEP_DIR)/fortran.d
-GATE := $(BUILD_BASE)/.xnet-gate.lock
-DIR_LOCK := $(BUILD_DIR).lock
 
 PUBLIC_TARGETS := xnet xnse net_setup all xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO \
                   frontier_gpu_linalg_probe xinab xnet_gpu clean clean-all \
@@ -60,16 +64,17 @@ endif
 
 .DEFAULT_GOAL := xnet
 
-# Cleaning is deliberately independent of compiler, Python, and configuration
-# validation. Both operations still use the global-gate/directory-lock hierarchy.
+# Cleaning is deliberately independent of compiler and configuration validation.
 ifneq ($(CLEAN_GOALS),)
 .PHONY: clean clean-all
 clean:
-	+@$(TOOLS_BUILD)/xnet_lock.sh '$(GATE)' '$(DIR_LOCK)' \
-	  $(TOOLS_BUILD)/xnet_clean_dir.sh '$(ROOT_DIR)' '$(XNET_DIR)' '$(BUILD_BASE)' '$(BUILD_DIR)'
+	@case '$(BUILD_DIR)' in /|'$(ROOT_DIR)'|'$(XNET_DIR)'|'$(BUILD_BASE)') echo 'refusing unsafe BUILD_DIR' >&2; exit 2;; esac; \
+	 test ! -e '$(BUILD_DIR)' || { test ! -L '$(BUILD_DIR)' && test -f '$(CONFIG)' && test "$$(sed -n '1p' '$(CONFIG)')" = XNET_CONFIG_SCHEMA=1 || { echo 'refusing unmarked BUILD_DIR' >&2; exit 2; }; rm -rf -- '$(BUILD_DIR)'; }
 clean-all:
 	@test "$(CONFIRM_CLEAN_ALL)" = yes || { echo 'set CONFIRM_CLEAN_ALL=yes' >&2; exit 2; }
-	@$(TOOLS_BUILD)/xnet_clean_all.sh '$(GATE)' '$(ROOT_DIR)' '$(XNET_DIR)' '$(BUILD_BASE)'
+	@case '$(BUILD_BASE)' in /|'$(ROOT_DIR)'|'$(XNET_DIR)') echo 'refusing unsafe BUILD_BASE' >&2; exit 2;; esac; \
+	 test ! -L '$(BUILD_BASE)' || { echo 'refusing symlink BUILD_BASE' >&2; exit 2; }; \
+	 for d in '$(BUILD_BASE)'/*; do test -e "$$d" || continue; test -L "$$d" && continue; test -f "$$d/config.txt" && test "$$(sed -n '1p' "$$d/config.txt")" = XNET_CONFIG_SCHEMA=1 && rm -rf -- "$$d" || echo "leaving unrecognized $$d" >&2; done
 
 else
 
@@ -82,7 +87,7 @@ OPENMP_OL_MODE ?= OFF
 GPU_BACKEND ?= CUDA
 GPU_LAPACK_VER ?= CUBLAS
 GPU_TARGET ?= Volta
-XNET_EXTERNAL_MODULES ?= iso_c_binding iso_fortran_env omp_lib mpi mpi_f08
+XNET_EXTERNAL_MODULES ?= iso_c_binding iso_fortran_env omp_lib openacc mpi mpi_f08
 XNET_EXTERNAL_MODULE_DIRS ?=
 XNET_CPP ?= cpp
 NVCC ?= nvcc
@@ -197,6 +202,14 @@ endif
 
 include $(XNET_DIR)/Makefile.internal
 
+PRIVATE_PROVIDER_VARIABLES := MPI_SRC EOS_SRC JAC_SRC GPU_PROVIDER_SRC LAPACK_SRC SOLVER_SRC \
+  CORE_SRC DRIVER_SRC XNSE_MAIN_SRC SETUP_MAIN_SRC PROBE_SRC SPARSE_SRC XNSE_CORE_SRC SETUP_CORE_SRC
+PROVIDER_OVERRIDES := $(strip $(foreach variable,$(PRIVATE_PROVIDER_VARIABLES),\
+  $(if $(filter command line,$(origin $(variable))),$(variable))))
+ifneq ($(PROVIDER_OVERRIDES),)
+  $(error provider variables are internal and may not be overridden: $(PROVIDER_OVERRIDES))
+endif
+
 ifneq ($(filter $(LAPACK_VER),$(VALID_LAPACK)),$(LAPACK_VER))
   $(error unsupported or unwired LAPACK_VER '$(LAPACK_VER)')
 endif
@@ -205,58 +218,65 @@ ifeq ($(MATRIX_SOLVER),PARDISO)
     $(error unsupported standalone PARDISO: use LAPACK_VER=MKL)
   endif
 endif
+ifeq ($(LAPACK_VER),MKL)
+  ifeq ($(strip $(LAPACK_LIBS)),)
+    $(error LAPACK_VER=MKL requires resolved MKL_LIBS or a working MKL link tool)
+  endif
+endif
 
 # The accelerator providers are selected explicitly here; Makefile.dev is not
 # a second production graph.
-GPU_PROVIDER_SRC :=
-GPU_DEFINES :=
-GPU_INC :=
-GPU_LIBDIR :=
-GPU_LIBS :=
-GPU_LAPACK_INC :=
-GPU_LAPACK_LIBDIR :=
-GPU_LAPACK_LIBS :=
+override GPU_PROVIDER_SRC :=
+override GPU_DEFINES :=
+override GPU_INC :=
+override GPU_LIBDIR :=
+override GPU_LIBS :=
+override GPU_LAPACK_INC :=
+override GPU_LAPACK_LIBDIR :=
+override GPU_LAPACK_LIBS :=
+SELECTED_EXTERNAL_MODULE_DIRS := $(XNET_EXTERNAL_MODULE_DIRS)
 ifeq ($(GPU_MODE),ON)
   ifeq ($(GPU_BACKEND),CUDA)
     CUDA_DIR ?= /usr/local/cuda
-    GPU_DEFINES += -DXNET_GPU -DXNET_CUDA
-    GPU_INC += -I$(CUDA_DIR)/include
-    GPU_LIBDIR += -L$(CUDA_DIR)/lib64
-    GPU_LIBS += -lcudart -lcuda
-    GPU_PROVIDER_SRC += $(XNET_DIR)/cudaf.F90
+    override GPU_DEFINES += -DXNET_GPU -DXNET_CUDA
+    override GPU_INC += -I$(CUDA_DIR)/include
+    override GPU_LIBDIR += -L$(CUDA_DIR)/lib64
+    override GPU_LIBS += -lcudart -lcuda
+    override GPU_PROVIDER_SRC += $(XNET_DIR)/cudaf.F90
     ifeq ($(GPU_LAPACK_VER),CUBLAS)
-      GPU_DEFINES += -DXNET_LA_CUBLAS
-      GPU_LAPACK_INC += -I$(CUDA_DIR)/include
-      GPU_LAPACK_LIBDIR += -L$(CUDA_DIR)/lib64
-      GPU_LAPACK_LIBS += -lcublas -lcusparse -lcusolver
-      GPU_PROVIDER_SRC += $(addprefix $(XNET_DIR)/,cublasf.F90 cusparsef.F90 cusolverf.F90)
+      override GPU_DEFINES += -DXNET_LA_CUBLAS
+      override GPU_LAPACK_INC += -I$(CUDA_DIR)/include
+      override GPU_LAPACK_LIBDIR += -L$(CUDA_DIR)/lib64
+      override GPU_LAPACK_LIBS += -lcublas -lcusparse -lcusolver
+      override GPU_PROVIDER_SRC += $(addprefix $(XNET_DIR)/,cublasf.F90 cusparsef.F90 cusolverf.F90)
     else
       MAGMA_DIR ?= $(OLCF_MAGMA_ROOT)
-      GPU_DEFINES += -DXNET_LA_MAGMA
-      GPU_LAPACK_INC += -I$(MAGMA_DIR)/include -I$(CUDA_DIR)/include
-      GPU_LAPACK_LIBDIR += -L$(MAGMA_DIR)/lib -L$(CUDA_DIR)/lib64
-      GPU_LAPACK_LIBS += -lmagma -lcublas -lcusparse -lcusolver
-      GPU_PROVIDER_SRC += $(addprefix $(XNET_DIR)/,magmaf.F90 cublasf.F90 cusparsef.F90 cusolverf.F90)
+      override GPU_DEFINES += -DXNET_LA_MAGMA
+      override GPU_LAPACK_INC += -I$(MAGMA_DIR)/include -I$(CUDA_DIR)/include
+      override GPU_LAPACK_LIBDIR += -L$(MAGMA_DIR)/lib -L$(CUDA_DIR)/lib64
+      override GPU_LAPACK_LIBS += -lmagma -lcublas -lcusparse -lcusolver
+      override GPU_PROVIDER_SRC += $(addprefix $(XNET_DIR)/,magmaf.F90 cublasf.F90 cusparsef.F90 cusolverf.F90)
     endif
   else
     HIPFORT_DIR ?= $(OLCF_HIPFORT_ROOT)
     ROCM_DIR ?= $(ROCM_PATH)
-    GPU_DEFINES += -DXNET_GPU -DXNET_HIP -DXNET_LA_ROCM
-    GPU_INC += -I$(HIPFORT_DIR)/include/hipfort/amdgcn
-    GPU_LIBDIR += -L$(HIPFORT_DIR)/lib
-    GPU_LIBS += -lhipfort-amdgcn
-    GPU_LAPACK_INC += -I$(HIPFORT_DIR)/include/hipfort/amdgcn -I$(ROCM_DIR)/include
-    GPU_LAPACK_LIBDIR += -L$(ROCM_DIR)/lib
-    GPU_LAPACK_LIBS += -lrocsparse -lrocsolver -lrocblas -lhipblas -lhipsparse -lamdhip64
-    GPU_PROVIDER_SRC += $(addprefix $(XNET_DIR)/,hipf.F90 hipblasf.F90 rocblasf.F90 rocsparsef.F90 rocsolverf.F90)
+    SELECTED_EXTERNAL_MODULE_DIRS += $(HIPFORT_DIR)/include/hipfort/amdgcn
+    override GPU_DEFINES += -DXNET_GPU -DXNET_HIP -DXNET_LA_ROCM
+    override GPU_INC += -I$(HIPFORT_DIR)/include/hipfort/amdgcn
+    override GPU_LIBDIR += -L$(HIPFORT_DIR)/lib
+    override GPU_LIBS += -lhipfort-amdgcn
+    override GPU_LAPACK_INC += -I$(HIPFORT_DIR)/include/hipfort/amdgcn -I$(ROCM_DIR)/include
+    override GPU_LAPACK_LIBDIR += -L$(ROCM_DIR)/lib
+    override GPU_LAPACK_LIBS += -lrocsparse -lrocsolver -lrocblas -lhipblas -lhipsparse -lamdhip64
+    override GPU_PROVIDER_SRC += $(addprefix $(XNET_DIR)/,hipf.F90 hipblasf.F90 rocblasf.F90 rocsparsef.F90 rocsolverf.F90)
   endif
   ifeq ($(OPENACC_MODE),ON)
-    GPU_DEFINES += -DXNET_OACC
-    GPU_PROVIDER_SRC += $(XNET_DIR)/openaccf.F90
+    override GPU_DEFINES += -DXNET_OACC
+    override GPU_PROVIDER_SRC += $(XNET_DIR)/openaccf.F90
     GPU_DIRECTIVE_FLAGS := $(OPENACC)
   else
-    GPU_DEFINES += -DXNET_OMP_OL
-    GPU_PROVIDER_SRC += $(XNET_DIR)/openmpf.F90
+    override GPU_DEFINES += -DXNET_OMP_OL
+    override GPU_PROVIDER_SRC += $(XNET_DIR)/openmpf.F90
     GPU_DIRECTIVE_FLAGS := $(OPENMP_OL)
   endif
   FFLAGS += $(GPU_DIRECTIVE_FLAGS)
@@ -266,27 +286,48 @@ ifeq ($(GPU_MODE),ON)
   LAPACK_LIBS += $(GPU_LIBS) $(GPU_LAPACK_LIBS)
 endif
 
+MISSING_SELECTED_EXTERNAL_MODULE_DIRS := $(filter-out $(wildcard $(SELECTED_EXTERNAL_MODULE_DIRS)),$(SELECTED_EXTERNAL_MODULE_DIRS))
+ifneq ($(strip $(MISSING_SELECTED_EXTERNAL_MODULE_DIRS)),)
+  $(error selected external module directory does not exist: $(MISSING_SELECTED_EXTERNAL_MODULE_DIRS))
+endif
+
 ifeq ($(MPI_MODE),ON)
-  MPI_SRC := $(XNET_DIR)/xnet_parallel.F90
+  override MPI_SRC := $(XNET_DIR)/xnet_parallel.F90
 else
-  MPI_SRC := $(XNET_DIR)/xnet_parallel_stubs.F90
+  override MPI_SRC := $(XNET_DIR)/xnet_parallel_stubs.F90
 endif
 ifeq ($(EOS),STARKILLER)
   STARKILLER_HELMHOLTZ_PATH ?= $(ROOT_DIR)/tools/starkiller-helmholtz
-  EOS_SRC := $(abspath $(STARKILLER_HELMHOLTZ_PATH))/actual_eos.F90 \
+  override EOS_SRC := $(abspath $(STARKILLER_HELMHOLTZ_PATH))/actual_eos.F90 \
              $(abspath $(STARKILLER_HELMHOLTZ_PATH))/eos_type.F90 $(XNET_DIR)/xnet_eos_starkiller.F90
 else ifeq ($(EOS),BAHCALL)
-  EOS_SRC := $(XNET_DIR)/xnet_eos_bahcall.F90
+  override EOS_SRC := $(XNET_DIR)/xnet_eos_bahcall.F90
 else
-  EOS_SRC := $(XNET_DIR)/xnet_eos_helm.F90 $(abspath $(HELMHOLTZ_PATH))/helmholtz.F90
+  override EOS_SRC := $(XNET_DIR)/xnet_eos_helm.F90 $(abspath $(HELMHOLTZ_PATH))/helmholtz.F90
 endif
 ifeq ($(MATRIX_SOLVER),dense)
-  JAC_SRC := $(XNET_DIR)/xnet_jacobian_dense.F90
+  override JAC_SRC := $(XNET_DIR)/xnet_jacobian_dense.F90
 else ifeq ($(MATRIX_SOLVER),PARDISO)
-  JAC_SRC := $(XNET_DIR)/xnet_jacobian_$(PARDISO).F90
+  override JAC_SRC := $(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90
 else
-  JAC_SRC := $(XNET_DIR)/xnet_jacobian_$(MATRIX_SOLVER).F90
+  override JAC_SRC := $(XNET_DIR)/xnet_jacobian_$(MATRIX_SOLVER).F90
 endif
+override SOLVER_SRC := $(if $(filter MA41,$(MATRIX_SOLVER)),$(MA41_DIR)/MA41.f,\
+  $(if $(filter MA48,$(MATRIX_SOLVER)),$(MA48_DIR)/MA48.f))
+XNET_NETLIB_FILES := dcopy.f ddot.f dlamch.f dnrm2.f dscal.f dswap.f idamax.f lsame.f xerbla.f \
+  daxpy.f dger.f dgemv.f dtrmv.f $(if $(filter MA48,$(MATRIX_SOLVER)),dtrsv.f) \
+  dgemm.f dtrmm.f dtrsm.f ieeeck.f iparmq.f ilaenv.f iladlc.f iladlr.f \
+  dgetrf2.f dlaswp.f dlapy2.f dlaisnan.f dlarf.f dlarfg.f dgelq2.f dgeqr2.f disnan.f \
+  dlarfb.f dlarft.f dlassq.f dorm2r.f dorml2.f dgelqf.f dgeqrf.f dlabad.f dlange.f \
+  dlascl.f dlaset.f dormlq.f dormqr.f dtrtrs.f dgels.f dgetrf.f dgetrs.f dgesv.f
+override LAPACK_SRC := $(if $(filter NETLIB,$(LAPACK_VER)),$(addprefix $(NETLIB_DIR)/,$(XNET_NETLIB_FILES)))
+LAPACK_PROVIDER_ID = $(if $(LAPACK_SRC),sources:$(abspath $(LAPACK_SRC)),\
+  $(if $(filter MKL,$(LAPACK_VER)),MKLROOT:$(abspath $(MKLROOT)),\
+  $(if $(filter ATLAS,$(LAPACK_VER)),ATLAS_DIR:$(abspath $(ATLAS_DIR)),\
+  $(if $(filter ESSL,$(LAPACK_VER)),ESSL_DIR:$(abspath $(ESSL_DIR)),\
+  $(if $(filter ACCEL,$(LAPACK_VER)),system-framework:Accelerate,compiler-driver:$(COMPILE_FC))))))
+SOLVER_PROVIDER_ID = $(if $(filter PARDISO,$(MATRIX_SOLVER)),MKLROOT:$(abspath $(MKLROOT)),\
+  $(if $(SOLVER_SRC),sources:$(abspath $(SOLVER_SRC)),in-tree-jacobian:$(JAC_SRC)))
 
 CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_controls.F90 xnet_data.F90 xnet_output.F90 \
   xnet_abundances.F90 xnet_conditions.F90 xnet_constants.F90 xnet_evolve.F90 xnet_fd.F90 \
@@ -355,7 +396,7 @@ ifeq ($(MPI_MODE),ON)
   MPI_HEADER_DIR := $(shell header=`$(COMPILE_FC) -print-file-name=mpif.h 2>/dev/null`; test -f "$$header" && dirname "$$header" || true)
   MPI_INCLUDE_FLAGS := $(filter -I%,$(MPI_WRAPPER_SHOW)) $(if $(MPI_HEADER_DIR),-I$(MPI_HEADER_DIR))
 endif
-EXTERNAL_MODULE_FLAGS := $(addprefix -I,$(XNET_EXTERNAL_MODULE_DIRS))
+EXTERNAL_MODULE_FLAGS := $(addprefix -I,$(SELECTED_EXTERNAL_MODULE_DIRS))
 CPP_INCLUDE_FLAGS := -I$(XNET_DIR) $(sort $(addprefix -I,$(dir $(SOURCE_FREE_SRC) $(EOS_FREE_SRC) \
   $(SOLVER_FREE_SRC) $(LAPACK_FREE_SRC) $(GPU_FREE_SRC)))) \
   $(filter -I%,$(FFLAGS) $(F90FLAGS) $(LAPACK_INC) $(SOLVER_INC)) $(MPI_INCLUDE_FLAGS)
@@ -419,23 +460,21 @@ XNSE_EXE := $(BIN_DIR)/xnse
 NET_SETUP_EXE := $(BIN_DIR)/net_setup
 PROBE_EXE := $(BIN_DIR)/frontier_gpu_linalg_probe
 
-# Exact final values are exported rather than shell-tokenized. config_record.py
-# rejects line-breaking bytes and compares the resulting UTF-8 file bytewise.
-export XNET_CFG_SOURCE_ROOT := $(ROOT_DIR)
-export XNET_CFG_PE_ENV := $(PE_ENV)
-export XNET_CFG_CMODE := $(CMODE)
-export XNET_CFG_MACHINE := $(MACHINE)
-export XNET_CFG_MPI_MODE := $(MPI_MODE)
-export XNET_CFG_OPENMP_MODE := $(OPENMP_MODE)
-export XNET_CFG_GPU_MODE := $(GPU_MODE)
-export XNET_CFG_GPU_BACKEND := $(GPU_BACKEND)
-export XNET_CFG_GPU_LAPACK_VER := $(GPU_LAPACK_VER)
-export XNET_CFG_GPU_TARGET := $(GPU_TARGET)
-export XNET_CFG_OPENACC_MODE := $(OPENACC_MODE)
-export XNET_CFG_OPENMP_OL_MODE := $(OPENMP_OL_MODE)
-export XNET_CFG_EOS := $(EOS)
-export XNET_CFG_MATRIX_SOLVER := $(MATRIX_SOLVER)
-export XNET_CFG_LAPACK_VER := $(LAPACK_VER)
+XNET_CFG_SOURCE_ROOT := $(ROOT_DIR)
+XNET_CFG_PE_ENV := $(PE_ENV)
+XNET_CFG_CMODE := $(CMODE)
+XNET_CFG_MACHINE := $(MACHINE)
+XNET_CFG_MPI_MODE := $(MPI_MODE)
+XNET_CFG_OPENMP_MODE := $(OPENMP_MODE)
+XNET_CFG_GPU_MODE := $(GPU_MODE)
+XNET_CFG_GPU_BACKEND := $(GPU_BACKEND)
+XNET_CFG_GPU_LAPACK_VER := $(GPU_LAPACK_VER)
+XNET_CFG_GPU_TARGET := $(GPU_TARGET)
+XNET_CFG_OPENACC_MODE := $(OPENACC_MODE)
+XNET_CFG_OPENMP_OL_MODE := $(OPENMP_OL_MODE)
+XNET_CFG_EOS := $(EOS)
+XNET_CFG_MATRIX_SOLVER := $(MATRIX_SOLVER)
+XNET_CFG_LAPACK_VER := $(LAPACK_VER)
 export XNET_CFG_FC := $(COMPILE_FC)
 export XNET_CFG_CONFIGURED_FC := $(FC)
 export XNET_CFG_CC := $(CC)
@@ -465,45 +504,38 @@ export XNET_CFG_JACOBIAN_PROVIDER := $(JAC_SRC)
 export XNET_CFG_ACCELERATOR_PROVIDERS := $(if $(GPU_PROVIDER_SRC),$(GPU_PROVIDER_SRC),inactive)
 export XNET_CFG_LAPACK_PROVIDER_SOURCES := $(if $(LAPACK_SRC),$(abspath $(LAPACK_SRC)),inactive)
 export XNET_CFG_SOLVER_PROVIDER_SOURCES := $(if $(SOLVER_SRC),$(abspath $(SOLVER_SRC)),inactive)
+export XNET_CFG_LAPACK_PROVIDER := $(LAPACK_PROVIDER_ID)
+export XNET_CFG_SOLVER_PROVIDER := $(SOLVER_PROVIDER_ID)
 export XNET_CFG_EXTERNAL_MODULES := $(XNET_EXTERNAL_MODULES)
-export XNET_CFG_EXTERNAL_MODULE_DIRS := $(if $(XNET_EXTERNAL_MODULE_DIRS),$(abspath $(XNET_EXTERNAL_MODULE_DIRS)),inactive)
+export XNET_CFG_EXTERNAL_MODULE_DIRS := $(if $(SELECTED_EXTERNAL_MODULE_DIRS),$(abspath $(SELECTED_EXTERNAL_MODULE_DIRS)),inactive)
 export XNET_CFG_HELMHOLTZ_PATH := $(if $(filter HELMHOLTZ,$(EOS)),$(abspath $(HELMHOLTZ_PATH)),inactive)
 CONFIG_KEYS := SOURCE_ROOT PE_ENV CMODE MACHINE MPI_MODE OPENMP_MODE GPU_MODE GPU_BACKEND \
   GPU_LAPACK_VER GPU_TARGET OPENACC_MODE OPENMP_OL_MODE EOS MATRIX_SOLVER LAPACK_VER FC CONFIGURED_FC \
   CC CXX LDR CPP NVCC FFLAGS COMPILE_FFLAGS F90FLAGS F77FLAGS CFLAGS CXXFLAGS NVCCFLAGS CPPFLAGS MODULE_FLAGS \
   LDFLAGS LAPACK_INC LAPACK_LIBDIR LAPACK_LIBS SOLVER_INC SOLVER_LIBDIR SOLVER_LIBS \
   PARALLEL_PROVIDER EOS_PROVIDERS JACOBIAN_PROVIDER ACCELERATOR_PROVIDERS LAPACK_PROVIDER_SOURCES \
-  SOLVER_PROVIDER_SOURCES EXTERNAL_MODULES EXTERNAL_MODULE_DIRS HELMHOLTZ_PATH
+  SOLVER_PROVIDER_SOURCES LAPACK_PROVIDER SOLVER_PROVIDER EXTERNAL_MODULES EXTERNAL_MODULE_DIRS HELMHOLTZ_PATH
 CONFIG_ARGS := $(foreach key,$(CONFIG_KEYS),--environment XNET_CFG_$(key)=$(key))
-
-ifneq ($(XNET_LOCK_HELD),yes)
-.PHONY: $(PUBLIC_TARGETS) _dispatch
-$(PUBLIC_TARGETS): _dispatch ; @:
-print-%: _dispatch ; @:
-_dispatch:
-	@mkdir -p '$(BUILD_BASE)'
-	+@$(TOOLS_BUILD)/xnet_lock.sh '$(GATE)' '$(DIR_LOCK)' \
-	  $(MAKE) --no-print-directory XNET_LOCK_HELD=yes $(REQUESTED_GOALS)
-
-else
+CONFIG_UNSUPPORTED := $(findstring ',$(COMPILE_FFLAGS) $(COMPILE_F90FLAGS) $(LDFLAGS))
+ifneq ($(strip $(CONFIG_UNSUPPORTED)),)
+  $(error config.txt cannot represent single quotes in effective flags; choose a different spelling or BUILD_DIR)
+endif
 
 .PHONY: $(PUBLIC_TARGETS) FORCE
-LOCK_OWNER_OK := $(shell test "$(XNET_LOCK_DIR)" = "$(DIR_LOCK)" && test -f '$(DIR_LOCK)/token' && \
-  test "$$(sed -n '1p' '$(DIR_LOCK)/token' 2>/dev/null)" = "$(XNET_LOCK_TOKEN)" && printf yes)
-ifneq ($(LOCK_OWNER_OK),yes)
-  $(error XNET_LOCK_HELD is internal and requires ownership of $(DIR_LOCK))
-endif
 FORCE:
 $(CONFIG): FORCE
-	@$(PYTHON) $(TOOLS_BUILD)/config_record.py --output '$@' $(CONFIG_ARGS)
+	@mkdir -p '$(@D)'; { \
+	 printf '%s\n' 'XNET_CONFIG_SCHEMA=1' 'SOURCE_ROOT=$(XNET_CFG_SOURCE_ROOT)' 'PE_ENV=$(XNET_CFG_PE_ENV)' 'CMODE=$(XNET_CFG_CMODE)' 'MPI_MODE=$(XNET_CFG_MPI_MODE)' 'OPENMP_MODE=$(XNET_CFG_OPENMP_MODE)' 'GPU_MODE=$(XNET_CFG_GPU_MODE)' 'GPU_BACKEND=$(XNET_CFG_GPU_BACKEND)' 'GPU_LAPACK_VER=$(XNET_CFG_GPU_LAPACK_VER)' 'GPU_TARGET=$(XNET_CFG_GPU_TARGET)' 'OPENACC_MODE=$(XNET_CFG_OPENACC_MODE)' 'OPENMP_OL_MODE=$(XNET_CFG_OPENMP_OL_MODE)' 'EOS=$(XNET_CFG_EOS)' 'MATRIX_SOLVER=$(XNET_CFG_MATRIX_SOLVER)' 'LAPACK_VER=$(XNET_CFG_LAPACK_VER)' 'FC=$(COMPILE_FC)' 'LDR=$(LDR)' 'FFLAGS=$(COMPILE_FFLAGS)' 'F90FLAGS=$(COMPILE_F90FLAGS)' 'LDFLAGS=$(LDFLAGS)' 'PARALLEL_PROVIDER=$(MPI_SRC)' 'EOS_PROVIDERS=$(EOS_SRC)' 'JACOBIAN_PROVIDER=$(JAC_SRC)'; } > '$@.tmp'; \
+	 if test -f '$@'; then cmp -s '$@' '$@.tmp' || { echo 'incompatible BUILD_DIR configuration; clean this BUILD_DIR or select another BUILD_DIR' >&2; rm -f '$@.tmp'; exit 2; }; rm -f '$@.tmp'; else mv '$@.tmp' '$@'; fi
 
 $(SOURCE_OBJ_DIR) $(EOS_OBJ_DIR) $(SOLVER_OBJ_DIR) $(LAPACK_OBJ_DIR) $(GPU_OBJ_DIR) \
 $(SOURCE_PP_DIR) $(EOS_PP_DIR) $(SOLVER_PP_DIR) $(LAPACK_PP_DIR) $(GPU_PP_DIR) \
 $(MOD_DIR) $(DEP_DIR) $(BIN_DIR): | $(CONFIG)
 	@mkdir -p '$@'
 
-PP_STATIC_INPUTS := $(XNET_DIR)/xnet_macros.fh $(XNET_DIR)/Makefile $(XNET_DIR)/Makefile.production \
-                    $(XNET_DIR)/Makefile.opt $(XNET_DIR)/Makefile.internal $(XNET_DIR)/crayftn_cpp.sh
+BUILD_LOGIC_INPUTS := $(XNET_DIR)/Makefile $(XNET_DIR)/Makefile.production \
+                      $(XNET_DIR)/Makefile.opt $(XNET_DIR)/Makefile.internal
+PP_STATIC_INPUTS := $(XNET_DIR)/xnet_macros.fh $(BUILD_LOGIC_INPUTS) $(XNET_DIR)/crayftn_cpp.sh
 define free_rule
 $(3): $(1) $(PP_STATIC_INPUTS) $(CONFIG) | $(call parent_dir,$(3))
 ifeq ($(CRAY_RETAINED_PP),yes)
@@ -514,13 +546,48 @@ else
 endif
 $(2): $(3) | $(call parent_dir,$(2)) $(MOD_DIR)
 	$(COMPILE_FC) $(COMPILE_FFLAGS) $(COMPILE_F90FLAGS) $(MODULE_FLAGS) $(LAPACK_INC) $(SOLVER_INC) \
-	  $(EXTERNAL_MODULE_FLAGS) -c '$$<' -o '$$@'
+	  $(CPP_INCLUDE_FLAGS) $(EXTERNAL_MODULE_FLAGS) -c '$$<' -o '$$@'
 endef
 $(foreach source,$(SOURCE_FREE_SRC),$(eval $(call free_rule,$(source),$(call source_obj,$(source)),$(call source_pp,$(source)))))
 $(foreach source,$(EOS_FREE_SRC),$(eval $(call free_rule,$(source),$(call eos_obj,$(source)),$(call eos_pp,$(source)))))
 $(foreach source,$(SOLVER_FREE_SRC),$(eval $(call free_rule,$(source),$(call solver_obj,$(source)),$(call solver_pp,$(source)))))
 $(foreach source,$(LAPACK_FREE_SRC),$(eval $(call free_rule,$(source),$(call lapack_obj,$(source)),$(call lapack_pp,$(source)))))
 $(foreach source,$(GPU_FREE_SRC),$(eval $(call free_rule,$(source),$(call gpu_obj,$(source)),$(call gpu_pp,$(source)))))
+
+# XNet's module graph is intentionally explicit.  Keep this conventional list
+# beside the selected providers so an ordinary single `make -j` orders module
+# creation without compiler-specific dependency generation.
+SOBJ = $(call source_obj,$(XNET_DIR)/$(1).F90)
+EOBJ = $(call eos_obj,$(STARKILLER_HELMHOLTZ_PATH)/$(1).F90)
+$(call SOBJ,xnet_constants): $(call SOBJ,xnet_types)
+$(call SOBJ,xnet_parallel_stubs) $(call SOBJ,xnet_parallel): $(call SOBJ,xnet_types)
+$(call SOBJ,xnet_util): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_types) $(call source_obj,$(MPI_SRC))
+$(call SOBJ,xnet_conditions): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
+$(call SOBJ,xnet_controls): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call source_obj,$(MPI_SRC))
+$(call SOBJ,xnet_data): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_ffn) $(call SOBJ,xnet_nnu) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call source_obj,$(MPI_SRC))
+$(call SOBJ,xnet_fd) $(call SOBJ,xnet_timers): $(call SOBJ,xnet_types)
+$(call SOBJ,xnet_ffn): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_types) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_fd)
+$(call SOBJ,xnet_abundances): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types)
+$(call SOBJ,xnet_nnu): $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
+$(call SOBJ,xnet_match): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
+$(call SOBJ,xnet_preprocess): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call source_obj,$(MPI_SRC))
+$(call SOBJ,xnet_gpu): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(GPU_OBJ)
+$(call SOBJ,xnet_linalg): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_gpu) $(call SOBJ,xnet_types) $(LAPACK_OBJ_ALL)
+$(call SOBJ,xnet_screening): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(EOS_OBJ)
+$(call EOBJ,eos_type): $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
+$(call EOBJ,actual_eos): $(call EOBJ,eos_type) $(call SOBJ,xnet_util) $(call source_obj,$(MPI_SRC))
+$(call eos_obj,$(XNET_DIR)/xnet_eos_starkiller.F90): $(call EOBJ,actual_eos) $(call EOBJ,eos_type) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call SOBJ,xnet_abundances)
+$(call solver_obj,$(JAC_SRC)): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_linalg) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types)
+$(call SOBJ,net_setup): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_preprocess)
+$(call SOBJ,nse_slice): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_match) $(call SOBJ,xnet_nse) $(call SOBJ,xnet_preprocess) $(call SOBJ,xnet_types) $(call SOBJ,xnet_data) $(call SOBJ,xnet_timers) $(EOS_OBJ)
+$(call SOBJ,xnet_nse): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(EOS_OBJ) $(LAPACK_OBJ_ALL)
+$(call SOBJ,xnet_flux): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_match) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types)
+$(call SOBJ,xnet_output): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_flux) $(call SOBJ,xnet_match) $(call source_obj,$(MPI_SRC)) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types)
+$(call SOBJ,xnet_integrate): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_ffn) $(call SOBJ,xnet_linalg) $(call SOBJ,xnet_nnu) $(call SOBJ,xnet_screening) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(EOS_OBJ) $(LAPACK_OBJ_ALL)
+$(call SOBJ,xnet_integrate_bdf) $(call SOBJ,xnet_integrate_be): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_integrate) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(SOLVER_FREE_OBJ)
+$(call SOBJ,xnet_evolve): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_integrate) $(call SOBJ,xnet_integrate_bdf) $(call SOBJ,xnet_integrate_be) $(call SOBJ,xnet_output) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
+$(call SOBJ,model_input_ascii): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_nnu) $(call SOBJ,xnet_nse) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
+$(call SOBJ,net): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_evolve) $(call SOBJ,xnet_flux) $(call SOBJ,xnet_gpu) $(call SOBJ,xnet_match) $(call SOBJ,xnet_nnu) $(call SOBJ,xnet_nse) $(call SOBJ,xnet_preprocess) $(call SOBJ,xnet_screening) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(EOS_OBJ) $(SOLVER_FREE_OBJ) $(call source_obj,$(MPI_SRC))
 
 # Generate dependencies from the union of the requested executable graphs.
 # Rules exist for every selected provider, but an xnet-only request must not
@@ -552,17 +619,9 @@ DEP_INCLUDE_DIRS := $(sort $(dir $(SOURCE_FREE_SRC) $(EOS_FREE_SRC) $(SOLVER_FRE
                     $(patsubst -I%,%,$(filter -I%,$(CPP_INCLUDE_FLAGS) $(LAPACK_INC) $(SOLVER_INC))))
 DEP_INCLUDE_ARGS := $(foreach directory,$(DEP_INCLUDE_DIRS),--include-dir '$(directory)')
 DEP_EXTERNAL_ARGS := $(foreach module,$(XNET_EXTERNAL_MODULES),--external-module '$(module)') \
-                     $(foreach directory,$(XNET_EXTERNAL_MODULE_DIRS),--external-module-dir '$(directory)')
-$(DEPS): $(CONFIG) $(ALL_PP) $(TOOLS_BUILD)/generate_fortran_deps.py | $(DEP_DIR)
-	@$(PYTHON) $(TOOLS_BUILD)/generate_fortran_deps.py --output '$@' $(FREE_DEP_MAP) \
-	  $(DEP_INCLUDE_ARGS) $(DEP_EXTERNAL_ARGS)
-
-ifneq ($(filter xnet xnse net_setup all xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO frontier_gpu_linalg_probe,$(REQUESTED_GOALS)),)
--include $(DEPS)
-endif
-
+                     $(foreach directory,$(SELECTED_EXTERNAL_MODULE_DIRS),--external-module-dir '$(directory)')
 define fixed_rule
-$(2): $(1) $(CONFIG) | $(call parent_dir,$(2)) $(MOD_DIR)
+$(2): $(1) $(CONFIG) $(BUILD_LOGIC_INPUTS) | $(call parent_dir,$(2)) $(MOD_DIR)
 	$(COMPILE_FC) $(FFLAGS) $(F77FLAGS) $(MODULE_FLAGS) $(LAPACK_INC) $(SOLVER_INC) \
 	  $(EXTERNAL_MODULE_FLAGS) -c '$$<' -o '$$@'
 endef
@@ -570,21 +629,21 @@ $(foreach source,$(SOLVER_FIXED_SRC),$(eval $(call fixed_rule,$(source),$(call s
 $(foreach source,$(LAPACK_FIXED_SRC),$(eval $(call fixed_rule,$(source),$(call lapack_obj,$(source)))))
 
 define c_rule
-$(2): $(1) $(CONFIG) | $(call parent_dir,$(2))
+$(2): $(1) $(CONFIG) $(BUILD_LOGIC_INPUTS) | $(call parent_dir,$(2))
 	$(CC) $(CFLAGS) $(LAPACK_INC) $(SOLVER_INC) -c '$$<' -o '$$@'
 endef
 $(foreach source,$(SOLVER_C_SRC),$(eval $(call c_rule,$(source),$(call solver_obj,$(source)))))
 $(foreach source,$(LAPACK_C_SRC),$(eval $(call c_rule,$(source),$(call lapack_obj,$(source)))))
 
 define cxx_rule
-$(2): $(1) $(CONFIG) | $(call parent_dir,$(2))
+$(2): $(1) $(CONFIG) $(BUILD_LOGIC_INPUTS) | $(call parent_dir,$(2))
 	$(CXX) $(CXXFLAGS) $(LAPACK_INC) $(SOLVER_INC) -c '$$<' -o '$$@'
 endef
 $(foreach source,$(SOLVER_CXX_SRC),$(eval $(call cxx_rule,$(source),$(call solver_obj,$(source)))))
 $(foreach source,$(LAPACK_CXX_SRC),$(eval $(call cxx_rule,$(source),$(call lapack_obj,$(source)))))
 
 define cuda_rule
-$(2): $(1) $(CONFIG) | $(call parent_dir,$(2))
+$(2): $(1) $(CONFIG) $(BUILD_LOGIC_INPUTS) | $(call parent_dir,$(2))
 	$(NVCC) $(NVCCFLAGS) $(LAPACK_INC) $(SOLVER_INC) -c '$$<' -o '$$@'
 endef
 $(foreach source,$(SOLVER_CUDA_SRC),$(eval $(call cuda_rule,$(source),$(call solver_obj,$(source)))))
@@ -613,5 +672,4 @@ print-NET_SETUP_EXE: $(CONFIG) ; @echo 'NET_SETUP_EXE = $(NET_SETUP_EXE)'
 print-PROBE_EXE: $(CONFIG) ; @echo 'PROBE_EXE = $(PROBE_EXE)'
 print-%: $(CONFIG) ; @echo '$* = $($*)'
 
-endif
 endif

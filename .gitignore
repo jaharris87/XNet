@@ -1,5 +1,6 @@
 # compiler output
 /build/
+/.xnet-build-gate/
 pgipar*
 *.mod
 *.o

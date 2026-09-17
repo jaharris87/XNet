@@ -1,3 +1,5 @@
+## Legacy/reference accelerator recipes.  Makefile.production does not include
+## this file; it is retained only as historical source material.
 ##
 ## Instructions and compiler/library flags for features under development
 ##

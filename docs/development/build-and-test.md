@@ -30,8 +30,8 @@ The Makefile fragments have distinct roles:
 
 - `source/Makefile` is the small public entry point.
 - `source/Makefile.production` defines the one production target and provider
-  graph, retained preprocessing, generated dependencies, and isolated output
-  layout.
+  graph, retained preprocessing, explicit Fortran module prerequisites, and
+  isolated output layout. Production builds do not invoke Python.
 - `source/Makefile.opt` defines tracked user-selectable defaults.
 - `source/Makefile.internal` maps configuration choices to compilers, flags,
   libraries, source files, and solver objects.
@@ -41,6 +41,14 @@ The Makefile fragments have distinct roles:
 Inspect the conditional path through these files for any configuration being
 changed. Variable names and commented examples provide orientation; the
 selected Make logic determines the build.
+
+Each build directory contains a fixed-order `config.txt` record. Reusing it
+with different selectors, providers, compiler commands, or effective flags
+fails; clean that directory or choose another one. The conventional POSIX
+record supports ordinary flag text but rejects effective flags containing a
+single quote or line break. Do not run two top-level Make processes in one
+build directory, and do not clean a directory while another invocation uses
+it. Different build directories may build concurrently.
 
 ## Tracked defaults
 

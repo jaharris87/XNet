@@ -78,7 +78,7 @@ else ifeq ($(PE_ENV),PGI)
 
         ARCHOPT   =
     endif
-    ifneq ($(findstring $(MACHINE),$(LEGACY_IBM_HOSTS)),$(MACHINE))
+    ifneq ($(findstring $(MACHINE),$(RETIRED_IBM_HOSTS)),$(MACHINE))
         INLINE    = -Mipa=fast,inline,safe
     else
         INLINE    =
@@ -124,7 +124,7 @@ else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
 
         ARCHOPT   = -tp=pwr9
     endif
-    ifneq ($(findstring $(MACHINE),$(LEGACY_IBM_HOSTS)),$(MACHINE))
+    ifneq ($(findstring $(MACHINE),$(RETIRED_IBM_HOSTS)),$(MACHINE))
         INLINE    =# -Mipa=fast,inline,safe
     else
         INLINE    =
@@ -168,7 +168,7 @@ else ifeq ($(PE_ENV),GNU)
         CXX       = g++
         LDR       = gfortran
 
-        ifeq ($(findstring $(MACHINE),$(LEGACY_IBM_HOSTS)),$(MACHINE))
+        ifeq ($(findstring $(MACHINE),$(RETIRED_IBM_HOSTS)),$(MACHINE))
           ARCHOPT   = -mtune=native
         else
           ARCHOPT   = -march=native

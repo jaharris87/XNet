@@ -60,7 +60,8 @@ BUILD_NET_BUILD_DIR := $(BUILD_DIR)/build-net
 BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
 BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
 BUILD_NET_WORK_DIR := $(abspath $(BUILD_DIR)/build-net-work)
-PRODUCTION_XNET_EXE = $(shell $(MAKE) -C $(XNET_DIR) --no-print-directory CMODE=$(CMODE) print-XNET_EXE 2>/dev/null | sed -n 's/^XNET_EXE = //p')
+PRODUCTION_BUILD_NAME := unit-$(shell echo $(CMODE) | tr A-Z a-z)
+PRODUCTION_XNET_EXE := $(ROOT_DIR)/build/$(PRODUCTION_BUILD_NAME)/bin/xnet
 MODEL_INPUT_BUILD_DIR := $(BUILD_DIR)/model-input
 MODEL_INPUT_MODULE_FLAGS := -J$(MODEL_INPUT_BUILD_DIR) -I$(MODEL_INPUT_BUILD_DIR) -I$(XNET_DIR)
 MODEL_INPUT_TEST_EXE := $(MODEL_INPUT_BUILD_DIR)/model_input_contract_tests
@@ -259,8 +260,8 @@ $(BUILD_NET_BUILD_DIR):
 	mkdir -p $@
 
 production-xnet: | $(BUILD_DIR)
-	$(MAKE) -C $(XNET_DIR) CMODE=$(CMODE) clean
-	$(MAKE) -C $(XNET_DIR) -j CMODE=$(CMODE) xnet
+	$(MAKE) -C $(XNET_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) clean
+	$(MAKE) -C $(XNET_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) -j CMODE=$(CMODE) xnet
 
 $(BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@

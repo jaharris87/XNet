@@ -69,6 +69,7 @@ FAILURE_CATEGORIES = (
     "comparison",
 )
 CPU_BUILD_VARIABLES = {
+    "BUILD_NAME": "frontier-cpu",
     "CMODE": "OPT",
     "PE_ENV": "CRAY",
     "MPI_MODE": "OFF",
@@ -81,6 +82,7 @@ CPU_BUILD_VARIABLES = {
     "LAPACK_VER": "LIBSCI",
 }
 GPU_BUILD_VARIABLES = {
+    "BUILD_NAME": "frontier-gpu",
     "CMODE": "OPT",
     "PE_ENV": "CRAY",
     "MPI_MODE": "OFF",
@@ -801,14 +803,12 @@ def _build_configuration(
     jobs: int,
     targets: Sequence[str],
 ) -> dict[str, object]:
-    build_directory = artifact_root / "build" / label
-    source_directory = source_root / "source"
-    for executable in (source_directory / "xnet", source_directory / "frontier_gpu_linalg_probe"):
-        executable.unlink(missing_ok=True)
+    build_directory = source_root / "build" / variables["BUILD_NAME"]
+    build_evidence_directory = artifact_root / "build" / label
     clean, _ = _record_command(
-        ["make", "-C", str(source_directory), "clean"],
+        _make_command(source_root, variables, 1, "clean"),
         source_root,
-        build_directory,
+        build_evidence_directory,
         "clean",
         timeout_seconds=300.0,
     )
@@ -817,7 +817,7 @@ def _build_configuration(
     completed, runtime = _record_command(
         _make_command(source_root, variables, jobs, *targets),
         source_root,
-        build_directory,
+        build_evidence_directory,
         "build",
         timeout_seconds=1800.0,
     )
@@ -828,7 +828,7 @@ def _build_configuration(
     resolved, _ = _record_command(
         _make_command(source_root, variables, 1, *print_targets),
         source_root,
-        build_directory,
+        build_evidence_directory,
         "resolved-variables",
         timeout_seconds=120.0,
     )
@@ -842,7 +842,7 @@ def _build_configuration(
     binary_directory.mkdir(exist_ok=True)
     executables: dict[str, dict[str, object]] = {}
     for target in targets:
-        source = source_directory / target
+        source = build_directory / "bin" / target
         if not source.is_file() or not os.access(source, os.X_OK):
             raise FrontierFailure("build", f"{label}-build", f"missing executable {target}")
         destination_name = f"{target}-{label}"
@@ -851,7 +851,7 @@ def _build_configuration(
         link, _ = _record_command(
             ["ldd", str(destination)],
             source_root,
-            build_directory,
+            build_evidence_directory,
             f"{target}-link",
             timeout_seconds=120.0,
         )

@@ -750,8 +750,14 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     assert "\n!$omp\n" not in preprocessed
 
 
-def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override() -> None:
+def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override(
+    tmp_path: Path,
+) -> None:
     repository = FRONTIER_DIRECTORY.parents[2]
+    hipfort = tmp_path / "hipfort"
+    (hipfort / "include" / "hipfort" / "amdgcn").mkdir(parents=True)
+    rocm = tmp_path / "rocm"
+    rocm.mkdir()
     completed = subprocess.run(
         [
             "make",
@@ -760,7 +766,13 @@ def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override() -> None
             "--no-print-directory",
             "MACHINE=frontier",
             "PE_ENV=CRAY",
+            f"BUILD_DIR={tmp_path / 'frontier-wrapper'}",
             "GPU_MODE=ON",
+            "GPU_BACKEND=HIP",
+            "GPU_LAPACK_VER=ROCM",
+            f"HIPFORT_DIR={hipfort}",
+            f"ROCM_DIR={rocm}",
+            "OPENMP_OL_MODE=ON",
             "MPI_MODE=ON",
             "print-FC",
             "print-XNET_CRAY_FTN",
@@ -771,7 +783,7 @@ def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override() -> None
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "FC = env XNET_CRAY_FTN=ftn" in completed.stdout
+    assert 'FC = env XNET_CRAY_FTN="ftn"' in completed.stdout
     assert "crayftn_cpp.sh" in completed.stdout
     assert "XNET_CRAY_FTN = ftn" in completed.stdout
     assert "LDR = ftn" in completed.stdout

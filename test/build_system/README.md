@@ -7,5 +7,8 @@ python3 test/build_system/test_build_system.py
 ```
 
 The script builds the three direct products in a temporary GNU build directory,
-checks generic host fallback, verifies configuration-reuse protection, and
-verifies configuration-local cleaning.
+checks generic, Perlmutter, and retired Summit/Cori host selection, verifies
+configuration-reuse protection and configuration-local cleaning, and checks
+CUDA selector resolution and early rejection. The CUDA checks establish Make
+selector behavior only; they do not qualify NVIDIA hardware or a CUDA
+toolchain.

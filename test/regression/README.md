@@ -20,10 +20,10 @@ python3 -m pip install -r test/regression/requirements.txt
 Build XNet and `xnse` separately, then select both executables explicitly:
 
 ```bash
-make -C source -j xnet xnse
+make -C source BUILD_NAME=regression-serial -j xnet xnse
 python3 -m pytest test/regression \
-    --xnet-executable="$PWD/source/xnet" \
-    --xnse-executable="$PWD/source/xnse"
+    --xnet-executable="$PWD/build/regression-serial/bin/xnet" \
+    --xnse-executable="$PWD/build/regression-serial/bin/xnse"
 ```
 
 There is no default executable name and no `XNET_EXECUTABLE` fallback. The
@@ -60,8 +60,8 @@ standard option, for example:
 
 ```bash
 python3 -m pytest test/regression \
-    --xnet-executable="$PWD/source/xnet" \
-    --xnse-executable="$PWD/source/xnse" \
+    --xnet-executable="$PWD/build/regression-serial/bin/xnet" \
+    --xnse-executable="$PWD/build/regression-serial/bin/xnse" \
     --basetemp=/tmp/xnet-regression-artifacts
 ```
 

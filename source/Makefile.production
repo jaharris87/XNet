@@ -43,7 +43,6 @@ endif
 OBJ_DIR := $(BUILD_DIR)/obj
 MOD_DIR := $(BUILD_DIR)/mod
 PP_DIR := $(BUILD_DIR)/pp
-DEP_DIR := $(BUILD_DIR)/dep
 BIN_DIR := $(BUILD_DIR)/bin
 CONFIG := $(BUILD_DIR)/config.txt
 
@@ -530,7 +529,7 @@ $(CONFIG): FORCE
 
 $(SOURCE_OBJ_DIR) $(EOS_OBJ_DIR) $(SOLVER_OBJ_DIR) $(LAPACK_OBJ_DIR) $(GPU_OBJ_DIR) \
 $(SOURCE_PP_DIR) $(EOS_PP_DIR) $(SOLVER_PP_DIR) $(LAPACK_PP_DIR) $(GPU_PP_DIR) \
-$(MOD_DIR) $(DEP_DIR) $(BIN_DIR): | $(CONFIG)
+$(MOD_DIR) $(BIN_DIR): | $(CONFIG)
 	@mkdir -p '$@'
 
 BUILD_LOGIC_INPUTS := $(XNET_DIR)/Makefile $(XNET_DIR)/Makefile.production \

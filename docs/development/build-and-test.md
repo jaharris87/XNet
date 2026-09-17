@@ -100,11 +100,12 @@ make -C source --no-print-directory print-MATRIX_SOLVER
 
 ## Configuration changes and clean builds
 
-Each build directory contains predictable `obj/`, `mod/`, `pp/`, `dep/`, and
+Each build directory contains predictable `obj/`, `mod/`, `pp/`, and
 `bin/` subdirectories plus `config.txt`. The configuration record preserves
 the exact effective selectors, commands, flags, provider paths, and external
 source paths. Reusing the directory with different material settings fails
-before preprocessing or compilation and identifies the differing fields.
+before preprocessing or compilation and directs the user to clean or choose
+another directory.
 
 Use a different readable directory for a different configuration:
 
@@ -116,7 +117,7 @@ make -C source BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
 `clean` removes only the selected marked build directory and does not require
 the old configuration to be restated. `clean-all` removes only marked direct
 children of `BUILD_BASE`, requires `CONFIRM_CLEAN_ALL=yes`, and refuses to run
-while any build-directory lock exists. Run cleaning and building as separate
+while another invocation uses the same directory. Run cleaning and building as separate
 commands; mixed cleaning/product goals are rejected.
 
 Pass local configuration choices on the Make command line and leave tracked

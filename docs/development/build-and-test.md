@@ -9,26 +9,46 @@ details in the Makefiles, test drivers, and source before relying on them.
 
 ## Build entry point
 
-The production build uses GNU Make and writes its results into `source/`.
-From the repository root, build the tracked default with:
+The production build uses GNU Make and writes its results below a
+caller-selected build directory. From the repository root, build the tracked
+default with:
 
 ```bash
 make -C source -j
 ```
 
+The default artifact is `build/default/bin/xnet`. Set a readable `BUILD_NAME`
+for a directory below `build/`, or set `BUILD_DIR` directly. Relative paths
+are interpreted from the repository root:
+
+```bash
+make -C source BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
+make -C source BUILD_DIR=/scratch/$USER/xnet-frontier -j xnet
+```
+
 The Makefile fragments have distinct roles:
 
-- `source/Makefile` defines production targets, selects driver and EOS
-  objects, and records the object dependency graph.
+- `source/Makefile` is the small public entry point.
+- `source/Makefile.production` defines the one production target and provider
+  graph, retained preprocessing, explicit Fortran module prerequisites, and
+  isolated output layout. Production builds do not invoke Python.
 - `source/Makefile.opt` defines tracked user-selectable defaults.
 - `source/Makefile.internal` maps configuration choices to compilers, flags,
   libraries, source files, and solver objects.
-- `source/Makefile.dev` adds accelerator libraries, flags, objects, and
-  development targets. The main Makefile includes it when present.
+- `source/Makefile.dev` remains historical source material; the production
+  graph selects accelerator providers explicitly and does not include it.
 
 Inspect the conditional path through these files for any configuration being
 changed. Variable names and commented examples provide orientation; the
 selected Make logic determines the build.
+
+Each build directory contains a fixed-order `config.txt` record. Reusing it
+with different selectors, providers, compiler commands, or effective flags
+fails; clean that directory or choose another one. The conventional POSIX
+record supports ordinary flag text but rejects effective flags containing a
+single quote or line break. Do not run two top-level Make processes in one
+build directory, and do not clean a directory while another invocation uses
+it. Different build directories may build concurrently.
 
 ## Tracked defaults
 
@@ -39,7 +59,7 @@ The tracked defaults currently resolve to:
 | `EXE` | `xnet` | Main executable name |
 | `CMODE` | `OPT` | Optimized build |
 | `PE_ENV` | `GNU` | GNU compiler configuration |
-| `MPI_MODE` | `OFF` | Selects parallel stubs for the linked driver; see the current dependency limitation below |
+| `MPI_MODE` | `OFF` | Selects the serial parallel-interface stubs |
 | `OPENMP_MODE` | `OFF` | OpenMP host threading disabled |
 | `GPU_MODE` | `OFF` | Accelerator runtime and libraries disabled |
 | `GPU_BACKEND` | `CUDA` | Accelerator vendor selection when GPU mode is enabled |
@@ -80,36 +100,30 @@ make -C source --no-print-directory print-MATRIX_SOLVER
 
 ## Configuration changes and clean builds
 
-Production builds are in-place. Objects, module files, and executables from
-different configurations share filenames. Make does not track build-variable
-changes as prerequisites.
+Each build directory contains predictable `obj/`, `mod/`, `pp/`, and
+`bin/` subdirectories plus `config.txt`. The configuration record preserves
+the exact effective selectors, commands, flags, provider paths, and external
+source paths. Reusing the directory with different material settings fails
+before preprocessing or compilation and directs the user to clean or choose
+another directory.
 
-Use a clean rebuild after changing any choice that can affect compiled code or
-linked libraries:
+The line-oriented record accepts ordinary single-line Make values. Embedded
+single quotes and line breaks in recorded commands, flags, providers, or paths
+are rejected with a clear diagnostic; select an equivalent spelling or another
+build directory.
+
+Use a different readable directory for a different configuration:
 
 ```bash
-make -C source clean
-make -C source -j CMODE=DEBUG
+make -C source BUILD_NAME=gnu-opt -j xnet
+make -C source BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
 ```
 
-This includes changes to compiler, compile mode, numerical flags, MPI,
-threading, accelerator mode, EOS, matrix solver, or CPU/GPU linear algebra.
-The clean target removes objects and module files while leaving some
-executables. Confirm the requested target was linked in the new build output.
-
-### Current MPI dependency limitation
-
-With `MPI_MODE=OFF`, `source/Makefile` selects
-`xnet_parallel_stubs.o` for the linked executable. The explicit prerequisite
-for `xnet_output.o` currently names `xnet_parallel.o` directly. A forced clean
-or parallel build therefore schedules both `xnet_parallel_stubs.F90` with the
-selected Fortran compiler and `xnet_parallel.F90` with `mpifort`.
-
-Both files define the `xnet_parallel` module. The nominal serial build can
-require an MPI compiler and can compile two providers of the same module file
-concurrently. Until the dependency is corrected, inspect clean build output
-for both compilations and record MPI compiler availability even when
-`MPI_MODE=OFF`.
+`clean` removes only the selected marked build directory and does not require
+the old configuration to be restated. `clean-all` removes only marked direct
+children of `BUILD_BASE` and requires `CONFIRM_CLEAN_ALL=yes`. Do not clean
+while a build uses that directory; run cleaning and building as separate
+commands. Mixed cleaning/product goals are rejected.
 
 Pass local configuration choices on the Make command line and leave tracked
 defaults unchanged. The main selection variables include:
@@ -128,7 +142,7 @@ Validate support and numerical behavior for the exact combination used.
 
 ## Production and utility targets
 
-The default target builds `source/xnet`. Common utility builds are:
+The default target builds `build/default/bin/xnet`. Common utility builds are:
 
 ```bash
 make -C source -j net_setup
@@ -138,11 +152,11 @@ make -C source -j xnse
 - `net_setup` preprocesses network data.
 - `xnse` is the stand-alone NSE state calculator.
 
-The Makefile also contains solver-named `xnet_*` targets, the `all` target,
-accelerator development targets, test targets, and `xinab`. Read their recipes
-and prerequisites before use. Their presence records an available recipe and
-selection path. Current support depends on the requested platform and the
-evidence collected for the task.
+`all` builds the three canonical programs in one graph. Solver-named `xnet_*`
+aliases select that solver directly and reject conflicting selectors.
+`xinab` and `xnet_gpu` are unsupported and fail early; accelerator builds use
+`xnet` with explicit supported selectors. Target presence records a build
+recipe, not a support claim.
 
 ## Focused deterministic contract tests
 
@@ -156,8 +170,8 @@ make -C test/unit
 It uses the tracked GNU optimized configuration by default, compiles selected
 production sources into the ignored `test/unit/build/` directory, and performs
 no network access. Its build-net interoperability check always cleans and
-builds the requested tracked `source/xnet` configuration in place before
-running the smoke, so a previous in-place configuration cannot be reused. Run
+builds the requested tracked configuration before resolving and running the
+canonical XNet path, so an incompatible configuration cannot be reused. Run
 the bounds-checking configuration with:
 
 ```bash
@@ -214,11 +228,10 @@ is absent, and those diagnostic files are ignored by `.gitignore`. Establish
 an independent comparison result with recorded provenance before claiming
 numerical agreement.
 
-The `source/Makefile` includes `test`, `test_serial`, `test_heat`,
-`test_simple`, `test_batch`, `test_setup`, and `test_nse` targets. Inspect the
-target recipe and corresponding problem IDs before running one. Some targets
-create a Helmholtz-table symlink, write `control`, create result directories,
-move diagnostic files, create comparison files, or run preprocessing inside a
+Legacy problem drivers remain under `test/`; the production Makefile does not
+duplicate them as recursive build targets. Some legacy drivers create a
+Helmholtz-table symlink, write `control`, create result directories, move
+diagnostic files, create comparison files, or run preprocessing inside a
 tracked data directory.
 
 `test/test_xnet.csh` is an older driver. Use it as historical information and
@@ -261,5 +274,6 @@ physics, numerical behavior, tolerances, convergence, or performance.
 
 Keep build objects, module files, executables, diagnostic outputs, comparison
 files, temporary control files, local installation paths, and machine-specific
-settings out of commits. Review the worktree after builds and runs because the
-legacy recipes write into `source/` and `test/`.
+settings out of commits. Production artifacts remain below `BUILD_DIR`, but
+legacy problem drivers can still write into `test/`; review ignored files as
+well as `git status` after runs.

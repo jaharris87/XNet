@@ -48,8 +48,19 @@ if [[ -z ${source_file} ]]; then
   exec "${compiler}" "$@"
 fi
 
-temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/xnet-crayftn-cpp.XXXXXX")
-trap 'rm -rf -- "${temporary_directory}"' EXIT HUP INT TERM
+if [[ -n ${XNET_CPP_OUTPUT:-} ]]; then
+  temporary_directory=${XNET_CPP_OUTPUT%/*}
+  if [[ ${temporary_directory} == "${XNET_CPP_OUTPUT}" ]]; then
+    temporary_directory=.
+  fi
+  mkdir -p -- "${temporary_directory}"
+elif [[ -n ${XNET_CPP_OUTPUT_DIR:-} ]]; then
+  temporary_directory=${XNET_CPP_OUTPUT_DIR}
+  mkdir -p -- "${temporary_directory}"
+else
+  temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/xnet-crayftn-cpp.XXXXXX")
+  trap 'rm -rf -- "${temporary_directory}"' EXIT HUP INT TERM
+fi
 source_basename=${source_file##*/}
 source_stem=${source_basename%.*}
 preprocessed_source="${temporary_directory}/${source_stem}.f90"
@@ -57,6 +68,12 @@ raw_preprocessed_source="${temporary_directory}/raw-${source_stem}.f90"
 if [[ ${source_form} == fixed ]]; then
   preprocessed_source="${temporary_directory}/${source_stem}.f"
   raw_preprocessed_source="${temporary_directory}/raw-${source_stem}.f"
+fi
+
+if [[ -n ${XNET_CPP_OUTPUT:-} ]]; then
+  preprocessed_source="${XNET_CPP_OUTPUT}.filtered.$$"
+  raw_preprocessed_source="${XNET_CPP_OUTPUT}.raw.$$"
+  trap 'rm -f -- "${preprocessed_source}" "${raw_preprocessed_source}"' EXIT HUP INT TERM
 fi
 
 if ! "${preprocessor}" "${preprocessor_arguments[@]}" \
@@ -87,6 +104,12 @@ if ! awk '
 ' "${raw_preprocessed_source}" > "${preprocessed_source}"; then
   echo "crayftn_cpp.sh: OpenMP continuation filtering failed for ${source_file}" >&2
   exit 1
+fi
+
+if [[ -n ${XNET_CPP_OUTPUT:-} ]]; then
+  mv -- "${preprocessed_source}" "${XNET_CPP_OUTPUT}"
+  rm -f -- "${raw_preprocessed_source}"
+  exit 0
 fi
 
 "${compiler}" "${compiler_arguments[@]}" "${preprocessed_source}"

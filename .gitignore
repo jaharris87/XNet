@@ -1,4 +1,5 @@
 # compiler output
+/build/
 pgipar*
 *.mod
 *.o

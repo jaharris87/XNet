@@ -204,6 +204,14 @@ def graph_checks(work: pathlib.Path) -> None:
     assert not (xnet_only / "pp/source/nse_slice.f90").exists()
     assert not (xnet_only / "pp/source/net_setup.f90").exists()
     assert not (xnet_only / "pp/source/gpu_linalg_probe.f90").exists()
+    database = make_result(f"BUILD_DIR={xnet_only}", *arguments, "-np", "xnet", env=environment)
+    assert database.returncode == 0
+    retained_target = f"{xnet_only}/pp/source/model_input_ascii.f90:"
+    retained_rule = next(line for line in database.stdout.splitlines() if line.startswith(retained_target))
+    assert f"{xnet_only}/pp/source/" not in retained_rule.split()
+    object_target = f"{xnet_only}/obj/source/model_input_ascii.o:"
+    object_rule = next(line for line in database.stdout.splitlines() if line.startswith(object_target))
+    assert f"{xnet_only}/obj/source/" not in object_rule.split()
 
     build = work / "default"
     make(f"BUILD_DIR={build}", *arguments, "-j8", "all", env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

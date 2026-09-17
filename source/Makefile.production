@@ -390,6 +390,7 @@ eos_pp = $(EOS_PP_DIR)/$(call stem,$(1)).f90
 solver_pp = $(SOLVER_PP_DIR)/$(call stem,$(1)).f90
 lapack_pp = $(LAPACK_PP_DIR)/$(call stem,$(1)).f90
 gpu_pp = $(GPU_PP_DIR)/$(call stem,$(1)).f90
+parent_dir = $(patsubst %/,%,$(dir $(1)))
 
 EOS_OBJ := $(foreach source,$(EOS_FREE_SRC),$(call eos_obj,$(source)))
 SOLVER_FREE_OBJ := $(foreach source,$(SOLVER_FREE_SRC),$(call solver_obj,$(source)))
@@ -504,14 +505,14 @@ $(MOD_DIR) $(DEP_DIR) $(BIN_DIR): | $(CONFIG)
 PP_STATIC_INPUTS := $(XNET_DIR)/xnet_macros.fh $(XNET_DIR)/Makefile $(XNET_DIR)/Makefile.production \
                     $(XNET_DIR)/Makefile.opt $(XNET_DIR)/Makefile.internal $(XNET_DIR)/crayftn_cpp.sh
 define free_rule
-$(3): $(1) $(PP_STATIC_INPUTS) $(CONFIG) | $(dir $(3))
+$(3): $(1) $(PP_STATIC_INPUTS) $(CONFIG) | $(call parent_dir,$(3))
 ifeq ($(CRAY_RETAINED_PP),yes)
 	@XNET_CPP_OUTPUT='$$@.$$$$.tmp' XNET_CPP='$(XNET_CPP)' XNET_CRAY_FTN=: \
 	  $(XNET_DIR)/crayftn_cpp.sh $(CPP_EFFECTIVE_FLAGS) '$(1)' && mv '$$@.$$$$.tmp' '$$@'
 else
 	@$(XNET_CPP) $(CPP_EFFECTIVE_FLAGS) '$(1)' > '$$@.$$$$.tmp' && mv '$$@.$$$$.tmp' '$$@'
 endif
-$(2): $(3) | $(dir $(2)) $(MOD_DIR)
+$(2): $(3) | $(call parent_dir,$(2)) $(MOD_DIR)
 	$(COMPILE_FC) $(COMPILE_FFLAGS) $(COMPILE_F90FLAGS) $(MODULE_FLAGS) $(LAPACK_INC) $(SOLVER_INC) \
 	  $(EXTERNAL_MODULE_FLAGS) -c '$$<' -o '$$@'
 endef
@@ -561,7 +562,7 @@ ifneq ($(filter xnet xnse net_setup all xnet_dense xnet_MA41 xnet_MA48 xnet_PARD
 endif
 
 define fixed_rule
-$(2): $(1) $(CONFIG) | $(dir $(2)) $(MOD_DIR)
+$(2): $(1) $(CONFIG) | $(call parent_dir,$(2)) $(MOD_DIR)
 	$(COMPILE_FC) $(FFLAGS) $(F77FLAGS) $(MODULE_FLAGS) $(LAPACK_INC) $(SOLVER_INC) \
 	  $(EXTERNAL_MODULE_FLAGS) -c '$$<' -o '$$@'
 endef
@@ -569,21 +570,21 @@ $(foreach source,$(SOLVER_FIXED_SRC),$(eval $(call fixed_rule,$(source),$(call s
 $(foreach source,$(LAPACK_FIXED_SRC),$(eval $(call fixed_rule,$(source),$(call lapack_obj,$(source)))))
 
 define c_rule
-$(2): $(1) $(CONFIG) | $(dir $(2))
+$(2): $(1) $(CONFIG) | $(call parent_dir,$(2))
 	$(CC) $(CFLAGS) $(LAPACK_INC) $(SOLVER_INC) -c '$$<' -o '$$@'
 endef
 $(foreach source,$(SOLVER_C_SRC),$(eval $(call c_rule,$(source),$(call solver_obj,$(source)))))
 $(foreach source,$(LAPACK_C_SRC),$(eval $(call c_rule,$(source),$(call lapack_obj,$(source)))))
 
 define cxx_rule
-$(2): $(1) $(CONFIG) | $(dir $(2))
+$(2): $(1) $(CONFIG) | $(call parent_dir,$(2))
 	$(CXX) $(CXXFLAGS) $(LAPACK_INC) $(SOLVER_INC) -c '$$<' -o '$$@'
 endef
 $(foreach source,$(SOLVER_CXX_SRC),$(eval $(call cxx_rule,$(source),$(call solver_obj,$(source)))))
 $(foreach source,$(LAPACK_CXX_SRC),$(eval $(call cxx_rule,$(source),$(call lapack_obj,$(source)))))
 
 define cuda_rule
-$(2): $(1) $(CONFIG) | $(dir $(2))
+$(2): $(1) $(CONFIG) | $(call parent_dir,$(2))
 	$(NVCC) $(NVCCFLAGS) $(LAPACK_INC) $(SOLVER_INC) -c '$$<' -o '$$@'
 endef
 $(foreach source,$(SOLVER_CUDA_SRC),$(eval $(call cuda_rule,$(source),$(call solver_obj,$(source)))))

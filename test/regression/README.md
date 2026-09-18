@@ -1,6 +1,6 @@
 # XNet pytest regression cases
 
-This directory is a bounded replacement path for XNet regression testing. It
+This directory contains the maintained XNet regression cases. It
 exercises the compiled XNet program as an external process; it is not a Python
 binding, a scientific-validation suite, or a replacement for all legacy cases.
 The migrated cases are the serial, CPU-only `tnsn_alpha` and `tnsn_torch47`
@@ -36,7 +36,7 @@ python3 -m pytest test/regression/test_xnet_regression.py
 The suite enforces a 30-second per-case process timeout. Use
 `--xnet-timeout=SECONDS` to change it deliberately.
 
-## Isolated execution and artifacts
+## Isolated execution and retained output
 
 pytest supplies a new empty temporary directory for each case. The runner
 copies the complete `control` input into it, creates a local writable network
@@ -52,9 +52,10 @@ requires its ordered, unique species list to match the case declaration before
 execution. A nonempty work directory is a setup failure, so old diagnostics
 cannot satisfy a new run.
 
-Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`,
-`xnet.status.txt`, and `composition_error_norms.json` beside the XNet outputs.
-Failure messages give the work directory path. pytest retains recent temporary
+Every invocation records `xnet.stdout.txt`, `xnet.stderr.txt`, and
+`xnet.status.txt` beside the XNet outputs. Runs whose final diagnostic is
+parsed successfully also record `composition_error_norms.json`. Failure
+messages give the work directory path. pytest retains recent temporary
 directories. To choose a stable diagnostic location for a run, use its
 standard option, for example:
 
@@ -62,7 +63,7 @@ standard option, for example:
 python3 -m pytest test/regression \
     --xnet-executable="$PWD/build/regression-serial/bin/xnet" \
     --xnse-executable="$PWD/build/regression-serial/bin/xnse" \
-    --basetemp=/tmp/xnet-regression-artifacts
+    --basetemp=/tmp/xnet-regression-output
 ```
 
 The runner classifies invalid definitions, paths, and preparation as setup
@@ -93,7 +94,7 @@ concatenation.
 
 The Starkiller EOS initializes even though `tnsn_alpha` disables self-heating,
 so `tools/starkiller-helmholtz/helm_table.dat` is also an explicit required
-input. Before issue #40 corrected the serial abort status, a missing table
+input. Before the serial abort path returned a nonzero status, a missing table
 could produce a fatal message, a partial `net_diag01`, and process status zero.
 The runner still requires all expected output and complete final records
 instead of relying on status or stderr keyword heuristics alone.
@@ -119,11 +120,10 @@ trajectory paths in the isolated directory. XNet uses the number of digits in
 the largest zone number for output suffixes, so this six-zone case uses `_1`
 through `_6`, while the ten-zone `tnsn_alpha` case uses `_01` through `_10`.
 
-Issue #21 divided the paired SN160 study into two ordered increments. Backward
-Euler legacy ID 53, `heat_sn160`, was accepted first. Issue #24 adds the
-second increment for legacy ID 54, `bdf_sn160`. Both remain members of
-aggregate self-heating ID 50. The split gives each maintained integrator its
-own characterization reference and tolerance policy; the paired comparison is
+The paired SN160 study has separate cases for Backward Euler legacy ID 53,
+`heat_sn160`, and BDF legacy ID 54, `bdf_sn160`. Both remain members of
+aggregate self-heating ID 50. Each maintained integrator has its own
+characterization reference and tolerance policy; the paired comparison is
 diagnostic and does not make one integrator's execution history a requirement
 for the other.
 
@@ -181,14 +181,10 @@ the normal root-level production build contains
 abundance- and temperature-change timestep limits with the effective value
 `1e10` for `isolv == 3`; the committed reference records that effective state.
 
-The maintained solver is Backward Differentiation Formula (BDF). The text
-`Choice of integration Scheme (1=Backward Euler, 2= Bader-Deufelhard)` in
-`test/test_settings_bdf` and the analogous input/output descriptions in
-`source/xnet_controls.F90` are stale historical wording. They do not control
-dispatch. The commented `Case (2)` in `source/xnet_evolve.F90` and the absent
-`xnet_integrate_bd.o` production object confirm that obsolete Bader-Deuflhard
-(BD) is not the solver exercised here. Issue #24 does not change those stale
-production or legacy comments.
+The maintained solver is Backward Differentiation Formula (BDF). Integration
+choice 3 selects BDF; the obsolete Bader-Deuflhard (BD) choice 2 is not built.
+The commented `Case (2)` in `source/xnet_evolve.F90` and the absent
+`xnet_integrate_bd.o` production object provide additional confirmation.
 
 Legacy ID 2 names `tnsn_torch47` and calls `do_test`, which concatenates
 `test/test_settings` and `test/Test_Problems/setup_tnsn_torch47`. The settings
@@ -217,8 +213,8 @@ recorded build and inputs, not historical or independent scientific truth.
 
 ### `batch_alpha`: serial zone-batching characterization
 
-Issue #22 migrates legacy aggregate ID 60's ID 61, `batch_alpha`, only. The
-legacy driver maps ID 61 to `do_test_batch`, which concatenates
+The maintained `batch_alpha` case corresponds to ID 61 within legacy aggregate
+ID 60. The legacy driver maps ID 61 to `do_test_batch`, which concatenates
 `test/test_settings_batch` with `test/Test_Problems/setup_batch_alpha`; ID 62
 is the separate `batch_torch47` case. The former source-directory Makefile's
 `test_batch` target invoked ID 62, so that target is historical context rather
@@ -319,10 +315,11 @@ record. The regression parser sums those emitted values in output order and
 compares the result with the canonical complete-vector sum through the normal
 `mass_fraction_printed_sum` policy. It separately uses `math.fsum` for the
 structural normalization-to-one check controlled by `mass_fraction_sum_atol`.
-For `heat_sn160` and `bdf_sn160`, the printed-sum limits cover the Issue #30
-three-row envelope with a compact margin; the normalization bounds retain the
-existing formatting-aware structural allowance. Neither is the BDF `iconvc ==
-3` weighted RMS convergence norm or a check of `rtol`, `atol`, or `ymin`.
+For `heat_sn160` and `bdf_sn160`, the printed-sum limits cover the documented
+three-configuration envelope with a compact margin; the normalization bounds
+retain the existing formatting-aware structural allowance. Neither is the BDF
+`iconvc == 3` weighted RMS convergence norm or a check of `rtol`, `atol`, or
+`ymin`.
 
 Each reference records characterized final step counts for diagnosis:
 `tnsn_alpha` records 2841 for every zone, `heat_alpha` records 654, 600, 553,
@@ -436,30 +433,30 @@ species and vector gates are independent, so either can reject a result. An
 
 `composition_error_norms.json` records complete-vector `L1`, `L2`, and
 `L-infinity` norms, the `L-infinity` species, and any reference-owned vector
-limits. It is an execution artifact, not a reference-update mechanism.
+limits. It is test output, not a reference-update mechanism.
 
-Issue #30 provides the bounded three-row (`mac-gnu16`, `mac-llvm`, and
-`etacar-gnu16`) characterization evidence for the five current cases under
-the documented serial optimized configuration. This is characterization, not
+A three-configuration study (`mac-gnu16`, `mac-llvm`, and `etacar-gnu16`)
+provides characterization evidence for the five current cases under the
+documented serial optimized configuration. This is characterization, not
 scientific validation, and it does not establish portability outside that
 matrix. Future cases should keep one canonical endpoint, choose the coarsest
-quantitatively justified settings, preserve exact invariants, and document
-their evidence in the governing issue or PR rather than adding study archives
-or platform branches to this tree.
+quantitatively justified settings, preserve exact invariants, and document the
+supporting evidence rather than adding study archives or platform branches to
+this tree.
 
-Issue #79 extends the Issue #30 empirical envelope after the hosted GNU 13.3.0
-Ubuntu 24.04 pilot exposed bounded optimized-run variation. For each affected
-case, zone, and comparison category, the stored coefficient is derived from
+A later hosted GNU 13.3.0 Ubuntu 24.04 observation extended that empirical
+envelope after exposing optimized-run variation. For each affected case, zone,
+and comparison category, the stored coefficient is derived from
 
 ```text
 1.5 * max(abs(observation - canonical mac-gnu16 value))
     + half the final printed decimal unit
 ```
 
-The maximum is taken over the union of the Issue #30 observations and the
-preserved `NUM-OBS-001` observations. The resulting value is rounded upward to
+The maximum is taken over the union of the three-configuration observations
+and the preserved `NUM-OBS-001` observations. The resulting value is rounded upward to
 two significant decimal digits. The hosted observation controls each revised
-coefficient below; the Issue #30 maxima were smaller. The structural
+coefficient below; the earlier maxima were smaller. The structural
 normalization row retains the canonical sum's offset from one because that gate
 compares directly with one, then adds the same cross-canonical envelope.
 
@@ -492,17 +489,17 @@ diagnostic content is not hidden.
 
 ## SN160 Backward Euler characterization evidence
 
-No tracked `test/Test_Problems/Results/net_diag_heat_sn160` exists, and the
-investigation for issue #21 found no historical endpoint with usable compiler,
+No tracked `test/Test_Problems/Results/net_diag_heat_sn160` exists, and a
+repository-history search found no historical endpoint with usable compiler,
 platform, input, or scientific provenance. The committed result is therefore
-a new characterization, not historical truth. Issue #12 does not block this
-increment: `net_diag01` retains enough printed precision for the selected
-endpoint policy, while each `ts_*` file remains a required fresh artifact and
-is neither decoded nor compared.
+a new characterization, not historical truth. `net_diag01` retains enough
+printed precision for the selected endpoint policy, while each `ts_*` file
+remains a required fresh output and is neither decoded nor compared.
 
 The reference was generated on 2026-08-05 from production and input revision
 `01dd4963e9b9677f64711c90e08f50d468bc99a4` on macOS 26.6 arm64 with GNU
-Fortran 16.1.0. The clean tracked-default build commands were:
+Fortran 16.1.0. The following commands and in-source executable path record
+that revision's historical build; they are not current build instructions:
 
 ```bash
 make -C source clean
@@ -517,13 +514,12 @@ existing argument and rank mismatch warnings; the linked executable used
 `xnet_parallel_stubs.o`. MPI, OpenMP, accelerators, other matrix solvers,
 other libraries, other compilers, and other platforms were not validated.
 
-Three isolated optimized runs returned direct process status 0. The same
-focused command was run once with each retained pytest base directory:
+Three isolated optimized runs returned direct process status 0. The historical
+focused command below was run three times with distinct external pytest base
+directories:
 
 ```bash
-.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue21-opt-repeat-1 --durations=1
-.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue21-opt-repeat-2 --durations=1
-.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue21-opt-repeat-3 --durations=1
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_heat_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=<external-directory> --durations=1
 ```
 
 The three retained `net_diag01` files were parsed independently with
@@ -571,7 +567,7 @@ value and scalar field uses half its baseline's last printed place as `atol`
 and `5e-8` as `rtol`, matching the diagnostic's eight-significant-digit
 representation. Complete vectors still receive exact identity/order,
 uniqueness, finite, nonnegative, normalization, and diagnostic norm checks.
-Cross-integrator agreement is not evaluated in this increment.
+Cross-integrator agreement is not evaluated by this regression.
 
 The required outputs totaled 30,663,926 bytes: 47,898 bytes for `net_diag01`,
 694,600 bytes for six ASCII histories, and 29,921,428 bytes for six binary
@@ -580,7 +576,7 @@ histories. Isolated preprocessing created `ab_blank`, `match_data`,
 `nuc_data`, and `sparse_ind`, totaling 847,933 bytes. The committed complete
 JSON reference is 52,447 bytes. Hashes for the control, five network sources,
 six trajectories, and EOS table are recorded in the reference; the tracked
-inputs remained unchanged after the runs. The post-run ignored-artifact check
+inputs remained unchanged after the runs. The post-run ignored-file check
 was scoped to every repository input and case directory that the execution
 could mutate:
 
@@ -589,13 +585,14 @@ git status --short --ignored -- test/Data_SN160 test/Test_Problems tools/starkil
 # no entries
 ```
 
-Thus neither tracked nor ignored runtime or preprocessing artifacts appeared
-in those source directories. Expected build products remained confined to
-the ignored `source/` build directory, and pytest artifacts remained under
+Thus neither tracked nor ignored runtime or preprocessing outputs appeared in
+those source directories. At that revision, expected build products remained
+confined to the ignored `source/` directory, and pytest outputs remained under
 the explicitly external `/private/tmp` base directories.
 
 An alternate clean GNU `CMODE=DEBUG` build was also exercised with these
-commands before restoring the clean tracked-default optimized build:
+historical commands before restoring that revision's tracked-default optimized
+build:
 
 ```bash
 make -C source clean
@@ -634,9 +631,10 @@ scientific validation.
 
 The reference was generated on 2026-08-05 from production and input revision
 `a8b64764a6d614f406da6c897e6b051fb3e1972d` on macOS 26.6 arm64 with GNU
-Fortran 16.1.0, Python 3.13.0, and pytest 9.1.1. The complete control is new in
-this increment and is bound by its SHA-256 hash in the reference. The clean
-tracked-default build commands were:
+Fortran 16.1.0, Python 3.13.0, and pytest 9.1.1. The complete control is bound
+by its SHA-256 hash in the reference. The following commands and executable
+path record that revision's historical build; they are not current build
+instructions:
 
 ```bash
 make -C source clean
@@ -665,12 +663,11 @@ identity, and the effective `changemx = changemxt = 1e10` state imposed by
 XNet.
 
 Three isolated optimized pytest runs used the unchanged default 30-second
-timeout and distinct retained base directories:
+timeout and distinct external base directories. This historical command was
+run once for each directory:
 
 ```bash
-.venv/bin/python -m pytest -q test/regression/test_regression.py::test_bdf_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue24-pytest-baseline --durations=1
-.venv/bin/python -m pytest -q test/regression/test_regression.py::test_bdf_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue24-pytest-repeat-2 --durations=1
-.venv/bin/python -m pytest -q test/regression/test_regression.py::test_bdf_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=/private/tmp/xnet-issue24-pytest-repeat-3 --durations=1
+.venv/bin/python -m pytest -q test/regression/test_regression.py::test_bdf_sn160 --xnet-executable="$PWD/source/xnet" --basetemp=<external-directory> --durations=1
 ```
 
 Each XNet subprocess recorded direct return status 0. Pytest call times were
@@ -723,8 +720,7 @@ for the six binary histories. Isolated preprocessing created `ab_blank`,
 `match_data`, `match_read`, `matr_shape`, `net_desc`, `net_diag`, `nets3`,
 `nets4`, `nuc_data`, and `sparse_ind`, totaling 847,933 bytes. The committed
 JSON reference is 54,190 bytes. Binary histories are required fresh and
-nonempty but are not decoded, compared, or committed; issue #12 still owns
-that policy.
+nonempty but are not decoded, compared, or committed.
 
 A controlled end-to-end failure temporarily changed selected zone 3 `ni56`
 from `0.064921366` to `0.07`. Both the focused BDF command and the complete
@@ -775,15 +771,14 @@ configuration and are not performance benchmarks. Differing timestep,
 convergence, and abundance-floor policies make the different endpoints and
 execution histories expected characterization evidence, not evidence that
 either integrator is scientifically superior. Scientific interpretation of
-the endpoint differences remains a human-maintainer decision. Issue #21 must
-remain open until this increment is accepted and the maintainer accepts the
-paired diagnostic record.
+the endpoint differences remains a human-maintainer decision.
 
 ## Torch47 characterization evidence
 
-The issue #16 reference was generated on 2026-08-05 from revision
+The Torch47 reference was generated on 2026-08-05 from revision
 `5e7e1543d432f3c2792e40e271816ecaf8184fad` on macOS 26.6 arm64 with GNU
-Fortran 16.1.0. The clean build commands were:
+Fortran 16.1.0. The following commands and in-source executable path record
+that revision's historical build; they are not current build instructions:
 
 ```bash
 make -C source clean
@@ -809,7 +804,8 @@ outputs totaled 14,470,756 and 1,757,702 bytes respectively. Torch47 remains
 well inside the unchanged 30-second timeout and is suitable for the fast local
 suite on this configuration.
 
-The focused helper command passed 39 tests, and the complete suite passed 42:
+At that revision, the focused helper command passed 39 tests and the complete
+suite passed 42:
 
 ```bash
 python -m pytest -q test/regression/test_xnet_regression.py
@@ -826,11 +822,11 @@ reference-writing path.
 The third explicit Python registration remains a short `RegressionCase`
 declaration and shares the existing loader-free validation path. A TOML
 manifest would duplicate these values while adding schema and loading code, so
-issue #16 retains explicit Python registration for all three cases.
+all three cases remain registered directly in Python.
 
-## NSE software-contract coverage
+## NSE runtime-behavior coverage
 
-Issue #40 adds exactly one complete ordinary NSE-initialized evolution. The
+The suite includes exactly one complete ordinary NSE-initialized evolution. The
 `nse_sn160` case uses the tracked `th_frohlich2006_nse` trajectory, whose
 initial temperature exceeds the 8 GK threshold and whose subsequent evolution
 cools below it. The supplied `ab_ye49` file differs from the trajectory's
@@ -840,10 +836,10 @@ comparison; silently selecting the file state cannot satisfy the case.
 
 The standalone `xnse` test supplies three ordered density/temperature/Ye rows
 and checks their association with complete state and counter output. Two
-bounded failure probes require nonzero status for malformed input and for a
+failure probes require nonzero status for malformed input and for a
 deliberately out-of-domain electron fraction that drives NSE nonconvergence.
-These checks are software contracts and characterization evidence, not
-scientific validation of NSE physics or screening models.
+These checks cover program behavior and provide characterization evidence; they
+do not scientifically validate NSE physics or screening models.
 
 ## Current limits and next cases
 
@@ -857,11 +853,11 @@ validate screened physics. BDF coverage is limited to the characterized
 `bdf_sn160` endpoint on the recorded optimized configuration.
 
 The self-heating comparisons cover final `net_diag01` endpoints only. They do
-not inspect the evolution history in `ev_*` or binary `ts_*` output. Issue #12
-owns the investigation needed before binary time-series data can affect
-regression pass/fail. The Torch47 and SN160 migrations change endpoint
-coverage only; their larger `ev_*` and `ts_*` artifacts remain required for
-freshness but are not parsed or compared.
+not inspect the evolution history in `ev_*` or binary `ts_*` output. Binary
+time-series data would require a separate decoding and comparison study before
+they could affect regression pass/fail. The Torch47 and SN160 cases change
+endpoint coverage only; their larger `ev_*` and `ts_*` outputs remain required
+for freshness but are not parsed or compared.
 
 Per-zone importance selection changes only regression classification. It does
 not change XNet calculations, establish scientific validity, or extend the

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the frozen issue #41 reference outside the ordinary test run."""
+"""Generate the frozen independent NSE reference outside ordinary tests."""
 
 from __future__ import annotations
 
@@ -365,7 +365,7 @@ def reference_data_text(payload: dict[str, Any]) -> str:
 def generate(network_directory: Path) -> tuple[dict[str, Any], str]:
     manifest = extract(network_directory, REPOSITORY_ROOT)
     if manifest["network"]["species_count"] != 489:
-        raise RuntimeError("issue #41 frozen network must contain 489 species")
+        raise RuntimeError("the frozen NSE network must contain 489 species")
     fp = floating_point_budget(manifest["network"]["species_count"])
     with localcontext() as context:
         context.prec = REFERENCE_PRECISION + 30

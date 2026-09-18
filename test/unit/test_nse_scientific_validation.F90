@@ -66,25 +66,25 @@ Contains
 
     filename = trim(network_directory)//'/netwinv'
     Open(newunit=lun,file=trim(filename),status='old',action='read',iostat=ierr)
-    If ( ierr /= 0 ) Call fail_fixture('cannot open issue #41 netwinv fixture')
+    If ( ierr /= 0 ) Call fail_fixture('cannot open NSE validation netwinv fixture')
     Read(lun,'(i5)',iostat=ierr) ny
-    If ( ierr /= 0 .OR. ny /= 489 ) Call fail_fixture('invalid issue #41 species count')
+    If ( ierr /= 0 .OR. ny /= 489 ) Call fail_fixture('invalid NSE validation species count')
     Read(lun,'(24i3)',iostat=ierr) it9i
-    If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 temperature grid')
+    If ( ierr /= 0 ) Call fail_fixture('invalid NSE validation temperature grid')
 
     Allocate(aa(ny),angm(ny),be(ny),g(ng,ny),ia(ny),iz(ny),mex(ny),mm(ny),nname(ny), &
       & nn(ny),t9i(ng),zz(ny),zz2(ny),zzi(ny),neutron_number(ny))
     Do inuc = 1, ny
       Read(lun,'(a5)',iostat=ierr) nname(inuc)
-      If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 species list')
+      If ( ierr /= 0 ) Call fail_fixture('invalid NSE validation species list')
     EndDo
     Do inuc = 1, ny
       Read(lun,*,iostat=ierr) record_name, aa(inuc), iz(inuc), neutron_number(inuc), &
         & spin, mex(inuc)
       If ( ierr /= 0 .OR. adjustl(record_name) /= adjustl(nname(inuc)) ) &
-        & Call fail_fixture('invalid issue #41 nuclear record')
+        & Call fail_fixture('invalid NSE validation nuclear record')
       Read(lun,*,iostat=ierr) (g(j,inuc),j=1,ng)
-      If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 partition factors')
+      If ( ierr /= 0 ) Call fail_fixture('invalid NSE validation partition factors')
       angm(inuc) = 2.0_dp*spin + 1.0_dp
     EndDo
     Close(lun)
@@ -95,7 +95,7 @@ Contains
     neutron_index = find_species_index(0,1)
     proton_index = find_species_index(1,1)
     If ( neutron_index == 0 .OR. proton_index == 0 ) &
-      & Call fail_fixture('issue #41 network requires free n and p')
+      & Call fail_fixture('NSE validation network requires free n and p')
     be = nn*mex(neutron_index) + zz*mex(proton_index) - mex
     mm = aa/avn
     t9i = real(it9i,dp)
@@ -129,16 +129,16 @@ Contains
     Integer :: ierr, inuc, lun, reference_species_count, state
 
     Open(newunit=lun,file=trim(reference_path),status='old',action='read',iostat=ierr)
-    If ( ierr /= 0 ) Call fail_fixture('cannot open issue #41 reference data')
+    If ( ierr /= 0 ) Call fail_fixture('cannot open NSE validation reference data')
     Read(lun,'(a)',iostat=ierr) line
     If ( ierr /= 0 .OR. trim(line) /= 'XNET_NSE_REFERENCE_V2' ) &
-      & Call fail_fixture('invalid issue #41 reference schema')
+      & Call fail_fixture('invalid NSE validation reference schema')
     Read(lun,*,iostat=ierr) reference_species_count, state_count
     If ( ierr /= 0 .OR. reference_species_count /= ny .OR. state_count /= 3 ) &
-      & Call fail_fixture('invalid issue #41 reference dimensions')
+      & Call fail_fixture('invalid NSE validation reference dimensions')
     Read(lun,'(a64)',iostat=ierr) order_hash
     If ( ierr /= 0 .OR. len_trim(order_hash) /= 64 ) &
-      & Call fail_fixture('invalid issue #41 order hash')
+      & Call fail_fixture('invalid NSE validation order hash')
 
     Allocate(state_id(state_count),state_rho(state_count),state_t9(state_count), &
       & state_ye(state_count),state_tolerances(state_count))
@@ -147,25 +147,25 @@ Contains
     Do state = 1, state_count
       Read(lun,'(a)',iostat=ierr) line
       If ( ierr /= 0 .OR. line(1:6) /= 'STATE ' ) &
-        & Call fail_fixture('invalid issue #41 state header')
+        & Call fail_fixture('invalid NSE validation state header')
       state_id(state) = adjustl(line(7:))
       Read(lun,*,iostat=ierr) state_rho(state),state_t9(state),state_ye(state)
-      If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 state inputs')
+      If ( ierr /= 0 ) Call fail_fixture('invalid NSE validation state inputs')
       Read(lun,*,iostat=ierr) state_tolerances(state)%mass, &
         & state_tolerances(state)%charge,state_tolerances(state)%ye, &
         & state_tolerances(state)%l1,state_tolerances(state)%linf
-      If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 state tolerances')
+      If ( ierr /= 0 ) Call fail_fixture('invalid NSE validation state tolerances')
       Do inuc = 1, ny
         Read(lun,'(a)',iostat=ierr) line
-        If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 composition row')
+        If ( ierr /= 0 ) Call fail_fixture('invalid NSE validation composition row')
         expected_names(inuc,state) = line(1:5)
         Read(line(7:),*,iostat=ierr) expected_a(inuc,state),expected_z(inuc,state), &
           & expected_n(inuc,state),expected_x(inuc,state)
-        If ( ierr /= 0 ) Call fail_fixture('invalid issue #41 mass fraction')
+        If ( ierr /= 0 ) Call fail_fixture('invalid NSE validation mass fraction')
       EndDo
     EndDo
     Read(lun,'(a)',iostat=ierr) line
-    If ( ierr == 0 ) Call fail_fixture('unexpected trailing issue #41 reference data')
+    If ( ierr == 0 ) Call fail_fixture('unexpected trailing NSE validation reference data')
     Close(lun)
 
     Return

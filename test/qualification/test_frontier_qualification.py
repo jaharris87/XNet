@@ -169,8 +169,8 @@ def _executable(artifact: str, link_evidence: str) -> dict[str, object]:
 
 def _build(label: str, variables: dict[str, str], targets: tuple[str, ...]) -> dict[str, object]:
     resolved = {**variables, "FC": "ftn", "LDR": "ftn", "FFLAGS": "-O2", "LDFLAGS": ""}
-    if label == "gpu":
-        resolved["FC"] = 'env XNET_CRAY_FTN="ftn" <source>/source/crayftn_cpp.sh'
+    resolved["CRAY_OMP_PREPROCESS"] = "yes" if label == "gpu" else "no"
+    resolved["XNET_CPP"] = "cpp"
     return {
         "status": "passed",
         "variables": variables,
@@ -716,7 +716,7 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
             "XNET_CAPTURE_NAME": str(tmp_path / "source-name.txt"),
         }
     )
-    wrapper = FRONTIER_DIRECTORY.parents[2] / "source" / "crayftn_cpp.sh"
+    wrapper = FRONTIER_DIRECTORY.parents[2] / "make" / "crayftn_cpp.sh"
     completed = subprocess.run(
         [
             str(wrapper),
@@ -751,7 +751,7 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     assert "\n!$omp\n" not in preprocessed
 
 
-def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override(
+def test_cray_gpu_preprocessing_remains_selected_after_mpi_compiler_override(
     tmp_path: Path,
 ) -> None:
     repository = FRONTIER_DIRECTORY.parents[2]
@@ -763,7 +763,7 @@ def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override(
         [
             "make",
             "-C",
-            str(repository / "source"),
+            str(repository),
             "--no-print-directory",
             "MACHINE=frontier",
             "PE_ENV=CRAY",
@@ -776,7 +776,8 @@ def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override(
             "OPENMP_OL_MODE=ON",
             "MPI_MODE=ON",
             "print-FC",
-            "print-XNET_CRAY_FTN",
+            "print-CRAY_OMP_PREPROCESS",
+            "print-XNET_CPP",
             "print-LDR",
         ],
         capture_output=True,
@@ -784,9 +785,9 @@ def test_cray_gpu_wrapper_remains_selected_after_mpi_compiler_override(
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    assert 'FC = env XNET_CRAY_FTN="ftn"' in completed.stdout
-    assert "crayftn_cpp.sh" in completed.stdout
-    assert "XNET_CRAY_FTN = ftn" in completed.stdout
+    assert "FC = ftn" in completed.stdout
+    assert "CRAY_OMP_PREPROCESS = yes" in completed.stdout
+    assert "XNET_CPP = cpp" in completed.stdout
     assert "LDR = ftn" in completed.stdout
 
 

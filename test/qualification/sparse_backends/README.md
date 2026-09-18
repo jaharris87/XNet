@@ -51,8 +51,8 @@ directory:
 make -C test/unit clean real-ma48-test \
   HSL_MA48_SOURCE="$HSL_MA48_DIR/MA48.f"
 
-make -C source BUILD_NAME=ma48-dense -j xnet_dense
-make -C source BUILD_NAME=ma48-sparse -j xnet_MA48 MA48_DIR="$HSL_MA48_DIR"
+make BUILD_NAME=ma48-dense MATRIX_SOLVER=dense -j xnet
+make BUILD_NAME=ma48-sparse MATRIX_SOLVER=MA48 MA48_DIR="$HSL_MA48_DIR" -j xnet
 
 python3 test/qualification/sparse_backends/compare_heat_sn160.py \
   --provider=ma48 \
@@ -82,8 +82,8 @@ source /opt/intel/oneapi/setvars.sh
 
 make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
 
-make -C source BUILD_NAME=pardiso-mkl-dense -j xnet_dense LAPACK_VER=MKL
-make -C source BUILD_NAME=pardiso-mkl-sparse -j xnet_PARDISO LAPACK_VER=MKL
+make BUILD_NAME=pardiso-mkl-dense MATRIX_SOLVER=dense LAPACK_VER=MKL -j xnet
+make BUILD_NAME=pardiso-mkl-sparse MATRIX_SOLVER=PARDISO_MKL LAPACK_VER=MKL -j xnet
 
 python3 test/qualification/sparse_backends/compare_heat_sn160.py \
   --provider=pardiso-mkl \
@@ -92,7 +92,7 @@ python3 test/qualification/sparse_backends/compare_heat_sn160.py \
   --work-directory=/tmp/xnet-44-pardiso-mkl
 ```
 
-`source/Makefile.internal` accepts the legacy
+`Makefile.internal` accepts the legacy
 `$MKLROOT/tools/mkl_link_tool` location and the current
 `$MKLROOT/bin/mkl_link_tool` location. Preserve the emitted compile/link lines
 in the PR evidence so the selected interface, sequential threading layer, and
@@ -100,13 +100,11 @@ library version remain reviewable.
 
 ## Standalone PARDISO disposition
 
-Standalone PARDISO is unsupported and unqualified. The legacy build recipe
-selects that ABI whenever `MATRIX_SOLVER=PARDISO` is combined with a
-non-`MKL` `LAPACK_VER`, but its `/usr/local/pardiso` default and fixed library
-names do not identify an approved maintained dependency. The maintainer does
-not have an approved compatible standalone installation, and oneMKL success
-does not qualify the standalone ABI. Do not substitute the issue #43 numerical
-stub or oneMKL library for a standalone qualification.
+Standalone PARDISO is unsupported and unqualified. The production build's
+`PARDISO_MKL` selector names the maintained oneMKL implementation explicitly.
+The maintainer does not have an approved compatible standalone installation,
+and oneMKL success does not qualify the standalone ABI. Do not substitute the
+issue #43 numerical stub or oneMKL library for a standalone qualification.
 
 ## Evidence limits
 

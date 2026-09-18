@@ -121,8 +121,11 @@ The loaded accelerator target module makes `ftn -fopenmp` target the MI250X
 is a failure rather than a misleading pass.
 
 The runner passes `BUILD_NAME=frontier-cpu` and `BUILD_NAME=frontier-gpu` to
-the production Makefile, then collects the selected executables from the
-corresponding `build/<name>/bin/` directories in the extracted source tree.
+the root production build through this directory's small qualification
+Makefile. That file adds only the GPU linear-algebra probe and reuses the
+production objects and build settings. The runner collects the selected
+executables from the corresponding `build/<name>/bin/` directories in the
+extracted source tree.
 
 OpenMP-offload builds currently treat the shared `XASYNC` and `XWAIT` markers
 as no-ops and execute synchronously. Mapping XNet's queue-oriented OpenACC
@@ -130,7 +133,7 @@ behavior to OpenMP tasks and dependencies is outside this qualification.
 
 Cray's native Fortran preprocessor requires a fixed argument count for
 function-like macros, while XNet's shared accelerator-directive layer uses
-variadic macros. For Cray GPU builds, `source/crayftn_cpp.sh` therefore runs
+variadic macros. For Cray GPU builds, `make/crayftn_cpp.sh` therefore runs
 the system `cpp -P -C -nostdinc` first and passes the resulting Fortran
 source to the selected Cray compiler wrapper. The preprocessing wrapper is
 selected after any MPI compiler override so an MPI-enabled Cray GPU build does

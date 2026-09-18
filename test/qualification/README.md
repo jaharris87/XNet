@@ -51,11 +51,11 @@ Use a different explicit build name for each configuration. The executable
 paths below are predictable and may be passed to the runner directly:
 
 ```bash
-make -C source BUILD_NAME=parallel-zone-serial -j \
+make BUILD_NAME=parallel-zone-serial -j \
   CMODE=OPT PE_ENV=GNU MPI_MODE=OFF OPENMP_MODE=OFF xnet
-make -C source BUILD_NAME=parallel-zone-mpi -j \
+make BUILD_NAME=parallel-zone-mpi -j \
   CMODE=OPT PE_ENV=GNU MPI_MODE=ON OPENMP_MODE=OFF xnet
-make -C source BUILD_NAME=parallel-zone-openmp -j \
+make BUILD_NAME=parallel-zone-openmp -j \
   CMODE=OPT PE_ENV=GNU MPI_MODE=OFF OPENMP_MODE=ON xnet
 
 python3 test/qualification/parallel_zones.py \

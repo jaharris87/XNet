@@ -24,7 +24,8 @@ dedicated design document.
 - `docs/development/` contains task-oriented development guidance.
 
 Production builds place objects, module files, retained preprocessing, and
-executables under the caller-selected `BUILD_DIR` (default `build/default`).
+executables under a readable build directory such as `build/GNU-OPT`, or one
+selected explicitly with `BUILD_NAME` or `BUILD_DIR`.
 The build compiles selected dependencies from `tools/` without generating
 source-tree products.
 
@@ -94,18 +95,17 @@ the selected Jacobian file together when changing this path.
 
 ## Build-time selection
 
-`source/Makefile.opt` exposes compiler environment, compile mode, MPI,
+`Makefile.opt` exposes compiler environment, compile mode, MPI,
 threading, accelerator mode, EOS, matrix solver, and CPU/GPU linear-algebra
-choices. `source/Makefile.internal` maps those choices to compilers, flags,
-sources, and libraries. The conventional fragments under `source/make/`
+choices. `Makefile.internal` maps those choices to compilers, flags,
+sources, and libraries. The conventional fragments under `make/`
 separate provider selection, source lists, explicit module prerequisites, and
 build rules. In particular, `providers.mk` selects the source or library that
 supplies the requested MPI, EOS, Jacobian, numerical-library, and accelerator
 functionality.
 `machines.mk` retains hostname/LMOD detection and explicitly selects the
 tracked generic or Cray Programming Environment defaults; compiler-family
-flags and the legacy Cori Intel compatibility exception remain in
-`Makefile.internal`.
+flags remain in `Makefile.internal`.
 
 Important selections change which file is intended to supply a common module
 name:

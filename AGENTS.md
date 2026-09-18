@@ -50,8 +50,10 @@ inputs that exercise it. Read additional guidance when the task calls for it:
 
 ## Repository map
 
-- `source/` contains production Fortran, the stand-alone driver, utility
-  programs, and the GNU Make build.
+- The repository-root `Makefile`, `Makefile.opt`, `Makefile.internal`, and
+  `make/` directory contain the GNU Make build.
+- `source/` contains production Fortran, the stand-alone driver, and utility
+  programs.
 - `test/` contains the legacy shell drivers, runtime settings, problem inputs,
   and pre-built `Data_*` networks.
 - `tools/` contains vendored numerical code and supporting network-building,
@@ -67,15 +69,16 @@ inputs that exercise it. Read additional guidance when the task calls for it:
 Build the tracked default configuration from the repository root:
 
 ```bash
-make -C source -j
+make -j
 ```
 
-Build products are isolated under the caller-selected `BUILD_DIR` (default
-`build/default`), including distinct object and module directories. Use a
-different `BUILD_DIR` for a different compiler or configuration; incompatible
-reuse is rejected. Different build directories may run concurrently, but run
-only one top-level Make invocation per directory and do not clean it while it
-is in use.
+Build products are isolated under a caller-readable directory such as
+`build/GNU-OPT` or a directory selected with `BUILD_NAME` or `BUILD_DIR`,
+including distinct object and module directories. Major public selectors are
+part of the automatic name; incompatible reuse is still rejected when other
+recorded settings change. Different build directories may run concurrently,
+but run only one top-level Make invocation per directory and do not clean it
+while it is in use.
 
 The legacy test commands provide useful run recipes and comparisons with
 unreliable pass/fail behavior. Treat the wrapper's exit status as wrapper
@@ -99,7 +102,7 @@ utility targets, runtime inputs, test side effects, and evidence requirements.
   state requires a dedicated task and adequate tests.
 - Preserve serial, MPI, threaded, and accelerator considerations in shared
   code. Report portability for the configurations actually checked.
-- Update explicit object prerequisites in `source/Makefile` when a changed
+- Update explicit object prerequisites in `make/dependencies.mk` when a changed
   `Use` dependency affects parallel builds.
 - Keep generated objects, module files, executables, runtime outputs,
   comparison files, local paths, and machine-specific settings out of commits.

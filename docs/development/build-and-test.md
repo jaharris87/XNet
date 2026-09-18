@@ -14,42 +14,40 @@ caller-selected build directory. From the repository root, build the tracked
 default with:
 
 ```bash
-make -C source -j
+make -j
 ```
 
-The default executable is `build/default/bin/xnet`. Set a readable `BUILD_NAME`
-for a directory below `build/`, or set `BUILD_DIR` directly. Relative paths
-are interpreted from the repository root:
+With the tracked defaults, the executable is `build/GNU-OPT/bin/xnet`. The
+major public selectors form a readable automatic directory name. Set
+`BUILD_NAME` to choose a different name below `build/`, or set `BUILD_DIR`
+directly. Relative paths are interpreted from the repository root:
 
 ```bash
-make -C source BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
-make -C source BUILD_DIR=/scratch/$USER/xnet-frontier -j xnet
+make BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
+make BUILD_DIR=/scratch/$USER/xnet-frontier -j xnet
 ```
 
 The Makefile fragments have distinct roles:
 
-- `source/Makefile` is the small public entry point. Its included
-  `source/make/build.mk` defines the production build and its output layout.
-- `source/make/configuration.mk` validates compiler/platform selectors.
-- `source/make/providers.mk` selects the MPI, EOS, solver, accelerator, and
+- `Makefile` is the small public entry point. Its included `make/build.mk`
+  defines the production build and its output layout.
+- `make/configuration.mk` validates compiler/platform selectors.
+- `make/providers.mk` selects the MPI, EOS, solver, accelerator, and
   numerical-library providers.
-- `source/make/sources.mk` lists sources and output files and records
+- `make/sources.mk` lists sources and output files and records
   configuration reuse.
-- `source/make/dependencies.mk` records explicit Fortran module prerequisites.
-- `source/make/rules.mk` contains preprocessing, compilation, link, and public
+- `make/dependencies.mk` records explicit Fortran module prerequisites.
+- `make/rules.mk` contains preprocessing, compilation, link, and public
   target rules.
-- `source/Makefile.opt` defines tracked user-selectable defaults.
-- `source/Makefile.internal` maps configuration choices to compilers, flags,
+- `Makefile.opt` defines tracked user-selectable defaults.
+- `Makefile.internal` maps configuration choices to compilers, flags,
   libraries, source files, and solver objects.
-- `source/make/machines.mk` detects the current host and explicitly selects
+- `make/machines.mk` detects the current host and explicitly selects
   the tracked generic or Cray Programming Environment defaults. Compiler
   defaults remain in `Makefile.internal`; add a machine fragment and one
   visible mapping entry only when a real repository-supported machine needs
-  concrete overrides. Perlmutter is the current NERSC production system, and
-  Frontier is the retained OLCF accelerator qualification system. Summit and
-  Cori names remain only in retired-host compatibility lists. The maintainer
-  currently uses no IBM system; `summit`, `summitdev`, and `mira` remain only
-  as retired compatibility settings.
+  concrete overrides. Perlmutter and Frontier select the maintained HPE Cray
+  Programming Environment settings; other hosts use the generic defaults.
 
 Inspect the conditional path through these files for any configuration being
 changed. Variable names and commented examples provide orientation; the
@@ -92,8 +90,7 @@ serial CPU support dispositions are:
 | Provider | Selection | Status and limit |
 | --- | --- | --- |
 | HSL MA48 2.2.0 | `MATRIX_SOLVER=MA48` with external `MA48.f` | Qualified on macOS arm64 with GNU Fortran 16.2.0 using the production build. The maintainer-supplied source is used under a maintainer-held non-redistributable HSL licence and must remain outside the repository. Other HSL versions, compilers, and platforms are unqualified. |
-| Standalone PARDISO | `MATRIX_SOLVER=PARDISO` with `LAPACK_VER` other than `MKL` | Unsupported and unqualified. No approved compatible standalone dependency is maintained, and the legacy `/usr/local/pardiso` library-name defaults are not evidence of support. |
-| Intel oneMKL PARDISO | `MATRIX_SOLVER=PARDISO LAPACK_VER=MKL` | Previously qualified on the `etacar` Linux x86_64 host with GNU Fortran 11.4.0 and oneMKL 2026.1. The Phase-5 production build has not been checked there because the host is currently unreachable, so this revision remains unverified for oneMKL. Other oneMKL versions, compilers, platforms, and parallel modes are unqualified. |
+| Intel oneMKL PARDISO | `MATRIX_SOLVER=PARDISO_MKL LAPACK_VER=MKL` | Previously qualified on the `etacar` Linux x86_64 host with GNU Fortran 11.4.0 and oneMKL 2026.1. The production build has not been checked there since its recent Makefile changes because the host is currently unreachable, so this revision remains unverified for oneMKL. Other oneMKL versions, compilers, platforms, and parallel modes are unqualified. |
 
 MA48 source must not be copied, committed, archived, or attached to an issue or
 pull request. HSL describes MA48 2.2.0 and its licensing restrictions in the
@@ -111,8 +108,7 @@ The exact opt-in component and same-source dense comparison commands are in
 | GNU MPI and OpenMP | Serial, two-rank MPI, and two-thread OpenMP results agreed on the ten-zone qualification problem on macOS arm64 with GNU Fortran 16.2.0 and Open MPI 5.0.10. |
 | Frontier HIP/ROCm OpenMP offload | Retained qualification applies to source `97174bc0b382ed2c580eb517b05479e0ee63b184`, CCE 20.0.2, ROCm 6.4.2, hipfort 6.4.2, and MI250X. The Phase-5 build-directory changes have not been rerun on Frontier and are unverified there. |
 | Perlmutter | Current NERSC host selection is maintained, but no Perlmutter qualification is recorded for this revision. |
-| Summit and Cori host names | Retired compatibility settings only. |
-| Retired IBM host names | No current IBM system or qualification. `summit`, `summitdev`, and `mira` remain as compatibility settings only. |
+| Other host names | Use the generic machine defaults unless `MACHINE` or other build variables are supplied explicitly. |
 
 The exact commands, source revision, and any launcher-specific options belong
 in the issue or pull-request evidence for each run. A successful build alone
@@ -122,8 +118,8 @@ Make can display resolved values through the existing `print-%` target. For
 example:
 
 ```bash
-make -C source --no-print-directory print-CMODE
-make -C source --no-print-directory print-MATRIX_SOLVER
+make --no-print-directory print-CMODE
+make --no-print-directory print-MATRIX_SOLVER
 ```
 
 ## Configuration changes and clean builds
@@ -143,8 +139,8 @@ build directory.
 Use a different readable directory for a different configuration:
 
 ```bash
-make -C source BUILD_NAME=gnu-opt -j xnet
-make -C source BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
+make BUILD_NAME=gnu-opt -j xnet
+make BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
 ```
 
 `clean` removes only the selected marked build directory and does not require
@@ -170,18 +166,19 @@ Validate support and numerical behavior for the exact combination used.
 
 ## Production and utility targets
 
-The default target builds `build/default/bin/xnet`. Common utility builds are:
+The default target builds `build/GNU-OPT/bin/xnet` with the tracked defaults.
+Common utility builds are:
 
 ```bash
-make -C source -j net_setup
-make -C source -j xnse
+make -j net_setup
+make -j xnse
 ```
 
 - `net_setup` preprocesses network data.
 - `xnse` is the stand-alone NSE state calculator.
 
-`all` builds the three canonical programs together. Solver-named `xnet_*`
-aliases select that solver directly and reject conflicting selectors.
+`all` builds the three canonical programs together. Select another solver with
+`MATRIX_SOLVER`, for example `make MATRIX_SOLVER=MA48 MA48_DIR=... xnet`.
 `xinab` and `xnet_gpu` are unsupported and fail early; accelerator builds use
 `xnet` with explicit supported selectors. Target presence records a build
 recipe, not a support claim.
@@ -236,8 +233,8 @@ runs. It has unreliable pass/fail reporting.
 
 - selects problems by numeric ID;
 - combines settings and setup files into `test/control`;
-- runs a supplied executable or `build/default/bin/xnet`;
-- looks for an MPI build at `build/mpi/bin/xnet`; set `XNET_MPI` to use
+- runs a supplied executable or `build/GNU-OPT/bin/xnet`;
+- looks for an MPI build at `build/GNU-OPT-MPI/bin/xnet`; set `XNET_MPI` to use
   another predictable build directory;
 - moves diagnostics into `test/Test_Results/`;
 - removes timer sections before comparison;

@@ -11,7 +11,21 @@
 # All parallel test problems = 30
 # 4 different SN       with alpha (=31),  160 species (=32)
 
-set xnet = ../source/xnet
+if ($?XNET) then
+  set xnet = $XNET
+else
+  set xnet = ../build/GNU-OPT/bin/xnet
+endif
+if ($?XNET_MPI) then
+  set xnet_mpi = $XNET_MPI
+else
+  set xnet_mpi = ../build/GNU-OPT-MPI/bin/xnet
+endif
+if ($?XNET_NSE) then
+  set xnet_nse = $XNET_NSE
+else
+  set xnet_nse = $xnet
+endif
 echo 'Testing ' $xnet
 if (! -d Test_Results) then
   mkdir Test_Results
@@ -133,7 +147,7 @@ endif
 if ($argv[1] == 30 || $argv[1] == 31) then
   cat test_settings_parallel Test_Problems/setup_parallel_sn160 >! control
   echo 'Test: 4 different zones in parallel'
-  mpirun -n 4 ../source/xnet_mpi
+  mpirun -n 4 $xnet_mpi
   mv -f net_diag01 Test_Results/net_diag_parallel_sn160_1
   mv -f net_diag11 Test_Results/net_diag_parallel_sn160_2
   mv -f net_diag21 Test_Results/net_diag_parallel_sn160_3
@@ -144,7 +158,7 @@ endif
 if ($argv[1] == 30 || $argv[1] == 32) then
   cat test_settings_parallel Test_Problems/setup_parallel_alpha >! control
   echo 'Test: 4 different zones in parallel'
-  mpirun -n 4 ../source/xnet_mpi
+  mpirun -n 4 $xnet_mpi
   mv -f net_diag01 Test_Results/net_diag_parallel_alpha_1
   mv -f net_diag11 Test_Results/net_diag_parallel_alpha_2
   mv -f net_diag21 Test_Results/net_diag_parallel_alpha_3
@@ -155,7 +169,7 @@ endif
 if ($argv[1] == 40 || $argv[1] == 41) then
   cat test_settings_nse Test_Problems/setup_nse_nup >! control
   echo 'Test NSE: Core-Collapse SN with nu-p process network'
-  ../source/xnet_nse
+  $xnet_nse
   mv -f net_diag01 Test_Results/net_diag_nse_ccsn_nup
 endif
 

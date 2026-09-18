@@ -31,7 +31,7 @@ from xnet_regression import (  # noqa: E402
 EXPECTED_ZONES = tuple(range(1, 11))
 FIXTURE_DIRECTORY = Path(__file__).with_name("parallel_zones")
 NETWORK_INPUTS = ("sunet", "netsu", "netweak", "netwinv")
-PROCESS_ARTIFACTS = (
+PROCESS_OUTPUT_FILES = (
     "xnet.command.json",
     "xnet.stdout.txt",
     "xnet.stderr.txt",
@@ -139,19 +139,19 @@ def prepare_work_directory(work_directory: Path) -> Path:
     return work_directory
 
 
-def _write_process_artifacts(
+def _write_process_outputs(
     work_directory: Path,
     command: Sequence[str],
     stdout: str,
     stderr: str,
     status: str,
 ) -> None:
-    (work_directory / PROCESS_ARTIFACTS[0]).write_text(
+    (work_directory / PROCESS_OUTPUT_FILES[0]).write_text(
         json.dumps(list(command), indent=2) + "\n", encoding="utf-8"
     )
-    (work_directory / PROCESS_ARTIFACTS[1]).write_text(stdout, encoding="utf-8")
-    (work_directory / PROCESS_ARTIFACTS[2]).write_text(stderr, encoding="utf-8")
-    (work_directory / PROCESS_ARTIFACTS[3]).write_text(status + "\n", encoding="utf-8")
+    (work_directory / PROCESS_OUTPUT_FILES[1]).write_text(stdout, encoding="utf-8")
+    (work_directory / PROCESS_OUTPUT_FILES[2]).write_text(stderr, encoding="utf-8")
+    (work_directory / PROCESS_OUTPUT_FILES[3]).write_text(status + "\n", encoding="utf-8")
 
 
 def run_process(
@@ -162,7 +162,7 @@ def run_process(
     environment: Mapping[str, str] | None = None,
     expect_success: bool = True,
 ) -> ProcessResult:
-    """Run a process group with a bounded timeout and preserve its artifacts."""
+    """Run a process group with a specified timeout and preserve its output files."""
 
     if timeout_seconds <= 0.0 or not math.isfinite(timeout_seconds):
         raise QualificationFailure("timeout must be a positive finite value")
@@ -178,12 +178,12 @@ def run_process(
             start_new_session=True,
         )
     except OSError as error:
-        _write_process_artifacts(
+        _write_process_outputs(
             work_directory, normalized_command, "", str(error), "launch-error"
         )
         raise QualificationFailure(
             f"could not launch {' '.join(normalized_command)}: {error}; "
-            f"artifacts: {work_directory}"
+            f"output files: {work_directory}"
         ) from error
 
     try:
@@ -195,15 +195,15 @@ def run_process(
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             stdout, stderr = process.communicate()
-        _write_process_artifacts(
+        _write_process_outputs(
             work_directory, normalized_command, stdout, stderr, "timeout"
         )
         raise QualificationFailure(
             f"process timed out after {timeout_seconds:g} seconds; "
-            f"artifacts: {work_directory}"
+            f"output files: {work_directory}"
         ) from error
 
-    _write_process_artifacts(
+    _write_process_outputs(
         work_directory,
         normalized_command,
         stdout,
@@ -212,11 +212,11 @@ def run_process(
     )
     if expect_success and process.returncode != 0:
         raise QualificationFailure(
-            f"process returned {process.returncode}; artifacts: {work_directory}"
+            f"process returned {process.returncode}; output files: {work_directory}"
         )
     if not expect_success and process.returncode == 0:
         raise QualificationFailure(
-            f"failure probe returned zero; artifacts: {work_directory}"
+            f"failure probe returned zero; output files: {work_directory}"
         )
     return ProcessResult(
         normalized_command, work_directory, process.returncode, stdout, stderr
@@ -279,7 +279,7 @@ def _diagnostic_topology(
 
 
 def validate_mpi_topology(paths: Sequence[Path], expected_ranks: int) -> None:
-    """Require every rank in the requested MPI launch without asserting zone ownership."""
+    """Require every rank in the requested MPI launch without asserting zone assignment."""
 
     mpi_records, _ = _diagnostic_topology(paths)
     expected = {(rank, expected_ranks) for rank in range(expected_ranks)}
@@ -290,7 +290,7 @@ def validate_mpi_topology(paths: Sequence[Path], expected_ranks: int) -> None:
 
 
 def validate_openmp_topology(paths: Sequence[Path], expected_threads: int) -> None:
-    """Require the requested OpenMP team without asserting diagnostic ownership."""
+    """Require the requested OpenMP team without asserting diagnostic assignment."""
 
     mpi_records, openmp_records = _diagnostic_topology(paths)
     expected = {(thread, expected_threads) for thread in range(1, expected_threads + 1)}
@@ -325,7 +325,7 @@ def normalize_worker_states(
     worker_states: Sequence[Sequence[FinalState]],
     expected_zones: Sequence[int] = EXPECTED_ZONES,
 ) -> tuple[FinalState, ...]:
-    """Merge rank/thread results by global zone without assuming worker ownership."""
+    """Merge rank/thread results by global zone without assuming worker assignment."""
 
     expected_zones = tuple(expected_zones)
     by_zone: dict[int, FinalState] = {}
@@ -574,12 +574,14 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
     )
     compare_configuration_results(mpi_result, serial_result, "MPI")
 
-    failure_directory = prepare_work_directory(work_root / "mpi-nonroot-failure")
+    missing_abundance_directory = prepare_work_directory(
+        work_root / "mpi-nonroot-missing-abundance"
+    )
     # With three rank-strided batches, two ranks assign zones 5-8 to rank 1.
-    (failure_directory / "inputs" / "abundance_05").unlink()
+    (missing_abundance_directory / "inputs" / "abundance_05").unlink()
     run_process(
         mpi_command,
-        failure_directory,
+        missing_abundance_directory,
         timeout_seconds=arguments.timeout,
         expect_success=False,
     )

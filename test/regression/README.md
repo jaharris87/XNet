@@ -20,7 +20,7 @@ python3 -m pip install -r test/regression/requirements.txt
 Build XNet and `xnse` separately, then select both executables explicitly:
 
 ```bash
-make -C source BUILD_NAME=regression-serial -j xnet xnse
+make BUILD_NAME=regression-serial -j xnet xnse
 python3 -m pytest test/regression \
     --xnet-executable="$PWD/build/regression-serial/bin/xnet" \
     --xnse-executable="$PWD/build/regression-serial/bin/xnse"
@@ -176,7 +176,7 @@ comparison; no evidence from the isolated runs indicated a BDF semantic
 dependency on the legacy block size of 4. Testing `szbatch > 1` remains
 separate work. `source/xnet_evolve.F90` imports `solve_bdf` and dispatches
 `isolv == 3` to it, `source/net.F90` calls `bdf_init` for the same choice, and
-the normal `source/Makefile` production object set contains
+the normal root-level production build contains
 `xnet_integrate_bdf.o`. `source/xnet_controls.F90` replaces both input
 abundance- and temperature-change timestep limits with the effective value
 `1e10` for `isolv == 3`; the committed reference records that effective state.
@@ -220,9 +220,9 @@ recorded build and inputs, not historical or independent scientific truth.
 Issue #22 migrates legacy aggregate ID 60's ID 61, `batch_alpha`, only. The
 legacy driver maps ID 61 to `do_test_batch`, which concatenates
 `test/test_settings_batch` with `test/Test_Problems/setup_batch_alpha`; ID 62
-is the separate `batch_torch47` case. The current `source/Makefile`
-`test_batch` target invokes ID 62, so it is historical context rather than the
-definition of this bounded regression.
+is the separate `batch_torch47` case. The former source-directory Makefile's
+`test_batch` target invoked ID 62, so that target is historical context rather
+than the definition of this regression.
 
 The committed standalone control preserves ID 61's 16 serial zones,
 `nzbatchmx = 4`, Backward Euler, self-heating, screening, weak reactions,

@@ -96,7 +96,14 @@ GPU_BUILD_VARIABLES = {
     "MATRIX_SOLVER": "dense",
     "LAPACK_VER": "LIBSCI",
 }
-RESOLVED_BUILD_VARIABLES = ("FC", "LDR", "FFLAGS", "LDFLAGS")
+RESOLVED_BUILD_VARIABLES = (
+    "FC",
+    "LDR",
+    "FFLAGS",
+    "LDFLAGS",
+    "CRAY_OMP_PREPROCESS",
+    "XNET_CPP",
+)
 EXPECTED_EXECUTABLES = {
     "cpu": ("xnet",),
     "gpu": ("xnet", "frontier_gpu_linalg_probe"),
@@ -735,7 +742,9 @@ def _make_command(
     return [
         "make",
         "-C",
-        str(source_root / "source"),
+        str(source_root),
+        "-f",
+        "test/qualification/frontier/Makefile",
         f"-j{jobs}",
         *(f"{name}={value}" for name, value in variables.items()),
         *targets,
@@ -1760,8 +1769,8 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
             raise FrontierFailure("build", "manifest", f"{label} resolved variables differ")
         if not all(isinstance(resolved[name], str) for name in RESOLVED_BUILD_VARIABLES):
             raise FrontierFailure("build", "manifest", f"{label} compiler evidence is invalid")
-        if label == "gpu" and "crayftn_cpp.sh" not in resolved["FC"]:
-            raise FrontierFailure("build", "manifest", "GPU compiler wrapper is missing")
+        if label == "gpu" and resolved["CRAY_OMP_PREPROCESS"] != "yes":
+            raise FrontierFailure("build", "manifest", "Cray GPU preprocessing is not selected")
         _manifest_number(build["timeout_seconds"], f"{label} build timeout", positive=True)
         _manifest_number(build["runtime_seconds"], f"{label} build runtime")
         executables = build["executables"]

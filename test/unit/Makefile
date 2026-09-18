@@ -7,8 +7,8 @@ BUILD_NET_SOURCE_DIR := $(ROOT_DIR)/test/build_net
 HELM_TABLE := $(ROOT_DIR)/tools/starkiller-helmholtz/helm_table.dat
 STARKILLER_DIR := $(ROOT_DIR)/tools/starkiller-helmholtz
 
-include $(XNET_DIR)/Makefile.opt
-include $(XNET_DIR)/Makefile.internal
+include $(ROOT_DIR)/Makefile.opt
+include $(ROOT_DIR)/Makefile.internal
 
 BUILD_DIR := build/$(shell echo $(CMODE) | tr A-Z a-z)
 TEST_EXE := $(BUILD_DIR)/xnet_contract_tests
@@ -260,8 +260,8 @@ $(BUILD_NET_BUILD_DIR):
 	mkdir -p $@
 
 production-xnet: | $(BUILD_DIR)
-	$(MAKE) -C $(XNET_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) clean
-	$(MAKE) -C $(XNET_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) -j CMODE=$(CMODE) xnet
+	$(MAKE) -C $(ROOT_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) clean
+	$(MAKE) -C $(ROOT_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) -j CMODE=$(CMODE) xnet
 
 $(BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@

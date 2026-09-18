@@ -290,7 +290,7 @@ reaction, match, and PARDISO sparse-data readers. Fixture-specific checks cover
 the selected nuclear and partition values, reaction participants and
 coefficients, recomputed Q and weak/reverse flags, match associations, exact
 CRS coordinates, and every reaction-to-entry map before the tracked serial GNU
-`build/default/bin/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
+`build/unit-opt/bin/xnet` executable performs a one-zone `1e-10` second smoke. The smoke
 requires normal target-time completion and emitted counters; it is an
 interoperability check, not a stored scientific endpoint comparison.
 

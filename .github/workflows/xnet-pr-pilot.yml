@@ -323,8 +323,8 @@ jobs:
       - name: Build serial executables
         shell: bash
         run: |
-          make -C source BUILD_NAME=ci-gnu clean 2>&1 | tee pilot-logs/serial-clean.log
-          make -C source BUILD_NAME=ci-gnu -j xnet xnse 2>&1 | tee pilot-logs/serial-build.log
+          make BUILD_NAME=ci-gnu clean 2>&1 | tee pilot-logs/serial-clean.log
+          make BUILD_NAME=ci-gnu -j xnet xnse 2>&1 | tee pilot-logs/serial-build.log
           xnet_executable="$GITHUB_WORKSPACE/build/ci-gnu/bin/xnet"
           xnse_executable="$GITHUB_WORKSPACE/build/ci-gnu/bin/xnse"
           test -x "$xnet_executable" && test -x "$xnse_executable"

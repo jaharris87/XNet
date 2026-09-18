@@ -2,15 +2,44 @@
 # One top-level GNU Make invocation owns a BUILD_DIR. Do not clean that
 # directory while the build is running.
 SHELL := /bin/sh
-XNET_DIR := $(abspath .)
-ROOT_DIR := $(abspath ..)
+ROOT_DIR := $(CURDIR)
+SOURCE_DIR := $(ROOT_DIR)/source
+
+# Read the public defaults before choosing the build directory. Compiler flags,
+# machine defaults, library paths, and provider selection are resolved later.
+include Makefile.opt
+
+# Build output. Without an explicit BUILD_NAME or BUILD_DIR, use a readable
+# name derived from the major public selectors. config.txt remains responsible
+# for detecting changes to flags, library paths, and other recorded settings.
 BUILD_BASE ?= build
 ifeq ($(filter /%,$(BUILD_BASE)),)
   BUILD_BASE := $(abspath $(ROOT_DIR)/$(BUILD_BASE))
 else
   BUILD_BASE := $(abspath $(BUILD_BASE))
 endif
-BUILD_NAME ?= default
+AUTO_BUILD_NAME := $(PE_ENV)-$(CMODE)
+ifeq ($(MPI_MODE),ON)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-MPI
+endif
+ifeq ($(OPENMP_MODE),ON)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-OPENMP
+endif
+ifeq ($(GPU_MODE),ON)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-$(GPU_BACKEND)-$(GPU_LAPACK_VER)
+  ifeq ($(OPENACC_MODE),ON)
+    AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-OPENACC
+  else ifeq ($(OPENMP_OL_MODE),ON)
+    AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-OPENMP-OFFLOAD
+  endif
+endif
+ifneq ($(EOS),STARKILLER)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-$(EOS)
+endif
+ifneq ($(MATRIX_SOLVER),dense)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-$(MATRIX_SOLVER)
+endif
+BUILD_NAME ?= $(AUTO_BUILD_NAME)
 ifneq ($(words $(BUILD_NAME)),1)
   $(error BUILD_NAME must be one readable path component without whitespace)
 endif
@@ -32,7 +61,7 @@ endif
 ifeq ($(BUILD_DIR),$(ROOT_DIR))
   $(error BUILD_DIR may not be the repository root)
 endif
-ifeq ($(BUILD_DIR),$(XNET_DIR))
+ifeq ($(BUILD_DIR),$(SOURCE_DIR))
   $(error BUILD_DIR may not be the source directory)
 endif
 ifeq ($(BUILD_DIR),$(BUILD_BASE))
@@ -45,9 +74,6 @@ PP_DIR := $(BUILD_DIR)/pp
 BIN_DIR := $(BUILD_DIR)/bin
 CONFIG := $(BUILD_DIR)/config.txt
 
-PUBLIC_TARGETS := xnet xnse net_setup all xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO \
-                  frontier_gpu_linalg_probe xinab xnet_gpu clean clean-all \
-                  print-XNET_EXE print-XNSE_EXE print-NET_SETUP_EXE print-PROBE_EXE
 REQUESTED_GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),xnet)
 CLEAN_GOALS := $(filter clean clean-all,$(REQUESTED_GOALS))
 OTHER_GOALS := $(filter-out clean clean-all,$(REQUESTED_GOALS))
@@ -66,20 +92,20 @@ endif
 ifneq ($(CLEAN_GOALS),)
 .PHONY: clean clean-all
 clean:
-	@case '$(BUILD_DIR)' in /|'$(ROOT_DIR)'|'$(XNET_DIR)'|'$(BUILD_BASE)') echo 'refusing unsafe BUILD_DIR' >&2; exit 2;; esac; \
+	@case '$(BUILD_DIR)' in /|'$(ROOT_DIR)'|'$(SOURCE_DIR)'|'$(BUILD_BASE)') echo 'refusing unsafe BUILD_DIR' >&2; exit 2;; esac; \
 	 test ! -e '$(BUILD_DIR)' || { test ! -L '$(BUILD_DIR)' && test -f '$(CONFIG)' && test "$$(sed -n '1p' '$(CONFIG)')" = XNET_CONFIG_SCHEMA=1 || { echo 'refusing unmarked BUILD_DIR' >&2; exit 2; }; rm -rf -- '$(BUILD_DIR)'; }
 clean-all:
 	@test "$(CONFIRM_CLEAN_ALL)" = yes || { echo 'set CONFIRM_CLEAN_ALL=yes' >&2; exit 2; }
-	@case '$(BUILD_BASE)' in /|'$(ROOT_DIR)'|'$(XNET_DIR)') echo 'refusing unsafe BUILD_BASE' >&2; exit 2;; esac; \
+	@case '$(BUILD_BASE)' in /|'$(ROOT_DIR)'|'$(SOURCE_DIR)') echo 'refusing unsafe BUILD_BASE' >&2; exit 2;; esac; \
 	 test ! -L '$(BUILD_BASE)' || { echo 'refusing symlink BUILD_BASE' >&2; exit 2; }; \
 	 for d in '$(BUILD_BASE)'/*; do test -e "$$d" || continue; test -L "$$d" && continue; test -f "$$d/config.txt" && test "$$(sed -n '1p' "$$d/config.txt")" = XNET_CONFIG_SCHEMA=1 && rm -rf -- "$$d" || echo "leaving unrecognized $$d" >&2; done
 
 else
 
-include $(XNET_DIR)/make/configuration.mk
-include $(XNET_DIR)/make/providers.mk
-include $(XNET_DIR)/make/sources.mk
-include $(XNET_DIR)/make/dependencies.mk
-include $(XNET_DIR)/make/rules.mk
+include make/configuration.mk
+include make/providers.mk
+include make/sources.mk
+include make/dependencies.mk
+include make/rules.mk
 
 endif

@@ -3,8 +3,8 @@
 This fixture is a synthetic six-species network for the `net_preprocess` and
 `net_setup` contract tests. It contains no private data. Nuclear masses are
 small public-format test values and every partition function is deliberately
-one, because rate-library quality and partition-function physics are outside
-issue #38.
+one, because the checks cover preprocessing behavior rather than rate-library
+quality or partition-function physics.
 
 The positive `netsu` contains:
 

@@ -56,11 +56,18 @@ documented in `test/nse_validation/README.md`.
 
 ## Sparse matrix and solver interfaces
 
-The sparse checks compare the dense, MA48 coordinate, and PARDISO compressed-
-row representations produced from the same small reaction network. Test-only
-solver routines record calls and solve a known system with the bundled NETLIB
-code; they check XNet's matrix construction and adapter behavior, not the
-licensed solver implementations.
+The sparse-data checks exercise the production `xnet_sparse` reader directly.
+They cover the persisted `sparse_ind` dimensions, one-based ordered CRS
+topology, required diagonal entries, reaction maps, malformed and truncated
+records, and the self-heating CRS augmentation and remapping.
+
+The sparse solver checks compare dense, MA48 coordinate, standalone PARDISO,
+and oneMKL PARDISO compressed-row representations produced from the same small
+reaction network. Test-only solver routines record calls and solve a known
+system with the bundled NETLIB code. These checks cover XNet's matrix
+construction, controls, status handling, and result association; they do not
+qualify the external solver libraries. Standalone PARDISO remains unsupported
+for production builds.
 
 Real-library checks are available when the external software is installed:
 
@@ -70,8 +77,8 @@ make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
 ```
 
 The first requires maintainer-licensed HSL source outside the repository; the
-second requires an initialized oneMKL environment. The qualification records
-and limitations are under `test/qualification/sparse_backends/`.
+second requires an initialized oneMKL environment. Commands and evidence
+requirements are under `test/qualification/sparse_backends/`.
 
 ## Surrogate-result checks
 

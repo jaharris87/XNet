@@ -244,8 +244,8 @@ answer key. Do not include them in fresh-context reviewer briefs.
   - `review-playbook.md` at `5395b1e`;
   - diff `9ae2e0d..a21eeb1`;
   - `test/qualification/sparse_backends/compare_heat_sn160.py`;
-  - `test/unit/run_real_sparse_contracts.sh`;
-  - `test/unit/test_sparse_contracts.F90`;
+  - `test/unit/run_real_sparse_solver_tests.sh`;
+  - `test/unit/test_sparse_solvers.F90`;
   - `test/regression/xnet_regression.py`; and
   - relevant sparse-backend README text.
 - Repair-candidate additional context:

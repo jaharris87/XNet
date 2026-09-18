@@ -121,8 +121,8 @@ def write_mass_source(path: Path) -> None:
     )
     # A missing uncertainty after a valid mass must not discard that mass.
     lines[first_data_index] += " #"
-    # The repository's JINA-derived mass tables use '#' for unavailable
-    # evaluations.  Unselected missing records must not make the reader fail.
+    # The retained JINA-derived tables use '#' for unavailable evaluations.
+    # An unselected unavailable record must not make network construction fail.
     lines.append("75 203 synthetic #")
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
 

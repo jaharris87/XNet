@@ -2,8 +2,8 @@
 """Explore network/state suitability without executing XNet.
 
 This program intentionally emits diagnostic JSON only.  It never creates or
-updates the committed reference dataset.  Its candidate list documents the
-ex-ante state search performed for issue #41.
+updates the committed reference dataset.  Its state list documents the
+preflight search performed before the three retained states were selected.
 """
 
 from __future__ import annotations

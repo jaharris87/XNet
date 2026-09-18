@@ -1,28 +1,29 @@
 # Independent unscreened NSE validation
 
-This directory implements issue #41.  The validation problem is deliberately
-narrow: compare XNet's existing, unscreened ideal-gas NSE calculation with
+This directory compares XNet's existing, unscreened ideal-gas NSE calculation with
 three compositions computed independently from published equilibrium
 equations, using the same finite species set and explicitly reconciled nuclear
 inputs.  It is not a general NSE package and it does not change XNet physics.
 
 ## Verification record (before reference generation)
 
-The statements below were checked at base commit
+The statements below were checked at historical `jaharris87/XNet` fork commit
 `65271bcbeea430534c1adc92748ef13bea10c228`.  This record was written before
-freezing expected compositions or running XNet against them.
+freezing expected compositions or running XNet against them; that commit is
+not expected to exist in a normal `starkiller-astro/XNet` clone.
 
 ### XNet software facts
 
-- The issue #40 unit-test seam directly calls the public `nse_initialize` and
+- The component test directly calls the public `nse_initialize` and
   `nse_solve` procedures from the production `source/xnet_nse.F90`, then reads
   public `xnse`, `ynse`, `unse`, and `knrtot`.  The test build copies that
   production source into an isolated test-drive build and supplies only the
-  surrounding XNet module interfaces.  Issue #41 preserves this architecture.
-- The issue #40 direct fixture has eight deliberately synthetic species with
+  surrounding XNet module interfaces.  The scientific comparison uses the
+  same production entry points.
+- The direct component fixture has eight deliberately synthetic species with
   unit spins and partition functions and rounded binding energies.  It is a
   software-test fixture, not an independent scientific reference, and is not
-  used to define issue #41 expected values.
+  used to define the retained expected values.
 - XNet represents the NSE result as mass fractions `X_i`; it also sets
   `Y_i = X_i / (m_i N_A)`.  With the active translational-mass convention
   `m_i = A_i/N_A`, this is `Y_i = X_i/A_i`.
@@ -52,19 +53,19 @@ freezing expected compositions or running XNet against them.
   calculate and gate the physical residuals itself instead of treating either
   positive status as sufficient.
 - Exponentials are protected by `safe_exp`, and each resulting mass fraction
-  is then clipped to `[0,1]`.  Issue #41 therefore compares the complete
+  is then clipped to `[0,1]`.  The validation therefore compares the complete
   vector, including stored tiny values, and preflights the reference states so
   no scientifically material species relies on either clipping boundary.
 - The current test-drive dependency is version 0.5.0.  Its Makefile builds
   separate test executables, copies production Fortran into the isolated build
   to select the stub module files, and treats `build/` plus generated module,
-  object, and executable files as untracked test artifacts.
+  object, and executable files as untracked generated files.
 
 ### Network candidates recorded before the freeze
 
 No network was selected merely because the planning report proposed SN160.
 All tracked `test/Data_*` directories with both `sunet` and `netwinv` were
-surveyed.  The bounded candidates are:
+surveyed.  The networks considered are:
 
 | Network | Species | Useful property | Material concern |
 | --- | ---: | --- | --- |
@@ -215,22 +216,17 @@ published equation is reconciled to XNet's explicitly approximate
 translational mass `A_i/N_A`, rather than silently substituting actual nuclear
 masses.
 
-### Material corrections to the planning report
+### Preflight decisions
 
 - SN160 is a candidate, not a requirement.  It must pass an expanded-network
   boundary comparison; SN231 will be used if it does not.
-- The report's three nominal states are candidates, not fixed answers.  The
+- The three initially proposed states were not treated as fixed answers.  The
   final set will consider proton-rich and harder thermodynamic conditions as
-  suggested during maintainer review, while retaining exactly three robust
-  states.
+  alternatives while retaining exactly three robust states.
 - Pynucastro/Microphysics overlap is primarily within that software family.
   The one identified XNet-author contribution to historical Microphysics EOS
   declarations is unrelated to NSE.  Scientific implementation lineage and a
   literal contributor-list intersection are recorded separately.
-- Repository review policy requires fresh-context role reviews after a pushed
-  draft PR exists.  The implementation follows that sequencing rather than
-  the report's earlier review-freeze suggestion.
-
 No expected composition, validation tolerance, or observed XNet discrepancy
 was used in the network/state decision recorded above.
 
@@ -299,7 +295,7 @@ the documented `#` unavailable-value rows even when those rows were not
 selected.  `test/build_net/partf_module.f90` now skips a row only when its
 required mass field is exactly `#`, while malformed rows remain errors and the
 existing later error still rejects a requested species with no mass.  Focused
-contracts cover all three cases.  `network/build_input.namelist` retains the
+checks cover all three cases.  `network/build_input.namelist` retains the
 exact torch489, REACLIB, partition, mass, and disabled weak/neutrino settings
 used for the snapshot.
 
@@ -352,6 +348,10 @@ record except its two derived hash fields and the separately checked,
 provenance-only scientific-input identity, so changing a residual or other
 numerical-quality diagnostic changes the fingerprint.
 
+The frozen JSON retains the original fork issue URL in its historical
+generation metadata. That field is part of the recorded dataset identity; it
+is provenance, not a current issue or build instruction.
+
 The residual gate starts from XNet's configured `1e-8` function tolerance.
 An inspected upper bound of 32 correctly-rounded binary64 operation
 equivalents per species plus complete serial accumulation gives
@@ -382,13 +382,20 @@ renormalized.
 
 ### Reproduction and ordinary test separation
 
-The retained JSON's generator/source payload was frozen at commit
-`66e3ee7399e522011aae17fc714a942511f47041`; the later
-`scientific_input_sha256` field is the separately checked preservation identity
-documented above.  Reproducing the historical payload and `reference.dat`
-requires that snapshot and the recorded CPython and libmpdec versions:
+The retained JSON's generator/source payload was frozen at historical
+`jaharris87/XNet` fork commit
+`66e3ee7399e522011aae17fc714a942511f47041`; the earlier verification record
+began at fork commit `65271bcbeea430534c1adc92748ef13bea10c228`.
+Neither commit is expected to exist in a normal `starkiller-astro/XNet` clone.
+The later `scientific_input_sha256` field is the separately checked
+preservation identity documented above.  Reproducing the historical payload
+and `reference.dat` therefore requires fetching the fork's development history,
+then using the recorded CPython and libmpdec versions:
 
 ```bash
+git fetch https://github.com/jaharris87/XNet.git development
+git cat-file -e 65271bcbeea430534c1adc92748ef13bea10c228^{commit}
+git cat-file -e 66e3ee7399e522011aae17fc714a942511f47041^{commit}
 mkdir /tmp/xnet-nse-reference-snapshot
 git archive 66e3ee7399e522011aae17fc714a942511f47041 | \
   tar -x -C /tmp/xnet-nse-reference-snapshot
@@ -452,6 +459,5 @@ conventions.  It does not validate screening, reaction or weak rates, the
 timescale for reaching NSE, other networks/states, or the absolute accuracy of
 the underlying nuclear data.  The several-parts-per-million full-network
 boundary differences are larger than the XNet/reference discrepancies and
-remain outside this finite-network claim.  The same-PR provenance record and
-author-run review evidence also do not replace independent human scientific
-approval.
+remain outside this finite-network claim.  The recorded provenance and test
+results do not replace independent human scientific review.

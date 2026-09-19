@@ -10,8 +10,9 @@ dedicated design document.
 
 ## Repository areas
 
-- `source/` contains production Fortran, GNU Make configuration, the
-  stand-alone driver, and utility programs.
+- `source/` contains production Fortran, the stand-alone driver, and utility
+  programs. The production GNU Make entry point and configuration files are at
+  the repository root, with included rules under `make/`.
 - `tools/LAPACK/` contains the vendored NETLIB subset used by the tracked
   baseline configuration.
 - `tools/starkiller-helmholtz/` supplies the tracked default EOS
@@ -49,11 +50,13 @@ these areas, especially through shared module state.
 
 `net.F90` is the stand-alone production program. Its setup path currently:
 
-1. initializes serial or MPI execution;
+1. initializes serial or MPI execution, determines the OpenMP thread count,
+   initializes GPU execution when selected, and starts setup timing;
 2. reads `control` through `xnet_controls`;
-3. preprocesses or reads nuclear and reaction data;
-4. initializes the selected EOS, NSE support, screening, flux, integrators,
-   Jacobian implementation, accelerator state, and timers;
+3. preprocesses the requested network when needed, then reads nuclear,
+   reaction, Jacobian, and match data;
+4. initializes screening, flux evaluation, the selected EOS and integrator,
+   NSE support, and shared run arrays;
 5. reads thermodynamic histories and initial abundances through
    `model_input_ascii`;
 6. evolves assigned zones and writes diagnostic or timestep output;
@@ -99,10 +102,10 @@ the selected Jacobian file together when changing this path.
 threading, accelerator mode, EOS, matrix solver, and CPU/GPU linear-algebra
 choices. `Makefile.internal` maps those choices to compilers, flags,
 sources, and libraries. The conventional fragments under `make/`
-separate provider selection, source lists, explicit module prerequisites, and
-build rules. In particular, `providers.mk` selects the source or library that
-supplies the requested MPI, EOS, Jacobian, numerical-library, and accelerator
-functionality.
+separate implementation selection, source lists, explicit module
+prerequisites, and build rules. In particular, `providers.mk` selects the
+source or library that supplies the requested MPI, EOS, Jacobian,
+numerical-library, and accelerator implementation.
 `machines.mk` retains hostname/LMOD detection and explicitly selects the
 tracked generic or Cray Programming Environment defaults; compiler-family
 flags remain in `Makefile.internal`.
@@ -117,6 +120,21 @@ name:
 - one `xnet_jacobian_*.F90` file supplies `xnet_jacobian`.
 
 Source inspection and tests must follow the configuration named by the task.
+
+`xnet_linalg.F90` exposes one batched GPU LU/solve routine family:
+
+```text
+LinearSolveBatched_GPU
+  -> LUDecompBatched_GPU
+  -> LUBksubBatched_GPU
+```
+
+The vendor calling convention remains inside those routines. cuBLAS and MAGMA
+use pointer-array batched calls; hipBLAS and oneMKL use strided-batched calls.
+`xnet_jacobian_dense.F90` does not select between those representations.
+cuBLAS retains XNet's implemented no-pivot path. XNet currently rejects a
+no-pivot request for the hipBLAS, oneMKL, and MAGMA implementations rather
+than silently changing the requested solve.
 
 ## Shared state and interfaces
 

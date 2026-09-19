@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/jaharris87/XNet/test/qualification/frontier/manifest.schema.json",
+  "$id": "https://github.com/starkiller-astro/XNet/test/qualification/frontier/manifest.schema.json",
   "title": "XNet Frontier qualification manifest",
   "type": "object",
   "additionalProperties": false,

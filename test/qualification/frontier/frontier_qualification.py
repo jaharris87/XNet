@@ -44,6 +44,7 @@ from xnet_regression import (  # noqa: E402
 
 MANIFEST_SCHEMA = "xnet-frontier-qualification-v2"
 POLICY_SCHEMA = "xnet-frontier-comparison-v1"
+GPU_LINALG_RESIDUAL_LIMIT = 1.0e-12
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SOURCE_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 SLURM_TIME_PATTERN = re.compile(r"^(?:\d+-)?\d{1,2}:\d{2}:\d{2}$")
@@ -56,6 +57,7 @@ REQUIRED_MODULE_MARKERS = (
     "rocm",
     "craype-accel-amd-gfx90a",
     "hipfort",
+    "cray-python",
 )
 FAILURE_CATEGORIES = (
     "source",
@@ -179,7 +181,7 @@ def _load_bounds(document: object, context: str) -> Bounds:
 
 
 def load_policy(path: Path) -> NumericalPolicy:
-    """Load the reviewed, bounded CPU/GPU endpoint policy."""
+    """Load the reviewed CPU/GPU numerical limits."""
 
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -477,7 +479,9 @@ def compare_ascii_endpoints(
     }
 
 
-def parse_linalg_probe(text: str, residual_limit: float = 1.0e-12) -> dict[str, object]:
+def parse_linalg_probe(
+    text: str, residual_limit: float = GPU_LINALG_RESIDUAL_LIMIT
+) -> dict[str, object]:
     """Require real device execution, two successful factors, and small residuals."""
 
     device_count: int | None = None
@@ -1630,7 +1634,7 @@ def _validate_ascii_evidence(
 
 
 def validate_manifest(document: object, *, require_pass: bool = True) -> None:
-    """Validate the complete successful-evidence contract required by issue #46."""
+    """Validate every required result from a successful Frontier run."""
 
     required = {
         "schema", "status", "failure", "source", "environment", "slurm",
@@ -1806,6 +1810,12 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
         "GPU linear-algebra evidence",
     )
     residual_limit = _manifest_number(linalg["residual_limit"], "residual limit", positive=True)
+    if residual_limit != GPU_LINALG_RESIDUAL_LIMIT:
+        raise FrontierFailure(
+            "test",
+            "manifest",
+            f"GPU residual limit must be {GPU_LINALG_RESIDUAL_LIMIT:.1e}",
+        )
     if linalg["status"] != "passed" or type(linalg["device_count"]) is not int or linalg["device_count"] < 1 or linalg["offloaded"] is not True or linalg["data_present"] is not True:
         raise FrontierFailure("test", "manifest", "GPU linear-algebra evidence failed")
     batches = linalg["batches"]

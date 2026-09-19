@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage an exact clean XNet commit and submit issue #46 to Frontier Slurm."""
+"""Stage an exact clean XNet commit and submit the Frontier qualification."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ REQUIRED_MODULE_MARKERS = (
     "rocm",
     "craype-accel-amd-gfx90a",
     "hipfort",
+    "cray-python",
 )
 
 
@@ -285,7 +286,7 @@ def submit(arguments: argparse.Namespace) -> Path:
         "sbatch",
         "--parsable",
         "--wait",
-        "--job-name=xnet-issue46",
+        "--job-name=xnet-frontier-qualification",
         "--nodes=1",
         "--ntasks=1",
         f"--cpus-per-task={arguments.cpus_per_task}",

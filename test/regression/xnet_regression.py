@@ -2249,7 +2249,7 @@ def scale_comparison_tolerances(
                 l1=None if limits.l1 is None else factor * limits.l1,
                 linf=None if limits.linf is None else factor * limits.linf,
             )
-            for zone, limits in composition_norm_limits.items()
+            for zone, limits in reference.composition_norm_limits.items()
         }
 
     return replace(

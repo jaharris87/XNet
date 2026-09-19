@@ -1,14 +1,14 @@
 # Manual Frontier GPU correctness qualification
 
-This is the manually initiated Tier 4 qualification for issue #46. It checks
-one exact, clean XNet commit on one Frontier MI250X GPU. It is not CI, a
-performance benchmark, a scaling claim, or a permanent GPU endpoint baseline.
+This manual qualification checks one exact, clean XNet commit on one Frontier
+MI250X GPU. It is not CI, a performance benchmark, a scaling claim, or a
+permanent GPU endpoint baseline.
 
 A human completes Frontier's interactive RSA authentication and starts the
 submission. No credential, token, account name, reservation name, or private
 path belongs in the repository. The submitter supplies allocation values on
 the command line, and the retained manifest records only whether an account,
-QoS, or reservation was supplied. The raw artifact directory remains outside
+QoS, or reservation was supplied. The full run directory remains outside
 the checkout.
 
 The package exercises three independent requirements:
@@ -17,8 +17,8 @@ The package exercises three independent requirements:
   calls the public production `LinearSolveBatched` path. It requires a real
   OpenMP target device, successful HIP/rocBLAS handles and factor/solve status,
   and a relative residual no larger than `1e-12` for both systems.
-- the ten-zone, `nzbatchmx=4` fixture from issue #45 runs once with the CPU
-  executable and once with the GPU executable. The existing semantic runner
+- the ten-zone, `nzbatchmx=4` fixture runs once with the CPU executable and
+  once with the GPU executable. The existing parallel-zone runner
   requires zones 1-10 exactly once, correct filename/content association, and
   no output for inactive lanes 11-12.
 - `heat_sn160` runs with both executables to reach the larger network,
@@ -29,23 +29,21 @@ The package exercises three independent requirements:
 
 Both XNet comparisons normalize diagnostic endpoints by global zone and use
 the CPU result from the same source archive as the reference. The tracked
-`comparison_policy.json` supplies bounded scalar, selected material-species,
+`comparison_policy.json` supplies scalar, selected material-species,
 complete-vector, normalization, neutrino-loss, and timestep limits. The final
 ASCII energy-generation rate is required to be finite and is retained with
 its CPU/GPU difference, but it is report-only because its difference of two
 accepted-step energies can be ill-conditioned when the true rate is near zero.
 This package does not qualify the correctness of that final diagnostic; the
-claimed CPU/GPU support is limited to the bounded endpoint and ASCII fields.
+claimed CPU/GPU support is limited to the checked endpoint and ASCII fields.
 The policy never creates or updates a canonical GPU result.
-Its `status` must be updated with the retained measured Frontier evidence and
-review disposition before issue #46 is complete.
 
 ## Package contents
 
 - `submit_frontier.py` verifies a clean commit, creates and hashes a `git
-  archive`, stages it outside the checkout, submits one bounded Slurm job, and
+  archive`, stages it outside the checkout, submits one Slurm job, and
   waits for the returned report. After Slurm closes the job logs, it finalizes
-  the redacted resource evidence and complete artifact inventory.
+  the redacted resource evidence and complete output-file inventory.
 - `frontier_job.sh` verifies the staged archive hash and embedded Git commit,
   extracts it only after the queued job starts, and then starts one GPU-bound
   Slurm step. Before building, the runner independently verifies that every
@@ -53,7 +51,7 @@ review disposition before issue #46 is complete.
   archive.
 - `frontier_qualification.py` captures the environment, builds CPU and GPU
   configurations from the archive, runs the three checks, compares results,
-  inventories every regular artifact, and writes
+  inventories every regular output file, and writes
   `qualification_manifest.json`.
 - `manifest.schema.json` defines the versioned evidence envelope. The runner's
   stricter standard-library validator requires the successful build, device,
@@ -61,28 +59,32 @@ review disposition before issue #46 is complete.
 - `comparison_policy.json` is the reviewed numerical policy, not a reference
   result.
 
-Generated artifacts are deliberately outside the repository. A completed
-qualification retains a compact, path-neutral manifest under `evidence/`;
-executables, object/module files, runtime histories, raw environment paths,
-and account data remain in the external artifact directory.
+Generated run files, including the validated manifest, remain outside the
+repository. Record the source commit, tested software configuration, job,
+numerical results, review outcome, and limitations concisely with the pull
+request or release record. Do not commit executables, object/module files,
+runtime histories, raw environment paths, or account data.
 
 ## Human login and submission
 
-Use the current Frontier defaults unless the qualification is intentionally
-testing another recorded module set. OLCF's Frontier guide requires the
+Use an explicitly recorded Frontier module set and consult the current OLCF
+documentation before a future rerun. OLCF's Frontier guide requires the
 `craype-accel-amd-gfx90a` module for HPE Cray Programming Environment OpenMP
-offload and documents hipfort as an OLCF module. The checked configuration uses
-the Cray compiler wrappers,
-ROCm, OpenMP target offload, and HIP/rocBLAS bindings.
+offload and documents hipfort as an OLCF module. The last successfully
+recorded qualification used CPE 25.09, Cray Fortran 20.0.0, ROCm 6.4.2, and
+hipfort 6.4.2.
 
 After authenticating interactively on Frontier:
 
 ```bash
 module purge
 module load PrgEnv-cray
-module load rocm
+module load cpe/25.09
+module load rocm/6.4.2
 module load craype-accel-amd-gfx90a
-module load hipfort
+module load hipfort/6.4.2
+module load cray-python/3.12.12
+export LD_LIBRARY_PATH="${CRAY_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 python3 test/qualification/frontier/submit_frontier.py \
   --account=<allocation> \
@@ -90,6 +92,13 @@ python3 test/qualification/frontier/submit_frontier.py \
   --artifact-root=<fresh-external-directory> \
   --expected-sha="$(git rev-parse HEAD)"
 ```
+
+This block records the last stack that passed; it is not a requirement to
+retain those versions indefinitely. A newer CPE 26.03 / ROCm 7.0.2 attempt
+currently encounters a hipfort/rocBLAS link incompatibility and is not
+qualified. For a later current-stack run, update the module versions, keep the
+same explicit recording and validation, and report the exact tested stack with
+the result.
 
 Use `--qos` or `--reservation` only when the facility requires it. The default
 request is one node, one task, seven CPUs, one GPU, and 20 minutes. The script
@@ -103,6 +112,11 @@ inside the allocated job, after queue wait. CPU and GPU builds use separate
 caller-selected build directories. Different directories may run concurrently;
 do not run two top-level Make invocations or a clean concurrently in one
 affected directory.
+
+The qualification tools require Python 3.10 or newer. The current Frontier
+procedure loads `cray-python/3.12.12`; the job checks the interpreter version
+before invoking the runner and retains `python.version.txt` with the other run
+files.
 
 The explicit build selections are:
 
@@ -137,8 +151,8 @@ variadic macros. For Cray GPU builds, `make/crayftn_cpp.sh` therefore runs
 the system `cpp -P -C -nostdinc` first and passes the resulting Fortran
 source to the selected Cray compiler wrapper. The preprocessing wrapper is
 selected after any MPI compiler override so an MPI-enabled Cray GPU build does
-not silently return to native preprocessing; issue #46 still qualifies only
-the explicit MPI-off configuration above. Comment preservation retains
+not silently return to native preprocessing. This procedure qualifies only the
+explicit MPI-off configuration above. Comment preservation retains
 Fortran `//` concatenation; disabling standard include directories avoids
 injecting C system-header text. The qualification records both compiler and
 preprocessor versions.
@@ -166,20 +180,21 @@ The manifest records:
 - direct status, timeout behavior, observed residual, zone list, numerical
   differences, policy fractions, and runtime output inventories; and
 - a complete relative-path, size, and SHA-256 inventory of qualification
-  artifacts except the self-referential manifest and the separately hashed
+  output files except the self-referential manifest and the separately hashed
   source archive/build tree.
 
 Review the observed scalar differences, selected-species fraction of allowed,
 complete-vector `L1`/`L-infinity` values, and the report-only final
 energy-generation-rate difference before accepting the policy. A policy
 change requires a numerical explanation, a controlled perturbation that the
-new bound still rejects, and a final rerun from the exact candidate commit.
+new limit still rejects, and a final rerun from the exact source commit.
 Do not derive limits automatically from the current output.
 
-To retain a successful run, copy only the validated, path-neutral manifest and
-concise review note into a dated directory below `evidence/`. Do not copy raw
-histories, binaries, build products, absolute link paths, source archives, or
-allocation identifiers other than the required Slurm job ID.
+Keep the validated manifest and full run directory outside the repository.
+Record concise, path-neutral source, configuration, job, numerical, and review
+results with the pull request or release record. Do not publish raw histories,
+binaries, build products, absolute link paths, source archives, or private
+allocation information.
 
 ## Focused local checks
 
@@ -213,7 +228,7 @@ Every job-side failure manifest names a category and phase:
 - `build`: clean, compile, link, resolved-variable, or `ldd` failure;
 - `test`: nonzero/timeout, device/handle/factor failure, residual failure,
   missing/wrong output association, or incomplete diagnostic; and
-- `comparison`: a CPU/GPU endpoint exceeds the reviewed bounded policy.
+- `comparison`: a CPU/GPU endpoint exceeds the reviewed numerical limits.
 
 Inspect `sbatch.stderr.txt` and `slurm.stderr.txt` first for submission,
 queue, allocation, and facility failures. For builds, inspect the relevant

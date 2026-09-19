@@ -144,9 +144,10 @@ measurements so the benchmark exercises acceptable results.
 
 ## Scientific and architecture decisions
 
-Agents prepare evidence, identify assumptions, and expose uncertainty. The
-human maintainer decides whether a physical model, algorithm, tolerance,
-reference result, or maintenance tradeoff is scientifically appropriate.
+Developers should prepare evidence, identify assumptions, and expose
+uncertainty. The maintainer decides whether a physical model, algorithm,
+tolerance, reference result, or maintenance tradeoff is scientifically
+appropriate.
 
 Escalate questions involving physical interpretation, accepted regimes,
 scientific provenance, or consequential algorithm selection. Record the

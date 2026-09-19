@@ -33,7 +33,8 @@ The `./*_data` directories contain the rate databases:
     * Fuller et al., ApJ 293 (1985) 1
     * Oda et al., ADNDT 56 (1994) 231
     * Langanke & Martinez-Pinedo, ADNDT 79 (2001) 1
-* `./neutrio_data`: Tabulated neutrino capture rates (not public)
+* `./neutrio_data`: Tabulated neutrino capture rates (not public and not
+  included in this repository)
   * Files:
     * `neutrino.data` - Tabulated Rates
   * References:

@@ -33,7 +33,7 @@ The Makefile fragments have distinct roles:
   defines the production build and its output layout.
 - `make/configuration.mk` validates compiler/platform selectors.
 - `make/providers.mk` selects the MPI, EOS, solver, accelerator, and
-  numerical-library providers.
+  numerical-library implementations.
 - `make/sources.mk` lists sources and output files and records
   configuration reuse.
 - `make/dependencies.mk` records explicit Fortran module prerequisites.
@@ -54,20 +54,19 @@ changed. Variable names and commented examples provide orientation; the
 selected Make logic determines the build.
 
 Each build directory contains a fixed-order `config.txt` record. Reusing it
-with different selectors, providers, compiler commands, or effective flags
-fails; clean that directory or choose another one. The conventional POSIX
-record supports ordinary flag text but rejects effective flags containing a
-single quote or line break. Do not run two top-level Make processes in one
-build directory, and do not clean a directory while another invocation uses
-it. Different build directories may build concurrently.
+with different selectors, selected libraries or sources, compiler commands,
+or effective flags fails; clean that directory or choose another one. The
+conventional POSIX record supports ordinary flag text but rejects effective
+flags containing a single quote or line break. Do not run two top-level Make
+processes in one build directory, and do not clean a directory while another
+invocation uses it. Different build directories may build concurrently.
 
 ## Tracked defaults
 
-The tracked defaults currently resolve to:
+The tracked selector defaults are:
 
 | Setting | Value | Meaning |
 | --- | --- | --- |
-| `EXE` | `xnet` | Main executable name |
 | `CMODE` | `OPT` | Optimized build |
 | `PE_ENV` | `GNU` | GNU compiler configuration |
 | `MPI_MODE` | `OFF` | Selects the serial parallel-interface stubs |
@@ -85,12 +84,12 @@ environment, result, and date.
 ## Optional sparse-backend status
 
 A named Make target records a build recipe, not a support claim. The current
-serial CPU support dispositions are:
+serial CPU support status is:
 
-| Provider | Selection | Status and limit |
+| Implementation | Selection | Status and limit |
 | --- | --- | --- |
 | HSL MA48 2.2.0 | `MATRIX_SOLVER=MA48` with external `MA48.f` | Qualified on macOS arm64 with GNU Fortran 16.2.0 using the production build. The maintainer-supplied source is used under a maintainer-held non-redistributable HSL licence and must remain outside the repository. Other HSL versions, compilers, and platforms are unqualified. |
-| Intel oneMKL PARDISO | `MATRIX_SOLVER=PARDISO_MKL LAPACK_VER=MKL` | Previously qualified on the `etacar` Linux x86_64 host with GNU Fortran 11.4.0 and oneMKL 2026.1. The production build has not been checked there since its recent Makefile changes because the host is currently unreachable, so this revision remains unverified for oneMKL. Other oneMKL versions, compilers, platforms, and parallel modes are unqualified. |
+| Intel oneMKL PARDISO | `MATRIX_SOLVER=PARDISO_MKL LAPACK_VER=MKL` | Historical qualification used the `etacar` Linux x86_64 host with GNU Fortran 11.4.0 and oneMKL 2026.1. That run predates the current production Makefiles and does not qualify this tree. Other oneMKL versions, compilers, platforms, and parallel modes are also unqualified. |
 
 MA48 source must not be copied, committed, archived, or attached to an issue or
 pull request. HSL describes MA48 2.2.0 and its licensing restrictions in the
@@ -104,15 +103,24 @@ The exact opt-in component and same-source dense comparison commands are in
 
 | Configuration | Current status |
 | --- | --- |
-| GNU serial OPT and DEBUG | Built and tested on macOS arm64 with GNU Fortran 16.2.0; the hosted GNU serial jobs provide the Linux check. |
-| GNU MPI and OpenMP | Serial, two-rank MPI, and two-thread OpenMP results agreed on the ten-zone qualification problem on macOS arm64 with GNU Fortran 16.2.0 and Open MPI 5.0.10. |
-| Frontier HIP/ROCm OpenMP offload | Retained qualification applies to source `97174bc0b382ed2c580eb517b05479e0ee63b184`, CCE 20.0.2, ROCm 6.4.2, hipfort 6.4.2, and MI250X. The Phase-5 build-directory changes have not been rerun on Frontier and are unverified there. |
-| Perlmutter | Current NERSC host selection is maintained, but no Perlmutter qualification is recorded for this revision. |
+| GNU serial | The maintained serial regression suite passed in the optimized GNU configuration (194 pytest tests), and the component suite passed in both OPT and DEBUG configurations during the staged sequence on macOS arm64 with GNU Fortran 16.2.0. This is not a general cross-platform claim. |
+| GNU MPI and OpenMP | Serial, two-rank MPI, and two-thread OpenMP results agreed on the ten-zone qualification problem on macOS arm64 with GNU Fortran 16.2.0 and Open MPI 5.0.10. This checks the selected functional and numerical behavior, not scaling, multi-node placement, binding performance, or hybrid MPI+OpenMP execution. |
+| Frontier HIP/ROCm OpenMP offload | The accepted source `64951196032bf4622ee6c887323db33cf1de5beb`, included in this tree, passed Frontier job `5512553` on one MI250X with CPE 25.09, Cray Fortran 20.0.0, ROCm 6.4.2, hipfort 6.4.2, OpenMP target offload, Starkiller EOS, dense solver, and MPI off. The device-probe maximum residual was `3.552713678800501e-17` against a `1e-12` limit. The ten-zone partial batch and six-zone `heat_sn160` comparisons passed; the latter's maximum numerical-limit fraction was `0.16072834133922473`, with nonzero neutrino loss in every zone. CPE 26.03 with ROCm 7.0.2 encountered a hipfort/rocBLAS link incompatibility and is not qualified. |
+| Perlmutter CUDA/OpenACC | Supplemental evidence for the same accepted source passed Perlmutter job `58588659` on one A100-SXM4-80GB with NVHPC 26.5, PrgEnv-nvidia 8.7.0, CUDA 13.2, OpenACC, and the cuBLAS pointer-array batched solve. Device-probe residuals were zero. The ten-zone partial batch and `heat_sn160` comparisons passed; the latter's maximum numerical-limit fraction was `0.07912200248018902`, with nonzero neutrino loss in every zone. This evidence applies only to that tested configuration. |
 | Other host names | Use the generic machine defaults unless `MACHINE` or other build variables are supplied explicitly. |
 
 The exact commands, source revision, and any launcher-specific options belong
 in the issue or pull-request evidence for each run. A successful build alone
 does not establish runtime or numerical agreement.
+
+The Frontier and Perlmutter runs used source
+`64951196032bf4622ee6c887323db33cf1de5beb`. Upstream staging merge
+`1f41d9be38f8d3f171b1cc37f9977a3e815a53ad` has the same source tree.
+
+The accelerator checks above do not establish performance, scaling,
+multi-GPU or MPI+GPU behavior, BDF numerical behavior, other GPU generations,
+newer ROCm stacks, arbitrary CUDA or NVHPC versions, or general accelerator
+portability.
 
 Make can display resolved values through the existing `print-%` target. For
 example:
@@ -126,13 +134,13 @@ make --no-print-directory print-MATRIX_SOLVER
 
 Each build directory contains predictable `obj/`, `mod/`, `pp/`, and
 `bin/` subdirectories plus `config.txt`. The configuration record preserves
-the exact effective selectors, commands, flags, provider paths, and
-external source paths. Reusing the directory with different material settings fails
-before preprocessing or compilation and directs the user to clean or choose
-another directory.
+the exact effective selectors, commands, flags, selected library paths, and
+external source paths. Reusing the directory with different material settings
+fails before preprocessing or compilation and directs the user to clean or
+choose another directory.
 
 The line-oriented record accepts ordinary single-line Make values. Embedded
-single quotes and line breaks in recorded commands, flags, providers, or paths
+single quotes and line breaks in recorded commands, flags, libraries, or paths
 are rejected with a clear diagnostic; select an equivalent spelling or another
 build directory.
 
@@ -205,7 +213,31 @@ make -C test/unit clean test CMODE=DEBUG
 
 See `test/unit/README.md` for the tested behavior, narrow test-only
 state and stubs, vendored `test-drive` revision and license, update procedure,
-and issue-specific effectiveness evidence.
+and focused effectiveness checks.
+
+## Maintained serial regression suite
+
+The pytest suite under `test/regression/` is the normal serial CPU regression
+path. It requires Python 3.11 or newer and the dependency recorded in
+`test/regression/requirements.txt`. Build the production programs and pass
+their paths explicitly:
+
+```bash
+python3 -m pip install -r test/regression/requirements.txt
+make BUILD_NAME=regression-serial -j xnet xnse
+python3 -m pytest test/regression \
+    --xnet-executable="$PWD/build/regression-serial/bin/xnet" \
+    --xnse-executable="$PWD/build/regression-serial/bin/xnse"
+```
+
+The suite runs `xnet` and `xnse` as external programs in isolated temporary
+directories. It checks direct process status, required output, parsed
+diagnostics, and numerical comparisons with stated limits. Its current 194
+pytest tests include runner, parsing, and effectiveness checks as well as the
+physical regression scenarios; they are not 194 separate scientific cases.
+This evidence does not by itself establish scientific validity or portability.
+See `test/regression/README.md` for the case definitions, requirements,
+timeouts, reference provenance, and comparison policy.
 
 ## Runtime inputs
 
@@ -224,10 +256,11 @@ meaning.
 preprocessing work should identify whether these tracked files are inputs,
 generated results, or comparison data before changing them.
 
-## Legacy test behavior
+## Legacy shell test drivers
 
-The current test infrastructure supports investigation and historical problem
-runs. It has unreliable pass/fail reporting.
+The older shell drivers remain useful for investigation and historical problem
+runs, but they are secondary to the maintained pytest suite and have unreliable
+pass/fail reporting.
 
 `test/test_xnet.sh`:
 

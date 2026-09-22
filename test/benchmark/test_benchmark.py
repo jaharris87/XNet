@@ -283,7 +283,7 @@ def main(record: Path) -> None:
         diagnostic = changed_topology / "repetitions" / "1" / "net_diag01"
         original = diagnostic.read_text(encoding="utf-8")
         changed, count = re.subn(
-            r"^MyId\s+0\s+1\s*$",
+            r"^\s*MyId\s+0\s+1\s*$",
             "MyId 9 1",
             original,
             count=1,

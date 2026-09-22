@@ -7,6 +7,28 @@ awk -F '\t' 'NF!=2||$1==""||$2==""{exit 1}' "$meta" || { echo "malformed metadat
 [ "$(val schema)" = xnet-v9-benchmark-record-v2 ] && [ "$(val historical_source_sha)" = "$historical" ] && [ "$(val source_sha)" = "$historical" ] && [ "$(val execution_mode)" = direct-serial ] && [ "$(val launcher)" = none ] || { echo "invalid contract binding" >&2; exit 1; }
 case "$(val expected_end_records):$(val repetitions_requested)" in *[!0-9:]*|:*|*:0|0:*) echo "invalid counts" >&2; exit 1;; esac
 root=$(val source_root); config=$(val build_config_path); exe=$(val executable_path); [ -e "$root/.git" ] && [ "$(git -C "$root" rev-parse HEAD)" = "$historical" ] && [ -z "$(git -C "$root" status --porcelain)" ] || { echo "dirty/unavailable source" >&2; exit 1; }
+case_id=$(val case_id)
+case "$case_id" in
+  batch_alpha) canonical_ends=16; settings=test/test_settings_batch; setup=test/Test_Problems/setup_batch_alpha; network=test/Data_alpha; trajectory_prefix=test/Test_Problems/th_batch/ ;;
+  heat_sn160) canonical_ends=6; settings=test/test_settings_heat; setup=test/Test_Problems/setup_heat_sn160; network=test/Data_SN160; trajectory_prefix=test/Test_Problems/th_co_burn_ ;;
+  *) echo "unsupported case binding" >&2; exit 1 ;;
+esac
+[ "$(val expected_end_records)" = "$canonical_ends" ] || { echo "case/end-count binding failed" >&2; exit 1; }
+expected_paths=$(mktemp "${TMPDIR:-/tmp}/xnet-benchmark-paths.XXXXXX")
+actual_paths=$(mktemp "${TMPDIR:-/tmp}/xnet-benchmark-paths.XXXXXX")
+trap 'rm -f "$expected_paths" "$actual_paths"' EXIT HUP INT TERM
+{
+  printf '%s/%s\n%s/%s\n' "$root" "$settings" "$root" "$setup"
+  git -C "$root" ls-files -- "$network" | while IFS= read -r path; do printf '%s/%s\n' "$root" "$path"; done
+  if [ "$case_id" = batch_alpha ]; then
+    git -C "$root" ls-files -- test/Test_Problems/th_batch | while IFS= read -r path; do printf '%s/%s\n' "$root" "$path"; done
+  else
+    git -C "$root" ls-files -- test/Test_Problems | grep '/th_co_burn_' | while IFS= read -r path; do printf '%s/%s\n' "$root" "$path"; done
+  fi
+  printf '%s/tools/starkiller-helmholtz/helm_table.dat\n' "$root"
+} | LC_ALL=C sort > "$expected_paths"
+awk -F '\t' 'NR > 1 {print $2}' "$manifest" | LC_ALL=C sort > "$actual_paths"
+cmp -s "$expected_paths" "$actual_paths" || { echo "case/input-path binding failed" >&2; exit 1; }
 hash(){ if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi; }; [ -f "$config" ] && [ -x "$exe" ] && [ "$(hash "$config"|awk '{print $1}')" = "$(val build_config_sha256)" ] && [ "$(hash "$exe"|awk '{print $1}')" = "$(val executable_sha256)" ] || { echo "build binding failed" >&2; exit 1; }
 for k in MPI_MODE OPENMP_MODE GPU_MODE OPENACC_MODE OPENMP_OL_MODE; do [ "$(awk -F= -v k="$k" '$1==k{print $2}' "$config")" = OFF ] || { echo "nonserial config" >&2; exit 1; }; done; [ "$(awk -F= '$1=="MATRIX_SOLVER"{print $2}' "$config")" = dense ] || exit 1
 awk -F '\t' 'NR==1{if($0!="sha256\tpath")exit 1;next}NF!=2||$1!~/^[0-9a-f]{64}$/||$2!~/^\//||seen[$2]++{exit 1}END{exit NR<2}' "$manifest" || { echo "malformed manifest" >&2; exit 1; }; while IFS='	' read -r h p; do [ "$h" = sha256 ] && continue; [ -f "$p" ] && [ "$(hash "$p"|awk '{print $1}')" = "$h" ] || { echo "changed/missing input" >&2; exit 1; }; done < "$manifest"

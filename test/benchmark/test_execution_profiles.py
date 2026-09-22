@@ -34,7 +34,8 @@ def main():
     openmp = profiles["openmp-dense"]
     threaded = {"launcher_argv": [], "requested_ranks": 1, "requested_threads": 2,
                 "launcher_probe": {"allocation": {"kind": "unscheduled-local", "host": "node", "affinity": [0]}, "observations": [{"rank": None, "host": "node", "affinity": [0]}]},
-                "xnet_topology": {"ranks": [{"rank": 0, "size": 1}], "threads": [{"rank": 0, "thread": 1, "team": 2}, {"rank": 0, "thread": 2, "team": 2}]}}
+                "xnet_topology": {"ranks": [{"rank": 0, "size": 1}], "threads": [{"rank": 0, "thread": 1, "team": 2}, {"rank": 0, "thread": 2, "team": 2}]},
+                "openmp_probe": {"observations": [{"rank": "0", "thread": 0, "team": 2, "place": 0, "binding": 3}, {"rank": "0", "thread": 1, "team": 2, "place": 1, "binding": 3}]}}
     validate_runtime_evidence(openmp, threaded, ["/build/bin/xnet"], "/build/bin/xnet", {"OMP_NUM_THREADS": "2"})
     reject("wrong threads", openmp, threaded, {"OMP_NUM_THREADS": "1"}, "thread evidence")
     wrong_team = deepcopy(threaded); wrong_team["xnet_topology"]["threads"].pop()
@@ -42,6 +43,7 @@ def main():
     accelerator = deepcopy(threaded)
     accelerator.update(requested_threads=1, gpu_backend="CUDA", accelerator_mode="openacc")
     accelerator["xnet_topology"]["threads"] = []
+    accelerator["accelerator_evidence"] = {"backend": "CUDA", "commands": [{}]}
     reject("false GPU/offload", profiles["accelerator-dense"], accelerator, {}, "offload probe")
     accelerator["offload_probe"] = {
         "observations": [

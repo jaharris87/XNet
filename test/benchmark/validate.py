@@ -36,6 +36,7 @@ HARNESS_FILES = {
     "test_execution_profiles.py",
     "cases.json",
     "gpu_execution_probe.F90",
+    "openmp_execution_probe.F90",
     "gpu_probe.mk",
 }
 COUNTER_NAMES = {"TS", "NR", "Jacobian", "Deriv", "CrossSect"}
@@ -293,7 +294,40 @@ def validate_runtime_evidence(
         }
         if teams != expected_teams:
             raise BenchmarkError("XNet OpenMP topology does not match requested thread team")
+        openmp_probe = runtime.get("openmp_probe")
+        if not isinstance(openmp_probe, dict) or not isinstance(openmp_probe.get("observations"), list):
+            raise BenchmarkError("OpenMP profile lacks capture-owned placement probe")
+        placement = openmp_probe["observations"]
+        observed_team = {
+            (str(item.get("rank")), item.get("thread"), item.get("team"))
+            for item in placement
+            if isinstance(item, dict)
+        }
+        expected_observed = {
+            (str(rank), thread - 1, threads)
+            for rank in range(ranks)
+            for thread in range(1, threads + 1)
+        }
+        if observed_team != expected_observed:
+            raise BenchmarkError("OpenMP placement probe does not match requested team")
+        if any(
+            not isinstance(item, dict)
+            or not isinstance(item.get("place"), int)
+            or item["place"] < 0
+            or not isinstance(item.get("binding"), int)
+            or item["binding"] == 0
+            for item in placement
+        ):
+            raise BenchmarkError("OpenMP placement probe lacks active thread binding")
     if dimensions["gpu"] == "ON":
+        accelerator_evidence = runtime.get("accelerator_evidence")
+        if (
+            not isinstance(accelerator_evidence, dict)
+            or accelerator_evidence.get("backend") != runtime.get("gpu_backend")
+            or not isinstance(accelerator_evidence.get("commands"), list)
+            or not accelerator_evidence["commands"]
+        ):
+            raise BenchmarkError("accelerator profile lacks runtime/device identity evidence")
         offload = runtime.get("offload_probe")
         if not isinstance(offload, dict) or not isinstance(offload.get("observations"), list):
             raise BenchmarkError("accelerator profile lacks capture-owned offload probe")
@@ -475,6 +509,8 @@ def validate_capture_provenance(
         validate_transcript("execution probe", runtime_claim["launcher_probe"].get("probe"))
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("offload_probe"), dict):
         validate_transcript("offload probe", runtime_claim["offload_probe"].get("probe"))
+    if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("openmp_probe"), dict):
+        validate_transcript("OpenMP probe", runtime_claim["openmp_probe"].get("probe"))
     if isinstance(runtime_claim, dict) and runtime_claim.get("accelerator_evidence") is not None:
         accelerator = runtime_claim["accelerator_evidence"]
         if not isinstance(accelerator, dict) or accelerator.get("backend") != runtime_claim.get("gpu_backend"):

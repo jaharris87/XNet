@@ -43,6 +43,7 @@ HARNESS_FILES = (
     "test_execution_profiles.py",
     "cases.json",
     "gpu_execution_probe.F90",
+    "openmp_execution_probe.F90",
     "gpu_probe.mk",
 )
 
@@ -189,6 +190,14 @@ def build_xnet(
     command = ["make", "-C", str(repository), f"BUILD_DIR={build_dir}"]
     command.extend(f"{name}={value}" for name, value in build_options.items())
     command.extend(f"{name}={value}" for name, value in selectors.items())
+    if profile.get("accelerator") or profile["dimensions"]["openmp"] == "ON":
+        command.extend(
+            [
+                "-f",
+                str(Path(__file__).parent / "gpu_probe.mk"),
+                f"BENCHMARK_HARNESS_DIR={Path(__file__).parent}",
+            ]
+        )
     if profile.get("accelerator"):
         backend = profile.get("_gpu_backend")
         mode = profile.get("_accelerator_mode")
@@ -198,13 +207,6 @@ def build_xnet(
         command.append(f"GPU_LAPACK_VER={'CUBLAS' if backend == 'CUDA' else 'ROCM'}")
         command.append(f"OPENACC_MODE={'ON' if mode == 'openacc' else 'OFF'}")
         command.append(f"OPENMP_OL_MODE={'ON' if mode == 'openmp-offload' else 'OFF'}")
-        command.extend(
-            [
-                "-f",
-                str(Path(__file__).parent / "gpu_probe.mk"),
-                f"BENCHMARK_HARNESS_DIR={Path(__file__).parent}",
-            ]
-        )
     if profile.get("external_source"):
         ma48_dir = profile.get("_ma48_dir")
         if not isinstance(ma48_dir, Path) or not (ma48_dir / "MA48.f").is_file():
@@ -213,6 +215,8 @@ def build_xnet(
     command.append("xnet")
     if profile.get("accelerator"):
         command.append("xnet_benchmark_gpu_probe")
+    if profile["dimensions"]["openmp"] == "ON":
+        command.append("xnet_benchmark_openmp_probe")
     with build_log.open("w", encoding="utf-8") as log:
         build = subprocess.run(
             command,
@@ -456,6 +460,39 @@ def observe_offload(
         "executable_sha256": sha256(probe),
         "observations": observations,
     }
+
+
+def observe_openmp(
+    record: Path,
+    launcher: list[str],
+    probe: Path | None,
+) -> dict[str, object] | None:
+    """Run the capture-built OpenMP team/placement probe."""
+    if probe is None:
+        return None
+    if not probe.is_file() or not os.access(probe, os.X_OK):
+        raise BenchmarkError("OpenMP build did not produce its placement probe")
+    transcript = retain_command_output(
+        record,
+        "openmp-probe",
+        [*launcher, str(probe)],
+    )
+    observations = []
+    for line in (record / transcript["path"]).read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) == 11 and fields[:2] == ["XNET_BENCHMARK_OPENMP", "rank"]:
+            observations.append(
+                {
+                    "rank": fields[2],
+                    "thread": int(fields[4]),
+                    "team": int(fields[6]),
+                    "place": int(fields[8]),
+                    "binding": int(fields[10]),
+                }
+            )
+    if transcript["status"] != 0 or not observations:
+        raise BenchmarkError("OpenMP probe did not report its team placement")
+    return {"probe": transcript, "observations": observations}
 
 
 def environment_identity() -> dict[str, str]:
@@ -785,6 +822,13 @@ def main() -> int:
         if profile["dimensions"]["gpu"] == "ON"
         else None,
     )
+    openmp_probe = observe_openmp(
+        record,
+        launcher,
+        build_dir / "bin" / "xnet_benchmark_openmp_probe"
+        if profile["dimensions"]["openmp"] == "ON"
+        else None,
+    )
 
     repetitions = [
         capture_repetition(
@@ -806,6 +850,7 @@ def main() -> int:
         "requested_threads": args.threads,
         "launcher_probe": launcher_probe,
         "offload_probe": offload_probe,
+        "openmp_probe": openmp_probe,
         "accelerator_evidence": accelerator,
         "xnet_topology": topology,
         "affinity": operational["affinity"],

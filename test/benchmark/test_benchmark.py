@@ -232,6 +232,78 @@ def main(record: Path) -> None:
             "runtime affinity evidence",
         )
 
+        changed_probe_summary = copy_record(
+            temporary_path,
+            record,
+            "changed-probe-summary",
+        )
+        document = read_document(changed_probe_summary)
+        observations = document["capture"]["runtime"]["launcher_probe"][
+            "observations"
+        ]
+        observations[0]["host"] = "fabricated-host"
+        write_document(changed_probe_summary, document)
+        reject(
+            "launcher summary without transcript evidence",
+            changed_probe_summary,
+            root,
+            "execution probe summary disagrees with transcript",
+        )
+
+        changed_probe_transcript = copy_record(
+            temporary_path,
+            record,
+            "changed-probe-transcript",
+        )
+        document = read_document(changed_probe_transcript)
+        probe = document["capture"]["runtime"]["launcher_probe"]["probe"]
+        transcript = changed_probe_transcript / probe["path"]
+        transcript.write_text(
+            transcript.read_text(encoding="utf-8").replace(
+                '"host":',
+                '"untrusted_host":',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        probe["sha256"] = hashlib.sha256(transcript.read_bytes()).hexdigest()
+        write_document(changed_probe_transcript, document)
+        reject(
+            "launcher transcript without matching summary",
+            changed_probe_transcript,
+            root,
+            "execution probe summary disagrees with transcript",
+        )
+
+        changed_topology = copy_record(
+            temporary_path,
+            record,
+            "changed-topology-transcript",
+        )
+        diagnostic = changed_topology / "repetitions" / "1" / "net_diag01"
+        original = diagnostic.read_text(encoding="utf-8")
+        changed, count = re.subn(
+            r"^MyId\s+0\s+1\s*$",
+            "MyId 9 1",
+            original,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if count != 1:
+            raise RuntimeError("test record lacks a mutable MyId topology record")
+        diagnostic.write_text(changed, encoding="utf-8")
+        document = read_document(changed_topology)
+        for worker in document["repetitions"][0]["worker_metrics"]:
+            if worker["path"].endswith("/net_diag01"):
+                worker["sha256"] = hashlib.sha256(diagnostic.read_bytes()).hexdigest()
+        write_document(changed_topology, document)
+        reject(
+            "raw XNet topology without matching summary",
+            changed_topology,
+            root,
+            "retained XNet topology disagrees with runtime summary",
+        )
+
         changed_composition = copy_record(
             temporary_path,
             record,

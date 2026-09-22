@@ -26,7 +26,10 @@ from benchmark import (
     inventory,
     load_regression,
     manifest_digest,
+    parse_device_probe,
     parse_diagnostic_metrics,
+    parse_execution_probe,
+    parse_openmp_probe,
     read_registry,
     require_clean_repository,
     run_timed_and_compare,
@@ -389,14 +392,7 @@ def observe_launcher(record: Path, launcher: list[str]) -> dict[str, object]:
     )
     argv = [*launcher, sys.executable, "-c", code]
     transcript = retain_command_output(record, "execution-probe", argv)
-    path = record / transcript["path"]
-    observations = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("XNET_EXECUTION_PROBE "):
-            try:
-                observations.append(json.loads(line.removeprefix("XNET_EXECUTION_PROBE ")))
-            except json.JSONDecodeError as error:
-                raise BenchmarkError("malformed launcher probe output") from error
+    observations = parse_execution_probe(record / transcript["path"])
     scheduler_names = (
         "SLURM_JOB_ID", "SLURM_NODELIST", "SLURM_JOB_NUM_NODES",
         "SLURM_NTASKS", "SLURM_CPUS_PER_TASK", "SLURM_GPUS",
@@ -434,22 +430,7 @@ def observe_offload(
         raise BenchmarkError("accelerator build did not produce its device probe")
     argv = [*launcher, str(probe)]
     transcript = retain_command_output(record, "offload-probe", argv)
-    text = (record / transcript["path"]).read_text(encoding="utf-8")
-    observations = []
-    for line in text.splitlines():
-        fields = line.split()
-        if len(fields) == 15 and fields[:2] == ["XNET_BENCHMARK_DEVICE", "rank"]:
-            observations.append(
-                {
-                    "rank": fields[2],
-                    "device": int(fields[4]),
-                    "device_count": int(fields[6]),
-                    "offloaded": fields[8].upper() == "T",
-                    "data_present": fields[10].upper() == "T",
-                    "info": int(fields[12]),
-                    "residual": float(fields[14]),
-                }
-            )
+    observations = parse_device_probe(record / transcript["path"])
     if (
         transcript["status"] != 0
         or not observations
@@ -485,19 +466,7 @@ def observe_openmp(
         "openmp-probe",
         [*launcher, str(probe)],
     )
-    observations = []
-    for line in (record / transcript["path"]).read_text(encoding="utf-8").splitlines():
-        fields = line.split()
-        if len(fields) == 11 and fields[:2] == ["XNET_BENCHMARK_OPENMP", "rank"]:
-            observations.append(
-                {
-                    "rank": fields[2],
-                    "thread": int(fields[4]),
-                    "team": int(fields[6]),
-                    "place": int(fields[8]),
-                    "binding": int(fields[10]),
-                }
-            )
+    observations = parse_openmp_probe(record / transcript["path"])
     if transcript["status"] != 0 or not observations:
         raise BenchmarkError("OpenMP probe did not report its team placement")
     return {"probe": transcript, "observations": observations}

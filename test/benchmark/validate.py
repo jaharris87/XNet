@@ -21,11 +21,15 @@ from benchmark import (
     inventory,
     load_regression,
     manifest_digest,
+    parse_device_probe,
     read_record,
     read_registry,
     parse_diagnostic_metrics,
+    parse_execution_probe,
+    parse_openmp_probe,
     parse_worker_states,
     sha256,
+    worker_topology,
 )
 
 HARNESS_FILES = {
@@ -218,7 +222,8 @@ def validate_runtime_evidence(
     profile: dict[str, Any],
     runtime: object,
     run_argv: list[str],
-    expected_executable: str, environment: dict[str, object],
+    expected_executable: str,
+    environment: dict[str, object],
 ) -> None:
     """Require observed execution facts, not merely a profile label."""
     if not isinstance(runtime, dict):
@@ -290,19 +295,59 @@ def validate_runtime_evidence(
     expected_ranks = {(rank, ranks) for rank in range(ranks)}
     if rank_records != expected_ranks:
         raise BenchmarkError("XNet rank topology does not match requested launcher ranks")
+    allocation = probe.get("allocation")
+    needs_placement = any(
+        dimensions[name] == "ON" for name in ("mpi", "openmp", "gpu")
+    )
+    placement_policy = profile.get("placement_policy")
+    if placement_policy not in {
+        "none",
+        "distinct-thread-places",
+        "disjoint-rank-affinity",
+        "bound-ranks-and-device",
+        "disjoint-rank-affinity-and-device",
+    }:
+        raise BenchmarkError("execution profile lacks a supported placement policy")
+    if needs_placement and (
+        len(observations) != ranks
+        or any(
+            not isinstance(item, dict)
+            or not item.get("host")
+            or not isinstance(item.get("affinity"), list)
+            or not item["affinity"]
+            for item in observations
+        )
+    ):
+        raise BenchmarkError("launcher probe lacks host or binding evidence")
+    if needs_placement and (
+        not isinstance(allocation, dict)
+        or allocation.get("kind") not in {"scheduler", "unscheduled-local"}
+    ):
+        raise BenchmarkError("parallel profile lacks observed allocation context")
+    if needs_placement and allocation["kind"] == "scheduler":
+        scheduler = allocation.get("environment")
+        if not isinstance(scheduler, dict) or "SLURM_JOB_ID" not in scheduler:
+            raise BenchmarkError("parallel profile lacks supported Slurm allocation evidence")
+        try:
+            slurm_ranks = int(scheduler["SLURM_NTASKS"])
+            slurm_threads = int(scheduler["SLURM_CPUS_PER_TASK"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise BenchmarkError("Slurm allocation lacks rank or thread counts") from error
+        if slurm_ranks != ranks:
+            raise BenchmarkError("Slurm task count does not match requested ranks")
+        if slurm_threads < threads:
+            raise BenchmarkError("Slurm CPUs per task do not cover requested threads")
     if dimensions["mpi"] == "ON":
         observed_ranks = {item.get("rank") for item in observations if isinstance(item, dict)}
         if observed_ranks != {str(rank) for rank in range(ranks)}:
             raise BenchmarkError("launcher probe rank IDs do not match XNet ranks")
-        if len(observations) != ranks or any(not item.get("host") or not item.get("affinity") for item in observations if isinstance(item, dict)):
-            raise BenchmarkError("launcher probe lacks host or binding evidence")
-        allocation = probe.get("allocation")
-        if not isinstance(allocation, dict) or allocation.get("kind") not in {
-            "scheduler", "unscheduled-local"
-        }:
-            raise BenchmarkError("parallel profile lacks observed allocation context")
-        if allocation["kind"] == "scheduler" and not allocation.get("environment"):
-            raise BenchmarkError("parallel profile lacks observed scheduler allocation")
+        affinity_by_host: dict[str, list[set[int]]] = {}
+        for item in observations:
+            affinity_by_host.setdefault(item["host"], []).append(set(item["affinity"]))
+        for host_affinities in affinity_by_host.values():
+            for index, affinity in enumerate(host_affinities):
+                if any(affinity & other for other in host_affinities[index + 1 :]):
+                    raise BenchmarkError("MPI ranks do not have disjoint CPU affinity")
     if dimensions["openmp"] == "ON":
         teams = {
             (item.get("rank"), item.get("thread"), item.get("team"))
@@ -341,6 +386,15 @@ def validate_runtime_evidence(
             for item in placement
         ):
             raise BenchmarkError("OpenMP placement probe lacks active thread binding")
+        places_by_rank: dict[str, set[int]] = {}
+        for item in placement:
+            places_by_rank.setdefault(str(item["rank"]), set()).add(item["place"])
+        if any(len(places) != threads for places in places_by_rank.values()):
+            raise BenchmarkError("OpenMP threads do not occupy distinct bound places")
+        for item in observations:
+            affinity = item.get("affinity") if isinstance(item, dict) else None
+            if not isinstance(affinity, list) or len(set(affinity)) < threads:
+                raise BenchmarkError("launcher affinity cannot cover requested OpenMP threads")
     if dimensions["gpu"] == "ON":
         accelerator_evidence = runtime.get("accelerator_evidence")
         if (
@@ -365,11 +419,19 @@ def validate_runtime_evidence(
             or item["device_count"] < 1
             or not isinstance(item.get("device"), int)
             or item["device"] < 0
+            or item["device"] >= item["device_count"]
             or item.get("info") != 0
             or as_finite_nonnegative(item.get("residual"), "invalid device residual") > 1.0e-12
             for item in device_rows
         ):
             raise BenchmarkError("accelerator offload probe did not prove device execution")
+        if isinstance(allocation, dict) and allocation.get("kind") == "scheduler":
+            scheduler = allocation.get("environment", {})
+            if not any(
+                scheduler.get(name)
+                for name in ("SLURM_GPUS", "SLURM_GPUS_PER_NODE", "SLURM_GPUS_PER_TASK")
+            ):
+                raise BenchmarkError("Slurm allocation lacks GPU resource evidence")
         launcher_by_rank = {
             str(item.get("rank") if item.get("rank") is not None else 0): item
             for item in observations
@@ -516,7 +578,7 @@ def validate_capture_provenance(
     ):
         raise BenchmarkError("compiler provenance does not match the build config")
 
-    def validate_transcript(name: str, entry: object) -> None:
+    def validate_transcript(name: str, entry: object) -> Path:
         if not isinstance(entry, dict):
             raise BenchmarkError(f"capture lacks {name} provenance")
         path = entry.get("path")
@@ -536,6 +598,7 @@ def validate_capture_provenance(
         )
         if not artifact.is_file() or sha256(artifact) != digest:
             raise BenchmarkError(f"retained {name} evidence hash mismatch")
+        return artifact
 
     validate_transcript("compiler version", compiler.get("version"))
     compiler_version = compiler["version"]
@@ -545,11 +608,20 @@ def validate_capture_provenance(
         validate_transcript(name, operational.get(name))
     runtime_claim = capture.get("runtime")
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("launcher_probe"), dict):
-        validate_transcript("execution probe", runtime_claim["launcher_probe"].get("probe"))
+        probe = runtime_claim["launcher_probe"]
+        transcript = validate_transcript("execution probe", probe.get("probe"))
+        if parse_execution_probe(transcript) != probe.get("observations"):
+            raise BenchmarkError("execution probe summary disagrees with transcript")
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("offload_probe"), dict):
-        validate_transcript("offload probe", runtime_claim["offload_probe"].get("probe"))
+        probe = runtime_claim["offload_probe"]
+        transcript = validate_transcript("offload probe", probe.get("probe"))
+        if parse_device_probe(transcript) != probe.get("observations"):
+            raise BenchmarkError("offload probe summary disagrees with transcript")
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("openmp_probe"), dict):
-        validate_transcript("OpenMP probe", runtime_claim["openmp_probe"].get("probe"))
+        probe = runtime_claim["openmp_probe"]
+        transcript = validate_transcript("OpenMP probe", probe.get("probe"))
+        if parse_openmp_probe(transcript) != probe.get("observations"):
+            raise BenchmarkError("OpenMP probe summary disagrees with transcript")
     if isinstance(runtime_claim, dict) and runtime_claim.get("accelerator_evidence") is not None:
         accelerator = runtime_claim["accelerator_evidence"]
         if not isinstance(accelerator, dict) or accelerator.get("backend") != runtime_claim.get("gpu_backend"):
@@ -669,6 +741,7 @@ def validate_repetition(
     record: Path,
     comparison_paths: dict[str, Path],
     factory_name: str,
+    expected_topology: dict[str, object],
 ) -> None:
     if not isinstance(repetition, dict):
         raise BenchmarkError("malformed repetition")
@@ -784,6 +857,8 @@ def validate_repetition(
         or parsed_sections != checked_sections
     ):
         raise BenchmarkError("retained diagnostics disagree with repetition summary")
+    if worker_topology(diagnostics) != expected_topology:
+        raise BenchmarkError("retained XNet topology disagrees with runtime summary")
     composition = artifact / "composition_error_norms.json"
     artifacts = repetition.get("artifacts")
     composition_entry = (
@@ -920,6 +995,10 @@ def main() -> int:
         raise BenchmarkError("missing repetition list")
     if requested < 1 or len(repetitions) != requested:
         raise BenchmarkError("missing or short repetition list")
+    runtime = capture.get("runtime") if isinstance(capture, dict) else None
+    topology = runtime.get("xnet_topology") if isinstance(runtime, dict) else None
+    if not isinstance(topology, dict):
+        raise BenchmarkError("capture lacks XNet topology evidence")
     for number, repetition in enumerate(repetitions, start=1):
         validate_repetition(
             repetition,
@@ -928,6 +1007,7 @@ def main() -> int:
             record,
             comparison_paths,
             case.workload["regression_factory"],
+            topology,
         )
 
     validate_inventory(record)

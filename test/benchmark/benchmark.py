@@ -281,6 +281,65 @@ def worker_topology(paths: Iterable[Path]) -> dict[str, list[dict[str, int]]]:
     }
 
 
+def parse_execution_probe(path: Path) -> list[dict[str, Any]]:
+    """Reparse rank/host/affinity observations from a retained probe transcript."""
+    observations = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("XNET_EXECUTION_PROBE "):
+            try:
+                value = json.loads(line.removeprefix("XNET_EXECUTION_PROBE "))
+            except json.JSONDecodeError as error:
+                raise BenchmarkError("malformed launcher probe output") from error
+            if not isinstance(value, dict):
+                raise BenchmarkError("malformed launcher probe output")
+            observations.append(value)
+    return observations
+
+
+def parse_openmp_probe(path: Path) -> list[dict[str, Any]]:
+    """Reparse OpenMP team/place observations from a retained transcript."""
+    observations = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) == 11 and fields[:2] == ["XNET_BENCHMARK_OPENMP", "rank"]:
+            try:
+                observations.append(
+                    {
+                        "rank": fields[2],
+                        "thread": int(fields[4]),
+                        "team": int(fields[6]),
+                        "place": int(fields[8]),
+                        "binding": int(fields[10]),
+                    }
+                )
+            except ValueError as error:
+                raise BenchmarkError("malformed OpenMP probe output") from error
+    return observations
+
+
+def parse_device_probe(path: Path) -> list[dict[str, Any]]:
+    """Reparse device/offload observations from a retained probe transcript."""
+    observations = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) == 15 and fields[:2] == ["XNET_BENCHMARK_DEVICE", "rank"]:
+            try:
+                observations.append(
+                    {
+                        "rank": fields[2],
+                        "device": int(fields[4]),
+                        "device_count": int(fields[6]),
+                        "offloaded": fields[8].upper() == "T",
+                        "data_present": fields[10].upper() == "T",
+                        "info": int(fields[12]),
+                        "residual": float(fields[14]),
+                    }
+                )
+            except ValueError as error:
+                raise BenchmarkError("malformed device probe output") from error
+    return observations
+
+
 def parse_worker_states(regression: Any, case: Any, paths: Iterable[Path]) -> tuple[Any, ...]:
     """Parse all worker diagnostics and return one ordered state per global zone."""
     by_zone: dict[int, Any] = {}

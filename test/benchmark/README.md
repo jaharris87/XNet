@@ -69,8 +69,10 @@ network/input provenance, and accepted numerical references are complete.
 MPI captures require `--launcher 'mpiexec -n N'`, `--ranks N`, and the actual
 thread count. The harness runs its own probe through that exact launcher and
 checks the observed rank IDs, hosts, CPU affinity, allocation context, and
-XNet's own `MyId` records. OpenMP captures additionally require the requested
-`OMP_NUM_THREADS`; XNet's per-thread diagnostic headers prove the actual team.
+XNet's own `MyId` records. MPI ranks on the same host must have disjoint CPU
+affinity. OpenMP captures additionally require the requested
+`OMP_NUM_THREADS`; XNet's per-thread diagnostic headers prove the actual team,
+and every requested thread must occupy a distinct bound place.
 Caller-authored placement JSON is neither accepted nor trusted.
 OpenMP and one-rank accelerator profiles accept an optional site launcher such
 as `srun`; MPI profiles require one. Site compiler selections are explicit,

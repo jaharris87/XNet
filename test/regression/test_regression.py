@@ -158,6 +158,68 @@ def test_default_template_matches_compiled_defaults(
     assert template_resolved == compiled_resolved
 
 
+def test_resolved_namelist_escapes_and_round_trips_character_values(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    first_directory = _prepared_configuration_work_directory(tmp_path, "quoted-input")
+    quoted_configuration = _minimal_standalone_configuration().replace(
+        "&xnet_config",
+        "&xnet_config\n description(1) = 'O''Brien test',\n"
+        " ev_file_base = 'O''Brien_',",
+    )
+    (first_directory / "controls.nml").write_text(
+        quoted_configuration, encoding="utf-8"
+    )
+    first_result = _run_raw_configuration(
+        xnet_executable, first_directory, xnet_timeout
+    )
+    assert first_result.returncode == 0, first_result.stdout + first_result.stderr
+    first_resolved = (first_directory / "controls.resolved.nml").read_text(
+        encoding="utf-8"
+    )
+    assert "description(1) = 'O''Brien test'" in first_resolved
+    assert "ev_file_base = 'O''Brien_'" in first_resolved
+
+    second_directory = _prepared_configuration_work_directory(tmp_path, "quoted-resolved")
+    (second_directory / "controls.nml").write_text(
+        first_resolved, encoding="utf-8"
+    )
+    second_result = _run_raw_configuration(
+        xnet_executable, second_directory, xnet_timeout
+    )
+    assert second_result.returncode == 0, second_result.stdout + second_result.stderr
+    second_resolved = (second_directory / "controls.resolved.nml").read_text(
+        encoding="utf-8"
+    )
+    assert second_resolved == first_resolved
+
+
+@pytest.mark.parametrize(
+    ("setting", "expected"),
+    (
+        ("ijac = 0,", "ijac must be positive"),
+        ("tdel_maxmult = 0.0,", "tdel_maxmult must be positive"),
+    ),
+)
+def test_namelist_rejects_controls_used_as_divisors(
+    xnet_executable: Path,
+    xnet_timeout: float,
+    tmp_path: Path,
+    setting: str,
+    expected: str,
+) -> None:
+    work_directory = _prepared_configuration_work_directory(
+        tmp_path, setting.split()[0]
+    )
+    configuration = _minimal_standalone_configuration().replace(
+        "&xnet_config", f"&xnet_config\n {setting}"
+    )
+    (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert expected in result.stdout + result.stderr
+
+
 def test_namelist_include_precedence_and_nested_relative_paths(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path
 ) -> None:

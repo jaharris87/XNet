@@ -23,7 +23,8 @@ The supported namelist names match the fields: `description`, `szone`,
 `kitmx`, `ijac`, `iconvc`, `changemx`, `yacc`, `tolm`, `tolc`, `ymin`,
 `tdel_maxmult`, `iheat`, `changemxt`, `tolt9`, `t9nse`, `ineutrino`,
 `idiag`, `itsout`, `ev_file_base`, `bin_file_base`, `nnucout`,
-`output_nuclei`, `data_dir`, `inab_files`, and `thermo_files`.
+`output_nuclei`, `data_dir`, `inab_files`, and `thermo_files`. The additional
+`include` key names ordered configuration layers; it is not an XNet control.
 
 An input can name up to 16 direct `include` files. XNet reads the including file,
 then reads listed includes in their listed order; a later include overrides an

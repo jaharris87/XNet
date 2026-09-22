@@ -205,8 +205,12 @@ Contains
       message = 'szone must select an existing zone'
     ElseIf ( controls%isolv /= 1 .and. controls%isolv /= 3 ) Then
       message = 'isolv must be 1 (BE) or 3 (BDF)'
+    ElseIf ( controls%ijac < 1 ) Then
+      message = 'ijac must be positive'
     ElseIf ( controls%nzbatchmx < 1 .or. controls%kitmx < 1 .or. controls%kstmx < 1 ) Then
       message = 'batch, iteration, and step limits must be positive'
+    ElseIf ( controls%tdel_maxmult <= 0.0_dp ) Then
+      message = 'tdel_maxmult must be positive'
     ElseIf ( controls%tolc <= 0.0_dp .or. controls%tolm <= 0.0_dp .or. controls%ymin < 0.0_dp ) Then
       message = 'integration tolerances must be positive and ymin nonnegative'
     EndIf
@@ -617,30 +621,26 @@ Contains
     nparts = 0
     first = 1
 
-    Do While ( first <= input_length )
-      Do While ( first <= input_length )
-        If ( input_path(first:first) /= '/' ) Exit
-        first = first + 1
-      EndDo
-      If ( first > input_length ) Exit
-      last = first
-      Do While ( last <= input_length )
-        If ( input_path(last:last) == '/' ) Exit
-        last = last + 1
-      EndDo
+    ! Treat the end of the input as a final separator so every component is handled in one loop.
+    Do last = 1, input_length+1
+      If ( last <= input_length ) Then
+        If ( input_path(last:last) /= '/' ) Cycle
+      EndIf
 
-      If ( input_path(first:last-1) == '.' ) Then
-        Continue
-      ElseIf ( input_path(first:last-1) == '..' ) Then
-        If ( nparts > 0 .and. Trim(part(nparts)) /= '..' ) Then
-          nparts = nparts - 1
-        ElseIf ( .not. absolute ) Then
+      If ( last > first ) Then
+        If ( input_path(first:last-1) == '.' ) Then
+          Continue
+        ElseIf ( input_path(first:last-1) == '..' ) Then
+          If ( nparts > 0 .and. Trim(part(nparts)) /= '..' ) Then
+            nparts = nparts - 1
+          ElseIf ( .not. absolute ) Then
+            nparts = nparts + 1
+            part(nparts) = '..'
+          EndIf
+        Else
           nparts = nparts + 1
-          part(nparts) = '..'
+          part(nparts) = input_path(first:last-1)
         EndIf
-      Else
-        nparts = nparts + 1
-        part(nparts) = input_path(first:last-1)
       EndIf
       first = last + 1
     EndDo
@@ -913,6 +913,34 @@ Contains
     Return
   End Subroutine read_controls
 
+  Character(160) Function escape_namelist_string(value)
+    !-----------------------------------------------------------------------------------------------
+    ! This function doubles apostrophes so a character value remains valid inside a single-quoted
+    ! Fortran namelist value.  Configuration character controls are at most 80 characters long.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: value
+
+    ! Local variables
+    Integer :: i, output_position
+
+    escape_namelist_string = ' '
+    output_position = 1
+    Do i = 1, Len_Trim(value)
+      If ( value(i:i) == "'" ) Then
+        escape_namelist_string(output_position:output_position+1) = "''"
+        output_position = output_position + 2
+      Else
+        escape_namelist_string(output_position:output_position) = value(i:i)
+        output_position = output_position + 1
+      EndIf
+    EndDo
+
+    Return
+  End Function escape_namelist_string
+
   Subroutine write_resolved_controls(controls,filename)
     !-----------------------------------------------------------------------------------------------
     ! This routine writes the fully resolved controls as a human-readable reproducibility artifact.
@@ -932,7 +960,8 @@ Contains
     Write(lun,'(a)') '! Resolved defaults and layered overrides used for this run.'
     Write(lun,'(a)') '&xnet_config'
     Do i = 1, 3
-      Write(lun,'(a,i0,a,a,a)') '  description(',i,") = '",Trim(controls%description(i)),"',"
+      Write(lun,'(a,i0,a,a,a)') '  description(',i,") = '", &
+        & Trim(escape_namelist_string(controls%description(i))),"',"
     EndDo
     Write(lun,'(a,i0,a)') '  szone = ',controls%szone,','
     Write(lun,'(a,i0,a)') '  nzone = ',controls%nzone,','
@@ -958,16 +987,19 @@ Contains
     Write(lun,'(a,i0,a)') '  ineutrino = ',controls%ineutrino,','
     Write(lun,'(a,i0,a)') '  idiag = ',controls%idiag,','
     Write(lun,'(a,i0,a)') '  itsout = ',controls%itsout,','
-    Write(lun,'(3a)') "  ev_file_base = '",Trim(controls%ev_file_base),"',"
-    Write(lun,'(3a)') "  bin_file_base = '",Trim(controls%bin_file_base),"',"
+    Write(lun,'(3a)') "  ev_file_base = '",Trim(escape_namelist_string(controls%ev_file_base)),"',"
+    Write(lun,'(3a)') "  bin_file_base = '",Trim(escape_namelist_string(controls%bin_file_base)),"',"
     Write(lun,'(a,i0,a)') '  nnucout = ',controls%nnucout,','
     Do i = 1, controls%nnucout
-      Write(lun,'(a,i0,a,a,a)') '  output_nuclei(',i,") = '",Trim(controls%output_nuclei(i)),"',"
+      Write(lun,'(a,i0,a,a,a)') '  output_nuclei(',i,") = '", &
+        & Trim(escape_namelist_string(controls%output_nuclei(i))),"',"
     EndDo
-    Write(lun,'(3a)') "  data_dir = '",Trim(controls%data_dir),"',"
+    Write(lun,'(3a)') "  data_dir = '",Trim(escape_namelist_string(controls%data_dir)),"',"
     Do i = 1, controls%nzone
-      Write(lun,'(a,i0,a,a,a)') '  inab_files(',i,") = '",Trim(controls%inab_files(i)),"',"
-      Write(lun,'(a,i0,a,a,a)') '  thermo_files(',i,") = '",Trim(controls%thermo_files(i)),"',"
+      Write(lun,'(a,i0,a,a,a)') '  inab_files(',i,") = '", &
+        & Trim(escape_namelist_string(controls%inab_files(i))),"',"
+      Write(lun,'(a,i0,a,a,a)') '  thermo_files(',i,") = '", &
+        & Trim(escape_namelist_string(controls%thermo_files(i))),"',"
     EndDo
     Write(lun,'(a)') '/'
     Close(lun)

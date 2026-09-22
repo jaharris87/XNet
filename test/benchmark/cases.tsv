@@ -1,6 +1,0 @@
-# case_id	network_axis	species_count	workload	standalone_status	control	input_set	limitations
-batch_alpha	alpha-small	14	16-zone partial-batch self-heating	ready	test/test_settings_batch + test/Test_Problems/setup_batch_alpha	Data_alpha plus batch trajectories	Retained for historical batch_alpha comparability.
-heat_sn160	SN160	160	6-zone self-heating repeated burn	ready	test/test_settings_heat + test/Test_Problems/setup_heat_sn160	Data_SN160 plus C/O-burn trajectories	Retained for historical heat_sn160 comparability.
-ccsn52	CCSN52	52	CCSN trajectory	candidate	unavailable	private or maintainer-supplied input required	No tracked standalone control and input set at this revision; do not substitute a different CCSN workload.
-ccsn179	CCSN179	179	CCSN trajectory	candidate	unavailable	Data_CCSN179 only	Tracked network data has no tracked matching abundance/trajectory/control for a standalone run.
-ecsn350	ECSN350	350	ECSN trajectory	candidate	unavailable	private capture required	No tracked historical standalone ECSN350 input.  The private ECSN archive is not a Git input and must not be copied into this tree.

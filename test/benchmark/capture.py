@@ -347,15 +347,16 @@ def command_evidence(
     else:
         runtime_command = ["sh", "-c", "printf 'unavailable\\n'"]
 
-    if shutil.which("lscpu"):
-        topology_command = ["lscpu"]
-    elif sys.platform == "darwin":
+    lscpu = shutil.which("lscpu")
+    system_profiler = shutil.which("system_profiler")
+    if lscpu:
+        topology_command = [lscpu]
+    elif sys.platform == "darwin" and system_profiler:
         topology_command = [
-            "sysctl",
-            "-n",
-            "hw.ncpu",
-            "hw.physicalcpu",
-            "hw.memsize",
+            system_profiler,
+            "SPHardwareDataType",
+            "-detailLevel",
+            "mini",
         ]
     else:
         topology_command = ["uname", "-a"]

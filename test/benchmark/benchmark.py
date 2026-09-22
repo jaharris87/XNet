@@ -65,13 +65,22 @@ def read_registry(
     ):
         raise BenchmarkError("invalid cases.json schema")
     cases: dict[str, BenchmarkCase] = {}
+    specifications = document.get("workload_specifications", {})
+    if not isinstance(specifications, dict):
+        raise BenchmarkError("invalid workload specifications")
     for item in document["cases"]:
         try:
+            workload = dict(item["workload"])
+            specification_id = workload.get("specification")
+            if specification_id is not None:
+                if specification_id not in specifications:
+                    raise BenchmarkError("unknown workload specification")
+                workload["specification_definition"] = specifications[specification_id]
             case = BenchmarkCase(
                 item["case_id"],
                 item["status"],
                 item["network"],
-                item["workload"],
+                workload,
                 item.get("expected", {}),
                 item.get("input_identity", {}),
             )

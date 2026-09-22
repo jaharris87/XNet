@@ -1,5 +1,33 @@
 {
   "schema": "xnet-benchmark-cases-v1",
+  "workload_specifications": {
+    "controlled-scaling": {
+      "status": "proposed-awaiting-scientific-approval",
+      "purpose": "isolate algorithmic performance trends across network sizes; not representative CCSN or ECSN physics",
+      "thermodynamic_history": {
+        "time_seconds": [0.0, 0.1],
+        "temperature_gk": [1.7, 1.7],
+        "density_g_cm3": [100000000.0, 100000000.0],
+        "electron_fraction": 0.5,
+        "self_heating": false
+      },
+      "composition": {
+        "basis": "mass-fraction",
+        "values": {"c12": 0.5, "o16": 0.5},
+        "projection": "identity for C12 and O16; every other network species is zero",
+        "excluded_mass_fraction": 0.0,
+        "renormalization": "none",
+        "sum_a_times_y": 1.0,
+        "sum_z_times_y": 0.5
+      },
+      "matrix_dimensions": {
+        "fixed_total_zones": 256,
+        "partial_final_batch_zones": 257,
+        "cpu_thread_scaling_nzbatchmx": 1,
+        "gpu_batch_sizes": [1, 4, 16, 64]
+      }
+    }
+  },
   "execution_profiles": {
     "serial-dense": {
       "launcher": "direct",
@@ -48,7 +76,8 @@
       "workload": {
         "id": "controlled-scaling-alpha",
         "family": "controlled-scaling",
-        "description": "Awaiting reviewed common state and composition projection."
+        "specification": "controlled-scaling",
+        "description": "Proposed common fixed C/O state; awaiting scientific approval and an accepted reference."
       }
     },
     {
@@ -58,7 +87,8 @@
       "workload": {
         "id": "controlled-scaling-ccsn52",
         "family": "controlled-scaling",
-        "description": "Awaiting reviewed common state and composition projection."
+        "specification": "controlled-scaling",
+        "description": "Proposed common fixed C/O state; awaiting scientific approval, an authorized exact species list, generated inputs, and an accepted reference."
       }
     },
     {
@@ -68,7 +98,8 @@
       "workload": {
         "id": "controlled-scaling-sn160",
         "family": "controlled-scaling",
-        "description": "Awaiting reviewed common state and composition projection."
+        "specification": "controlled-scaling",
+        "description": "Proposed common fixed C/O state; awaiting scientific approval, regenerated controlled inputs, and an accepted reference."
       }
     },
     {
@@ -78,7 +109,8 @@
       "workload": {
         "id": "controlled-scaling-ccsn179",
         "family": "controlled-scaling",
-        "description": "Awaiting reviewed common state and composition projection."
+        "specification": "controlled-scaling",
+        "description": "Proposed common fixed C/O state; awaiting scientific approval, generated controlled inputs, and an accepted reference."
       }
     },
     {
@@ -88,7 +120,8 @@
       "workload": {
         "id": "controlled-scaling-ecsn350",
         "family": "controlled-scaling",
-        "description": "Awaiting reviewed common state and composition projection."
+        "specification": "controlled-scaling",
+        "description": "Proposed common fixed C/O state; awaiting scientific approval, a redistributable exact species list or new descriptive network rule, generated inputs, and an accepted reference."
       }
     },
     {

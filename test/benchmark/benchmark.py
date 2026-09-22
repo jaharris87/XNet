@@ -98,16 +98,16 @@ def case_inputs(repository: Path, regression_case: Any) -> list[Path]:
     return sorted(unique, key=lambda path: path.relative_to(repository).as_posix())
 
 
-def copy_input_bundle(repository: Path, record: Path, inputs: Iterable[Path]) -> list[dict[str, str]]:
-    bundle = record / "input-bundle"
+def input_manifest(repository: Path, inputs: Iterable[Path]) -> list[dict[str, str]]:
     entries = []
     for source in inputs:
         relative = source.resolve().relative_to(repository).as_posix()
-        target = bundle / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        entries.append({"path": relative, "sha256": sha256(target)})
+        entries.append({"path": relative, "sha256": sha256(source)})
     return entries
+
+
+def manifest_digest(entries: Iterable[dict[str, str]]) -> str:
+    return hashlib.sha256(json.dumps(sorted(entries, key=lambda item: item["path"]), separators=(",", ":"), sort_keys=True).encode()).hexdigest()
 
 
 def parse_diagnostic_metrics(path: Path) -> tuple[dict[str, float], dict[str, int]]:
@@ -121,14 +121,13 @@ def parse_diagnostic_metrics(path: Path) -> tuple[dict[str, float], dict[str, in
             except ValueError:
                 continue
     counters = {"end_records": len(re.findall(r"^End\s", text, re.MULTILINE)), "timer_sections": text.count("Timers Summary:")}
-    for label in ("Number of timesteps", "Number of Newton iterations", "Number of Jacobian evaluations"):
-        match = re.search(re.escape(label) + r"\\s*[:=]?\\s*(\\d+)", text)
-        if match:
-            counters[label.lower().replace(" ", "_")] = int(match.group(1))
+    rows = re.findall(r"^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", text, re.MULTILINE)
+    if rows:
+        counters["zones"] = {zone: {"TS": int(ts), "NR": int(nr), "Jacobian": int(jac), "Deriv": int(deriv), "CrossSect": int(cross)} for zone, ts, nr, jac, deriv, cross in rows}
     return timers, counters
 
 
-def run_timed_and_compare(regression: Any, executable: Path, case: Any, work: Path, timeout_seconds: float) -> tuple[float, str | None]:
+def run_timed_and_compare(regression: Any, executable: Path, case: Any, work: Path, timeout_seconds: float) -> tuple[float, tuple[Any, ...]]:
     """Time only the existing runner's subprocess helper, then characterize it."""
     reference = regression.load_reference(case.reference)
     regression.validate_reference_for_case(case, reference)
@@ -145,7 +144,7 @@ def run_timed_and_compare(regression: Any, executable: Path, case: Any, work: Pa
     regression._write_composition_diagnostics(prepared, diagnostics, reference)
     regression.compare_final_states(states, reference)
     regression.compare_equivalent_zone_groups(states, case.equivalent_zone_groups)
-    return elapsed, None
+    return elapsed, tuple(states)
 
 
 def inventory(record: Path) -> list[dict[str, object]]:

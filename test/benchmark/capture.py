@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 
-from benchmark import (BenchmarkError, HISTORICAL_SHA, case_inputs, copy_input_bundle, inventory, load_regression, parse_diagnostic_metrics, read_cases, require_clean_historical_repository, run_timed_and_compare, sha256, write_json)
+from benchmark import (BenchmarkError, HISTORICAL_SHA, case_inputs, input_manifest, manifest_digest, inventory, load_regression, parse_diagnostic_metrics, read_cases, require_clean_historical_repository, run_timed_and_compare, sha256, write_json)
 
 
 def arguments() -> argparse.Namespace:
@@ -82,7 +82,9 @@ def main() -> int:
             raise BenchmarkError(f"serial-dense execution profile rejects {key}={settings.get(key)!r}")
     shutil.copy2(config, record / "build-config.txt")
     inputs = case_inputs(repository, regression_case)
-    input_manifest = copy_input_bundle(repository, record, inputs)
+    manifest = input_manifest(repository, inputs)
+    if manifest_digest(manifest) != cases[args.case].input_identity.get("manifest_sha256"):
+        raise BenchmarkError("case registry input-manifest binding mismatch")
     repetitions = []
     for number in range(1, args.repetitions + 1):
         artifact = record / "repetitions" / str(number)
@@ -90,13 +92,17 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="xnet-v9-benchmark-") as temporary:
             work = Path(temporary) / "work"
             try:
-                process_wall_seconds, _ = run_timed_and_compare(regression, executable, regression_case, work, args.timeout_seconds)
+                process_wall_seconds, states = run_timed_and_compare(regression, executable, regression_case, work, args.timeout_seconds)
                 numerical = "pass"
                 comparison_error = None
             except Exception as error:  # Preserve comparator diagnostics for failed numerical runs.
                 numerical = "fail"
                 comparison_error = f"{type(error).__name__}: {error}"
-            shutil.copytree(work, artifact)
+            artifact.mkdir()
+            for name in ("net_diag01", "xnet.stdout.txt", "xnet.stderr.txt", "xnet.status.txt", "composition_error_norms.json"):
+                source = work / name
+                if source.is_file():
+                    shutil.copy2(source, artifact / name)
         diagnostic = artifact / "net_diag01"
         timers, counters = parse_diagnostic_metrics(diagnostic) if diagnostic.is_file() else ({}, {})
         expected_zones = cases[args.case].expected["zones"]
@@ -105,11 +111,11 @@ def main() -> int:
         repetitions.append({"number": number, "numerical_result": numerical, "structural_result": "pass" if structural else "fail", "process_wall_seconds": process_wall_seconds if numerical == "pass" else None, "timers_seconds": timers, "counters": counters})
     environment = {key: value for key, value in os.environ.items() if key in {"LOADEDMODULES", "MODULEPATH", "SLURM_JOB_ID", "SLURM_NODELIST", "PBS_JOBID", "LSB_JOBID", "OMP_NUM_THREADS", "CUDA_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES"}}
     environment.update({"platform": platform.platform(), "python": sys.version, "processor": platform.processor(), "host": platform.node(), "uname": " ".join(platform.uname())})
-    document = {"schema": "xnet-v9-benchmark-record-v3", "historical_source_sha": HISTORICAL_SHA, "source_sha": HISTORICAL_SHA, "case": {"case_id": args.case, "network": cases[args.case].network, "workload": cases[args.case].workload, "input_identity": cases[args.case].input_identity}, "execution": {"profile": "serial-dense", "launcher": "none", "dimensions": {"mpi": "OFF", "openmp": "OFF", "gpu": "OFF", "solver": "dense"}}, "capture": {"captured_utc": datetime.now(timezone.utc).isoformat(), "repetitions_requested": args.repetitions, "timeout_seconds": args.timeout_seconds, "harness": harness_identity(), "build": {"config_path": "build-config.txt", "config_sha256": sha256(record / "build-config.txt"), "log_path": "build.log", "log_sha256": sha256(build_log)}, "executable": {"sha256": sha256(executable), "copied": False}, "environment": environment}, "input_bundle": {"type": "copied-historical-regression-inputs", "revision": HISTORICAL_SHA, "path": "input-bundle", "entries": input_manifest}, "expected": cases[args.case].expected, "repetitions": repetitions}
+    document = {"schema": "xnet-v9-benchmark-record-v3", "historical_source_sha": HISTORICAL_SHA, "source_sha": HISTORICAL_SHA, "case": {"case_id": args.case, "network": cases[args.case].network, "workload": cases[args.case].workload, "input_identity": cases[args.case].input_identity}, "execution": {"profile": "serial-dense", "launcher": "none", "dimensions": {"mpi": "OFF", "openmp": "OFF", "gpu": "OFF", "solver": "dense"}}, "capture": {"captured_utc": datetime.now(timezone.utc).isoformat(), "repetitions_requested": args.repetitions, "timeout_seconds": args.timeout_seconds, "harness": harness_identity(), "build": {"config_path": "build-config.txt", "config_sha256": sha256(record / "build-config.txt"), "log_path": "build.log", "log_sha256": sha256(build_log)}, "executable": {"sha256": sha256(executable), "copied": False}, "environment": environment}, "input_bundle": {"type": "historical-source-manifest", "revision": HISTORICAL_SHA, "entries": manifest, "manifest_sha256": manifest_digest(manifest)}, "expected": cases[args.case].expected, "repetitions": repetitions}
     write_json(record / "record.json", document)
     write_json(record / "inventory.json", inventory(record))
     print(record)
-    return 0
+    return 0 if all(row["structural_result"] == "pass" for row in repetitions) else 1
 
 
 if __name__ == "__main__":

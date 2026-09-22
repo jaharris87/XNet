@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
-from benchmark import BenchmarkError, HISTORICAL_SHA, inventory, read_cases, read_record, sha256
+from benchmark import BenchmarkError, HISTORICAL_SHA, inventory, manifest_digest, read_cases, read_record, sha256
 
 
 def main() -> int:
@@ -39,9 +40,10 @@ def main() -> int:
         if not path or path.startswith("/") or ".." in Path(path).parts or path in seen:
             raise BenchmarkError("malformed input-bundle path")
         seen.add(path)
-        bundled = record / "input-bundle" / path
-        if not bundled.is_file() or sha256(bundled) != entry.get("sha256"):
-            raise BenchmarkError(f"input bundle hash mismatch: {path}")
+        if not isinstance(entry.get("sha256"), str):
+            raise BenchmarkError(f"malformed input hash: {path}")
+    if document.get("input_bundle", {}).get("type") != "historical-source-manifest" or document["input_bundle"].get("revision") != HISTORICAL_SHA or document["input_bundle"].get("manifest_sha256") != manifest_digest(entries) or manifest_digest(entries) != identity.get("manifest_sha256"):
+        raise BenchmarkError("input manifest binding mismatch")
     required_paths = {identity.get(key) for key in ("control", "reference", "helm_table", "comparator")}
     if not required_paths <= seen or not any(path.startswith(identity.get("network_root", "!")) for path in seen):
         raise BenchmarkError("case input identity binding mismatch")
@@ -63,6 +65,11 @@ def main() -> int:
         artifact = record / "repetitions" / str(index)
         if not (artifact / "net_diag01").is_file() or not (artifact / "comparison.json").is_file() or not (artifact / "xnet.stdout.txt").is_file() or not (artifact / "xnet.stderr.txt").is_file():
             raise BenchmarkError("missing retained repetition artifacts")
+        comparison = json.loads((artifact / "comparison.json").read_text(encoding="utf-8"))
+        if comparison.get("result") != "pass" or comparison.get("timing_excluded") is not True:
+            raise BenchmarkError("comparison did not pass outside the timing interval")
+        if (artifact / "xnet.status.txt").read_text(encoding="utf-8").strip() != "return_code=0":
+            raise BenchmarkError("XNet did not retain a zero direct status")
     recorded_inventory = __import__("json").loads((record / "inventory.json").read_text(encoding="utf-8"))
     if recorded_inventory != inventory(record):
         raise BenchmarkError("artifact inventory is incomplete or tampered")

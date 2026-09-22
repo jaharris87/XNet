@@ -417,6 +417,7 @@ def observe_launcher(record: Path, launcher: list[str]) -> dict[str, object]:
         )
         if scheduler_probe["status"] != 0:
             raise BenchmarkError("Slurm allocation query failed")
+        scheduler_probe["tool_sha256"] = sha256(Path(scontrol))
         allocation = {
             "kind": "scheduler",
             "environment": scheduler_environment,

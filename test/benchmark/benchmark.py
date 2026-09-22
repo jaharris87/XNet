@@ -301,7 +301,22 @@ def parse_openmp_probe(path: Path) -> list[dict[str, Any]]:
     observations = []
     for line in path.read_text(encoding="utf-8").splitlines():
         fields = line.split()
-        if len(fields) == 11 and fields[:2] == ["XNET_BENCHMARK_OPENMP", "rank"]:
+        labels = fields[1::2] if len(fields) == 11 else []
+        if fields[:1] == ["XNET_BENCHMARK_OPENMP"] and labels != [
+            "rank",
+            "thread",
+            "team",
+            "place",
+            "binding",
+        ]:
+            raise BenchmarkError("malformed OpenMP probe output")
+        if len(fields) == 11 and labels == [
+            "rank",
+            "thread",
+            "team",
+            "place",
+            "binding",
+        ]:
             try:
                 observations.append(
                     {
@@ -322,7 +337,26 @@ def parse_device_probe(path: Path) -> list[dict[str, Any]]:
     observations = []
     for line in path.read_text(encoding="utf-8").splitlines():
         fields = line.split()
-        if len(fields) == 15 and fields[:2] == ["XNET_BENCHMARK_DEVICE", "rank"]:
+        labels = fields[1::2] if len(fields) == 15 else []
+        if fields[:1] == ["XNET_BENCHMARK_DEVICE"] and labels != [
+            "rank",
+            "device",
+            "count",
+            "offloaded",
+            "data_present",
+            "info",
+            "residual",
+        ]:
+            raise BenchmarkError("malformed device probe output")
+        if len(fields) == 15 and labels == [
+            "rank",
+            "device",
+            "count",
+            "offloaded",
+            "data_present",
+            "info",
+            "residual",
+        ]:
             try:
                 observations.append(
                     {

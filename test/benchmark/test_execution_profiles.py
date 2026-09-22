@@ -15,7 +15,12 @@ from benchmark import (
     parse_slurm_job,
     read_registry,
 )
-from validate import require_transcript_summary, validate_runtime_evidence
+from validate import (
+    require_transcript_summary,
+    validate_accelerator_identity_entry,
+    validate_runtime_evidence,
+    validate_slurm_query_command,
+)
 
 EXECUTABLE = "/build/bin/xnet"
 
@@ -163,7 +168,7 @@ def check_transcript_boundaries() -> None:
         (
             "offload",
             "XNET_BENCHMARK_DEVICE rank 0 device 0 count 1 offloaded T "
-            "present T info 0 residual 0.0\n",
+            "data_present T info 0 residual 0.0\n",
             parse_device_probe,
         ),
         (
@@ -190,6 +195,67 @@ def check_transcript_boundaries() -> None:
                     raise RuntimeError(f"{name}: unexpected transcript rejection") from error
             else:
                 raise RuntimeError(f"false pass: {name} transcript summary")
+
+        malformed_samples = (
+            (
+                "openmp labels",
+                "XNET_BENCHMARK_OPENMP rank 0 banana 0 team 1 place 0 binding 3\n",
+                parse_openmp_probe,
+            ),
+            (
+                "offload labels",
+                "XNET_BENCHMARK_DEVICE rank 0 device 0 nonsense 1 offloaded T "
+                "data_present T info 0 residual 0.0\n",
+                parse_device_probe,
+            ),
+        )
+        for name, text, parser in malformed_samples:
+            transcript = Path(temporary) / f"malformed-{name}.txt"
+            transcript.write_text(text, encoding="utf-8")
+            try:
+                parser(transcript)
+            except BenchmarkError:
+                pass
+            else:
+                raise RuntimeError(f"false pass: malformed {name}")
+
+        slurm_entry = {
+            "argv": ["/usr/bin/scontrol", "show", "job", "1", "--oneliner"],
+            "tool_sha256": "0" * 64,
+        }
+        validate_slurm_query_command(slurm_entry, {"SLURM_JOB_ID": "1"})
+        substituted_slurm = deepcopy(slurm_entry)
+        substituted_slurm["argv"] = ["/bin/echo", "fake allocation"]
+        try:
+            validate_slurm_query_command(
+                substituted_slurm,
+                {"SLURM_JOB_ID": "1"},
+            )
+        except BenchmarkError:
+            pass
+        else:
+            raise RuntimeError("false pass: substituted Slurm query")
+
+        nvidia = Path(temporary) / "nvidia-smi.txt"
+        nvidia.write_text("GPU 0: A100 (UUID: GPU-a)\n", encoding="utf-8")
+        nvidia_entry = {
+            "argv": ["/usr/bin/nvidia-smi", "-L"],
+            "tool_sha256": "0" * 64,
+        }
+        validate_accelerator_identity_entry("CUDA", 1, nvidia_entry, nvidia)
+        substituted_nvidia = deepcopy(nvidia_entry)
+        substituted_nvidia["argv"] = ["/bin/true"]
+        try:
+            validate_accelerator_identity_entry(
+                "CUDA",
+                1,
+                substituted_nvidia,
+                nvidia,
+            )
+        except BenchmarkError:
+            pass
+        else:
+            raise RuntimeError("false pass: substituted accelerator identity command")
 
 
 def main() -> None:
@@ -378,6 +444,18 @@ def main() -> None:
             lambda value: value["launcher_probe"]["allocation"][
                 "scheduler_probe"
             ]["fields"].update(AllocTRES="cpu=2,gres/gpu=nonsense"),
+        ),
+        {},
+        "sufficient GPU allocation",
+    )
+    reject(
+        "insufficient scheduler GPU query",
+        profiles["mpi-accelerator-dense"],
+        mutated(
+            shared_gpu,
+            lambda value: value["launcher_probe"]["allocation"][
+                "scheduler_probe"
+            ]["fields"].update(AllocTRES="cpu=2"),
         ),
         {},
         "sufficient GPU allocation",

@@ -91,6 +91,85 @@ def require_transcript_summary(
         raise BenchmarkError(message)
 
 
+def validate_slurm_query_command(
+    entry: object,
+    scheduler_environment: dict[str, object],
+) -> None:
+    """Bind retained allocation output to the supported scheduler query."""
+    argv = entry.get("argv") if isinstance(entry, dict) else None
+    tool_digest = entry.get("tool_sha256") if isinstance(entry, dict) else None
+    job_id = scheduler_environment.get("SLURM_JOB_ID")
+    if (
+        not isinstance(argv, list)
+        or len(argv) != 5
+        or Path(argv[0]).name != "scontrol"
+        or argv[1:] != ["show", "job", job_id, "--oneliner"]
+        or not isinstance(tool_digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", tool_digest)
+    ):
+        raise BenchmarkError("Slurm allocation command does not match the stored job")
+
+
+def validate_accelerator_identity_entry(
+    backend: str,
+    index: int,
+    entry: object,
+    transcript: Path,
+) -> None:
+    """Bind one vendor identity transcript to its supported command and output."""
+    expected_commands = (
+        (
+            ("nvidia-smi", "-L"),
+            (
+                "nvidia-smi",
+                "--query-gpu=index,uuid,name,driver_version",
+                "--format=csv,noheader",
+            ),
+        )
+        if backend == "CUDA"
+        else (
+            (
+                "rocm-smi",
+                "--showuniqueid",
+                "--showproductname",
+                "--showdriverversion",
+            ),
+        )
+    )
+    if index < 1 or index > len(expected_commands):
+        raise BenchmarkError("accelerator runtime evidence is incomplete")
+    argv = entry.get("argv") if isinstance(entry, dict) else None
+    tool_digest = entry.get("tool_sha256") if isinstance(entry, dict) else None
+    expected = expected_commands[index - 1]
+    if (
+        not isinstance(argv, list)
+        or Path(argv[0]).name != expected[0]
+        or tuple(argv[1:]) != expected[1:]
+        or not isinstance(tool_digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", tool_digest)
+    ):
+        raise BenchmarkError("accelerator identity command does not match backend")
+    output = transcript.read_text(encoding="utf-8", errors="replace")
+    if backend == "CUDA":
+        recognizable = (
+            (index == 1 and "GPU " in output and "UUID:" in output)
+            or (
+                index == 2
+                and any(len(line.split(",")) >= 4 for line in output.splitlines())
+            )
+        )
+    else:
+        recognizable = bool(
+            re.search(
+                r"Unique ID|Device|GPU|Card series|Driver version",
+                output,
+                re.IGNORECASE,
+            )
+        )
+    if not recognizable:
+        raise BenchmarkError("accelerator identity output is not recognizable")
+
+
 def read_config_values(path: Path) -> dict[str, str]:
     return {
         key: value
@@ -700,6 +779,13 @@ def validate_capture_provenance(
                 "Slurm allocation",
                 scheduler_probe.get("probe"),
             )
+            scheduler_environment = allocation.get("environment")
+            if not isinstance(scheduler_environment, dict):
+                raise BenchmarkError("capture lacks Slurm allocation provenance")
+            validate_slurm_query_command(
+                scheduler_probe.get("probe"),
+                scheduler_environment,
+            )
             require_transcript_summary(
                 parse_slurm_job,
                 transcript,
@@ -732,59 +818,12 @@ def validate_capture_provenance(
         if not isinstance(commands, list) or not commands:
             raise BenchmarkError("accelerator runtime evidence is incomplete")
         backend = accelerator["backend"]
-        expected_commands = (
-            (
-                ("nvidia-smi", "-L"),
-                (
-                    "nvidia-smi",
-                    "--query-gpu=index,uuid,name,driver_version",
-                    "--format=csv,noheader",
-                ),
-            )
-            if backend == "CUDA"
-            else (
-                (
-                    "rocm-smi",
-                    "--showuniqueid",
-                    "--showproductname",
-                    "--showdriverversion",
-                ),
-            )
-        )
-        if len(commands) != len(expected_commands):
+        expected_count = 2 if backend == "CUDA" else 1
+        if len(commands) != expected_count:
             raise BenchmarkError("accelerator runtime evidence is incomplete")
         for index, entry in enumerate(commands, start=1):
             transcript = validate_transcript(f"accelerator runtime {index}", entry)
-            argv = entry.get("argv") if isinstance(entry, dict) else None
-            tool_digest = entry.get("tool_sha256") if isinstance(entry, dict) else None
-            expected = expected_commands[index - 1]
-            if (
-                not isinstance(argv, list)
-                or Path(argv[0]).name != expected[0]
-                or tuple(argv[1:]) != expected[1:]
-                or not isinstance(tool_digest, str)
-                or not re.fullmatch(r"[0-9a-f]{64}", tool_digest)
-            ):
-                raise BenchmarkError("accelerator identity command does not match backend")
-            output = transcript.read_text(encoding="utf-8", errors="replace")
-            if backend == "CUDA":
-                recognizable = (
-                    (index == 1 and "GPU " in output and "UUID:" in output)
-                    or (index == 2 and any(
-                        len(line.split(",")) >= 4
-                        for line in output.splitlines()
-                    ))
-                )
-            else:
-                recognizable = bool(
-                    re.search(
-                        r"Unique ID|Device|GPU|Card series|Driver version",
-                        output,
-                        re.IGNORECASE,
-                    )
-                )
-            if not recognizable:
-                raise BenchmarkError("accelerator identity output is not recognizable")
+            validate_accelerator_identity_entry(backend, index, entry, transcript)
     runtime_argv = operational["runtime"]["argv"]
     if (
         Path(runtime_argv[0]).name not in {"ldd", "otool"}

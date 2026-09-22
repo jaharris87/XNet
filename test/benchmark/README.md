@@ -22,23 +22,20 @@ directory per point:
 
 ```sh
 git worktree add /scratch/xnet-v9-staging 86e867c2a64267a674ce4fbf6a3064af39e2f4e0
-make -C /scratch/xnet-v9-staging BUILD_DIR=/scratch/xnet-v9-build -j xnet
 sh test/benchmark/capture.sh \
   --repository /scratch/xnet-v9-staging \
-  --executable /scratch/xnet-v9-build/bin/xnet \
-  --case batch_alpha --placement 'serial; one process; one hardware thread' \
+  --build-dir /scratch/xnet-v9-build \
+  --case batch_alpha \
   --repetitions 5 --records /scratch/xnet-v9-records
 ```
 
-Capture one record per exact build, placement, and case. The required
-`--placement` text names the launcher, process/thread count, CPU or GPU
-binding, and allocated node/device shape. Do not mix serial,
-OpenMP, MPI, GPU, dense, MA48, or partial-batch runs in one record.  Copy the
-facility launcher, affinity, module list, compiler version, and scheduler
-allocation details into an adjacent operator note before interpreting runs.
-MA48 is a candidate only where the maintainer-held licensed source is already
-available; its absence is a limitation, not permission to substitute another
-sparse solver.
+Capture owns a fresh, previously nonexistent build directory and rejects an
+operator-supplied executable. This v2 contract is intentionally limited to a
+direct, one-process serial dense execution: it builds and checks every MPI,
+OpenMP, GPU, and directive selector as `OFF`, and records `launcher=none`.
+It cannot represent launcher, placement, MPI, GPU, MA48, or facility claims.
+Those require a later reviewed capture extension with launcher argv and
+topology evidence; do not label a v2 record as such a run.
 
 Each run starts a fresh standalone process.  `Setup` is the XNet internal
 setup timer (input, initialization, and per-batch preparation); `Total` is
@@ -59,10 +56,9 @@ manifest; retain its command, result, and artifacts beside the record.
 
 ## Record layout
 
-`metadata.tsv` is a two-column source/build/executable/environment/command
-record. The adjacent `build-config.txt` preserves the resolved compiler and
-build selection when the build produced one; the operator note retains the
-module list and environment not represented there. `input.sha256` lists SHA-256 hashes and absolute source paths for the
+`metadata.tsv` has an exact v2 key set; `build.log`, the build configuration,
+and the executable are retained and hash-verified. `input.sha256` has an exact
+header and SHA-256/absolute-path rows which the validator recomputes. It lists
 tracked control, network inputs, trajectories, and Helmholtz table. The network
 tree is copied into each temporary run directory because historical runtime
 preprocessing writes derived files; that prevents a measurement from mutating
@@ -74,13 +70,9 @@ belong outside Git.
 
 ## Facility and coupled future capture
 
-The initial facility matrix is finite: serial dense for both ready cases;
-useful site-approved OpenMP points for both; and, only when a supplied input
-is runnable, one dense and one licensed-MA48 CCSN/SN160-sized point.  GPU or
-partial-batch points retain `batch_alpha` and `heat_sn160`; Frontier and
-Perlmutter material must be a finite smoke/setup job before an allocation
-measurement.  This repository supplies no job submission script here because
-account, queue, launcher, placement, and module choices are facility-specific.
+The v2 matrix is only serial dense for both ready cases. Facility, OpenMP,
+MPI, MA48, GPU, and partial-batch measurements are deferred until a reviewed
+extension can bind actual launcher and topology evidence.
 
 A future authentic CHIMERA or Flash-X capture uses the same source,
 executable, build, topology, raw-repetition, input-identity, and numerical

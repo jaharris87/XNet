@@ -626,57 +626,22 @@ def write_smoke_inputs(directory: Path, helm_table: Path) -> None:
         "1.0e-10 1.0e-2 1.0e4 0.5\n",
         encoding="ascii",
     )
-    species_line = "".join(f"{name:>5}" for name in EXPECTED_SPECIES)
-    count_line = "# Species to output in ASCII output (format 14a5):" + f"{len(EXPECTED_SPECIES):4d}"
-    control = f"""## Problem Description
-build_net interoperability smoke
-one zone and one short interval
-structural completion only
-## Job Controls
-1
-1
-1
-0
-0
-## Neutrinos
-0
-## NSE Initial Conditions
-11.0
-## Integration Controls
-1
-20
-5
-4
-0
-1.0e-1
-1.0e-7
-1.0e-6
-1.0e-4
-1.0e-30
-2.0
-## Self-heating Controls
-0
-1.0e-2
-1.0e-4
-## Zone Batching Controls
-1
-## Output Controls
-0
-0
-# ASCII output filename root, network will append zone number
-ev_build_net_
-# Binary output filename root, network will append zone number
-ts_build_net_
-{count_line}
-{species_line}
-## Input Controls
-# Nuclear Data Directory
-.
-# Initial Abundance and Thermodynamic Trajectory Files
-initial_abundances
-thermo
+    output_species = ", ".join(f"'{name}'" for name in EXPECTED_SPECIES)
+    runtime_config = f"""&xnet_config
+ description = 'build_net interoperability smoke', 'one zone and one short interval',
+   'structural completion only',
+ szone = 1, nzone = 1, iweak0 = 1, iscrn = 0, iprocess = 0,
+ ineutrino = 0, t9nse = 11.0,
+ isolv = 1, kstmx = 20, kitmx = 5, ijac = 4, iconvc = 0,
+ changemx = 1.0e-1, yacc = 1.0e-7, tolm = 1.0e-6, tolc = 1.0e-4,
+ ymin = 1.0e-30, tdel_maxmult = 2.0,
+ iheat = 0, changemxt = 1.0e-2, tolt9 = 1.0e-4, nzbatchmx = 1,
+ idiag = 0, itsout = 0, ev_file_base = 'ev_build_net_', bin_file_base = 'ts_build_net_',
+ nnucout = {len(EXPECTED_SPECIES)}, output_nuclei = {output_species},
+ data_dir = '.', inab_files(1) = 'initial_abundances', thermo_files(1) = 'thermo',
+/
 """
-    (directory / "control").write_text(control, encoding="ascii")
+    (directory / "xnet.nml").write_text(runtime_config, encoding="ascii")
     (directory / "helm_table.dat").symlink_to(helm_table)
 
 

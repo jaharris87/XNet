@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,15 @@ HARNESS_FILES = (
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path)
+    parser.add_argument(
+        "--input-bundle",
+        type=Path,
+        help="versioned input tree; defaults to the frozen source checkout",
+    )
+    parser.add_argument(
+        "--input-bundle-revision",
+        help="exact bundle revision; defaults to the frozen source SHA",
+    )
     parser.add_argument("--build-dir", type=Path)
     parser.add_argument("--records", type=Path)
     parser.add_argument("--case")
@@ -112,12 +122,29 @@ def require_capture_arguments(args: argparse.Namespace) -> None:
         )
 
 
+def verify_input_bundle_revision(bundle: Path, revision: str) -> None:
+    """Verify Git revisions when the declared bundle identity is a commit SHA."""
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        return
+    try:
+        actual = subprocess.check_output(
+            ["git", "-C", str(bundle), "rev-parse", "HEAD"],
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise BenchmarkError(
+            "a Git-SHA input bundle revision requires a Git checkout"
+        ) from error
+    if actual != revision:
+        raise BenchmarkError("input bundle checkout does not match its revision")
+
+
 def build_historical_xnet(
     repository: Path,
     build_dir: Path,
     record: Path,
     profile: dict[str, Any],
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, list[str], dict[str, str]]:
     """Build the source checkout owned by the capture, then prove its profile."""
     if build_dir.exists():
         raise BenchmarkError("capture owns a fresh, nonexistent --build-dir")
@@ -158,7 +185,7 @@ def build_historical_xnet(
             raise BenchmarkError(f"serial-dense profile rejects {key}={value!r}")
 
     shutil.copy2(config, record / "build-config.txt")
-    return executable, build_log
+    return executable, build_log, command, settings
 
 
 def capture_repetition(
@@ -223,6 +250,13 @@ def capture_repetition(
             "timing_excluded": True,
         },
     )
+    composition = artifact / "composition_error_norms.json"
+    artifacts = {
+        "composition_error_norms": {
+            "path": composition.relative_to(record).as_posix(),
+            "sha256": sha256(composition) if composition.is_file() else None,
+        }
+    }
     return {
         "number": number,
         "numerical_result": numerical,
@@ -231,6 +265,7 @@ def capture_repetition(
         "timers_seconds": timers,
         "timer_sections_seconds": timer_sections,
         "counters": counters,
+        "artifacts": artifacts,
     }
 
 
@@ -262,6 +297,82 @@ def environment_identity() -> dict[str, str]:
     return environment
 
 
+def retain_command_output(
+    record: Path,
+    name: str,
+    command: list[str],
+) -> dict[str, object]:
+    """Run an optional host-inspection command and retain its complete output."""
+    path = record / f"{name}.txt"
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+        status: int | str = result.returncode
+    except OSError as error:
+        output = f"unavailable: {error}\n"
+        status = "unavailable"
+    path.write_text(output, encoding="utf-8")
+    return {
+        "path": path.name,
+        "sha256": sha256(path),
+        "argv": command,
+        "status": status,
+    }
+
+
+def compiler_evidence(record: Path, settings: dict[str, str]) -> dict[str, object]:
+    """Resolve the configured compiler and retain a version transcript."""
+    candidate = settings.get("FC") or settings.get("F90") or os.environ.get("FC")
+    compiler = shutil.which(candidate or "gfortran")
+    if compiler is None:
+        return {"path": None, "sha256": None, "version": "unavailable"}
+    version = retain_command_output(record, "compiler-version", [compiler, "--version"])
+    return {
+        "path": compiler,
+        "sha256": sha256(Path(compiler)),
+        "version": version,
+    }
+
+
+def command_evidence(
+    record: Path,
+    executable: Path,
+    settings: dict[str, str],
+) -> dict[str, object]:
+    """Retain safe, portable compiler, runtime, and topology facts."""
+    if sys.platform == "darwin":
+        runtime_command = ["otool", "-L", str(executable)]
+    elif shutil.which("ldd"):
+        runtime_command = ["ldd", str(executable)]
+    else:
+        runtime_command = ["sh", "-c", "printf 'unavailable\\n'"]
+
+    if shutil.which("lscpu"):
+        topology_command = ["lscpu"]
+    elif sys.platform == "darwin":
+        topology_command = [
+            "sysctl",
+            "-n",
+            "hw.ncpu",
+            "hw.physicalcpu",
+            "hw.memsize",
+        ]
+    else:
+        topology_command = ["uname", "-a"]
+
+    try:
+        affinity: list[int] | str = sorted(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        affinity = "unavailable"
+    return {
+        "cpu_count": os.cpu_count(),
+        "affinity": affinity,
+        "compiler": compiler_evidence(record, settings),
+        "runtime": retain_command_output(record, "runtime-libraries", runtime_command),
+        "topology": retain_command_output(record, "topology", topology_command),
+    }
+
+
 def make_record_document(
     case_id: str,
     case: Any,
@@ -274,6 +385,10 @@ def make_record_document(
     record: Path,
     executable: Path,
     build_log: Path,
+    input_bundle_revision: str,
+    operational: dict[str, object],
+    build_argv: list[str],
+    comparison: dict[str, object],
 ) -> dict[str, object]:
     """Assemble only portable values and retained-artifact identities."""
     return {
@@ -300,16 +415,42 @@ def make_record_document(
             },
             "executable": {"sha256": sha256(executable), "copied": False},
             "environment": environment_identity(),
+            "build_argv": build_argv,
+            "run_argv": [str(executable)],
+            "operational": operational,
         },
         "input_bundle": {
-            "type": "historical-source-manifest",
-            "revision": HISTORICAL_SHA,
+            "type": "versioned-relative-path-manifest",
+            "revision": input_bundle_revision,
             "entries": manifest,
             "manifest_sha256": manifest_digest(manifest),
         },
         "expected": case.expected,
+        "comparison": comparison,
         "repetitions": repetitions,
     }
+
+
+def retain_comparison_inputs(
+    record: Path,
+    bundle_root: Path,
+    identity: dict[str, Any],
+) -> dict[str, object]:
+    """Copy the small comparator/reference pair required for offline checking."""
+    comparison_dir = record / "comparison"
+    comparison_dir.mkdir()
+    retained: dict[str, dict[str, str]] = {}
+    for name in ("comparator", "reference"):
+        source_relative = identity[name]
+        source = bundle_root / source_relative
+        destination = comparison_dir / source.name
+        shutil.copy2(source, destination)
+        retained[name] = {
+            "source_path": source_relative,
+            "path": destination.relative_to(record).as_posix(),
+            "sha256": sha256(destination),
+        }
+    return retained
 
 
 def main() -> int:
@@ -331,26 +472,40 @@ def main() -> int:
         raise BenchmarkError("capture requires a clean committed benchmark harness")
 
     repository = require_clean_historical_repository(args.repository)
+    input_bundle = (args.input_bundle or repository).resolve()
+    if not input_bundle.is_dir():
+        raise BenchmarkError("--input-bundle must name a readable directory")
+    input_bundle_revision = args.input_bundle_revision or HISTORICAL_SHA
     build_dir = args.build_dir.resolve()
-    regression = load_regression(repository)
     case = cases[args.case]
-    regression_case = getattr(regression, case.workload["regression_factory"])(repository)
+    identity = case.input_identity
+    expected_bundle_revision = identity.get("bundle_revision")
+    if input_bundle_revision != expected_bundle_revision:
+        raise BenchmarkError("input bundle revision does not match the case registry")
+    verify_input_bundle_revision(input_bundle, input_bundle_revision)
+    comparator = input_bundle / identity["comparator"]
+    regression = load_regression(comparator)
+    regression_case = getattr(regression, case.workload["regression_factory"])(input_bundle)
 
     args.records.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     record = args.records.resolve() / f"{args.case}-{stamp}-{os.getpid()}"
     record.mkdir()
-
     profile = profiles["serial-dense"]
-    executable, build_log = build_historical_xnet(
+    executable, build_log, build_argv, settings = build_historical_xnet(
         repository,
         build_dir,
         record,
         profile,
     )
-    manifest = input_manifest(repository, case_inputs(repository, regression_case))
-    if manifest_digest(manifest) != case.input_identity.get("manifest_sha256"):
+    bundle_inputs = case_inputs(input_bundle, regression_case, comparator)
+    if any(not path.is_file() for path in bundle_inputs):
+        raise BenchmarkError("input bundle lacks a required case-relative input")
+    manifest = input_manifest(input_bundle, bundle_inputs)
+    if manifest_digest(manifest) != identity.get("manifest_sha256"):
         raise BenchmarkError("case registry input-manifest binding mismatch")
+    comparison = retain_comparison_inputs(record, input_bundle, identity)
+    operational = command_evidence(record, executable, settings)
 
     repetitions = [
         capture_repetition(
@@ -376,6 +531,10 @@ def main() -> int:
         record,
         executable,
         build_log,
+        input_bundle_revision,
+        operational,
+        build_argv,
+        comparison,
     )
     write_json(record / "record.json", document)
     write_json(record / "inventory.json", inventory(record))

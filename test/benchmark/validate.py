@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
+from datetime import datetime
 import json
 import math
 from pathlib import Path
 import re
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 from benchmark import (
@@ -16,9 +20,11 @@ from benchmark import (
     HISTORICAL_SHA,
     TIMER_NAMES,
     inventory,
+    load_regression,
     manifest_digest,
     read_record,
     read_registry,
+    parse_diagnostic_metrics,
     sha256,
 )
 
@@ -55,6 +61,24 @@ def read_json(path: Path, message: str) -> dict[str, Any]:
     return value
 
 
+def read_config_values(path: Path) -> dict[str, str]:
+    return {
+        key: value
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+        for key, value in [line.split("=", 1)]
+    }
+
+
+def retained_path(record: Path, value: object, message: str) -> Path:
+    if not isinstance(value, str):
+        raise BenchmarkError(message)
+    relative = Path(value)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise BenchmarkError(message)
+    return record / relative
+
+
 def validate_harness_identity(document: dict[str, object]) -> None:
     capture = document.get("capture", {})
     harness = capture.get("harness", {}) if isinstance(capture, dict) else {}
@@ -75,6 +99,15 @@ def validate_harness_identity(document: dict[str, object]) -> None:
             raise BenchmarkError("malformed harness hash")
         if sha256(Path(__file__).parent / name) != digest:
             raise BenchmarkError(f"current harness hash mismatch: {name}")
+    try:
+        current = subprocess.check_output(
+            ["git", "-C", str(Path(__file__).resolve().parents[2]), "rev-parse", "HEAD"],
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        current = None
+    if current is not None and current != revision:
+        raise BenchmarkError("harness revision is not the current checkout HEAD")
 
 
 def validate_case_and_execution(
@@ -142,10 +175,10 @@ def validate_input_bundle(
         seen.add(path)
         checked_entries.append({"path": path, "sha256": digest})
 
-    if bundle.get("type") != "historical-source-manifest":
+    if bundle.get("type") != "versioned-relative-path-manifest":
         raise BenchmarkError("unsupported input-bundle type")
-    if bundle.get("revision") != HISTORICAL_SHA:
-        raise BenchmarkError("input bundle does not bind the historical source")
+    if bundle.get("revision") != identity.get("bundle_revision"):
+        raise BenchmarkError("input bundle revision does not match the case registry")
     if bundle.get("manifest_sha256") != manifest_digest(checked_entries):
         raise BenchmarkError("input manifest digest mismatch")
     if manifest_digest(checked_entries) != identity.get("manifest_sha256"):
@@ -177,11 +210,206 @@ def validate_timer_section(section: object) -> dict[str, float]:
     }
 
 
+def validate_capture_provenance(
+    document: dict[str, object],
+    record: Path,
+    profile: dict[str, Any],
+) -> None:
+    """Check retained build, executable, and safe operational evidence."""
+    capture = document.get("capture")
+    if not isinstance(capture, dict):
+        raise BenchmarkError("missing capture provenance")
+    for key in ("captured_utc", "timeout_seconds", "build_argv", "run_argv"):
+        if key not in capture:
+            raise BenchmarkError(f"capture lacks {key}")
+    if not isinstance(capture["captured_utc"], str):
+        raise BenchmarkError("capture has malformed timestamp")
+    try:
+        datetime.fromisoformat(capture["captured_utc"])
+    except ValueError as error:
+        raise BenchmarkError("capture has malformed timestamp") from error
+    if as_finite_nonnegative(capture["timeout_seconds"], "invalid timeout") <= 0.0:
+        raise BenchmarkError("invalid timeout")
+    command_values = (capture["build_argv"], capture["run_argv"])
+    if not all(
+        isinstance(value, list)
+        and value
+        and all(isinstance(argument, str) and argument for argument in value)
+        for value in command_values
+    ):
+        raise BenchmarkError("capture lacks command provenance")
+
+    build = capture.get("build")
+    executable = capture.get("executable")
+    environment = capture.get("environment")
+    if not isinstance(build, dict) or not isinstance(executable, dict):
+        raise BenchmarkError("capture lacks build or executable provenance")
+    environment_fields = {"platform", "python", "processor", "host", "uname"}
+    if not isinstance(environment, dict) or not environment_fields <= set(environment):
+        raise BenchmarkError("capture lacks environment provenance")
+    for field in ("config", "log"):
+        path = build.get(f"{field}_path")
+        digest = build.get(f"{field}_sha256")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise BenchmarkError("malformed build provenance")
+        artifact = retained_path(record, path, "malformed build provenance")
+        if not artifact.is_file() or sha256(artifact) != digest:
+            raise BenchmarkError("retained build artifact hash mismatch")
+    executable_digest = executable.get("sha256")
+    if (
+        not isinstance(executable_digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", executable_digest)
+        or executable.get("copied") is not False
+    ):
+        raise BenchmarkError("malformed executable provenance")
+    settings = read_config_values(record / build["config_path"])
+    if "MATRIX_SOLVER" not in settings or "SOURCE_ROOT" not in settings:
+        raise BenchmarkError("retained build config is incomplete")
+    build_argv = capture["build_argv"]
+    try:
+        source_argument = build_argv[build_argv.index("-C") + 1]
+    except (ValueError, IndexError) as error:
+        raise BenchmarkError("build command lacks its source checkout") from error
+    if settings["SOURCE_ROOT"] != source_argument:
+        raise BenchmarkError("build command and config source roots disagree")
+    dimensions = profile["dimensions"]
+    if settings.get("MATRIX_SOLVER") != dimensions["solver"]:
+        raise BenchmarkError("retained build config solver does not match profile")
+    expected_switches = {
+        "MPI_MODE": dimensions["mpi"],
+        "OPENMP_MODE": dimensions["openmp"],
+        "GPU_MODE": dimensions["gpu"],
+    }
+    for name, value in expected_switches.items():
+        if settings.get(name) != value:
+            raise BenchmarkError("retained build config does not match profile")
+    for name in ("OPENACC_MODE", "OPENMP_OL_MODE"):
+        if settings.get(name) != "OFF":
+            raise BenchmarkError("retained build config does not match profile")
+
+    operational = capture.get("operational")
+    if not isinstance(operational, dict):
+        raise BenchmarkError("capture lacks operational provenance")
+    cpu_count = operational.get("cpu_count")
+    affinity = operational.get("affinity")
+    if not isinstance(cpu_count, int) or cpu_count < 1:
+        raise BenchmarkError("capture lacks CPU-count provenance")
+    if affinity != "unavailable" and not (
+        isinstance(affinity, list)
+        and affinity
+        and all(isinstance(cpu, int) and cpu >= 0 for cpu in affinity)
+    ):
+        raise BenchmarkError("capture has malformed affinity provenance")
+
+    compiler = operational.get("compiler")
+    if not isinstance(compiler, dict):
+        raise BenchmarkError("capture lacks compiler provenance")
+    compiler_path = compiler.get("path")
+    compiler_digest = compiler.get("sha256")
+    if not isinstance(compiler_path, str) or not compiler_path.startswith("/"):
+        raise BenchmarkError("capture lacks resolved compiler provenance")
+    if not isinstance(compiler_digest, str) or not re.fullmatch(
+        r"[0-9a-f]{64}",
+        compiler_digest,
+    ):
+        raise BenchmarkError("capture has malformed compiler provenance")
+
+    def validate_transcript(name: str, entry: object) -> None:
+        if not isinstance(entry, dict):
+            raise BenchmarkError(f"capture lacks {name} provenance")
+        path = entry.get("path")
+        digest = entry.get("sha256")
+        argv = entry.get("argv")
+        if not isinstance(digest, str):
+            raise BenchmarkError(f"malformed {name} provenance")
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise BenchmarkError(f"malformed {name} provenance")
+        if not isinstance(argv, list) or not argv:
+            raise BenchmarkError(f"malformed {name} provenance")
+        artifact = retained_path(
+            record,
+            path,
+            f"malformed {name} provenance",
+        )
+        if not artifact.is_file() or sha256(artifact) != digest:
+            raise BenchmarkError(f"retained {name} evidence hash mismatch")
+
+    validate_transcript("compiler version", compiler.get("version"))
+    for name in ("runtime", "topology"):
+        validate_transcript(name, operational.get(name))
+
+
+def validate_comparison_binding(
+    document: dict[str, object],
+    identity: dict[str, Any],
+    record: Path,
+    entries: list[dict[str, str]],
+) -> dict[str, Path]:
+    """Verify that the captured comparator/reference are exact bundle copies."""
+    comparison = document.get("comparison")
+    if not isinstance(comparison, dict):
+        raise BenchmarkError("missing captured comparison inputs")
+    paths: dict[str, Path] = {}
+    manifest_hashes = {entry["path"]: entry["sha256"] for entry in entries}
+    for name in ("comparator", "reference"):
+        entry = comparison.get(name)
+        if not isinstance(entry, dict):
+            raise BenchmarkError("malformed captured comparison input")
+        if entry.get("source_path") != identity.get(name):
+            raise BenchmarkError("captured comparison source path mismatch")
+        path = entry.get("path")
+        digest = entry.get("sha256")
+        if not isinstance(digest, str):
+            raise BenchmarkError("malformed captured comparison input")
+        artifact = retained_path(
+            record,
+            path,
+            "malformed captured comparison input",
+        )
+        if not artifact.is_file() or sha256(artifact) != digest:
+            raise BenchmarkError("captured comparison input hash mismatch")
+        if digest != manifest_hashes.get(entry["source_path"]):
+            raise BenchmarkError("captured comparison does not match input manifest")
+        paths[name] = artifact
+    return paths
+
+
+def compare_retained_diagnostic(
+    diagnostic: Path,
+    comparison_paths: dict[str, Path],
+    factory_name: str,
+) -> None:
+    """Run the captured historical comparator without a live source checkout."""
+    try:
+        regression = load_regression(comparison_paths["comparator"])
+        with tempfile.TemporaryDirectory(prefix="xnet-v9-comparison-") as temporary:
+            locator = Path(temporary)
+            case = getattr(regression, factory_name)(locator)
+            case = replace(case, reference=comparison_paths["reference"])
+            reference = regression.load_reference(case.reference)
+            text = diagnostic.read_text(encoding="utf-8")
+            states = regression.parse_diagnostic(
+                text,
+                case.expected_zones,
+                case.expected_species,
+                case.expected_diagnostic_groups,
+            )
+            regression.compare_final_states(states, reference)
+            regression.compare_equivalent_zone_groups(
+                states,
+                case.equivalent_zone_groups,
+            )
+    except Exception as error:
+        raise BenchmarkError(f"retained diagnostic comparison failed: {error}") from error
+
+
 def validate_repetition(
     repetition: object,
     number: int,
     expected: dict[str, object],
     record: Path,
+    comparison_paths: dict[str, Path],
+    factory_name: str,
 ) -> None:
     if not isinstance(repetition, dict):
         raise BenchmarkError("malformed repetition")
@@ -254,6 +482,37 @@ def validate_repetition(
     status = (artifact / "xnet.status.txt").read_text(encoding="utf-8").strip()
     if status != "return_code=0":
         raise BenchmarkError("XNet did not retain a zero direct status")
+    parsed_timers, parsed_counters, parsed_sections = parse_diagnostic_metrics(
+        artifact / "net_diag01"
+    )
+    if (
+        parsed_timers != checked_timers
+        or parsed_counters != counters
+        or parsed_sections != checked_sections
+    ):
+        raise BenchmarkError("retained diagnostic disagrees with repetition summary")
+    composition = artifact / "composition_error_norms.json"
+    artifacts = repetition.get("artifacts")
+    composition_entry = (
+        artifacts.get("composition_error_norms") if isinstance(artifacts, dict) else None
+    )
+    if not isinstance(composition_entry, dict):
+        raise BenchmarkError("missing composition diagnostics binding")
+    if composition_entry.get("path") != composition.relative_to(record).as_posix():
+        raise BenchmarkError("composition diagnostics path mismatch")
+    if not composition.is_file() or sha256(composition) != composition_entry.get("sha256"):
+        raise BenchmarkError("missing composition diagnostics")
+    try:
+        composition_value = json.loads(composition.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise BenchmarkError("malformed composition diagnostics") from error
+    if not isinstance(composition_value, dict):
+        raise BenchmarkError("malformed composition diagnostics")
+    compare_retained_diagnostic(
+        artifact / "net_diag01",
+        comparison_paths,
+        factory_name,
+    )
 
 
 def validate_inventory(record: Path) -> None:
@@ -267,13 +526,37 @@ def validate_inventory(record: Path) -> None:
 
 def rehydrate(
     repository: Path | None,
+    input_bundle: Path | None,
     executable: Path | None,
     entries: list[dict[str, str]],
     document: dict[str, object],
 ) -> None:
     if repository:
+        try:
+            revision = subprocess.check_output(
+                ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True
+            ).strip()
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise BenchmarkError("rehydration repository is not a Git checkout") from error
+        if revision != HISTORICAL_SHA:
+            raise BenchmarkError("rehydration repository is not the historical source")
+    if input_bundle:
+        bundle = document.get("input_bundle")
+        revision = bundle.get("revision") if isinstance(bundle, dict) else None
+        if isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision):
+            try:
+                actual = subprocess.check_output(
+                    ["git", "-C", str(input_bundle), "rev-parse", "HEAD"],
+                    text=True,
+                ).strip()
+            except (OSError, subprocess.CalledProcessError) as error:
+                raise BenchmarkError(
+                    "rehydration input bundle is not a Git checkout"
+                ) from error
+            if actual != revision:
+                raise BenchmarkError("rehydration input bundle revision mismatch")
         for entry in entries:
-            source = repository.resolve() / entry["path"]
+            source = input_bundle.resolve() / entry["path"]
             if not source.is_file() or sha256(source) != entry["sha256"]:
                 raise BenchmarkError(f"rehydration input mismatch: {entry['path']}")
     if executable:
@@ -299,6 +582,11 @@ def main() -> int:
         type=Path,
         help="optional executable whose hash is checked",
     )
+    parser.add_argument(
+        "--input-bundle",
+        type=Path,
+        help="optional versioned input bundle for manifest rehydration",
+    )
     args = parser.parse_args()
 
     record = args.record.resolve()
@@ -312,6 +600,14 @@ def main() -> int:
     cases, profiles = read_registry(Path(__file__).parent)
     case, expected = validate_case_and_execution(document, cases, profiles)
     entries = validate_input_bundle(document, case.input_identity)
+    profile_name = document["execution"]["profile"]
+    validate_capture_provenance(document, record, profiles[profile_name])
+    comparison_paths = validate_comparison_binding(
+        document,
+        case.input_identity,
+        record,
+        entries,
+    )
 
     capture = document.get("capture")
     repetitions = document.get("repetitions")
@@ -321,10 +617,23 @@ def main() -> int:
     if requested < 1 or len(repetitions) != requested:
         raise BenchmarkError("missing or short repetition list")
     for number, repetition in enumerate(repetitions, start=1):
-        validate_repetition(repetition, number, expected, record)
+        validate_repetition(
+            repetition,
+            number,
+            expected,
+            record,
+            comparison_paths,
+            case.workload["regression_factory"],
+        )
 
     validate_inventory(record)
-    rehydrate(args.repository, args.executable, entries, document)
+    rehydrate(
+        args.repository,
+        args.input_bundle,
+        args.executable,
+        entries,
+        document,
+    )
     print(f"valid benchmark record: {record}")
     return 0
 

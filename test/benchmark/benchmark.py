@@ -8,7 +8,6 @@ import importlib.util
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -117,8 +116,8 @@ def tracked_files(repository: Path, relative: Path) -> list[Path]:
     return [repository / item for item in output.splitlines() if item]
 
 
-def load_regression(repository: Path):
-    path = repository / "test/regression/xnet_regression.py"
+def load_regression(path: Path):
+    """Load the comparator from the declared benchmark-input bundle."""
     spec = importlib.util.spec_from_file_location("xnet_v9_historical_regression", path)
     if spec is None or spec.loader is None:
         raise BenchmarkError(f"could not load historical comparator: {path}")
@@ -128,19 +127,22 @@ def load_regression(repository: Path):
     return module
 
 
-def case_inputs(repository: Path, regression_case: Any) -> list[Path]:
+def case_inputs(bundle_root: Path, regression_case: Any, comparator: Path) -> list[Path]:
     """Return all source files whose content defines the isolated comparison run."""
     files = [
         regression_case.control,
         regression_case.reference,
         regression_case.helm_table,
     ]
-    files.extend(tracked_files(repository, regression_case.network_data.relative_to(repository)))
+    files.extend(
+        regression_case.network_data / name
+        for name in regression_case.network_inputs
+    )
     files.extend(regression_case.trajectories)
     files.extend(item.source for item in regression_case.staged_inputs)
-    files.append(repository / "test/regression/xnet_regression.py")
+    files.append(comparator)
     unique = {path.resolve() for path in files}
-    return sorted(unique, key=lambda path: path.relative_to(repository).as_posix())
+    return sorted(unique, key=lambda path: path.relative_to(bundle_root).as_posix())
 
 
 def input_manifest(repository: Path, inputs: Iterable[Path]) -> list[dict[str, str]]:

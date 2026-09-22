@@ -13,6 +13,56 @@
   },
   "cases": [
     {
+      "case_id": "alpha_controlled_scaling_v1",
+      "status": "candidate",
+      "network": {"id": "alpha-small", "species_count": 14},
+      "workload": {
+        "id": "controlled-scaling-v1-alpha",
+        "family": "controlled-scaling-v1",
+        "description": "Awaiting reviewed common state and composition projection."
+      }
+    },
+    {
+      "case_id": "ccsn52_controlled_scaling_v1",
+      "status": "candidate",
+      "network": {"id": "CCSN52", "species_count": 52},
+      "workload": {
+        "id": "controlled-scaling-v1-ccsn52",
+        "family": "controlled-scaling-v1",
+        "description": "Awaiting reviewed common state and composition projection."
+      }
+    },
+    {
+      "case_id": "sn160_controlled_scaling_v1",
+      "status": "candidate",
+      "network": {"id": "SN160", "species_count": 160},
+      "workload": {
+        "id": "controlled-scaling-v1-sn160",
+        "family": "controlled-scaling-v1",
+        "description": "Awaiting reviewed common state and composition projection."
+      }
+    },
+    {
+      "case_id": "ccsn179_controlled_scaling_v1",
+      "status": "candidate",
+      "network": {"id": "CCSN179", "species_count": 179},
+      "workload": {
+        "id": "controlled-scaling-v1-ccsn179",
+        "family": "controlled-scaling-v1",
+        "description": "Awaiting reviewed common state and composition projection."
+      }
+    },
+    {
+      "case_id": "ecsn350_controlled_scaling_v1",
+      "status": "candidate",
+      "network": {"id": "ECSN350", "species_count": 350},
+      "workload": {
+        "id": "controlled-scaling-v1-ecsn350",
+        "family": "controlled-scaling-v1",
+        "description": "Awaiting reviewed common state and composition projection."
+      }
+    },
+    {
       "case_id": "batch_alpha",
       "status": "ready",
       "network": {
@@ -22,6 +72,7 @@
       },
       "workload": {
         "id": "batch-alpha-16-zone",
+        "family": "representative-application",
         "description": "16-zone partial-batch self-heating",
         "regression_factory": "batch_alpha_case"
       },
@@ -32,7 +83,8 @@
         "trajectory_root": "test/Test_Problems/th_batch",
         "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
         "comparator": "test/regression/xnet_regression.py",
-        "manifest_sha256": "b31edd5986947a5ba8bc435bc84f89395e7a56744e926c67c7c617a2364f670c"
+        "bundle_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
+        "manifest_sha256": "8f6dc74ba2bb30a01d3b6f0d14ac3ad9b3071d6695b4e46b37dba0d3c71c7d8f"
       },
       "expected": {
         "zones": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -50,6 +102,7 @@
       },
       "workload": {
         "id": "heat-sn160-6-zone",
+        "family": "representative-application",
         "description": "6-zone self-heating repeated burn",
         "regression_factory": "heat_sn160_case"
       },
@@ -61,7 +114,8 @@
         "trajectory_prefix": "th_co_burn_",
         "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
         "comparator": "test/regression/xnet_regression.py",
-        "manifest_sha256": "fc92160e1a59fbc200af2026376eb6e00a4d6c3d4b4266b11735948708aedcdf"
+        "bundle_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
+        "manifest_sha256": "0aae2bd4ec9fdf9f853161563557c22f7993d00c5dcfc31ae08365b60b14bc48"
       },
       "expected": {
         "zones": [1, 2, 3, 4, 5, 6],
@@ -74,6 +128,8 @@
       "status": "candidate",
       "network": {"id": "CCSN52", "species_count": 52},
       "workload": {
+        "id": "ccsn52-representative",
+        "family": "representative-application",
         "description": "CCSN52 needs a reviewed workload plus licence and provenance binding."
       }
     },
@@ -81,13 +137,19 @@
       "case_id": "ccsn179",
       "status": "candidate",
       "network": {"id": "CCSN179", "species_count": 179},
-      "workload": {"description": "Data exists but lacks a reviewed standalone workload"}
+      "workload": {
+        "id": "ccsn179-representative",
+        "family": "representative-application",
+        "description": "Data exists but lacks a reviewed standalone workload"
+      }
     },
     {
       "case_id": "ecsn350",
       "status": "candidate",
       "network": {"id": "ECSN350", "species_count": 350},
       "workload": {
+        "id": "ecsn350-representative",
+        "family": "representative-application",
         "description": "ECSN350 needs a reviewed workload plus licence and provenance binding."
       }
     }

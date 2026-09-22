@@ -1,9 +1,11 @@
 # Draft facility local-session prompts
 
 Current status: #133 implements only serial-dense capture for the two ready
-representative cases. Run the smoke below now. All nonserial profiles and the
-controlled common-state input family are blocked on reviewed input and
-execution-profile PRs; do not improvise a site-specific repair.
+representative cases. Do not submit an allocation or job without separate
+maintainer authorization and resolved account/project/queue placeholders. All
+nonserial profiles and the controlled common-state input family are blocked on
+reviewed input and execution-profile PRs; do not improvise a site-specific
+repair.
 
 ## Frontier
 

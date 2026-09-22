@@ -272,6 +272,16 @@ def validate_capture_provenance(
         raise BenchmarkError("build command lacks its source checkout") from error
     if settings["SOURCE_ROOT"] != source_argument:
         raise BenchmarkError("build command and config source roots disagree")
+    build_directories = [
+        argument.removeprefix("BUILD_DIR=")
+        for argument in build_argv
+        if argument.startswith("BUILD_DIR=")
+    ]
+    if len(build_directories) != 1:
+        raise BenchmarkError("build command lacks one capture-owned build directory")
+    expected_executable = str(Path(build_directories[0]) / "bin" / "xnet")
+    if capture["run_argv"] != [expected_executable]:
+        raise BenchmarkError("run command does not match the captured build")
     dimensions = profile["dimensions"]
     if settings.get("MATRIX_SOLVER") != dimensions["solver"]:
         raise BenchmarkError("retained build config solver does not match profile")
@@ -313,6 +323,11 @@ def validate_capture_provenance(
         compiler_digest,
     ):
         raise BenchmarkError("capture has malformed compiler provenance")
+    configured_compiler = settings.get("FC")
+    if not isinstance(configured_compiler, str) or (
+        Path(compiler_path).name != Path(configured_compiler).name
+    ):
+        raise BenchmarkError("compiler provenance does not match the build config")
 
     def validate_transcript(name: str, entry: object) -> None:
         if not isinstance(entry, dict):
@@ -336,8 +351,17 @@ def validate_capture_provenance(
             raise BenchmarkError(f"retained {name} evidence hash mismatch")
 
     validate_transcript("compiler version", compiler.get("version"))
+    compiler_version = compiler["version"]
+    if compiler_version.get("argv") != [compiler_path, "--version"]:
+        raise BenchmarkError("compiler version command does not match the compiler")
     for name in ("runtime", "topology"):
         validate_transcript(name, operational.get(name))
+    runtime_argv = operational["runtime"]["argv"]
+    if (
+        Path(runtime_argv[0]).name not in {"ldd", "otool"}
+        or expected_executable not in runtime_argv
+    ):
+        raise BenchmarkError("runtime evidence does not inspect the run executable")
 
 
 def validate_comparison_binding(
@@ -377,6 +401,7 @@ def validate_comparison_binding(
 
 def compare_retained_diagnostic(
     diagnostic: Path,
+    composition: Path,
     comparison_paths: dict[str, Path],
     factory_name: str,
 ) -> None:
@@ -389,12 +414,35 @@ def compare_retained_diagnostic(
             case = replace(case, reference=comparison_paths["reference"])
             reference = regression.load_reference(case.reference)
             text = diagnostic.read_text(encoding="utf-8")
+            missing = tuple(
+                marker
+                for marker in case.required_diagnostic_markers
+                if marker not in text
+            )
+            if missing:
+                raise BenchmarkError("retained diagnostic lacks required markers")
             states = regression.parse_diagnostic(
                 text,
                 case.expected_zones,
                 case.expected_species,
                 case.expected_diagnostic_groups,
             )
+            diagnostics = regression.calculate_composition_norms(states, reference)
+            regression._write_composition_diagnostics(
+                locator,
+                diagnostics,
+                reference,
+            )
+            regenerated = read_json(
+                locator / "composition_error_norms.json",
+                "comparator did not regenerate composition diagnostics",
+            )
+            retained = read_json(
+                composition,
+                "malformed composition diagnostics",
+            )
+            if regenerated != retained:
+                raise BenchmarkError("composition diagnostics disagree with replay")
             regression.compare_final_states(states, reference)
             regression.compare_equivalent_zone_groups(
                 states,
@@ -511,6 +559,7 @@ def validate_repetition(
         raise BenchmarkError("malformed composition diagnostics")
     compare_retained_diagnostic(
         artifact / "net_diag01",
+        composition,
         comparison_paths,
         factory_name,
     )
@@ -541,6 +590,12 @@ def rehydrate(
             raise BenchmarkError("rehydration repository is not a Git checkout") from error
         if revision != HISTORICAL_SHA:
             raise BenchmarkError("rehydration repository is not the historical source")
+        dirty = subprocess.check_output(
+            ["git", "-C", str(repository), "status", "--porcelain"],
+            text=True,
+        ).strip()
+        if dirty:
+            raise BenchmarkError("rehydration repository is not clean")
     if input_bundle:
         bundle = document.get("input_bundle")
         revision = bundle.get("revision") if isinstance(bundle, dict) else None

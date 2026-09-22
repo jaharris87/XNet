@@ -181,6 +181,66 @@ def main(record: Path) -> None:
             write_document(incomplete, document)
             reject(f"missing capture {field}", incomplete, root, "capture lacks")
 
+        false_run = copy_record(temporary_path, record, "false-run-command")
+        document = read_document(false_run)
+        document["capture"]["run_argv"] = ["/bin/false"]
+        write_document(false_run, document)
+        reject("false run command", false_run, root, "run command does not match")
+
+        false_compiler = copy_record(temporary_path, record, "false-compiler")
+        document = read_document(false_compiler)
+        compiler = document["capture"]["operational"]["compiler"]
+        compiler["path"] = "/bin/false"
+        compiler["sha256"] = "0" * 64
+        compiler["version"]["argv"] = ["/bin/false", "--version"]
+        compiler["version"]["status"] = 1
+        write_document(false_compiler, document)
+        reject(
+            "false compiler",
+            false_compiler,
+            root,
+            "compiler provenance does not match",
+        )
+
+        false_runtime = copy_record(temporary_path, record, "false-runtime")
+        document = read_document(false_runtime)
+        runtime = document["capture"]["operational"]["runtime"]
+        runtime["argv"] = ["/bin/false"]
+        runtime["status"] = "unavailable"
+        write_document(false_runtime, document)
+        reject(
+            "false runtime",
+            false_runtime,
+            root,
+            "malformed runtime provenance",
+        )
+
+        changed_composition = copy_record(
+            temporary_path,
+            record,
+            "changed-composition",
+        )
+        composition = (
+            changed_composition
+            / "repetitions"
+            / "1"
+            / "composition_error_norms.json"
+        )
+        composition_document = json.loads(composition.read_text(encoding="utf-8"))
+        composition_document["zones"][0]["l1"] = 999.0
+        write_json(composition, composition_document)
+        document = read_document(changed_composition)
+        document["repetitions"][0]["artifacts"]["composition_error_norms"][
+            "sha256"
+        ] = hashlib.sha256(composition.read_bytes()).hexdigest()
+        write_document(changed_composition, document)
+        reject(
+            "changed composition diagnostics",
+            changed_composition,
+            root,
+            "composition diagnostics disagree with replay",
+        )
+
         fake_revision = copy_record(temporary_path, record, "fake-harness-revision")
         document = read_document(fake_revision)
         document["capture"]["harness"]["repository_revision"] = "0" * 40

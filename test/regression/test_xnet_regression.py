@@ -1608,26 +1608,11 @@ def test_bdf_sn160_definition_reuses_isolated_sn160_staging(
     )
 
 
-def test_bdf_control_is_the_normalized_legacy_id_54_concatenation() -> None:
-    settings = (REPOSITORY_ROOT / "test/test_settings_bdf").read_text(
-        encoding="utf-8"
-    )
-    setup = (REPOSITORY_ROOT / "test/Test_Problems/setup_bdf_sn160").read_text(
-        encoding="utf-8"
-    )
-    normalized = "\n".join(
-        line.rstrip() for line in (settings + setup).splitlines()
-    ) + "\n"
-    normalized = normalized.replace("Test_Results/", "")
-    normalized = normalized.replace("Test_Problems/", "")
-    normalized = normalized.replace(
-        "4         Blocking size for zone loop",
-        "1         Blocking size for zone loop",
-    )
-
-    assert bdf_sn160_case(REPOSITORY_ROOT).control.read_text(
-        encoding="utf-8"
-    ) == normalized
+def test_bdf_runtime_configuration_selects_bdf_and_preserves_batching() -> None:
+    configuration = bdf_sn160_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
+    assert "&xnet_config" in configuration
+    assert "isolv = 3" in configuration
+    assert "nzbatchmx = 1" in configuration
 
 
 def test_bdf_reference_records_end_steps_and_all_solver_counter_fields() -> None:
@@ -1695,7 +1680,7 @@ def test_bdf_reference_rejects_missing_required_metadata(
 def test_bdf_run_rejects_stale_input_hash_before_execution(tmp_path: Path) -> None:
     case = bdf_sn160_case(REPOSITORY_ROOT)
     document = json.loads(case.reference.read_text(encoding="utf-8"))
-    control_label = "test/regression/cases/bdf_sn160/control"
+    control_label = "test/regression/cases/bdf_sn160/xnet.nml"
     document["input_sha256"][control_label] = "0" * 64
     reference_path = tmp_path / "stale-input-hash.json"
     reference_path.write_text(json.dumps(document), encoding="utf-8")
@@ -2141,17 +2126,11 @@ def test_batch_alpha_stages_nested_prefix_inputs(tmp_path: Path) -> None:
         assert staged.resolve() == item.source.resolve()
 
 
-def test_batch_alpha_control_is_the_normalized_legacy_id_61_concatenation() -> None:
-    settings = (REPOSITORY_ROOT / "test/test_settings_batch").read_text(
-        encoding="utf-8"
-    )
-    setup = (REPOSITORY_ROOT / "test/Test_Problems/setup_batch_alpha").read_text(
-        encoding="utf-8"
-    )
-    normalized = "\n".join(line.rstrip() for line in (settings + setup).splitlines()) + "\n"
-    assert batch_alpha_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8") == normalized.replace(
-        "Test_Results/", ""
-    )
+def test_batch_alpha_runtime_configuration_preserves_batched_input() -> None:
+    configuration = batch_alpha_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
+    assert "&xnet_config" in configuration
+    assert "nzone = 16" in configuration
+    assert "nzbatchmx = 4" in configuration
 
 
 @pytest.mark.parametrize(
@@ -2186,7 +2165,7 @@ def test_batch_alpha_staging_rejects_missing_or_unsafe_inputs(
 
 def test_missing_case_input_is_a_setup_failure(tmp_path: Path) -> None:
     case = replace(tnsn_alpha_case(REPOSITORY_ROOT), control=tmp_path / "missing-control")
-    with pytest.raises(SetupFailure, match="complete control input"):
+    with pytest.raises(SetupFailure, match="complete runtime configuration"):
         prepare_work_directory(case, tmp_path / "work")
 
 

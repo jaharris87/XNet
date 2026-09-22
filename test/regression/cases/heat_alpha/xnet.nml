@@ -1,0 +1,14 @@
+! Generated v9 namelist equivalent of the retained characterization input.
+&xnet_config
+ description = '2000 timesteps', 'diagnostic level 1', 'New parameters',
+ szone = 1, nzone = 6, iweak0 = 1, iscrn = 1, iprocess = 1,
+ ineutrino = 0, t9nse = 11.0,
+ isolv = 1, kstmx = 9999, kitmx = 5, ijac = 1, iconvc = 0,
+ changemx = 1.00E-01, yacc = 1.00E-07, tolm = 1.00E-06, tolc = 1.00E-04, ymin = 1.00E-30, tdel_maxmult = 2.00E+00,
+ iheat = 1, changemxt = 1.00E-02, tolt9 = 1.00E-04, nzbatchmx = 1,
+ idiag = 0, itsout = 2, ev_file_base = 'ev_heat_alpha_', bin_file_base = 'ts_heat_alpha_',
+ nnucout = 14, output_nuclei = 'he4', 'c12', 'o16', 'ne20', 'mg24', 'si28', 's32', 'ar36', 'ca40', 'ti44', 'cr48', 'fe52', 'ni56', 'zn60',
+ data_dir = 'Data_alpha',
+ inab_files = 'Data_alpha/ab_co', 'Data_alpha/ab_co', 'Data_alpha/ab_co', 'Data_alpha/ab_co', 'Data_alpha/ab_co', 'Data_alpha/ab_co',
+ thermo_files = 'th_co_burn_1', 'th_co_burn_2', 'th_co_burn_3', 'th_co_burn_4', 'th_co_burn_5', 'th_co_burn_6',
+/

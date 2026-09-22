@@ -241,16 +241,16 @@ timeouts, reference provenance, and comparison policy.
 
 ## Runtime inputs
 
-The stand-alone driver reads a file named `control` from its working directory.
-`source/xnet_controls.F90` locates labeled blocks and reads the values within
-each block in a specific order. Ordering and format changes can affect existing
-inputs.
+The stand-alone driver reads `xnet.nml` from its working directory. Its
+`xnet_config` namelist, compiled defaults, layering rules, and migration from
+historical controls are documented in
+[`runtime-configuration.md`](runtime-configuration.md). The driver does not
+select the former positional `control` parser.
 
-Legacy problems assemble a control file by joining a `test/test_settings*`
-file with a matching `test/Test_Problems/setup_*` file. The setup file refers
-to thermodynamic trajectories, initial abundances, and nuclear data under
-`test/Data_*`. Source code remains authoritative for the values read and their
-meaning.
+Historical problems retain their source inputs for provenance, but maintained
+pytest cases stage committed `xnet.nml` files. The configuration refers to
+thermodynamic trajectories, initial abundances, and nuclear data under
+`test/Data_*`. Source code remains authoritative for values and behavior.
 
 `test/Data_*` directories contain pre-built nuclear networks. Network
 preprocessing work should identify whether these tracked files are inputs,

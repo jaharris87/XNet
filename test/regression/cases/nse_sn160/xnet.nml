@@ -1,0 +1,14 @@
+! Generated v9 namelist equivalent of the retained characterization input.
+&xnet_config
+ description = 'SN160 NSE initialization followed by an ordinary trajectory evolution', 'diagnostic level 1', 'Issue 40 characterization',
+ szone = 1, nzone = 1, iweak0 = 1, iscrn = 0, iprocess = 1,
+ ineutrino = 0, t9nse = 8.0,
+ isolv = 1, kstmx = 6000, kitmx = 5, ijac = 4, iconvc = 0,
+ changemx = 1.00E-01, yacc = 1.00E-07, tolm = 1.00E-06, tolc = 1.00E-04, ymin = 1.00E-30, tdel_maxmult = 2.00E+00,
+ iheat = 0, changemxt = 1.00E-02, tolt9 = 1.00E-04, nzbatchmx = 1,
+ idiag = 0, itsout = 2, ev_file_base = 'ev_nse_sn160_', bin_file_base = 'ts_nse_sn160_',
+ nnucout = 14, output_nuclei = 'n', 'p', 'he4', 'fe54', 'co55', 'ni56', 'ni57', 'ni58', 'cu58', 'zn60', 'zn61', 'ge64', 'ge65', 'as68',
+ data_dir = 'Data_SN160',
+ inab_files(1) = 'Data_SN160/ab_ye49',
+ thermo_files(1) = 'th_frohlich2006_nse',
+/

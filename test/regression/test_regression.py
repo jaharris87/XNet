@@ -68,10 +68,72 @@ def _run_case(
         }
         assert all(math.isfinite(zone[name]) for name in ("l1", "l2", "linf"))
         assert zone["l1"] >= zone["l2"] >= zone["linf"] >= 0.0
-        assert zone["linf_species"] is None or isinstance(
-            zone["linf_species"], str
-        )
+        assert zone["linf_species"] is None or isinstance(zone["linf_species"], str)
 
+
+def _run_raw_configuration(
+    xnet_executable: Path, work_directory: Path, timeout: float
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(xnet_executable)], cwd=work_directory, capture_output=True,
+        text=True, timeout=timeout, check=False,
+    )
+
+
+def test_namelist_include_is_read_from_the_including_directory(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    case = tnsn_alpha_case(REPOSITORY_ROOT)
+    work_directory = prepare_work_directory(case, tmp_path / "included")
+    configuration = (work_directory / "xnet.nml").read_text(encoding="utf-8")
+    nested = work_directory / "nested"
+    nested.mkdir()
+    (nested / "base.nml").write_text(configuration, encoding="utf-8")
+    (work_directory / "xnet.nml").write_text(
+        "&xnet_config\n include = 'nested/base.nml'\n/\n", encoding="utf-8"
+    )
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "nzone = 10" in (work_directory / "xnet.resolved.nml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("configuration", "expected"),
+    (
+        ("&xnet_config\n unknown_setting = 1\n/\n", "malformed or unknown xnet_config namelist"),
+        ("&xnet_config\n include = 'child.nml'\n/\n", "xnet.nml include cycle"),
+    ),
+)
+def test_namelist_rejects_unknown_variables_and_include_cycles(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path,
+    configuration: str, expected: str,
+) -> None:
+    work_directory = tmp_path / "invalid"
+    work_directory.mkdir()
+    (work_directory / "xnet.nml").write_text(configuration, encoding="utf-8")
+    if "child.nml" in configuration:
+        (work_directory / "child.nml").write_text(
+            "&xnet_config\n include = 'xnet.nml'\n/\n", encoding="utf-8"
+        )
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert expected in result.stdout + result.stderr
+
+
+def test_namelist_rejects_excessive_include_depth(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    work_directory = tmp_path / "too-deep"
+    work_directory.mkdir()
+    filenames = ["xnet.nml", *(f"layer{index}.nml" for index in range(16))]
+    for current, following in zip(filenames, filenames[1:]):
+        (work_directory / current).write_text(
+            f"&xnet_config\n include = '{following}'\n/\n", encoding="utf-8"
+        )
+    (work_directory / filenames[-1]).write_text("&xnet_config\n/\n", encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert "xnet.nml include depth limit exceeded" in result.stdout + result.stderr
 def test_tnsn_alpha(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path
 ) -> None:

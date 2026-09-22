@@ -93,7 +93,7 @@ def _mass_and_charge(species: str) -> tuple[int, int]:
 def _prepare_work_directory(tmp_path: Path) -> Path:
     work_directory = tmp_path / "xnse"
     work_directory.mkdir()
-    shutil.copy2(CASE_DIRECTORY / "control", work_directory / "control")
+    shutil.copy2(CASE_DIRECTORY / "xnet.nml", work_directory / "xnet.nml")
     network_directory = work_directory / "Data_SN160"
     network_directory.mkdir()
     source_directory = REPOSITORY_ROOT / "test" / "Data_SN160"

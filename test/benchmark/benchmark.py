@@ -340,6 +340,17 @@ def parse_device_probe(path: Path) -> list[dict[str, Any]]:
     return observations
 
 
+def parse_slurm_job(path: Path) -> dict[str, str]:
+    """Parse the key/value form produced by ``scontrol show job --oneliner``."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    fields = dict(
+        re.findall(r"(?:^|\s)([A-Za-z][A-Za-z0-9/]*)=(\S+)", text)
+    )
+    if not fields.get("JobId"):
+        raise BenchmarkError("malformed Slurm allocation output")
+    return fields
+
+
 def parse_worker_states(regression: Any, case: Any, paths: Iterable[Path]) -> tuple[Any, ...]:
     """Parse all worker diagnostics and return one ordered state per global zone."""
     by_zone: dict[int, Any] = {}

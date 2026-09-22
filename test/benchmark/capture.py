@@ -30,6 +30,7 @@ from benchmark import (
     parse_diagnostic_metrics,
     parse_execution_probe,
     parse_openmp_probe,
+    parse_slurm_job,
     read_registry,
     require_clean_repository,
     run_timed_and_compare,
@@ -404,17 +405,34 @@ def observe_launcher(record: Path, launcher: list[str]) -> dict[str, object]:
         for key in scheduler_names
         if key in os.environ
     }
-    allocation = (
-        {"kind": "scheduler", "environment": scheduler_environment}
-        if scheduler_environment
-        else {
+    if scheduler_environment:
+        job_id = scheduler_environment.get("SLURM_JOB_ID")
+        scontrol = shutil.which("scontrol")
+        if not job_id or not scontrol:
+            raise BenchmarkError("Slurm allocation requires SLURM_JOB_ID and scontrol")
+        scheduler_probe = retain_command_output(
+            record,
+            "slurm-allocation",
+            [scontrol, "show", "job", job_id, "--oneliner"],
+        )
+        if scheduler_probe["status"] != 0:
+            raise BenchmarkError("Slurm allocation query failed")
+        allocation = {
+            "kind": "scheduler",
+            "environment": scheduler_environment,
+            "scheduler_probe": {
+                "probe": scheduler_probe,
+                "fields": parse_slurm_job(record / scheduler_probe["path"]),
+            },
+        }
+    else:
+        allocation = {
             "kind": "unscheduled-local",
             "host": platform.node(),
             "affinity": sorted(os.sched_getaffinity(0))
             if hasattr(os, "sched_getaffinity")
             else None,
         }
-    )
     return {"probe": transcript, "observations": observations, "allocation": allocation}
 
 

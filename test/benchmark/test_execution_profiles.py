@@ -5,10 +5,17 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import tempfile
 from typing import Any, Callable
 
-from benchmark import BenchmarkError, read_registry
-from validate import validate_runtime_evidence
+from benchmark import (
+    BenchmarkError,
+    parse_device_probe,
+    parse_openmp_probe,
+    parse_slurm_job,
+    read_registry,
+)
+from validate import require_transcript_summary, validate_runtime_evidence
 
 EXECUTABLE = "/build/bin/xnet"
 
@@ -43,6 +50,7 @@ def xnet_topology(ranks: int, threads: int = 1) -> dict[str, Any]:
 
 
 def mpi_runtime() -> dict[str, Any]:
+    scheduler = slurm_environment(2, 1)
     return {
         "launcher_argv": ["mpiexec", "-n", "2"],
         "requested_ranks": 2,
@@ -50,7 +58,15 @@ def mpi_runtime() -> dict[str, Any]:
         "launcher_probe": {
             "allocation": {
                 "kind": "scheduler",
-                "environment": slurm_environment(2, 1),
+                "environment": scheduler,
+                "scheduler_probe": {
+                    "fields": {
+                        "JobId": scheduler["SLURM_JOB_ID"],
+                        "NumTasks": scheduler["SLURM_NTASKS"],
+                        "CPUs/Task": scheduler["SLURM_CPUS_PER_TASK"],
+                        "AllocTRES": "cpu=2",
+                    }
+                },
             },
             "observations": [rank_observation(0, 0), rank_observation(1, 1)],
         },
@@ -136,8 +152,49 @@ def mutated(runtime: dict[str, Any], change: Callable[[dict[str, Any]], None]) -
     return result
 
 
+def check_transcript_boundaries() -> None:
+    """Exercise raw-to-summary checks for evidence unavailable on this host."""
+    samples = (
+        (
+            "openmp",
+            "XNET_BENCHMARK_OPENMP rank 0 thread 0 team 1 place 0 binding 3\n",
+            parse_openmp_probe,
+        ),
+        (
+            "offload",
+            "XNET_BENCHMARK_DEVICE rank 0 device 0 count 1 offloaded T "
+            "present T info 0 residual 0.0\n",
+            parse_device_probe,
+        ),
+        (
+            "slurm",
+            "JobId=1 NumTasks=2 CPUs/Task=1 AllocTRES=cpu=2,gres/gpu=1\n",
+            parse_slurm_job,
+        ),
+    )
+    with tempfile.TemporaryDirectory(prefix="xnet-benchmark-evidence-test-") as temporary:
+        for name, text, parser in samples:
+            transcript = Path(temporary) / f"{name}.txt"
+            transcript.write_text(text, encoding="utf-8")
+            summary = parser(transcript)
+            require_transcript_summary(parser, transcript, summary, "summary mismatch")
+            try:
+                require_transcript_summary(
+                    parser,
+                    transcript,
+                    {"fabricated": True},
+                    "summary mismatch",
+                )
+            except BenchmarkError as error:
+                if str(error) != "summary mismatch":
+                    raise RuntimeError(f"{name}: unexpected transcript rejection") from error
+            else:
+                raise RuntimeError(f"false pass: {name} transcript summary")
+
+
 def main() -> None:
     _, profiles = read_registry(Path(__file__).parent)
+    check_transcript_boundaries()
 
     mpi = mpi_runtime()
     validate(profiles["mpi-dense"], mpi, {})
@@ -163,6 +220,13 @@ def main() -> None:
                 SLURM_NTASKS="1"
             ),
             "Slurm task count",
+        ),
+        (
+            "wrong scheduler query ranks",
+            lambda value: value["launcher_probe"]["allocation"][
+                "scheduler_probe"
+            ]["fields"].update(NumTasks="1"),
+            "Slurm query task count",
         ),
     )
     for name, change, message in mpi_mutations:
@@ -263,6 +327,10 @@ def main() -> None:
     )
     scheduler = shared_gpu["launcher_probe"]["allocation"]["environment"]
     scheduler["SLURM_GPUS_PER_NODE"] = "1"
+    scheduler_fields = shared_gpu["launcher_probe"]["allocation"][
+        "scheduler_probe"
+    ]["fields"]
+    scheduler_fields["AllocTRES"] = "cpu=2,gres/gpu=1"
     for observation in shared_gpu["launcher_probe"]["observations"]:
         observation["cuda_visible"] = "GPU-a"
     validate(profiles["mpi-accelerator-dense"], shared_gpu, {})
@@ -277,6 +345,42 @@ def main() -> None:
         ),
         {},
         "ranks per GPU",
+    )
+    duplicate_device_row = deepcopy(shared_gpu)
+    duplicate_device_row["offload_probe"]["observations"].insert(
+        1,
+        device_observation(0),
+    )
+    reject(
+        "duplicate device observation",
+        profiles["mpi-accelerator-dense"],
+        duplicate_device_row,
+        {},
+        "rank-to-device",
+    )
+    reject(
+        "malformed scheduler GPU allocation",
+        profiles["mpi-accelerator-dense"],
+        mutated(
+            shared_gpu,
+            lambda value: value["launcher_probe"]["allocation"][
+                "environment"
+            ].update(SLURM_GPUS_PER_NODE="nonsense"),
+        ),
+        {},
+        "malformed GPU allocation",
+    )
+    reject(
+        "malformed scheduler GPU query",
+        profiles["mpi-accelerator-dense"],
+        mutated(
+            shared_gpu,
+            lambda value: value["launcher_probe"]["allocation"][
+                "scheduler_probe"
+            ]["fields"].update(AllocTRES="cpu=2,gres/gpu=nonsense"),
+        ),
+        {},
+        "sufficient GPU allocation",
     )
     print("execution-profile synthetic probes: passed")
 

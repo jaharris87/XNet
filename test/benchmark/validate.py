@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Any
+from typing import Any, Callable
 
 from benchmark import (
     BenchmarkError,
@@ -27,6 +27,7 @@ from benchmark import (
     parse_diagnostic_metrics,
     parse_execution_probe,
     parse_openmp_probe,
+    parse_slurm_job,
     parse_worker_states,
     sha256,
     worker_topology,
@@ -59,6 +60,16 @@ def as_finite_nonnegative(value: object, message: str) -> float:
     return number
 
 
+def slurm_gpu_count(value: object) -> int:
+    """Parse a Slurm GPU count without accepting arbitrary truthy text."""
+    if not isinstance(value, str):
+        raise BenchmarkError("Slurm environment has malformed GPU allocation")
+    match = re.fullmatch(r"(?:gpu(?::[A-Za-z0-9_.-]+)?[:=])?(\d+)", value)
+    if match is None:
+        raise BenchmarkError("Slurm environment has malformed GPU allocation")
+    return int(match.group(1))
+
+
 def read_json(path: Path, message: str) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -67,6 +78,17 @@ def read_json(path: Path, message: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise BenchmarkError(message)
     return value
+
+
+def require_transcript_summary(
+    parser: Callable[[Path], object],
+    transcript: Path,
+    summary: object,
+    message: str,
+) -> None:
+    """Reject a retained summary that is not exactly derived from its transcript."""
+    if parser(transcript) != summary:
+        raise BenchmarkError(message)
 
 
 def read_config_values(path: Path) -> dict[str, str]:
@@ -337,6 +359,25 @@ def validate_runtime_evidence(
             raise BenchmarkError("Slurm task count does not match requested ranks")
         if slurm_threads < threads:
             raise BenchmarkError("Slurm CPUs per task do not cover requested threads")
+        scheduler_probe = allocation.get("scheduler_probe")
+        fields = (
+            scheduler_probe.get("fields")
+            if isinstance(scheduler_probe, dict)
+            else None
+        )
+        if not isinstance(fields, dict):
+            raise BenchmarkError("Slurm allocation lacks scheduler query evidence")
+        if fields.get("JobId") != scheduler["SLURM_JOB_ID"]:
+            raise BenchmarkError("Slurm job identity disagrees with scheduler query")
+        try:
+            queried_ranks = int(fields["NumTasks"])
+            queried_threads = int(fields["CPUs/Task"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise BenchmarkError("Slurm query lacks rank or thread counts") from error
+        if queried_ranks != ranks or queried_ranks != slurm_ranks:
+            raise BenchmarkError("Slurm query task count does not match requested ranks")
+        if queried_threads < threads or queried_threads != slurm_threads:
+            raise BenchmarkError("Slurm query CPUs per task disagree with the allocation")
     if dimensions["mpi"] == "ON":
         observed_ranks = {item.get("rank") for item in observations if isinstance(item, dict)}
         if observed_ranks != {str(rank) for rank in range(ranks)}:
@@ -408,8 +449,14 @@ def validate_runtime_evidence(
         if not isinstance(offload, dict) or not isinstance(offload.get("observations"), list):
             raise BenchmarkError("accelerator profile lacks capture-owned offload probe")
         device_rows = offload["observations"]
-        device_ranks = {str(item.get("rank")) for item in device_rows if isinstance(item, dict)}
-        if device_ranks != {str(rank) for rank in range(ranks)}:
+        device_ranks = [
+            str(item.get("rank")) for item in device_rows if isinstance(item, dict)
+        ]
+        if (
+            len(device_rows) != ranks
+            or len(device_ranks) != ranks
+            or set(device_ranks) != {str(rank) for rank in range(ranks)}
+        ):
             raise BenchmarkError("accelerator offload probe lacks rank-to-device evidence")
         if any(
             not isinstance(item, dict)
@@ -426,12 +473,40 @@ def validate_runtime_evidence(
         ):
             raise BenchmarkError("accelerator offload probe did not prove device execution")
         if isinstance(allocation, dict) and allocation.get("kind") == "scheduler":
-            scheduler = allocation.get("environment", {})
-            if not any(
-                scheduler.get(name)
-                for name in ("SLURM_GPUS", "SLURM_GPUS_PER_NODE", "SLURM_GPUS_PER_TASK")
-            ):
-                raise BenchmarkError("Slurm allocation lacks GPU resource evidence")
+            scheduler = allocation["environment"]
+            scheduler_probe = allocation["scheduler_probe"]
+            scheduler_fields = scheduler_probe["fields"]
+            gpu_text = " ".join(
+                scheduler_fields.get(name, "")
+                for name in ("AllocTRES", "TresPerNode", "TresPerTask", "Gres")
+            )
+            gpu_counts = [
+                int(value)
+                for value in re.findall(
+                    r"(?:gres/)?gpu(?::[A-Za-z0-9_.-]+)?[=:](\d+)",
+                    gpu_text,
+                )
+            ]
+            required_devices = (ranks + ranks_per_gpu - 1) // ranks_per_gpu
+            if not gpu_counts or max(gpu_counts) < required_devices:
+                raise BenchmarkError("Slurm query lacks sufficient GPU allocation")
+            environment_counts = []
+            if scheduler.get("SLURM_GPUS") is not None:
+                environment_counts.append(slurm_gpu_count(scheduler["SLURM_GPUS"]))
+            if scheduler.get("SLURM_GPUS_PER_NODE") is not None:
+                try:
+                    nodes = int(scheduler.get("SLURM_JOB_NUM_NODES", "1"))
+                except ValueError as error:
+                    raise BenchmarkError("Slurm environment has malformed node count") from error
+                environment_counts.append(
+                    slurm_gpu_count(scheduler["SLURM_GPUS_PER_NODE"]) * nodes
+                )
+            if scheduler.get("SLURM_GPUS_PER_TASK") is not None:
+                environment_counts.append(
+                    slurm_gpu_count(scheduler["SLURM_GPUS_PER_TASK"]) * ranks
+                )
+            if not environment_counts or max(environment_counts) < required_devices:
+                raise BenchmarkError("Slurm environment lacks sufficient GPU allocation")
         launcher_by_rank = {
             str(item.get("rank") if item.get("rank") is not None else 0): item
             for item in observations
@@ -610,18 +685,45 @@ def validate_capture_provenance(
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("launcher_probe"), dict):
         probe = runtime_claim["launcher_probe"]
         transcript = validate_transcript("execution probe", probe.get("probe"))
-        if parse_execution_probe(transcript) != probe.get("observations"):
-            raise BenchmarkError("execution probe summary disagrees with transcript")
+        require_transcript_summary(
+            parse_execution_probe,
+            transcript,
+            probe.get("observations"),
+            "execution probe summary disagrees with transcript",
+        )
+        allocation = probe.get("allocation")
+        if isinstance(allocation, dict) and allocation.get("kind") == "scheduler":
+            scheduler_probe = allocation.get("scheduler_probe")
+            if not isinstance(scheduler_probe, dict):
+                raise BenchmarkError("capture lacks Slurm allocation provenance")
+            transcript = validate_transcript(
+                "Slurm allocation",
+                scheduler_probe.get("probe"),
+            )
+            require_transcript_summary(
+                parse_slurm_job,
+                transcript,
+                scheduler_probe.get("fields"),
+                "Slurm allocation summary disagrees with transcript",
+            )
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("offload_probe"), dict):
         probe = runtime_claim["offload_probe"]
         transcript = validate_transcript("offload probe", probe.get("probe"))
-        if parse_device_probe(transcript) != probe.get("observations"):
-            raise BenchmarkError("offload probe summary disagrees with transcript")
+        require_transcript_summary(
+            parse_device_probe,
+            transcript,
+            probe.get("observations"),
+            "offload probe summary disagrees with transcript",
+        )
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("openmp_probe"), dict):
         probe = runtime_claim["openmp_probe"]
         transcript = validate_transcript("OpenMP probe", probe.get("probe"))
-        if parse_openmp_probe(transcript) != probe.get("observations"):
-            raise BenchmarkError("OpenMP probe summary disagrees with transcript")
+        require_transcript_summary(
+            parse_openmp_probe,
+            transcript,
+            probe.get("observations"),
+            "OpenMP probe summary disagrees with transcript",
+        )
     if isinstance(runtime_claim, dict) and runtime_claim.get("accelerator_evidence") is not None:
         accelerator = runtime_claim["accelerator_evidence"]
         if not isinstance(accelerator, dict) or accelerator.get("backend") != runtime_claim.get("gpu_backend"):

@@ -75,6 +75,7 @@ def arguments() -> argparse.Namespace:
     )
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--ranks", type=int, default=1)
+    parser.add_argument("--ranks-per-gpu", type=int, default=1)
     parser.add_argument("--gpu-backend", choices=("CUDA", "HIP"))
     parser.add_argument("--accelerator-mode", choices=("openacc", "openmp-offload"))
     parser.add_argument("--ma48-dir", type=Path)
@@ -785,8 +786,8 @@ def main() -> int:
     record.mkdir()
     if args.profile not in profiles:
         raise BenchmarkError(f"unknown execution profile: {args.profile}")
-    if args.threads < 1 or args.ranks < 1:
-        raise BenchmarkError("--threads and --ranks must be positive")
+    if args.threads < 1 or args.ranks < 1 or args.ranks_per_gpu < 1:
+        raise BenchmarkError("--threads, --ranks, and --ranks-per-gpu must be positive")
     profile = {**profiles[args.profile], "_name": args.profile}
     profile["_gpu_backend"] = args.gpu_backend
     profile["_accelerator_mode"] = args.accelerator_mode
@@ -812,6 +813,8 @@ def main() -> int:
         raise BenchmarkError("non-MPI profiles require --ranks 1")
     if profile["dimensions"]["openmp"] == "OFF" and args.threads != 1:
         raise BenchmarkError("non-OpenMP profiles require --threads 1")
+    if profile["dimensions"]["gpu"] == "OFF" and args.ranks_per_gpu != 1:
+        raise BenchmarkError("non-accelerator profiles require --ranks-per-gpu 1")
     if profile["dimensions"]["openmp"] == "ON" and os.environ.get("OMP_NUM_THREADS") != str(args.threads):
         raise BenchmarkError("OpenMP profile requires matching OMP_NUM_THREADS")
     run_argv = [*launcher, str((args.build_dir.resolve() / "bin/xnet"))]
@@ -865,6 +868,7 @@ def main() -> int:
         "launcher_argv": launcher,
         "requested_ranks": args.ranks,
         "requested_threads": args.threads,
+        "requested_ranks_per_gpu": args.ranks_per_gpu,
         "launcher_probe": launcher_probe,
         "offload_probe": offload_probe,
         "openmp_probe": openmp_probe,

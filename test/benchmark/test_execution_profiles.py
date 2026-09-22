@@ -61,6 +61,32 @@ def main():
     host_fallback = deepcopy(accelerator)
     host_fallback["offload_probe"]["observations"][0]["offloaded"] = False
     reject("GPU host fallback", profiles["accelerator-dense"], host_fallback, {}, "device execution")
+    shared_gpu = deepcopy(runtime)
+    shared_gpu.update(
+        requested_ranks_per_gpu=2,
+        gpu_backend="CUDA",
+        accelerator_mode="openacc",
+        accelerator_evidence={"backend": "CUDA", "commands": [{}]},
+        offload_probe={"observations": [
+            {"rank": "0", "device": 0, "device_count": 1, "offloaded": True,
+             "data_present": True, "info": 0, "residual": 0.0},
+            {"rank": "1", "device": 0, "device_count": 1, "offloaded": True,
+             "data_present": True, "info": 0, "residual": 0.0},
+        ]},
+    )
+    for observation in shared_gpu["launcher_probe"]["observations"]:
+        observation["cuda_visible"] = "GPU-a"
+    validate_runtime_evidence(
+        profiles["mpi-accelerator-dense"], shared_gpu,
+        [*shared_gpu["launcher_argv"], "/build/bin/xnet"],
+        "/build/bin/xnet", {},
+    )
+    wrong_sharing = deepcopy(shared_gpu)
+    wrong_sharing["launcher_probe"]["observations"][1]["cuda_visible"] = "GPU-b"
+    reject(
+        "incorrect ranks-per-GPU placement",
+        profiles["mpi-accelerator-dense"], wrong_sharing, {}, "ranks per GPU",
+    )
     print("execution-profile synthetic probes: passed")
 
 

@@ -226,13 +226,18 @@ def validate_runtime_evidence(
     launcher = runtime.get("launcher_argv")
     ranks = runtime.get("requested_ranks")
     threads = runtime.get("requested_threads")
+    ranks_per_gpu = runtime.get("requested_ranks_per_gpu", 1)
     if not isinstance(launcher, list) or not all(
         isinstance(item, str) and item for item in launcher
     ):
         raise BenchmarkError("malformed launcher provenance")
     if run_argv != [*launcher, expected_executable]:
         raise BenchmarkError("launcher provenance does not match run command")
-    if not isinstance(ranks, int) or ranks < 1 or not isinstance(threads, int) or threads < 1:
+    if (
+        not isinstance(ranks, int) or ranks < 1
+        or not isinstance(threads, int) or threads < 1
+        or not isinstance(ranks_per_gpu, int) or ranks_per_gpu < 1
+    ):
         raise BenchmarkError("malformed rank or thread provenance")
     dimensions = profile["dimensions"]
     if profile["launcher"] == "required" and not launcher:
@@ -260,6 +265,8 @@ def validate_runtime_evidence(
             raise BenchmarkError("launcher rank count does not match requested ranks")
     if dimensions["openmp"] == "OFF" and threads != 1:
         raise BenchmarkError("non-OpenMP profile has wrong thread count")
+    if dimensions["gpu"] == "OFF" and ranks_per_gpu != 1:
+        raise BenchmarkError("non-accelerator profile has ranks-per-GPU claim")
     if dimensions["openmp"] == "ON" and (
         threads < 2 or environment.get("OMP_NUM_THREADS") != str(threads)
     ):
@@ -363,6 +370,23 @@ def validate_runtime_evidence(
             for item in device_rows
         ):
             raise BenchmarkError("accelerator offload probe did not prove device execution")
+        launcher_by_rank = {
+            str(item.get("rank") if item.get("rank") is not None else 0): item
+            for item in observations
+            if isinstance(item, dict)
+        }
+        device_groups: dict[tuple[object, object], int] = {}
+        for item in device_rows:
+            rank = str(item["rank"])
+            launcher_item = launcher_by_rank.get(rank)
+            if not isinstance(launcher_item, dict):
+                raise BenchmarkError("accelerator rank lacks launcher placement")
+            visible = launcher_item.get("cuda_visible") or launcher_item.get("rocr_visible")
+            physical_identity = (visible, item["device"]) if visible else item["device"]
+            group = (launcher_item.get("host"), physical_identity)
+            device_groups[group] = device_groups.get(group, 0) + 1
+        if set(device_groups.values()) != {ranks_per_gpu}:
+            raise BenchmarkError("observed rank/device placement does not match ranks per GPU")
 
 
 def validate_capture_provenance(

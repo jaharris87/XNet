@@ -85,7 +85,8 @@ configured XNet objects as the executable, then launches it with the exact
 benchmark launcher. A passing record requires a device-resident mapped solve,
 the observed rank-to-device mapping, and retained `nvidia-smi` or `rocm-smi`
 physical-device/runtime output. Visible-device environment variables alone are
-not evidence. The same mechanism covers the one- and two-ranks-per-GPU slices;
+not evidence. `--ranks-per-gpu` is explicit and its observed host/device group
+counts must match for the one- and two-ranks-per-GPU slices;
 site launch options remain explicit argv rather than site-specific harness
 forks.
 

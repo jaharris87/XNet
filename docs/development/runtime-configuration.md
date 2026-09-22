@@ -25,6 +25,10 @@ An input can name up to 16 `include` files.  XNet reads the including file,
 then reads listed includes in their listed order; a later include overrides an
 earlier value.  Relative paths are interpreted relative to the file that names
 them.  Includes are limited to 16 nesting levels and cycles are rejected.
+Cycle identity lexically normalizes `.` and `..` components, so equivalent
+spelling aliases are rejected. XNet does not resolve symbolic links; a cycle
+that exists only through symbolic-link aliases is unsupported and can reach
+the depth limit instead.
 Validation and legacy single-pair filename expansion occur only after every
 layer has been read.  Rank zero reads and validates the files, then broadcasts
 the resolved value; rank zero writes `xnet.resolved.nml` for reproducibility.

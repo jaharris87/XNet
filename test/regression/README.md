@@ -39,7 +39,7 @@ The suite enforces a 30-second per-case process timeout. Use
 ## Isolated execution and retained output
 
 pytest supplies a new empty temporary directory for each case. The runner
-copies the complete `control` input into it, creates a local writable network
+copies the maintained `xnet.nml` input into it, creates a local writable network
 directory containing the case's declared tracked source inputs, and stages
 every trajectory, Helmholtz EOS table, and any explicitly declared nested
 input at a safe relative destination. Duplicate destinations and unsafe paths
@@ -73,6 +73,12 @@ failures; and out-of-policy values or invariants as comparison failures.
 
 ## Case inputs and legacy provenance
 
+For every migrated case, `cases/<case>/xnet.nml` is the maintained runtime
+input copied by the runner and read by XNet. The adjacent `control` file is a
+retained historical normalized-concatenation fixture; it is not copied or read
+by the runner. References whose input-inventory key is still named `control`
+bind the SHA-256 of the maintained `xnet.nml` path, not the historical fixture.
+
 Legacy ID 1 in `test/test_xnet.sh` names `tnsn_alpha` and calls
 `do_test_small`, which historically concatenates `test/test_settings_small`
 and `test/Test_Problems/setup_tnsn_alpha` into `test/control`. It assumes the
@@ -83,7 +89,8 @@ executable file argument is recognized, runs ten identical zones, reads
 `ts_tnsn_alpha_*` binary histories. The legacy driver moves only
 `net_diag01` into `Test_Results` for comparison.
 
-The committed `cases/tnsn_alpha/control` is the one-time concatenated input.
+The retained `cases/tnsn_alpha/control` is the one-time historical concatenated
+input; the maintained `cases/tnsn_alpha/xnet.nml` carries its runtime settings.
 Trailing whitespace was removed, and two deliberate path changes support
 isolated execution: the `Test_Results/` prefixes were removed from the ASCII
 and binary output roots, and each `Test_Problems/th_sn1aflame` path became
@@ -111,7 +118,8 @@ use `th_co_burn_1` through `th_co_burn_6`, covering densities from
 `net_diag01` for its warning-only comparison. No tracked historical
 `net_diag_heat_alpha` reference is present in a clean checkout.
 
-The committed `cases/heat_alpha/control` is the one-time concatenated input.
+The retained `cases/heat_alpha/control` is the one-time historical concatenated
+input; the maintained `cases/heat_alpha/xnet.nml` carries its runtime settings.
 Trailing whitespace was removed, the `Test_Results/` prefixes were removed
 from both output roots, and the six `Test_Problems/` prefixes were removed from
 the trajectory paths. All numerical controls, zone ordering, `Data_alpha`
@@ -137,7 +145,7 @@ matching `ts_heat_sn160_1` through `_6` binary histories. The 14 species in the
 ASCII-output control do not limit the diagnostic: `net_diag01` records all 160
 species in the exact order of `test/Data_SN160/sunet`.
 
-The committed `cases/heat_sn160/control` is that one-time concatenation with
+The retained `cases/heat_sn160/control` is that one-time historical concatenation with
 trailing whitespace removed. Its only semantic-preserving path edits remove
 the `Test_Results/` prefixes from both output roots and the `Test_Problems/`
 prefixes from all six trajectories. Numerical controls, zone block size 1,
@@ -160,7 +168,7 @@ The complete legacy control differences are:
 
 Legacy ID 54 calls `do_test_bdf`, which concatenates
 `test/test_settings_bdf` and `test/Test_Problems/setup_bdf_sn160` once. The
-committed `cases/bdf_sn160/control` removes trailing whitespace, removes
+retained `cases/bdf_sn160/control` removes trailing whitespace, removes
 `Test_Results/` from both output roots, removes `Test_Problems/` from the six
 trajectory paths, and intentionally changes the zone block size from 4 to 1.
 The focused normalized-concatenation test permits exactly those path edits and
@@ -196,7 +204,7 @@ pair for the one active zone. Its ASCII history requests 14 selected species,
 but `net_diag01` records the complete ordered 47-species network from
 `test/Data_torch47/sunet`.
 
-The committed `cases/tnsn_torch47/control` changes only the two output roots
+The retained `cases/tnsn_torch47/control` changes only the two output roots
 by removing `Test_Results/` and the ten trajectory records by removing
 `Test_Problems/`. Numerical and physical controls, `Data_torch47`, abundance
 paths, repeated records, and the 14-species ASCII-history selection are
@@ -220,7 +228,7 @@ is the separate `batch_torch47` case. The former source-directory Makefile's
 `test_batch` target invoked ID 62, so that target is historical context rather
 than the definition of this regression.
 
-The committed standalone control preserves ID 61's 16 serial zones,
+The retained standalone control preserves ID 61's 16 serial zones,
 `nzbatchmx = 4`, Backward Euler, self-heating, screening, weak reactions,
 runtime nuclear-data processing, alpha network, and 0.1-second target per
 zone. Its only edits remove `Test_Results/` from the history roots. It retains
@@ -574,7 +582,7 @@ The required outputs totaled 30,663,926 bytes: 47,898 bytes for `net_diag01`,
 histories. Isolated preprocessing created `ab_blank`, `match_data`,
 `match_read`, `matr_shape`, `net_desc`, `net_diag`, `nets3`, `nets4`,
 `nuc_data`, and `sparse_ind`, totaling 847,933 bytes. The committed complete
-JSON reference is 52,447 bytes. Hashes for the control, five network sources,
+JSON reference is 52,447 bytes. Hashes for the maintained `xnet.nml`, five network sources,
 six trajectories, and EOS table are recorded in the reference; the tracked
 inputs remained unchanged after the runs. The post-run ignored-file check
 was scoped to every repository input and case directory that the execution
@@ -631,7 +639,7 @@ scientific validation.
 
 The reference was generated on 2026-08-05 from production and input revision
 `a8b64764a6d614f406da6c897e6b051fb3e1972d` on macOS 26.6 arm64 with GNU
-Fortran 16.1.0, Python 3.13.0, and pytest 9.1.1. The complete control is bound
+Fortran 16.1.0, Python 3.13.0, and pytest 9.1.1. The maintained `xnet.nml` is bound
 by its SHA-256 hash in the reference. The following commands and executable
 path record that revision's historical build; they are not current build
 instructions:
@@ -656,8 +664,8 @@ only prose. `test_bdf_control_is_the_normalized_legacy_id_54_concatenation`
 forms the same `test_settings_bdf + setup_bdf_sn160` concatenation as
 `do_test_bdf`, strips trailing whitespace, applies the two isolated path
 normalizations, changes only the block-size line from 4 to 1, and requires an
-exact match with the committed control. The reference records SHA-256 hashes
-for that control, the five network sources, abundance input, six trajectories,
+exact match with the retained historical control. The reference records SHA-256 hashes
+for the maintained `xnet.nml`, the five network sources, abundance input, six trajectories,
 and EOS table. It also records integration choice 3, the maintained solver
 identity, and the effective `changemx = changemxt = 1e10` state imposed by
 XNet.

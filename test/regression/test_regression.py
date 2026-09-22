@@ -80,31 +80,80 @@ def _run_raw_configuration(
     )
 
 
-def test_namelist_include_is_read_from_the_including_directory(
+def _minimal_standalone_configuration(include: str = "") -> str:
+    lines = ["&xnet_config"]
+    if include:
+        lines.append(f" include = {include},")
+    lines.extend(
+        (
+            " data_dir = 'Data_alpha',",
+            " iprocess = 1,",
+            " inab_files(1) = 'Data_alpha/ab_co',",
+            " thermo_files(1) = 'th_sn1aflame',",
+            "/",
+            "",
+        )
+    )
+    return "\n".join(lines)
+
+
+def _prepared_configuration_work_directory(tmp_path: Path, name: str) -> Path:
+    return prepare_work_directory(tnsn_alpha_case(REPOSITORY_ROOT), tmp_path / name)
+
+
+def test_namelist_uses_compiled_defaults(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path
 ) -> None:
-    case = tnsn_alpha_case(REPOSITORY_ROOT)
-    work_directory = prepare_work_directory(case, tmp_path / "included")
-    configuration = (work_directory / "xnet.nml").read_text(encoding="utf-8")
-    nested = work_directory / "nested"
-    nested.mkdir()
-    (nested / "base.nml").write_text(configuration, encoding="utf-8")
+    work_directory = _prepared_configuration_work_directory(tmp_path, "defaults")
     (work_directory / "xnet.nml").write_text(
-        "&xnet_config\n include = 'nested/base.nml'\n/\n", encoding="utf-8"
+        _minimal_standalone_configuration(), encoding="utf-8"
     )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "nzone = 10" in (work_directory / "xnet.resolved.nml").read_text(encoding="utf-8")
+    resolved = (work_directory / "xnet.resolved.nml").read_text(encoding="utf-8")
+    assert "nzone = 1" in resolved
+    assert "isolv = 1" in resolved
+    assert "kstmx = 9999" in resolved
+    assert "nzbatchmx = 1" in resolved
+
+
+def test_namelist_include_precedence_and_nested_relative_paths(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    work_directory = _prepared_configuration_work_directory(tmp_path, "included")
+    nested = work_directory / "nested"
+    deeper = nested / "deeper"
+    deeper.mkdir(parents=True)
+    (deeper / "base.nml").write_text(
+        _minimal_standalone_configuration(), encoding="utf-8"
+    )
+    (nested / "first.nml").write_text(
+        "&xnet_config\n include = 'deeper/base.nml', isolv = 3\n/\n",
+        encoding="utf-8",
+    )
+    (nested / "second.nml").write_text(
+        "&xnet_config\n isolv = 1\n/\n", encoding="utf-8"
+    )
+    (work_directory / "xnet.nml").write_text(
+        "&xnet_config\n include = 'nested/first.nml', 'nested/second.nml'\n/\n",
+        encoding="utf-8",
+    )
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode == 0, result.stdout + result.stderr
+    resolved = (work_directory / "xnet.resolved.nml").read_text(encoding="utf-8")
+    assert "nzone = 1" in resolved
+    assert "isolv = 1" in resolved
 
 
 @pytest.mark.parametrize(
     ("configuration", "expected"),
     (
+        ("&xnet_config\n nzone = 'invalid'\n/\n", "malformed or unknown xnet_config namelist"),
         ("&xnet_config\n unknown_setting = 1\n/\n", "malformed or unknown xnet_config namelist"),
         ("&xnet_config\n include = 'child.nml'\n/\n", "xnet.nml include cycle"),
     ),
 )
-def test_namelist_rejects_unknown_variables_and_include_cycles(
+def test_namelist_rejects_malformed_unknown_and_include_cycle_input(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path,
     configuration: str, expected: str,
 ) -> None:
@@ -118,6 +167,68 @@ def test_namelist_rejects_unknown_variables_and_include_cycles(
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
     assert expected in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("root_include", "child_include"),
+    (
+        ("'./xnet.nml'", None),
+        ("'nested/../nested/child.nml'", "'../xnet.nml'"),
+    ),
+)
+def test_namelist_rejects_lexical_alias_include_cycles(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path,
+    root_include: str, child_include: str | None,
+) -> None:
+    work_directory = tmp_path / "alias-cycle"
+    work_directory.mkdir()
+    (work_directory / "xnet.nml").write_text(
+        f"&xnet_config\n include = {root_include}\n/\n", encoding="utf-8"
+    )
+    if child_include is not None:
+        nested = work_directory / "nested"
+        nested.mkdir()
+        (nested / "child.nml").write_text(
+            f"&xnet_config\n include = {child_include}\n/\n", encoding="utf-8"
+        )
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert "xnet.nml include cycle" in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("configuration", "expected"),
+    (
+        (None, "failed to open xnet.nml"),
+        ("&xnet_config\n include = 'missing.nml'\n/\n", "failed to open xnet.nml: missing.nml"),
+    ),
+)
+def test_namelist_rejects_missing_root_and_include(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path,
+    configuration: str | None, expected: str,
+) -> None:
+    work_directory = tmp_path / "missing"
+    work_directory.mkdir()
+    if configuration is not None:
+        (work_directory / "xnet.nml").write_text(configuration, encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert expected in result.stdout + result.stderr
+
+
+def test_namelist_validates_only_after_all_layers(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    work_directory = _prepared_configuration_work_directory(tmp_path, "late-validation")
+    (work_directory / "invalid.nml").write_text(
+        "&xnet_config\n nzone = 0\n/\n", encoding="utf-8"
+    )
+    (work_directory / "xnet.nml").write_text(
+        _minimal_standalone_configuration("'invalid.nml'"), encoding="utf-8"
+    )
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert "nzone must be between 1 and max_config_zones" in result.stdout + result.stderr
 
 
 def test_namelist_rejects_excessive_include_depth(
@@ -134,6 +245,8 @@ def test_namelist_rejects_excessive_include_depth(
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
     assert "xnet.nml include depth limit exceeded" in result.stdout + result.stderr
+
+
 def test_tnsn_alpha(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path
 ) -> None:

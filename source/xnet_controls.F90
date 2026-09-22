@@ -101,7 +101,7 @@ Contains
     Character(*), Intent(out) :: message
     Call SetRuntimeConfigDefaults(config)
     message = ''
-    If ( parallel_IOProcessor() ) Call read_config_file(config,Trim(filename),0,'',message)
+    If ( parallel_IOProcessor() ) Call read_config_file(config,canonicalize_path(filename),0,'',message)
     If ( parallel_IOProcessor() .and. Len_Trim(message) == 0 ) Then
       Call NormalizeRuntimeConfig(config,message)
       If ( Len_Trim(message) == 0 ) Call ValidateStandaloneRuntimeConfig(config,message)
@@ -115,7 +115,7 @@ Contains
     Character(*), Intent(in) :: filename, ancestry
     Integer, Intent(in) :: depth
     Character(*), Intent(out) :: message
-    Character(256) :: include(max_config_includes), include_path, next_ancestry
+    Character(256) :: include(max_config_includes), include_path, next_ancestry, canonical_filename
     Character(80) :: description(3), ev_file_base, bin_file_base, data_dir
     Character(80), Allocatable :: inab_files(:), thermo_files(:)
     Character(5), Allocatable :: output_nuclei(:)
@@ -128,12 +128,13 @@ Contains
       & changemxt, tolt9, t9nse, ineutrino, idiag, itsout, ev_file_base, bin_file_base, data_dir, &
       & nnucout, output_nuclei, inab_files, thermo_files, include
     message = ''
+    canonical_filename = canonicalize_path(filename)
     If ( depth >= max_config_include_depth ) Then
       message = 'xnet.nml include depth limit exceeded'
       Return
     EndIf
-    If ( Index('|'//Trim(ancestry)//'|','|'//Trim(filename)//'|') > 0 ) Then
-      message = 'xnet.nml include cycle: '//Trim(filename)
+    If ( Index('|'//Trim(ancestry)//'|','|'//Trim(canonical_filename)//'|') > 0 ) Then
+      message = 'xnet.nml include cycle: '//Trim(canonical_filename)
       Return
     EndIf
     include = ''
@@ -148,15 +149,15 @@ Contains
     itsout = config%itsout; ev_file_base = config%ev_file_base; bin_file_base = config%bin_file_base
     data_dir = config%data_dir; nnucout = config%nnucout; output_nuclei = config%output_nuclei
     inab_files = config%inab_files; thermo_files = config%thermo_files
-    Open(newunit=lun,file=Trim(filename),status='old',action='read',iostat=ierr)
+    Open(newunit=lun,file=Trim(canonical_filename),status='old',action='read',iostat=ierr)
     If ( ierr /= 0 ) Then
-      message = 'failed to open xnet.nml: '//Trim(filename)
+      message = 'failed to open xnet.nml: '//Trim(canonical_filename)
       Return
     EndIf
     Read(lun,nml=xnet_config,iostat=ierr)
     Close(lun)
     If ( ierr /= 0 ) Then
-      Write(message,'(a,i0,a)') 'malformed or unknown xnet_config namelist, iostat=',ierr,' in '//Trim(filename)
+      Write(message,'(a,i0,a)') 'malformed or unknown xnet_config namelist, iostat=',ierr,' in '//Trim(canonical_filename)
       Return
     EndIf
     config%description = description
@@ -169,10 +170,10 @@ Contains
     config%itsout = itsout; config%ev_file_base = ev_file_base; config%bin_file_base = bin_file_base
     config%data_dir = data_dir; config%nnucout = nnucout; config%output_nuclei = output_nuclei
     config%inab_files = inab_files; config%thermo_files = thermo_files
-    next_ancestry = Trim(ancestry)//'|'//Trim(filename)
+    next_ancestry = Trim(ancestry)//'|'//Trim(canonical_filename)
     Do i = 1, max_config_includes
       If ( Len_Trim(include(i)) == 0 ) Cycle
-      include_path = resolve_include(filename,include(i))
+      include_path = resolve_include(canonical_filename,include(i))
       Call read_config_file(config,Trim(include_path),depth+1,Trim(next_ancestry),message)
       If ( Len_Trim(message) /= 0 ) Return
     EndDo
@@ -214,16 +215,66 @@ Contains
     Character(256) :: path
     Integer :: slash
     If ( child(1:1) == '/' ) Then
-      path = child
+      path = canonicalize_path(child)
       Return
     EndIf
     slash = Scan(Trim(parent),'/',back=.True.)
     If ( slash > 0 ) Then
-      path = parent(:slash)//Trim(child)
+      path = canonicalize_path(parent(:slash)//Trim(child))
     Else
-      path = child
+      path = canonicalize_path(child)
     EndIf
   End Function resolve_include
+
+  Function canonicalize_path(input_path) Result(path)
+    Character(*), Intent(in) :: input_path
+    Character(256) :: path, text, part(128)
+    Integer :: first, last, length, nparts
+    Logical :: absolute
+    text = Trim(input_path)
+    path = ''
+    If ( Len_Trim(text) == 0 ) Return
+    absolute = text(1:1) == '/'
+    length = Len_Trim(text)
+    nparts = 0
+    first = 1
+    Do While ( first <= length )
+      Do While ( first <= length .and. text(first:first) == '/' )
+        first = first + 1
+      EndDo
+      If ( first > length ) Exit
+      last = first
+      Do While ( last <= length .and. text(last:last) /= '/' )
+        last = last + 1
+      EndDo
+      If ( text(first:last-1) == '.' ) Then
+        Continue
+      ElseIf ( text(first:last-1) == '..' ) Then
+        If ( nparts > 0 .and. Trim(part(nparts)) /= '..' ) Then
+          nparts = nparts - 1
+        ElseIf ( .not. absolute ) Then
+          nparts = nparts + 1
+          part(nparts) = '..'
+        EndIf
+      Else
+        nparts = nparts + 1
+        part(nparts) = text(first:last-1)
+      EndIf
+      first = last + 1
+    EndDo
+    If ( absolute ) path = '/'
+    Do first = 1, nparts
+      If ( Len_Trim(path) > 0 .and. Trim(path) /= '/' ) path = Trim(path)//'/'
+      path = Trim(path)//Trim(part(first))
+    EndDo
+    If ( Len_Trim(path) == 0 ) Then
+      If ( absolute ) Then
+        path = '/'
+      Else
+        path = '.'
+      EndIf
+    EndIf
+  End Function canonicalize_path
 
   Subroutine ApplyRuntimeConfig(config, data_dir)
     Type(RuntimeConfig), Intent(in) :: config

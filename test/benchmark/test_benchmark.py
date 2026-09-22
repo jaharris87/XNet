@@ -221,6 +221,17 @@ def main(record: Path) -> None:
             "malformed runtime provenance",
         )
 
+        false_affinity = copy_record(temporary_path, record, "false-affinity")
+        document = read_document(false_affinity)
+        document["capture"]["runtime"]["affinity"] = "fabricated"
+        write_document(false_affinity, document)
+        reject(
+            "false affinity",
+            false_affinity,
+            root,
+            "runtime affinity evidence",
+        )
+
         changed_composition = copy_record(
             temporary_path,
             record,

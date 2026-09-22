@@ -32,6 +32,7 @@ HARNESS_FILES = {
     "capture.py",
     "validate.py",
     "test_benchmark.py",
+    "test_execution_profiles.py",
     "cases.json",
 }
 COUNTER_NAMES = {"TS", "NR", "Jacobian", "Deriv", "CrossSect"}
@@ -209,6 +210,77 @@ def validate_timer_section(section: object) -> dict[str, float]:
     }
 
 
+def validate_runtime_evidence(
+    profile: dict[str, Any],
+    runtime: object,
+    run_argv: list[str],
+    expected_executable: str, environment: dict[str, object],
+) -> None:
+    """Require observed execution facts, not merely a profile label."""
+    if not isinstance(runtime, dict):
+        raise BenchmarkError("capture lacks runtime placement evidence")
+    launcher = runtime.get("launcher_argv")
+    ranks = runtime.get("requested_ranks")
+    threads = runtime.get("requested_threads")
+    if not isinstance(launcher, list) or not all(
+        isinstance(item, str) and item for item in launcher
+    ):
+        raise BenchmarkError("malformed launcher provenance")
+    if run_argv != [*launcher, expected_executable]:
+        raise BenchmarkError("launcher provenance does not match run command")
+    if not isinstance(ranks, int) or ranks < 1 or not isinstance(threads, int) or threads < 1:
+        raise BenchmarkError("malformed rank or thread provenance")
+    dimensions = profile["dimensions"]
+    if profile["launcher"] == "required" and not launcher:
+        raise BenchmarkError("parallel profile lacks launcher provenance")
+    if profile["launcher"] == "direct" and launcher:
+        raise BenchmarkError("direct profile has unexpected launcher")
+    if dimensions["mpi"] == "OFF" and ranks != 1:
+        raise BenchmarkError("non-MPI profile has wrong rank count")
+    if dimensions["mpi"] == "ON" and ranks < 2:
+        raise BenchmarkError("MPI profile lacks multiple ranks")
+    if dimensions["openmp"] == "OFF" and threads != 1:
+        raise BenchmarkError("non-OpenMP profile has wrong thread count")
+    if dimensions["openmp"] == "ON" and (
+        threads < 2 or environment.get("OMP_NUM_THREADS") != str(threads)
+    ):
+        raise BenchmarkError("OpenMP thread evidence does not match profile")
+    probe = runtime.get("launcher_probe")
+    if not isinstance(probe, dict) or not isinstance(probe.get("observations"), list):
+        raise BenchmarkError("capture lacks launcher-observed placement evidence")
+    observations = probe["observations"]
+    topology = runtime.get("xnet_topology")
+    if not isinstance(topology, list):
+        raise BenchmarkError("capture lacks XNet topology evidence")
+    rank_records = {(item.get("rank"), item.get("size")) for item in topology if isinstance(item, dict) and "rank" in item}
+    expected_ranks = {(rank, ranks) for rank in range(ranks)}
+    if rank_records != expected_ranks:
+        raise BenchmarkError("XNet rank topology does not match requested launcher ranks")
+    if dimensions["mpi"] == "ON":
+        observed_ranks = {item.get("rank") for item in observations if isinstance(item, dict)}
+        if observed_ranks != {str(rank) for rank in range(ranks)}:
+            raise BenchmarkError("launcher probe rank IDs do not match XNet ranks")
+        if len(observations) != ranks or any(not item.get("host") or not item.get("affinity") for item in observations if isinstance(item, dict)):
+            raise BenchmarkError("launcher probe lacks host or binding evidence")
+        if not isinstance(probe.get("scheduler"), dict) or not probe["scheduler"]:
+            raise BenchmarkError("parallel profile lacks observed scheduler allocation")
+    if dimensions["openmp"] == "ON":
+        teams = {(item.get("thread"), item.get("team")) for item in topology if isinstance(item, dict) and "thread" in item}
+        if teams != {(thread, threads) for thread in range(1, threads + 1)}:
+            raise BenchmarkError("XNet OpenMP topology does not match requested thread team")
+    if dimensions["gpu"] == "ON":
+        offload = runtime.get("offload_probe")
+        if not isinstance(offload, dict) or offload.get("offloaded") is None:
+            raise BenchmarkError("accelerator profile lacks capture-owned offload probe")
+        if not all(value is True for value in offload.get("offloaded", [])):
+            raise BenchmarkError("accelerator offload probe did not execute on device")
+        if not all(isinstance(value, int) and value > 0 for value in offload.get("device_counts", [])):
+            raise BenchmarkError("accelerator offload probe lacks device count")
+        devices = offload.get("devices")
+        if not isinstance(devices, list) or not devices:
+            raise BenchmarkError("accelerator offload probe lacks rank-to-device evidence")
+
+
 def validate_capture_provenance(
     document: dict[str, object],
     record: Path,
@@ -279,22 +351,20 @@ def validate_capture_provenance(
     if len(build_directories) != 1:
         raise BenchmarkError("build command lacks one capture-owned build directory")
     expected_executable = str(Path(build_directories[0]) / "bin" / "xnet")
-    if capture["run_argv"] != [expected_executable]:
+    run_argv = capture["run_argv"]
+    if not run_argv or run_argv[-1] != expected_executable:
         raise BenchmarkError("run command does not match the captured build")
     dimensions = profile["dimensions"]
-    if settings.get("MATRIX_SOLVER") != dimensions["solver"]:
-        raise BenchmarkError("retained build config solver does not match profile")
-    expected_switches = {
-        "MPI_MODE": dimensions["mpi"],
-        "OPENMP_MODE": dimensions["openmp"],
-        "GPU_MODE": dimensions["gpu"],
-    }
-    for name, value in expected_switches.items():
+    for name, value in profile["build_selectors"].items():
         if settings.get(name) != value:
             raise BenchmarkError("retained build config does not match profile")
-    for name in ("OPENACC_MODE", "OPENMP_OL_MODE"):
-        if settings.get(name) != "OFF":
-            raise BenchmarkError("retained build config does not match profile")
+    if profile.get("accelerator"):
+        if settings.get("GPU_BACKEND") not in {"CUDA", "HIP"}:
+            raise BenchmarkError("accelerator build lacks a supported backend")
+        if (settings.get("OPENACC_MODE") == "ON") == (settings.get("OPENMP_OL_MODE") == "ON"):
+            raise BenchmarkError("accelerator build lacks exactly one directive mode")
+    if profile.get("external_source") and not settings.get("MA48_DIR"):
+        raise BenchmarkError("MA48 build lacks external source provenance")
 
     operational = capture.get("operational")
     if not isinstance(operational, dict):
@@ -355,12 +425,24 @@ def validate_capture_provenance(
         raise BenchmarkError("compiler version command does not match the compiler")
     for name in ("runtime", "topology"):
         validate_transcript(name, operational.get(name))
+    runtime_claim = capture.get("runtime")
+    if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("launcher_probe"), dict):
+        validate_transcript("execution probe", runtime_claim["launcher_probe"].get("probe"))
+    if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("offload_probe"), dict):
+        validate_transcript("offload probe", runtime_claim["offload_probe"].get("probe"))
     runtime_argv = operational["runtime"]["argv"]
     if (
         Path(runtime_argv[0]).name not in {"ldd", "otool"}
         or expected_executable not in runtime_argv
     ):
         raise BenchmarkError("runtime evidence does not inspect the run executable")
+
+    runtime_evidence = runtime_claim
+    if not isinstance(runtime_evidence, dict) or runtime_evidence.get("affinity") != affinity:
+        raise BenchmarkError("runtime affinity evidence does not match operational evidence")
+    validate_runtime_evidence(
+        profile, runtime_evidence, run_argv, expected_executable, environment
+    )
 
 
 def validate_comparison_binding(

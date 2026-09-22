@@ -2,13 +2,42 @@
   "schema": "xnet-benchmark-cases-v1",
   "execution_profiles": {
     "serial-dense": {
-      "launcher": "none",
+      "launcher": "direct",
       "dimensions": {
         "mpi": "OFF",
         "openmp": "OFF",
         "gpu": "OFF",
         "solver": "dense"
-      }
+      },
+      "build_selectors": {"MPI_MODE": "OFF", "OPENMP_MODE": "OFF", "GPU_MODE": "OFF", "OPENACC_MODE": "OFF", "OPENMP_OL_MODE": "OFF", "MATRIX_SOLVER": "dense"}
+    },
+    "openmp-dense": {
+      "launcher": "direct",
+      "dimensions": {"mpi": "OFF", "openmp": "ON", "gpu": "OFF", "solver": "dense"},
+      "build_selectors": {"MPI_MODE": "OFF", "OPENMP_MODE": "ON", "GPU_MODE": "OFF", "OPENACC_MODE": "OFF", "OPENMP_OL_MODE": "OFF", "MATRIX_SOLVER": "dense"}
+    },
+    "mpi-dense": {
+      "launcher": "required",
+      "dimensions": {"mpi": "ON", "openmp": "OFF", "gpu": "OFF", "solver": "dense"},
+      "build_selectors": {"MPI_MODE": "ON", "OPENMP_MODE": "OFF", "GPU_MODE": "OFF", "OPENACC_MODE": "OFF", "OPENMP_OL_MODE": "OFF", "MATRIX_SOLVER": "dense"}
+    },
+    "accelerator-dense": {
+      "launcher": "direct",
+      "dimensions": {"mpi": "OFF", "openmp": "OFF", "gpu": "ON", "solver": "dense"},
+      "build_selectors": {"MPI_MODE": "OFF", "OPENMP_MODE": "OFF", "GPU_MODE": "ON", "MATRIX_SOLVER": "dense"},
+      "accelerator": true
+    },
+    "mpi-accelerator-dense": {
+      "launcher": "required",
+      "dimensions": {"mpi": "ON", "openmp": "OFF", "gpu": "ON", "solver": "dense"},
+      "build_selectors": {"MPI_MODE": "ON", "OPENMP_MODE": "OFF", "GPU_MODE": "ON", "MATRIX_SOLVER": "dense"},
+      "accelerator": true
+    },
+    "serial-ma48": {
+      "launcher": "direct",
+      "dimensions": {"mpi": "OFF", "openmp": "OFF", "gpu": "OFF", "solver": "MA48"},
+      "build_selectors": {"MPI_MODE": "OFF", "OPENMP_MODE": "OFF", "GPU_MODE": "OFF", "OPENACC_MODE": "OFF", "OPENMP_OL_MODE": "OFF", "MATRIX_SOLVER": "MA48"},
+      "external_source": "MA48.f"
     }
   },
   "cases": [

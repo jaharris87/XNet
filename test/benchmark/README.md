@@ -10,9 +10,10 @@ campaign is pinned to source revision
 `86e867c2a64267a674ce4fbf6a3064af39e2f4e0`.
 
 `cases.json` is the sole registry. It keeps case ID, scientific network and
-workload identity, and execution profile separate. The sole implemented
-profile is `serial-dense`; future generic identities must not encode execution
-choices into case IDs.
+workload identity, and execution profile separate. The bounded profiles are
+`serial-dense`, `openmp-dense`, `mpi-dense`, `accelerator-dense`,
+`mpi-accelerator-dense`, and opt-in `serial-ma48`; workload dimensions never
+become profile or case identities.
 
 ```sh
 python3 test/benchmark/capture.py --list-cases
@@ -30,8 +31,7 @@ The frozen source checkout supplies only the executable. The separately
 identified input bundle supplies the comparator, reference, network, workload,
 and runtime inputs; the ready historical cases use the same checkout for both
 roles, while later reviewed bundles may have a newer identity.
-It rejects MPI, OpenMP, GPU, directive, and non-dense configurations. Each
-fresh process uses the registered input bundle's maintained
+Each fresh process uses the registered input bundle's maintained
 `test/regression/xnet_regression.py` characterization for `batch_alpha` or
 `heat_sn160`. XNet execution is timed separately; parsing and comparison are
 afterward, outside the timing interval, but a numerical comparison pass and
@@ -62,3 +62,14 @@ appropriate basis for scaling conclusions. Candidate CCSN and ECSN families
 remain unavailable until their reviewed workload and provenance are defined.
 
 Facility runs require separately reviewed launcher and execution-profile support.
+
+MPI captures require `--launcher 'mpiexec -n N'`, rank and thread counts. The
+harness runs and retains its own probe through that exact launcher, then checks
+its observed rank IDs, hosts, affinity, scheduler environment, and XNet's own
+`MyId` records. It does not accept caller-authored placement JSON.
+Accelerator capture requires `--offload-probe`, a facility probe command run
+through the same launcher. Its retained output must report the existing
+`XNET_GPU_LINALG` device count, selected device, and true offload result; a
+visible-device environment variable alone is not evidence.
+`serial-ma48` is available only with `--ma48-dir` naming a licensed external
+`MA48.f`; neither that source nor its contents are retained in the record.

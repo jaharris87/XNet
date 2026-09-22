@@ -228,6 +228,7 @@ def parse_diagnostic_metrics(
 def run_timed_and_compare(
     regression: Any,
     executable: Path,
+    run_argv: list[str],
     case: Any,
     work: Path,
     timeout_seconds: float,
@@ -237,7 +238,37 @@ def run_timed_and_compare(
     regression.validate_reference_for_case(case, reference)
     prepared = regression.prepare_work_directory(case, work)
     started = time.monotonic()
-    regression.run_xnet(executable, case, prepared, timeout_seconds=timeout_seconds)
+    # The regression helper is intentionally direct-executable only.  Keep its
+    # comparison preparation, but allow this capture harness to time the exact
+    # launcher argv retained in the record.
+    if run_argv == [str(executable)]:
+        regression.run_xnet(executable, case, prepared, timeout_seconds=timeout_seconds)
+    else:
+        try:
+            completed = subprocess.run(
+                run_argv, cwd=prepared, capture_output=True, text=True,
+                timeout=timeout_seconds, check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            regression._write_process_artifacts(
+                prepared, error.stdout or "", error.stderr or "", "timeout"
+            )
+            raise BenchmarkError("launched XNet timed out") from error
+        except OSError as error:
+            regression._write_process_artifacts(prepared, "", str(error), "launch-error")
+            raise BenchmarkError(f"could not launch XNet: {error}") from error
+        regression._write_process_artifacts(
+            prepared, completed.stdout, completed.stderr,
+            f"return_code={completed.returncode}",
+        )
+        if completed.returncode != 0:
+            raise BenchmarkError(f"launched XNet returned {completed.returncode}")
+        missing_outputs = [
+            name for name in case.required_outputs
+            if not (prepared / name).is_file() or (prepared / name).stat().st_size == 0
+        ]
+        if missing_outputs:
+            raise BenchmarkError(f"launched XNet did not produce: {', '.join(missing_outputs)}")
     elapsed = time.monotonic() - started
     diagnostic = (prepared / "net_diag01").read_text(encoding="utf-8")
     missing = tuple(

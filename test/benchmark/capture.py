@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Capture one immutable-source, direct-serial XNet benchmark record."""
+"""Capture one immutable-source XNet benchmark record for a bounded profile."""
 
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -36,6 +38,7 @@ HARNESS_FILES = (
     "capture.py",
     "validate.py",
     "test_benchmark.py",
+    "test_execution_profiles.py",
     "cases.json",
 )
 
@@ -59,6 +62,20 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--build-dir", type=Path)
     parser.add_argument("--records", type=Path)
     parser.add_argument("--case")
+    parser.add_argument("--profile", default="serial-dense")
+    parser.add_argument(
+        "--launcher",
+        help="shell-style complete MPI launcher prefix; the captured executable is appended",
+    )
+    parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--ranks", type=int, default=1)
+    parser.add_argument("--gpu-backend", choices=("CUDA", "HIP"))
+    parser.add_argument("--accelerator-mode", choices=("openacc", "openmp-offload"))
+    parser.add_argument(
+        "--offload-probe",
+        help="facility probe command that reports XNET_GPU_LINALG device/offloaded facts",
+    )
+    parser.add_argument("--ma48-dir", type=Path)
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--timeout-seconds", type=float, default=1800.0)
     parser.add_argument("--list-cases", action="store_true")
@@ -160,7 +177,24 @@ def build_xnet(
         raise BenchmarkError("capture owns a fresh, nonexistent --build-dir")
 
     build_log = record / "build.log"
-    command = ["make", "-C", str(repository), f"BUILD_DIR={build_dir}", "xnet"]
+    selectors = profile["build_selectors"]
+    command = ["make", "-C", str(repository), f"BUILD_DIR={build_dir}"]
+    command.extend(f"{name}={value}" for name, value in selectors.items())
+    if profile.get("accelerator"):
+        backend = profile.get("_gpu_backend")
+        mode = profile.get("_accelerator_mode")
+        if backend is None or mode is None:
+            raise BenchmarkError("accelerator profile requires --gpu-backend and --accelerator-mode")
+        command.extend([f"GPU_BACKEND={backend}"])
+        command.append(f"GPU_LAPACK_VER={'CUBLAS' if backend == 'CUDA' else 'ROCM'}")
+        command.append(f"OPENACC_MODE={'ON' if mode == 'openacc' else 'OFF'}")
+        command.append(f"OPENMP_OL_MODE={'ON' if mode == 'openmp-offload' else 'OFF'}")
+    if profile.get("external_source"):
+        ma48_dir = profile.get("_ma48_dir")
+        if not isinstance(ma48_dir, Path) or not (ma48_dir / "MA48.f").is_file():
+            raise BenchmarkError("serial-ma48 requires --ma48-dir containing licensed MA48.f")
+        command.append(f"MA48_DIR={ma48_dir}")
+    command.append("xnet")
     with build_log.open("w", encoding="utf-8") as log:
         build = subprocess.run(
             command,
@@ -181,18 +215,14 @@ def build_xnet(
     settings = config_values(config)
     if settings.get("SOURCE_ROOT") != str(repository):
         raise BenchmarkError("fresh build does not bind the source repository")
-    if settings.get("MATRIX_SOLVER") != profile["dimensions"]["solver"]:
-        raise BenchmarkError("fresh build is not the requested dense solver build")
-    for key in (
-        "MPI_MODE",
-        "OPENMP_MODE",
-        "GPU_MODE",
-        "OPENACC_MODE",
-        "OPENMP_OL_MODE",
-    ):
-        if settings.get(key) != "OFF":
-            value = settings.get(key)
-            raise BenchmarkError(f"serial-dense profile rejects {key}={value!r}")
+    for key, value in selectors.items():
+        if settings.get(key) != value:
+            raise BenchmarkError(f"fresh build selector {key} does not match profile")
+    if profile.get("accelerator"):
+        if settings.get("GPU_BACKEND") != profile["_gpu_backend"] or settings.get("GPU_LAPACK_VER") not in {"CUBLAS", "ROCM"}:
+            raise BenchmarkError("fresh accelerator build does not match requested backend")
+        if (settings.get("OPENACC_MODE") == "ON") == (settings.get("OPENMP_OL_MODE") == "ON"):
+            raise BenchmarkError("fresh accelerator build lacks exactly one directive mode")
 
     shutil.copy2(config, record / "build-config.txt")
     return executable, build_log, command, settings
@@ -203,6 +233,7 @@ def capture_repetition(
     record: Path,
     regression: Any,
     executable: Path,
+    run_argv: list[str],
     regression_case: Any,
     timeout_seconds: float,
     expected_zones: list[int],
@@ -219,6 +250,7 @@ def capture_repetition(
             process_wall_seconds, _ = run_timed_and_compare(
                 regression,
                 executable,
+                run_argv,
                 regression_case,
                 work,
                 timeout_seconds,
@@ -229,8 +261,9 @@ def capture_repetition(
             comparison_error = f"{type(error).__name__}: {error}"
 
         artifact.mkdir()
-        retained_names = (
-            "net_diag01",
+        retained_names = tuple(
+            path.name for path in work.glob("net_diag*")
+        ) + (
             "xnet.stdout.txt",
             "xnet.stderr.txt",
             "xnet.status.txt",
@@ -277,6 +310,64 @@ def capture_repetition(
         "counters": counters,
         "artifacts": artifacts,
     }
+
+
+RANK_ENVIRONMENT = (
+    "OMPI_COMM_WORLD_RANK", "PMI_RANK", "PMIX_RANK", "SLURM_PROCID",
+)
+
+
+def observe_launcher(record: Path, launcher: list[str]) -> dict[str, object]:
+    """Run a harness-owned probe through the exact launcher before XNet."""
+    code = (
+        "import json,os,socket; "
+        "keys=('OMPI_COMM_WORLD_RANK','PMI_RANK','PMIX_RANK','SLURM_PROCID'); "
+        "rank=next((os.environ[k] for k in keys if k in os.environ),None); "
+        "aff=sorted(os.sched_getaffinity(0)) if hasattr(os,'sched_getaffinity') else None; "
+        "print('XNET_EXECUTION_PROBE '+json.dumps({'rank':rank,'host':socket.gethostname(),"
+        "'affinity':aff,'cuda_visible':os.environ.get('CUDA_VISIBLE_DEVICES'),"
+        "'rocr_visible':os.environ.get('ROCR_VISIBLE_DEVICES')},sort_keys=True))"
+    )
+    argv = [*launcher, sys.executable, "-c", code]
+    transcript = retain_command_output(record, "execution-probe", argv)
+    path = record / transcript["path"]
+    observations = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("XNET_EXECUTION_PROBE "):
+            try:
+                observations.append(json.loads(line.removeprefix("XNET_EXECUTION_PROBE ")))
+            except json.JSONDecodeError as error:
+                raise BenchmarkError("malformed launcher probe output") from error
+    scheduler = {
+        key: os.environ[key]
+        for key in ("SLURM_JOB_ID", "SLURM_NODELIST", "PBS_JOBID", "LSB_JOBID")
+        if key in os.environ
+    }
+    return {"probe": transcript, "observations": observations, "scheduler": scheduler}
+
+
+def observe_offload(record: Path, launcher: list[str], command: str | None) -> dict[str, object] | None:
+    """Retain a facility probe launched with the same placement as XNet."""
+    if command is None:
+        return None
+    try:
+        argv = [*launcher, *shlex.split(command)]
+    except ValueError as error:
+        raise BenchmarkError("--offload-probe is not valid shell-style argv text") from error
+    transcript = retain_command_output(record, "offload-probe", argv)
+    text = (record / transcript["path"]).read_text(encoding="utf-8")
+    device_counts, devices, offloaded = [], [], []
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and fields[:2] == ["XNET_GPU_LINALG", "device_count"]:
+            device_counts.append(int(fields[2]))
+        elif len(fields) == 3 and fields[:2] == ["XNET_GPU_LINALG", "device"]:
+            devices.append(fields[2])
+        elif len(fields) == 3 and fields[:2] == ["XNET_GPU_LINALG", "offloaded"]:
+            offloaded.append(fields[2].upper() == "T")
+    if transcript["status"] != 0 or not device_counts or min(device_counts) < 1 or not offloaded or not all(offloaded):
+        raise BenchmarkError("offload probe did not prove actual device execution")
+    return {"probe": transcript, "device_counts": device_counts, "devices": devices, "offloaded": offloaded}
 
 
 def environment_identity() -> dict[str, str]:
@@ -425,6 +516,8 @@ def make_record_document(
     build_argv: list[str],
     comparison: dict[str, object],
     source_revision: str,
+    run_argv: list[str],
+    runtime: dict[str, object],
 ) -> dict[str, object]:
     """Assemble only portable values and retained-artifact identities."""
     return {
@@ -436,7 +529,7 @@ def make_record_document(
             "workload": case.workload,
             "input_identity": case.input_identity,
         },
-        "execution": {"profile": "serial-dense", **profile},
+        "execution": {"profile": profile["_name"], **{key: value for key, value in profile.items() if not key.startswith("_")}},
         "capture": {
             "captured_utc": datetime.now(timezone.utc).isoformat(),
             "repetitions_requested": repetitions_requested,
@@ -451,8 +544,9 @@ def make_record_document(
             "executable": {"sha256": sha256(executable), "copied": False},
             "environment": environment_identity(),
             "build_argv": build_argv,
-            "run_argv": [str(executable)],
+            "run_argv": run_argv,
             "operational": operational,
+            "runtime": runtime,
         },
         "input_bundle": {
             "type": "versioned-relative-path-manifest",
@@ -526,7 +620,31 @@ def main() -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     record = args.records.resolve() / f"{args.case}-{stamp}-{os.getpid()}"
     record.mkdir()
-    profile = profiles["serial-dense"]
+    if args.profile not in profiles:
+        raise BenchmarkError(f"unknown execution profile: {args.profile}")
+    if args.threads < 1 or args.ranks < 1:
+        raise BenchmarkError("--threads and --ranks must be positive")
+    profile = {**profiles[args.profile], "_name": args.profile}
+    profile["_gpu_backend"] = args.gpu_backend
+    profile["_accelerator_mode"] = args.accelerator_mode
+    profile["_ma48_dir"] = args.ma48_dir.resolve() if args.ma48_dir else None
+    try:
+        launcher = shlex.split(args.launcher) if args.launcher else []
+    except ValueError as error:
+        raise BenchmarkError("--launcher is not valid shell-style argv text") from error
+    if profile["launcher"] == "required" and not launcher:
+        raise BenchmarkError(f"{args.profile} requires --launcher")
+    if profile["launcher"] == "direct" and launcher:
+        raise BenchmarkError(f"{args.profile} does not accept --launcher")
+    if profile["dimensions"]["mpi"] == "OFF" and args.ranks != 1:
+        raise BenchmarkError("non-MPI profiles require --ranks 1")
+    if profile["dimensions"]["openmp"] == "OFF" and args.threads != 1:
+        raise BenchmarkError("non-OpenMP profiles require --threads 1")
+    if profile["dimensions"]["openmp"] == "ON" and os.environ.get("OMP_NUM_THREADS") != str(args.threads):
+        raise BenchmarkError("OpenMP profile requires matching OMP_NUM_THREADS")
+    if profile["dimensions"]["gpu"] == "ON" and not args.offload_probe:
+        raise BenchmarkError("accelerator capture requires --offload-probe")
+    run_argv = [*launcher, str((args.build_dir.resolve() / "bin/xnet"))]
     executable, build_log, build_argv, settings = build_xnet(
         repository,
         build_dir,
@@ -541,6 +659,8 @@ def main() -> int:
         raise BenchmarkError("case registry input-manifest binding mismatch")
     comparison = retain_comparison_inputs(record, input_bundle, identity)
     operational = command_evidence(record, executable, settings)
+    launcher_probe = observe_launcher(record, launcher)
+    offload_probe = observe_offload(record, launcher, args.offload_probe)
 
     repetitions = [
         capture_repetition(
@@ -548,12 +668,30 @@ def main() -> int:
             record,
             regression,
             executable,
+            run_argv,
             regression_case,
             args.timeout_seconds,
             case.expected["zones"],
         )
         for number in range(1, args.repetitions + 1)
     ]
+    topology = []
+    for diagnostic in (record / "repetitions" / "1").glob("net_diag*"):
+        for line in diagnostic.read_text(encoding="utf-8", errors="replace").splitlines():
+            fields = line.split()
+            if fields and fields[0] == "MyId" and len(fields) == 3:
+                topology.append({"rank": int(fields[1]), "size": int(fields[2])})
+            if fields and fields[0] == "Thread" and len(fields) == 4 and fields[2] == "of":
+                topology.append({"thread": int(fields[1]), "team": int(fields[3])})
+    runtime = {
+        "launcher_argv": launcher,
+        "requested_ranks": args.ranks,
+        "requested_threads": args.threads,
+        "launcher_probe": launcher_probe,
+        "offload_probe": offload_probe,
+        "xnet_topology": topology,
+        "affinity": operational["affinity"],
+    }
     document = make_record_document(
         args.case,
         case,
@@ -571,6 +709,8 @@ def main() -> int:
         build_argv,
         comparison,
         args.source_revision,
+        run_argv,
+        runtime,
     )
     write_json(record / "record.json", document)
     write_json(record / "inventory.json", inventory(record))

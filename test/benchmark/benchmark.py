@@ -225,6 +225,78 @@ def parse_diagnostic_metrics(
     return timers, counters, sections
 
 
+def diagnostic_groups(path: Path) -> tuple[tuple[int, ...], ...]:
+    """Discover the End/counter group structure emitted by one XNet worker."""
+    groups: list[tuple[int, ...]] = []
+    current: list[int] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("End"):
+            fields = line.split()
+            if len(fields) < 2 or not fields[1].isdigit():
+                raise BenchmarkError(f"malformed End record in {path.name}")
+            current.append(int(fields[1]))
+        elif line.startswith("Counters:"):
+            if not current:
+                raise BenchmarkError(f"counter section without End records in {path.name}")
+            groups.append(tuple(current))
+            current = []
+    if current or not groups:
+        raise BenchmarkError(f"incomplete or empty diagnostic groups in {path.name}")
+    return tuple(groups)
+
+
+def worker_topology(paths: Iterable[Path]) -> dict[str, list[dict[str, int]]]:
+    """Read XNet's own rank and OpenMP-team records from worker diagnostics."""
+    ranks: set[tuple[int, int]] = set()
+    threads: set[tuple[int, int, int]] = set()
+    for path in paths:
+        rank: int | None = None
+        size: int | None = None
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            fields = line.split()
+            if fields and fields[0] == "MyId" and len(fields) == 3:
+                rank, size = int(fields[1]), int(fields[2])
+                ranks.add((rank, size))
+            elif fields and fields[0] == "Thread" and len(fields) == 4 and fields[2] == "of":
+                if rank is None:
+                    raise BenchmarkError(f"thread record precedes rank record in {path.name}")
+                threads.add((rank, int(fields[1]), int(fields[3])))
+    return {
+        "ranks": [
+            {"rank": rank, "size": size} for rank, size in sorted(ranks)
+        ],
+        "threads": [
+            {"rank": rank, "thread": thread, "team": team}
+            for rank, thread, team in sorted(threads)
+        ],
+    }
+
+
+def parse_worker_states(regression: Any, case: Any, paths: Iterable[Path]) -> tuple[Any, ...]:
+    """Parse all worker diagnostics and return one ordered state per global zone."""
+    by_zone: dict[int, Any] = {}
+    for path in paths:
+        groups = diagnostic_groups(path)
+        zones = tuple(zone for group in groups for zone in group)
+        states = regression.parse_diagnostic(
+            path.read_text(encoding="utf-8"),
+            zones,
+            case.expected_species,
+            groups,
+        )
+        for state in states:
+            if state.zone in by_zone:
+                raise BenchmarkError(f"duplicate final state for zone {state.zone}")
+            by_zone[state.zone] = state
+    expected = tuple(case.expected_zones)
+    if set(by_zone) != set(expected):
+        raise BenchmarkError(
+            f"worker diagnostic zone coverage mismatch: expected {expected}, "
+            f"found {tuple(sorted(by_zone))}"
+        )
+    return tuple(by_zone[zone] for zone in expected)
+
+
 def run_timed_and_compare(
     regression: Any,
     executable: Path,
@@ -270,7 +342,12 @@ def run_timed_and_compare(
         if missing_outputs:
             raise BenchmarkError(f"launched XNet did not produce: {', '.join(missing_outputs)}")
     elapsed = time.monotonic() - started
-    diagnostic = (prepared / "net_diag01").read_text(encoding="utf-8")
+    diagnostic_paths = sorted(prepared.glob("net_diag*"))
+    if not diagnostic_paths:
+        raise BenchmarkError("launched XNet produced no worker diagnostics")
+    diagnostic = "\n".join(
+        path.read_text(encoding="utf-8") for path in diagnostic_paths
+    )
     missing = tuple(
         marker
         for marker in case.required_diagnostic_markers
@@ -281,12 +358,7 @@ def run_timed_and_compare(
         raise regression.ParsingFailure(
             f"required diagnostic marker is missing: {markers}"
         )
-    states = regression.parse_diagnostic(
-        diagnostic,
-        case.expected_zones,
-        case.expected_species,
-        case.expected_diagnostic_groups,
-    )
+    states = parse_worker_states(regression, case, diagnostic_paths)
     diagnostics = regression.calculate_composition_norms(states, reference)
     regression._write_composition_diagnostics(prepared, diagnostics, reference)
     regression.compare_final_states(states, reference)

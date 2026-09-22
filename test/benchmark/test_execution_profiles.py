@@ -21,24 +21,44 @@ def main():
     _, profiles = read_registry(Path(__file__).parent)
     profile = profiles["mpi-dense"]
     runtime = {"launcher_argv": ["mpiexec", "-n", "2"], "requested_ranks": 2, "requested_threads": 1,
-               "launcher_probe": {"scheduler": {"SLURM_JOB_ID": "1"}, "observations": [{"rank": "0", "host": "node0", "affinity": [0]}, {"rank": "1", "host": "node0", "affinity": [1]}]},
-               "xnet_topology": [{"rank": 0, "size": 2}, {"rank": 1, "size": 2}]}
+               "launcher_probe": {"allocation": {"kind": "scheduler", "environment": {"SLURM_JOB_ID": "1"}}, "observations": [{"rank": "0", "host": "node0", "affinity": [0]}, {"rank": "1", "host": "node0", "affinity": [1]}]},
+               "xnet_topology": {"ranks": [{"rank": 0, "size": 2}, {"rank": 1, "size": 2}], "threads": []}}
     validate_runtime_evidence(profile, runtime, [*runtime["launcher_argv"], "/build/bin/xnet"], "/build/bin/xnet", {})
     for name, mutate, text in (
         ("fabricated placement", lambda x: x["launcher_probe"].update(observations=[]), "rank IDs"),
         ("wrong launcher ranks", lambda x: x.update(requested_ranks=1), "multiple ranks"),
-        ("wrong XNet ranks", lambda x: x["xnet_topology"].pop(), "rank topology"),
-        ("missing scheduler", lambda x: x["launcher_probe"].update(scheduler={}), "scheduler"),
+        ("wrong XNet ranks", lambda x: x["xnet_topology"]["ranks"].pop(), "rank topology"),
+        ("missing scheduler", lambda x: x["launcher_probe"].update(allocation={"kind": "scheduler", "environment": {}}), "scheduler"),
     ):
         bad = deepcopy(runtime); mutate(bad); reject(name, profile, bad, {}, text)
     openmp = profiles["openmp-dense"]
     threaded = {"launcher_argv": [], "requested_ranks": 1, "requested_threads": 2,
-                "launcher_probe": {"scheduler": {}, "observations": [{"rank": None, "host": "node", "affinity": [0]}]},
-                "xnet_topology": [{"rank": 0, "size": 1}, {"thread": 1, "team": 2}, {"thread": 2, "team": 2}]}
+                "launcher_probe": {"allocation": {"kind": "unscheduled-local", "host": "node", "affinity": [0]}, "observations": [{"rank": None, "host": "node", "affinity": [0]}]},
+                "xnet_topology": {"ranks": [{"rank": 0, "size": 1}], "threads": [{"rank": 0, "thread": 1, "team": 2}, {"rank": 0, "thread": 2, "team": 2}]}}
     validate_runtime_evidence(openmp, threaded, ["/build/bin/xnet"], "/build/bin/xnet", {"OMP_NUM_THREADS": "2"})
     reject("wrong threads", openmp, threaded, {"OMP_NUM_THREADS": "1"}, "thread evidence")
-    reject("wrong OpenMP team", openmp, {**threaded, "xnet_topology": threaded["xnet_topology"][:-1]}, {"OMP_NUM_THREADS": "2"}, "OpenMP topology")
-    reject("false GPU/offload", profiles["accelerator-dense"], {**threaded, "requested_threads": 1}, {}, "offload probe")
+    wrong_team = deepcopy(threaded); wrong_team["xnet_topology"]["threads"].pop()
+    reject("wrong OpenMP team", openmp, wrong_team, {"OMP_NUM_THREADS": "2"}, "OpenMP topology")
+    accelerator = deepcopy(threaded)
+    accelerator.update(requested_threads=1, gpu_backend="CUDA", accelerator_mode="openacc")
+    accelerator["xnet_topology"]["threads"] = []
+    reject("false GPU/offload", profiles["accelerator-dense"], accelerator, {}, "offload probe")
+    accelerator["offload_probe"] = {
+        "observations": [
+            {"rank": "0", "device": 0, "device_count": 1, "offloaded": True,
+             "data_present": True, "info": 0, "residual": 0.0}
+        ]
+    }
+    validate_runtime_evidence(
+        profiles["accelerator-dense"], accelerator,
+        ["/build/bin/xnet"], "/build/bin/xnet", {},
+    )
+    wrong_device = deepcopy(accelerator)
+    wrong_device["offload_probe"]["observations"][0]["rank"] = "1"
+    reject("wrong rank/device placement", profiles["accelerator-dense"], wrong_device, {}, "rank-to-device")
+    host_fallback = deepcopy(accelerator)
+    host_fallback["offload_probe"]["observations"][0]["offloaded"] = False
+    reject("GPU host fallback", profiles["accelerator-dense"], host_fallback, {}, "device execution")
     print("execution-profile synthetic probes: passed")
 
 

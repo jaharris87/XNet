@@ -24,6 +24,7 @@ from benchmark import (
     read_record,
     read_registry,
     parse_diagnostic_metrics,
+    parse_worker_states,
     sha256,
 )
 
@@ -34,6 +35,8 @@ HARNESS_FILES = {
     "test_benchmark.py",
     "test_execution_profiles.py",
     "cases.json",
+    "gpu_execution_probe.F90",
+    "gpu_probe.mk",
 }
 COUNTER_NAMES = {"TS", "NR", "Jacobian", "Deriv", "CrossSect"}
 
@@ -250,9 +253,17 @@ def validate_runtime_evidence(
         raise BenchmarkError("capture lacks launcher-observed placement evidence")
     observations = probe["observations"]
     topology = runtime.get("xnet_topology")
-    if not isinstance(topology, list):
+    if not isinstance(topology, dict):
         raise BenchmarkError("capture lacks XNet topology evidence")
-    rank_records = {(item.get("rank"), item.get("size")) for item in topology if isinstance(item, dict) and "rank" in item}
+    rank_rows = topology.get("ranks")
+    thread_rows = topology.get("threads")
+    if not isinstance(rank_rows, list) or not isinstance(thread_rows, list):
+        raise BenchmarkError("capture has malformed XNet topology evidence")
+    rank_records = {
+        (item.get("rank"), item.get("size"))
+        for item in rank_rows
+        if isinstance(item, dict)
+    }
     expected_ranks = {(rank, ranks) for rank in range(ranks)}
     if rank_records != expected_ranks:
         raise BenchmarkError("XNet rank topology does not match requested launcher ranks")
@@ -262,23 +273,47 @@ def validate_runtime_evidence(
             raise BenchmarkError("launcher probe rank IDs do not match XNet ranks")
         if len(observations) != ranks or any(not item.get("host") or not item.get("affinity") for item in observations if isinstance(item, dict)):
             raise BenchmarkError("launcher probe lacks host or binding evidence")
-        if not isinstance(probe.get("scheduler"), dict) or not probe["scheduler"]:
+        allocation = probe.get("allocation")
+        if not isinstance(allocation, dict) or allocation.get("kind") not in {
+            "scheduler", "unscheduled-local"
+        }:
+            raise BenchmarkError("parallel profile lacks observed allocation context")
+        if allocation["kind"] == "scheduler" and not allocation.get("environment"):
             raise BenchmarkError("parallel profile lacks observed scheduler allocation")
     if dimensions["openmp"] == "ON":
-        teams = {(item.get("thread"), item.get("team")) for item in topology if isinstance(item, dict) and "thread" in item}
-        if teams != {(thread, threads) for thread in range(1, threads + 1)}:
+        teams = {
+            (item.get("rank"), item.get("thread"), item.get("team"))
+            for item in thread_rows
+            if isinstance(item, dict)
+        }
+        expected_teams = {
+            (rank, thread, threads)
+            for rank in range(ranks)
+            for thread in range(1, threads + 1)
+        }
+        if teams != expected_teams:
             raise BenchmarkError("XNet OpenMP topology does not match requested thread team")
     if dimensions["gpu"] == "ON":
         offload = runtime.get("offload_probe")
-        if not isinstance(offload, dict) or offload.get("offloaded") is None:
+        if not isinstance(offload, dict) or not isinstance(offload.get("observations"), list):
             raise BenchmarkError("accelerator profile lacks capture-owned offload probe")
-        if not all(value is True for value in offload.get("offloaded", [])):
-            raise BenchmarkError("accelerator offload probe did not execute on device")
-        if not all(isinstance(value, int) and value > 0 for value in offload.get("device_counts", [])):
-            raise BenchmarkError("accelerator offload probe lacks device count")
-        devices = offload.get("devices")
-        if not isinstance(devices, list) or not devices:
+        device_rows = offload["observations"]
+        device_ranks = {str(item.get("rank")) for item in device_rows if isinstance(item, dict)}
+        if device_ranks != {str(rank) for rank in range(ranks)}:
             raise BenchmarkError("accelerator offload probe lacks rank-to-device evidence")
+        if any(
+            not isinstance(item, dict)
+            or item.get("offloaded") is not True
+            or item.get("data_present") is not True
+            or not isinstance(item.get("device_count"), int)
+            or item["device_count"] < 1
+            or not isinstance(item.get("device"), int)
+            or item["device"] < 0
+            or item.get("info") != 0
+            or as_finite_nonnegative(item.get("residual"), "invalid device residual") > 1.0e-12
+            for item in device_rows
+        ):
+            raise BenchmarkError("accelerator offload probe did not prove device execution")
 
 
 def validate_capture_provenance(
@@ -359,12 +394,22 @@ def validate_capture_provenance(
         if settings.get(name) != value:
             raise BenchmarkError("retained build config does not match profile")
     if profile.get("accelerator"):
-        if settings.get("GPU_BACKEND") not in {"CUDA", "HIP"}:
+        runtime_claim = capture.get("runtime")
+        requested_backend = runtime_claim.get("gpu_backend") if isinstance(runtime_claim, dict) else None
+        requested_mode = runtime_claim.get("accelerator_mode") if isinstance(runtime_claim, dict) else None
+        if requested_backend not in {"CUDA", "HIP"} or settings.get("GPU_BACKEND") != requested_backend:
             raise BenchmarkError("accelerator build lacks a supported backend")
-        if (settings.get("OPENACC_MODE") == "ON") == (settings.get("OPENMP_OL_MODE") == "ON"):
+        expected_openacc = "ON" if requested_mode == "openacc" else "OFF"
+        expected_openmp = "ON" if requested_mode == "openmp-offload" else "OFF"
+        if requested_mode not in {"openacc", "openmp-offload"} or (
+            settings.get("OPENACC_MODE"), settings.get("OPENMP_OL_MODE")
+        ) != (expected_openacc, expected_openmp):
             raise BenchmarkError("accelerator build lacks exactly one directive mode")
-    if profile.get("external_source") and not settings.get("MA48_DIR"):
-        raise BenchmarkError("MA48 build lacks external source provenance")
+    if profile.get("external_source"):
+        runtime_claim = capture.get("runtime")
+        source_digest = runtime_claim.get("ma48_source_sha256") if isinstance(runtime_claim, dict) else None
+        if not settings.get("MA48_DIR") or not isinstance(source_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", source_digest):
+            raise BenchmarkError("MA48 build lacks external source provenance")
 
     operational = capture.get("operational")
     if not isinstance(operational, dict):
@@ -430,6 +475,15 @@ def validate_capture_provenance(
         validate_transcript("execution probe", runtime_claim["launcher_probe"].get("probe"))
     if isinstance(runtime_claim, dict) and isinstance(runtime_claim.get("offload_probe"), dict):
         validate_transcript("offload probe", runtime_claim["offload_probe"].get("probe"))
+    if isinstance(runtime_claim, dict) and runtime_claim.get("accelerator_evidence") is not None:
+        accelerator = runtime_claim["accelerator_evidence"]
+        if not isinstance(accelerator, dict) or accelerator.get("backend") != runtime_claim.get("gpu_backend"):
+            raise BenchmarkError("accelerator runtime evidence does not match backend")
+        commands = accelerator.get("commands")
+        if not isinstance(commands, list) or not commands:
+            raise BenchmarkError("accelerator runtime evidence is incomplete")
+        for index, entry in enumerate(commands, start=1):
+            validate_transcript(f"accelerator runtime {index}", entry)
     runtime_argv = operational["runtime"]["argv"]
     if (
         Path(runtime_argv[0]).name not in {"ldd", "otool"}
@@ -480,8 +534,8 @@ def validate_comparison_binding(
     return paths
 
 
-def compare_retained_diagnostic(
-    diagnostic: Path,
+def compare_retained_diagnostics(
+    diagnostics: list[Path],
     composition: Path,
     comparison_paths: dict[str, Path],
     factory_name: str,
@@ -496,7 +550,10 @@ def compare_retained_diagnostic(
             case = getattr(regression, factory_name)(locator)
             case = replace(case, reference=comparison_paths["reference"])
             reference = regression.load_reference(case.reference)
-            text = diagnostic.read_text(encoding="utf-8")
+            text = "\n".join(
+                diagnostic.read_text(encoding="utf-8")
+                for diagnostic in diagnostics
+            )
             missing = tuple(
                 marker
                 for marker in case.required_diagnostic_markers
@@ -504,12 +561,7 @@ def compare_retained_diagnostic(
             )
             if missing:
                 raise BenchmarkError("retained diagnostic lacks required markers")
-            states = regression.parse_diagnostic(
-                text,
-                case.expected_zones,
-                case.expected_species,
-                case.expected_diagnostic_groups,
-            )
+            states = parse_worker_states(regression, case, diagnostics)
             diagnostics = regression.calculate_composition_norms(states, reference)
             regression._write_composition_diagnostics(
                 locator,
@@ -572,8 +624,6 @@ def validate_repetition(
     if not isinstance(sections, list) or len(sections) != expected_section_count:
         raise BenchmarkError("unexpected timer section count")
     checked_sections = [validate_timer_section(section) for section in sections]
-    if checked_sections[-1] != checked_timers:
-        raise BenchmarkError("timer sections do not end with cumulative timers")
 
     counters = repetition.get("counters")
     if not isinstance(counters, dict):
@@ -595,7 +645,6 @@ def validate_repetition(
 
     artifact = record / "repetitions" / str(number)
     required_artifacts = (
-        "net_diag01",
         "comparison.json",
         "xnet.stdout.txt",
         "xnet.stderr.txt",
@@ -614,15 +663,52 @@ def validate_repetition(
     status = (artifact / "xnet.status.txt").read_text(encoding="utf-8").strip()
     if status != "return_code=0":
         raise BenchmarkError("XNet did not retain a zero direct status")
-    parsed_timers, parsed_counters, parsed_sections = parse_diagnostic_metrics(
-        artifact / "net_diag01"
-    )
+    worker_metrics = repetition.get("worker_metrics")
+    if not isinstance(worker_metrics, list) or not worker_metrics:
+        raise BenchmarkError("repetition lacks worker metrics")
+    diagnostics: list[Path] = []
+    parsed_sections: list[dict[str, float]] = []
+    parsed_zone_counters: dict[str, object] = {}
+    parsed_end_records = 0
+    parsed_worker_timers: list[dict[str, float]] = []
+    for worker in worker_metrics:
+        if not isinstance(worker, dict):
+            raise BenchmarkError("malformed worker metrics")
+        diagnostic = retained_path(record, worker.get("path"), "malformed worker path")
+        if diagnostic.parent != artifact or not diagnostic.name.startswith("net_diag"):
+            raise BenchmarkError("malformed worker path")
+        if not diagnostic.is_file() or sha256(diagnostic) != worker.get("sha256"):
+            raise BenchmarkError("retained worker diagnostic hash mismatch")
+        worker_timers, worker_counters, worker_sections = parse_diagnostic_metrics(diagnostic)
+        if (
+            worker.get("timers_seconds") != worker_timers
+            or worker.get("counters") != worker_counters
+            or worker.get("timer_sections_seconds") != worker_sections
+        ):
+            raise BenchmarkError("retained diagnostic disagrees with worker summary")
+        diagnostics.append(diagnostic)
+        parsed_worker_timers.append(worker_timers)
+        parsed_sections.extend(worker_sections)
+        parsed_end_records += worker_counters.get("end_records", 0)
+        for zone, values in worker_counters.get("zones", {}).items():
+            if zone in parsed_zone_counters:
+                raise BenchmarkError("duplicate retained zone counter")
+            parsed_zone_counters[zone] = values
+    parsed_timers = {
+        name: max((row.get(name, 0.0) for row in parsed_worker_timers), default=0.0)
+        for name in TIMER_NAMES
+    }
+    parsed_counters = {
+        "end_records": parsed_end_records,
+        "timer_sections": len(parsed_sections),
+        "zones": parsed_zone_counters,
+    }
     if (
         parsed_timers != checked_timers
         or parsed_counters != counters
         or parsed_sections != checked_sections
     ):
-        raise BenchmarkError("retained diagnostic disagrees with repetition summary")
+        raise BenchmarkError("retained diagnostics disagree with repetition summary")
     composition = artifact / "composition_error_norms.json"
     artifacts = repetition.get("artifacts")
     composition_entry = (
@@ -640,8 +726,8 @@ def validate_repetition(
         raise BenchmarkError("malformed composition diagnostics") from error
     if not isinstance(composition_value, dict):
         raise BenchmarkError("malformed composition diagnostics")
-    compare_retained_diagnostic(
-        artifact / "net_diag01",
+    compare_retained_diagnostics(
+        diagnostics,
         composition,
         comparison_paths,
         factory_name,

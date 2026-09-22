@@ -40,10 +40,12 @@ its diagnostics are required and retained.
 Records have no required live absolute path: source and harness identities,
 copied build config/log, bundle-relative input hashes, executable hash (the
 executable is not copied), resolved compiler and linked-runtime evidence,
-CPU/topology and affinity facts, raw timers/counters, standard streams,
-diagnostics, captured comparator/reference, comparison result, environment,
-and final artifact checksum inventory are kept. Portable validation reparses
-the raw diagnostic and reruns the captured comparator after timing.
+CPU/topology and affinity facts, per-worker raw timers/counters, standard
+streams, all worker diagnostics, captured comparator/reference, comparison
+result, environment, and final artifact checksum inventory are kept. Portable
+validation reparses every worker diagnostic, verifies rank/team topology,
+merges final states by global zone, and reruns the captured comparator after
+timing.
 
 ```sh
 python3 test/benchmark/validate.py /scratch/xnet-benchmark-records/batch_alpha-...
@@ -61,15 +63,29 @@ thermodynamic state and composition projection across network sizes; it is the
 appropriate basis for scaling conclusions. Candidate CCSN and ECSN families
 remain unavailable until their reviewed workload and provenance are defined.
 
-Facility runs require separately reviewed launcher and execution-profile support.
+MPI captures require `--launcher 'mpiexec -n N'`, `--ranks N`, and the actual
+thread count. The harness runs its own probe through that exact launcher and
+checks the observed rank IDs, hosts, CPU affinity, allocation context, and
+XNet's own `MyId` records. OpenMP captures additionally require the requested
+`OMP_NUM_THREADS`; XNet's per-thread diagnostic headers prove the actual team.
+Caller-authored placement JSON is neither accepted nor trusted.
+OpenMP and one-rank accelerator profiles accept an optional site launcher such
+as `srun`; MPI profiles require one. Site compiler selections are explicit,
+repeatable `--build-option NAME=VALUE` arguments limited to `PE_ENV`, `CMODE`,
+`MACHINE`, `LAPACK_VER`, and `EOS`, and remain visible in the retained build
+command and resolved configuration.
 
-MPI captures require `--launcher 'mpiexec -n N'`, rank and thread counts. The
-harness runs and retains its own probe through that exact launcher, then checks
-its observed rank IDs, hosts, affinity, scheduler environment, and XNet's own
-`MyId` records. It does not accept caller-authored placement JSON.
-Accelerator capture requires `--offload-probe`, a facility probe command run
-through the same launcher. Its retained output must report the existing
-`XNET_GPU_LINALG` device count, selected device, and true offload result; a
-visible-device environment variable alone is not evidence.
+Accelerator profiles require `--gpu-backend CUDA|HIP` and
+`--accelerator-mode openacc|openmp-offload`. The capture builds
+`xnet_benchmark_gpu_probe` from the retained probe source and the same
+configured XNet objects as the executable, then launches it with the exact
+benchmark launcher. A passing record requires a device-resident mapped solve,
+the observed rank-to-device mapping, and retained `nvidia-smi` or `rocm-smi`
+physical-device/runtime output. Visible-device environment variables alone are
+not evidence. The same mechanism covers the one- and two-ranks-per-GPU slices;
+site launch options remain explicit argv rather than site-specific harness
+forks.
+
 `serial-ma48` is available only with `--ma48-dir` naming a licensed external
-`MA48.f`; neither that source nor its contents are retained in the record.
+`MA48.f`. Its hash and the resulting build/executable identities are retained,
+but neither the licensed source nor its contents are copied into the record.

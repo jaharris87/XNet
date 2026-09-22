@@ -34,6 +34,7 @@ from benchmark import (
     worker_topology,
     write_json,
 )
+from validate import validate_runtime_evidence
 
 HARNESS_FILES = (
     "benchmark.py",
@@ -860,6 +861,15 @@ def main() -> int:
         if profile.get("external_source")
         else None,
     }
+    # Reject an invalid profile before publishing record.json.  The offline
+    # validator repeats this check from retained evidence after transfer.
+    validate_runtime_evidence(
+        profile,
+        runtime,
+        run_argv,
+        str(executable),
+        environment_identity(),
+    )
     document = make_record_document(
         args.case,
         case,

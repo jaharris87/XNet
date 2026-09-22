@@ -231,6 +231,26 @@ def test_namelist_validates_only_after_all_layers(
     assert "nzone must be between 1 and max_config_zones" in result.stdout + result.stderr
 
 
+def test_namelist_allows_a_later_layer_to_repair_root_validation(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    work_directory = _prepared_configuration_work_directory(tmp_path, "repaired-validation")
+    (work_directory / "repair.nml").write_text(
+        "&xnet_config\n nzone = 1\n/\n", encoding="utf-8"
+    )
+    (work_directory / "xnet.nml").write_text(
+        "&xnet_config\n"
+        " include = 'repair.nml', nzone = 0, data_dir = 'Data_alpha', iprocess = 1,\n"
+        " inab_files(1) = 'Data_alpha/ab_co', thermo_files(1) = 'th_sn1aflame'\n"
+        "/\n",
+        encoding="utf-8",
+    )
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode == 0, result.stdout + result.stderr
+    resolved = (work_directory / "xnet.resolved.nml").read_text(encoding="utf-8")
+    assert "nzone = 1" in resolved
+
+
 def test_namelist_rejects_excessive_include_depth(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path
 ) -> None:

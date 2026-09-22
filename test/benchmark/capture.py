@@ -12,8 +12,31 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from typing import Any
 
-from benchmark import (BenchmarkError, HISTORICAL_SHA, case_inputs, input_manifest, manifest_digest, inventory, load_regression, parse_diagnostic_metrics, read_cases, require_clean_historical_repository, run_timed_and_compare, sha256, write_json)
+from benchmark import (
+    BenchmarkError,
+    HISTORICAL_SHA,
+    case_inputs,
+    input_manifest,
+    inventory,
+    load_regression,
+    manifest_digest,
+    parse_diagnostic_metrics,
+    read_registry,
+    require_clean_historical_repository,
+    run_timed_and_compare,
+    sha256,
+    write_json,
+)
+
+HARNESS_FILES = (
+    "benchmark.py",
+    "capture.py",
+    "validate.py",
+    "test_benchmark.py",
+    "cases.json",
+)
 
 
 def arguments() -> argparse.Namespace:
@@ -29,89 +52,331 @@ def arguments() -> argparse.Namespace:
 
 
 def config_values(path: Path) -> dict[str, str]:
-    return dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if "=" in line)
+    """Read XNet's simple ``config.txt`` assignments."""
+    return {
+        key: value
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+        for key, value in [line.split("=", 1)]
+    }
 
 
 def harness_identity() -> dict[str, object]:
+    """Bind a record to this committed, complete benchmark harness."""
     root = Path(__file__).resolve().parents[2]
-    files = ("benchmark.py", "capture.py", "validate.py", "cases.json")
     try:
-        revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
-        dirty = bool(subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--", "test/benchmark"], text=True).strip())
+        revision = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            text=True,
+        ).strip()
+        dirty = bool(
+            subprocess.check_output(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "status",
+                    "--porcelain",
+                    "--",
+                    "test/benchmark",
+                ],
+                text=True,
+            ).strip()
+        )
     except (OSError, subprocess.CalledProcessError):
         revision, dirty = None, None
-    return {"repository_revision": revision, "dirty": dirty, "files": {name: sha256(Path(__file__).parent / name) for name in files}}
+
+    return {
+        "repository_revision": revision,
+        "dirty": dirty,
+        "files": {
+            name: sha256(Path(__file__).parent / name)
+            for name in HARNESS_FILES
+        },
+    }
+
+
+def list_cases(cases: dict[str, Any]) -> None:
+    for case in cases.values():
+        network = case.network.get("id", "")
+        description = case.workload.get("description", "")
+        print(f"{case.case_id}\t{case.status}\t{network}\t{description}")
+
+
+def require_capture_arguments(args: argparse.Namespace) -> None:
+    required = (args.repository, args.build_dir, args.records, args.case)
+    if not all(required) or args.repetitions < 1:
+        raise BenchmarkError(
+            "--repository, --build-dir, --records, --case, and positive "
+            "--repetitions are required"
+        )
+
+
+def build_historical_xnet(
+    repository: Path,
+    build_dir: Path,
+    record: Path,
+    profile: dict[str, Any],
+) -> tuple[Path, Path]:
+    """Build the source checkout owned by the capture, then prove its profile."""
+    if build_dir.exists():
+        raise BenchmarkError("capture owns a fresh, nonexistent --build-dir")
+
+    build_log = record / "build.log"
+    command = ["make", "-C", str(repository), f"BUILD_DIR={build_dir}", "xnet"]
+    with build_log.open("w", encoding="utf-8") as log:
+        build = subprocess.run(
+            command,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    if build.returncode:
+        raise BenchmarkError(f"fresh build failed; see {build_log}")
+
+    executable = build_dir / "bin/xnet"
+    config = build_dir / "config.txt"
+    if not executable.is_file() or not os.access(executable, os.X_OK):
+        raise BenchmarkError("fresh build did not produce an executable")
+    if not config.is_file():
+        raise BenchmarkError("fresh build did not produce config.txt")
+
+    settings = config_values(config)
+    if settings.get("SOURCE_ROOT") != str(repository):
+        raise BenchmarkError("fresh build does not bind the historical source")
+    if settings.get("MATRIX_SOLVER") != profile["dimensions"]["solver"]:
+        raise BenchmarkError("fresh build is not the requested dense solver build")
+    for key in (
+        "MPI_MODE",
+        "OPENMP_MODE",
+        "GPU_MODE",
+        "OPENACC_MODE",
+        "OPENMP_OL_MODE",
+    ):
+        if settings.get(key) != "OFF":
+            value = settings.get(key)
+            raise BenchmarkError(f"serial-dense profile rejects {key}={value!r}")
+
+    shutil.copy2(config, record / "build-config.txt")
+    return executable, build_log
+
+
+def capture_repetition(
+    number: int,
+    record: Path,
+    regression: Any,
+    executable: Path,
+    regression_case: Any,
+    timeout_seconds: float,
+    expected_zones: list[int],
+) -> dict[str, object]:
+    """Run one timed XNet invocation and retain its post-timing comparison."""
+    artifact = record / "repetitions" / str(number)
+    artifact.parent.mkdir(exist_ok=True)
+    process_wall_seconds: float | None = None
+    comparison_error: str | None = None
+
+    with tempfile.TemporaryDirectory(prefix="xnet-v9-benchmark-") as temporary:
+        work = Path(temporary) / "work"
+        try:
+            process_wall_seconds, _ = run_timed_and_compare(
+                regression,
+                executable,
+                regression_case,
+                work,
+                timeout_seconds,
+            )
+            numerical = "pass"
+        except Exception as error:
+            numerical = "fail"
+            comparison_error = f"{type(error).__name__}: {error}"
+
+        artifact.mkdir()
+        retained_names = (
+            "net_diag01",
+            "xnet.stdout.txt",
+            "xnet.stderr.txt",
+            "xnet.status.txt",
+            "composition_error_norms.json",
+        )
+        for name in retained_names:
+            source = work / name
+            if source.is_file():
+                shutil.copy2(source, artifact / name)
+
+    diagnostic = artifact / "net_diag01"
+    if diagnostic.is_file():
+        timers, counters, timer_sections = parse_diagnostic_metrics(diagnostic)
+    else:
+        timers, counters, timer_sections = {}, {}, []
+
+    structural = (
+        numerical == "pass"
+        and counters.get("end_records") == len(expected_zones)
+        and timers.get("Total", 0.0) > 0.0
+    )
+    write_json(
+        artifact / "comparison.json",
+        {
+            "result": numerical,
+            "diagnostic": comparison_error,
+            "timing_excluded": True,
+        },
+    )
+    return {
+        "number": number,
+        "numerical_result": numerical,
+        "structural_result": "pass" if structural else "fail",
+        "process_wall_seconds": process_wall_seconds,
+        "timers_seconds": timers,
+        "timer_sections_seconds": timer_sections,
+        "counters": counters,
+    }
+
+
+def environment_identity() -> dict[str, str]:
+    """Record portable text facts useful when a facility record is transferred."""
+    interesting = {
+        "LOADEDMODULES",
+        "MODULEPATH",
+        "SLURM_JOB_ID",
+        "SLURM_NODELIST",
+        "PBS_JOBID",
+        "LSB_JOBID",
+        "OMP_NUM_THREADS",
+        "CUDA_VISIBLE_DEVICES",
+        "ROCR_VISIBLE_DEVICES",
+    }
+    environment = {
+        key: value for key, value in os.environ.items() if key in interesting
+    }
+    environment.update(
+        {
+            "platform": platform.platform(),
+            "python": sys.version,
+            "processor": platform.processor(),
+            "host": platform.node(),
+            "uname": " ".join(platform.uname()),
+        }
+    )
+    return environment
+
+
+def make_record_document(
+    case_id: str,
+    case: Any,
+    profile: dict[str, Any],
+    harness: dict[str, object],
+    manifest: list[dict[str, str]],
+    repetitions: list[dict[str, object]],
+    repetitions_requested: int,
+    timeout_seconds: float,
+    record: Path,
+    executable: Path,
+    build_log: Path,
+) -> dict[str, object]:
+    """Assemble only portable values and retained-artifact identities."""
+    return {
+        "schema": "xnet-v9-benchmark-record-v3",
+        "historical_source_sha": HISTORICAL_SHA,
+        "source_sha": HISTORICAL_SHA,
+        "case": {
+            "case_id": case_id,
+            "network": case.network,
+            "workload": case.workload,
+            "input_identity": case.input_identity,
+        },
+        "execution": {"profile": "serial-dense", **profile},
+        "capture": {
+            "captured_utc": datetime.now(timezone.utc).isoformat(),
+            "repetitions_requested": repetitions_requested,
+            "timeout_seconds": timeout_seconds,
+            "harness": harness,
+            "build": {
+                "config_path": "build-config.txt",
+                "config_sha256": sha256(record / "build-config.txt"),
+                "log_path": "build.log",
+                "log_sha256": sha256(build_log),
+            },
+            "executable": {"sha256": sha256(executable), "copied": False},
+            "environment": environment_identity(),
+        },
+        "input_bundle": {
+            "type": "historical-source-manifest",
+            "revision": HISTORICAL_SHA,
+            "entries": manifest,
+            "manifest_sha256": manifest_digest(manifest),
+        },
+        "expected": case.expected,
+        "repetitions": repetitions,
+    }
 
 
 def main() -> int:
     args = arguments()
-    cases = read_cases(Path(__file__).parent)
+    cases, profiles = read_registry(Path(__file__).parent)
     if args.list_cases:
-        for case in cases.values():
-            print(f"{case.case_id}\t{case.status}\t{case.network.get('id', '')}\t{case.workload.get('description', '')}")
+        list_cases(cases)
         return 0
-    if not all((args.repository, args.build_dir, args.records, args.case)) or args.repetitions < 1:
-        raise BenchmarkError("--repository, --build-dir, --records, --case, and positive --repetitions are required")
+
+    require_capture_arguments(args)
     if args.case not in cases or cases[args.case].status != "ready":
         raise BenchmarkError(f"case is not ready for capture: {args.case}")
+
+    harness = harness_identity()
+    if harness["dirty"] is not False or not isinstance(
+        harness["repository_revision"],
+        str,
+    ):
+        raise BenchmarkError("capture requires a clean committed benchmark harness")
+
     repository = require_clean_historical_repository(args.repository)
     build_dir = args.build_dir.resolve()
-    if build_dir.exists():
-        raise BenchmarkError("capture owns a fresh, nonexistent --build-dir")
     regression = load_regression(repository)
-    factory = cases[args.case].workload["regression_factory"]
-    regression_case = getattr(regression, factory)(repository)
+    case = cases[args.case]
+    regression_case = getattr(regression, case.workload["regression_factory"])(repository)
+
     args.records.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     record = args.records.resolve() / f"{args.case}-{stamp}-{os.getpid()}"
     record.mkdir()
-    build_log = record / "build.log"
-    with build_log.open("w", encoding="utf-8") as log:
-        build = subprocess.run(["make", "-C", str(repository), f"BUILD_DIR={build_dir}", "xnet"], stdout=log, stderr=subprocess.STDOUT, text=True)
-    if build.returncode:
-        raise BenchmarkError(f"fresh build failed; see {build_log}")
-    executable = build_dir / "bin/xnet"
-    config = build_dir / "config.txt"
-    if not executable.is_file() or not os.access(executable, os.X_OK) or not config.is_file():
-        raise BenchmarkError("fresh build did not produce executable and config.txt")
-    settings = config_values(config)
-    if settings.get("SOURCE_ROOT") != str(repository) or settings.get("MATRIX_SOLVER") != "dense":
-        raise BenchmarkError("fresh build is not the requested historical serial dense build")
-    for key in ("MPI_MODE", "OPENMP_MODE", "GPU_MODE", "OPENACC_MODE", "OPENMP_OL_MODE"):
-        if settings.get(key) != "OFF":
-            raise BenchmarkError(f"serial-dense execution profile rejects {key}={settings.get(key)!r}")
-    shutil.copy2(config, record / "build-config.txt")
-    inputs = case_inputs(repository, regression_case)
-    manifest = input_manifest(repository, inputs)
-    if manifest_digest(manifest) != cases[args.case].input_identity.get("manifest_sha256"):
+
+    profile = profiles["serial-dense"]
+    executable, build_log = build_historical_xnet(
+        repository,
+        build_dir,
+        record,
+        profile,
+    )
+    manifest = input_manifest(repository, case_inputs(repository, regression_case))
+    if manifest_digest(manifest) != case.input_identity.get("manifest_sha256"):
         raise BenchmarkError("case registry input-manifest binding mismatch")
-    repetitions = []
-    for number in range(1, args.repetitions + 1):
-        artifact = record / "repetitions" / str(number)
-        artifact.parent.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="xnet-v9-benchmark-") as temporary:
-            work = Path(temporary) / "work"
-            try:
-                process_wall_seconds, states = run_timed_and_compare(regression, executable, regression_case, work, args.timeout_seconds)
-                numerical = "pass"
-                comparison_error = None
-            except Exception as error:  # Preserve comparator diagnostics for failed numerical runs.
-                numerical = "fail"
-                comparison_error = f"{type(error).__name__}: {error}"
-            artifact.mkdir()
-            for name in ("net_diag01", "xnet.stdout.txt", "xnet.stderr.txt", "xnet.status.txt", "composition_error_norms.json"):
-                source = work / name
-                if source.is_file():
-                    shutil.copy2(source, artifact / name)
-        diagnostic = artifact / "net_diag01"
-        timers, counters = parse_diagnostic_metrics(diagnostic) if diagnostic.is_file() else ({}, {})
-        expected_zones = cases[args.case].expected["zones"]
-        structural = numerical == "pass" and counters.get("end_records") == len(expected_zones) and timers.get("Total", 0.0) > 0.0
-        write_json(artifact / "comparison.json", {"result": numerical, "diagnostic": comparison_error, "timing_excluded": True})
-        repetitions.append({"number": number, "numerical_result": numerical, "structural_result": "pass" if structural else "fail", "process_wall_seconds": process_wall_seconds if numerical == "pass" else None, "timers_seconds": timers, "counters": counters})
-    environment = {key: value for key, value in os.environ.items() if key in {"LOADEDMODULES", "MODULEPATH", "SLURM_JOB_ID", "SLURM_NODELIST", "PBS_JOBID", "LSB_JOBID", "OMP_NUM_THREADS", "CUDA_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES"}}
-    environment.update({"platform": platform.platform(), "python": sys.version, "processor": platform.processor(), "host": platform.node(), "uname": " ".join(platform.uname())})
-    document = {"schema": "xnet-v9-benchmark-record-v3", "historical_source_sha": HISTORICAL_SHA, "source_sha": HISTORICAL_SHA, "case": {"case_id": args.case, "network": cases[args.case].network, "workload": cases[args.case].workload, "input_identity": cases[args.case].input_identity}, "execution": {"profile": "serial-dense", "launcher": "none", "dimensions": {"mpi": "OFF", "openmp": "OFF", "gpu": "OFF", "solver": "dense"}}, "capture": {"captured_utc": datetime.now(timezone.utc).isoformat(), "repetitions_requested": args.repetitions, "timeout_seconds": args.timeout_seconds, "harness": harness_identity(), "build": {"config_path": "build-config.txt", "config_sha256": sha256(record / "build-config.txt"), "log_path": "build.log", "log_sha256": sha256(build_log)}, "executable": {"sha256": sha256(executable), "copied": False}, "environment": environment}, "input_bundle": {"type": "historical-source-manifest", "revision": HISTORICAL_SHA, "entries": manifest, "manifest_sha256": manifest_digest(manifest)}, "expected": cases[args.case].expected, "repetitions": repetitions}
+
+    repetitions = [
+        capture_repetition(
+            number,
+            record,
+            regression,
+            executable,
+            regression_case,
+            args.timeout_seconds,
+            case.expected["zones"],
+        )
+        for number in range(1, args.repetitions + 1)
+    ]
+    document = make_record_document(
+        args.case,
+        case,
+        profile,
+        harness,
+        manifest,
+        repetitions,
+        args.repetitions,
+        args.timeout_seconds,
+        record,
+        executable,
+        build_log,
+    )
     write_json(record / "record.json", document)
     write_json(record / "inventory.json", inventory(record))
     print(record)

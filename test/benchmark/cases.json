@@ -1,24 +1,95 @@
 {
   "schema": "xnet-v9-benchmark-cases-v1",
+  "execution_profiles": {
+    "serial-dense": {
+      "launcher": "none",
+      "dimensions": {
+        "mpi": "OFF",
+        "openmp": "OFF",
+        "gpu": "OFF",
+        "solver": "dense"
+      }
+    }
+  },
   "cases": [
     {
       "case_id": "batch_alpha",
       "status": "ready",
-      "network": {"id": "alpha-small", "species_count": 14, "path": "test/Data_alpha"},
-      "workload": {"id": "batch-alpha-16-zone", "description": "16-zone partial-batch self-heating", "regression_factory": "batch_alpha_case"},
-      "input_identity": {"control": "test/regression/cases/batch_alpha/control", "reference": "test/regression/cases/batch_alpha/reference/final_state.json", "network_root": "test/Data_alpha", "trajectory_root": "test/Test_Problems/th_batch", "helm_table": "tools/starkiller-helmholtz/helm_table.dat", "comparator": "test/regression/xnet_regression.py", "manifest_sha256": "b31edd5986947a5ba8bc435bc84f89395e7a56744e926c67c7c617a2364f670c"},
-      "expected": {"zones": [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16], "outputs": ["net_diag01"]}
+      "network": {
+        "id": "alpha-small",
+        "species_count": 14,
+        "path": "test/Data_alpha"
+      },
+      "workload": {
+        "id": "batch-alpha-16-zone",
+        "description": "16-zone partial-batch self-heating",
+        "regression_factory": "batch_alpha_case"
+      },
+      "input_identity": {
+        "control": "test/regression/cases/batch_alpha/control",
+        "reference": "test/regression/cases/batch_alpha/reference/final_state.json",
+        "network_root": "test/Data_alpha",
+        "trajectory_root": "test/Test_Problems/th_batch",
+        "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
+        "comparator": "test/regression/xnet_regression.py",
+        "manifest_sha256": "b31edd5986947a5ba8bc435bc84f89395e7a56744e926c67c7c617a2364f670c"
+      },
+      "expected": {
+        "zones": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        "outputs": ["net_diag01"],
+        "timer_sections": 4
+      }
     },
     {
       "case_id": "heat_sn160",
       "status": "ready",
-      "network": {"id": "SN160", "species_count": 160, "path": "test/Data_SN160"},
-      "workload": {"id": "heat-sn160-6-zone", "description": "6-zone self-heating repeated burn", "regression_factory": "heat_sn160_case"},
-      "input_identity": {"control": "test/regression/cases/heat_sn160/control", "reference": "test/regression/cases/heat_sn160/reference/final_state.json", "network_root": "test/Data_SN160", "trajectory_root": "test/Test_Problems", "trajectory_prefix": "th_co_burn_", "helm_table": "tools/starkiller-helmholtz/helm_table.dat", "comparator": "test/regression/xnet_regression.py", "manifest_sha256": "fc92160e1a59fbc200af2026376eb6e00a4d6c3d4b4266b11735948708aedcdf"},
-      "expected": {"zones": [1,2,3,4,5,6], "outputs": ["net_diag01"]}
+      "network": {
+        "id": "SN160",
+        "species_count": 160,
+        "path": "test/Data_SN160"
+      },
+      "workload": {
+        "id": "heat-sn160-6-zone",
+        "description": "6-zone self-heating repeated burn",
+        "regression_factory": "heat_sn160_case"
+      },
+      "input_identity": {
+        "control": "test/regression/cases/heat_sn160/control",
+        "reference": "test/regression/cases/heat_sn160/reference/final_state.json",
+        "network_root": "test/Data_SN160",
+        "trajectory_root": "test/Test_Problems",
+        "trajectory_prefix": "th_co_burn_",
+        "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
+        "comparator": "test/regression/xnet_regression.py",
+        "manifest_sha256": "fc92160e1a59fbc200af2026376eb6e00a4d6c3d4b4266b11735948708aedcdf"
+      },
+      "expected": {
+        "zones": [1, 2, 3, 4, 5, 6],
+        "outputs": ["net_diag01"],
+        "timer_sections": 6
+      }
     },
-    {"case_id": "ccsn52", "status": "candidate", "network": {"id": "CCSN52", "species_count": 52}, "workload": {"description": "Supplied CCSN52 bundle lacks reviewed workload, licence, and provenance binding"}},
-    {"case_id": "ccsn179", "status": "candidate", "network": {"id": "CCSN179", "species_count": 179}, "workload": {"description": "Data exists but lacks a reviewed standalone workload"}},
-    {"case_id": "ecsn350", "status": "candidate", "network": {"id": "ECSN350", "species_count": 350}, "workload": {"description": "Supplied ECSN350 bundle lacks reviewed workload, licence, and provenance binding"}}
+    {
+      "case_id": "ccsn52",
+      "status": "candidate",
+      "network": {"id": "CCSN52", "species_count": 52},
+      "workload": {
+        "description": "CCSN52 needs a reviewed workload plus licence and provenance binding."
+      }
+    },
+    {
+      "case_id": "ccsn179",
+      "status": "candidate",
+      "network": {"id": "CCSN179", "species_count": 179},
+      "workload": {"description": "Data exists but lacks a reviewed standalone workload"}
+    },
+    {
+      "case_id": "ecsn350",
+      "status": "candidate",
+      "network": {"id": "ECSN350", "species_count": 350},
+      "workload": {
+        "description": "ECSN350 needs a reviewed workload plus licence and provenance binding."
+      }
+    }
   ]
 }

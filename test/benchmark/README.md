@@ -38,30 +38,12 @@ python3 test/benchmark/test_benchmark.py /scratch/xnet-v9-records/batch_alpha-..
 `validate.py` works offline. Optional `--repository` and `--executable`
 rehydrate bundle and executable identity when they are locally available.
 
-## Frontier local-session prompt
+`batch_alpha` and `heat_sn160` are representative application cases. They
+support statements about those real standalone workloads, not general scaling
+conclusions. A future controlled family will use a reviewed common
+thermodynamic state and composition projection across network sizes; it is the
+appropriate basis for scaling conclusions. Candidate CCSN and ECSN families
+remain unavailable until their reviewed workload and provenance are defined.
 
-```text
-Using Frontier allocation <ACCOUNT_PROJECT> and finite slice
-<NODES>/<WALLTIME>, create a clean worktree at SHA
-86e867c2a64267a674ce4fbf6a3064af39e2f4e0. In this local session run the
-implemented Python serial-dense capture for batch_alpha and/or heat_sn160 with
-fresh build and record directories, then validate it offline. Report modules,
-compiler, allocation, host/topology, command, status, and failures. This is
-serial capture only, not MPI/GPU/Frontier qualification. Immediate follow-on
-facility support needs a reviewed execution profile with launcher argv and
-resolved placement evidence.
-```
-
-## Perlmutter local-session prompt
-
-```text
-Using Perlmutter allocation <ACCOUNT_PROJECT> and finite slice
-<NODES>/<WALLTIME>, create a clean worktree at SHA
-86e867c2a64267a674ce4fbf6a3064af39e2f4e0. In this local session run the
-implemented Python serial-dense capture for batch_alpha and/or heat_sn160 with
-fresh build and record directories, then validate it offline. Report modules,
-compiler, allocation, host/topology, command, status, and failures. This is
-serial capture only, not MPI/GPU/Perlmutter qualification. Immediate follow-on
-facility support needs a reviewed execution profile with launcher argv and
-resolved placement evidence.
-```
+See [the self-contained Frontier and Perlmutter prompt drafts](facility-prompts.md)
+for smoke and later facility execution guidance.

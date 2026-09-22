@@ -16,7 +16,22 @@ from typing import Any, Iterable
 
 HISTORICAL_SHA = "86e867c2a64267a674ce4fbf6a3064af39e2f4e0"
 RECORD_SCHEMA = "xnet-v9-benchmark-record-v3"
-TIMER_NAMES = ("Total", "TimeStep", "NewtRaph", "Solver", "Decomp", "BkSub", "Jacobian", "Deriv", "CrossSect", "Screening", "PreScreen", "EOS", "Setup", "Output")
+TIMER_NAMES = (
+    "Total",
+    "TimeStep",
+    "NewtRaph",
+    "Solver",
+    "Decomp",
+    "BkSub",
+    "Jacobian",
+    "Deriv",
+    "CrossSect",
+    "Screening",
+    "PreScreen",
+    "EOS",
+    "Setup",
+    "Output",
+)
 
 
 class BenchmarkError(RuntimeError):
@@ -41,26 +56,49 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def read_cases(directory: Path) -> dict[str, BenchmarkCase]:
+def read_registry(
+    directory: Path,
+) -> tuple[dict[str, BenchmarkCase], dict[str, dict[str, Any]]]:
     document = json.loads((directory / "cases.json").read_text(encoding="utf-8"))
-    if document.get("schema") != "xnet-v9-benchmark-cases-v1" or not isinstance(document.get("cases"), list):
+    if (
+        document.get("schema") != "xnet-v9-benchmark-cases-v1"
+        or not isinstance(document.get("cases"), list)
+    ):
         raise BenchmarkError("invalid cases.json schema")
     cases: dict[str, BenchmarkCase] = {}
     for item in document["cases"]:
         try:
-            case = BenchmarkCase(item["case_id"], item["status"], item["network"], item["workload"], item.get("expected", {}), item.get("input_identity", {}))
+            case = BenchmarkCase(
+                item["case_id"],
+                item["status"],
+                item["network"],
+                item["workload"],
+                item.get("expected", {}),
+                item.get("input_identity", {}),
+            )
         except (KeyError, TypeError) as error:
             raise BenchmarkError("invalid case registry entry") from error
         if not re.fullmatch(r"[a-z0-9_]+", case.case_id) or case.case_id in cases:
             raise BenchmarkError(f"invalid or duplicate case ID: {case.case_id!r}")
         cases[case.case_id] = case
-    return cases
+    profiles = document.get("execution_profiles", {})
+    if not isinstance(profiles, dict) or "serial-dense" not in profiles:
+        raise BenchmarkError("case registry lacks serial-dense execution profile")
+    return cases, profiles
+
+
+def read_cases(directory: Path) -> dict[str, BenchmarkCase]:
+    return read_registry(directory)[0]
 
 
 def require_clean_historical_repository(repository: Path) -> Path:
     repository = repository.resolve()
+
     def git(*args: str) -> str:
-        return subprocess.check_output(["git", "-C", str(repository), *args], text=True).strip()
+        return subprocess.check_output(
+            ["git", "-C", str(repository), *args],
+            text=True,
+        ).strip()
     try:
         revision = git("rev-parse", "HEAD")
         dirty = git("status", "--porcelain")
@@ -72,7 +110,10 @@ def require_clean_historical_repository(repository: Path) -> Path:
 
 
 def tracked_files(repository: Path, relative: Path) -> list[Path]:
-    output = subprocess.check_output(["git", "-C", str(repository), "ls-files", "--", relative.as_posix()], text=True)
+    output = subprocess.check_output(
+        ["git", "-C", str(repository), "ls-files", "--", relative.as_posix()],
+        text=True,
+    )
     return [repository / item for item in output.splitlines() if item]
 
 
@@ -89,7 +130,11 @@ def load_regression(repository: Path):
 
 def case_inputs(repository: Path, regression_case: Any) -> list[Path]:
     """Return all source files whose content defines the isolated comparison run."""
-    files = [regression_case.control, regression_case.reference, regression_case.helm_table]
+    files = [
+        regression_case.control,
+        regression_case.reference,
+        regression_case.helm_table,
+    ]
     files.extend(tracked_files(repository, regression_case.network_data.relative_to(repository)))
     files.extend(regression_case.trajectories)
     files.extend(item.source for item in regression_case.staged_inputs)
@@ -107,27 +152,73 @@ def input_manifest(repository: Path, inputs: Iterable[Path]) -> list[dict[str, s
 
 
 def manifest_digest(entries: Iterable[dict[str, str]]) -> str:
-    return hashlib.sha256(json.dumps(sorted(entries, key=lambda item: item["path"]), separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+    canonical = json.dumps(
+        sorted(entries, key=lambda item: item["path"]),
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def parse_diagnostic_metrics(path: Path) -> tuple[dict[str, float], dict[str, int]]:
+def parse_diagnostic_metrics(
+    path: Path,
+) -> tuple[dict[str, float], dict[str, Any], list[dict[str, float]]]:
     text = path.read_text(encoding="utf-8", errors="replace")
     timers: dict[str, float] = {}
+    sections: list[dict[str, float]] = []
+    section: dict[str, float] | None = None
     for line in text.splitlines():
+        if line.startswith("Timers Summary:"):
+            section = {}
+            sections.append(section)
+            continue
         fields = line.split()
         if len(fields) >= 2 and fields[0] in TIMER_NAMES:
             try:
                 timers[fields[0]] = float(fields[1])
+                if section is not None:
+                    section[fields[0]] = float(fields[1])
             except ValueError:
                 continue
-    counters = {"end_records": len(re.findall(r"^End\s", text, re.MULTILINE)), "timer_sections": text.count("Timers Summary:")}
-    rows = re.findall(r"^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$", text, re.MULTILINE)
+    counters: dict[str, Any] = {
+        "end_records": len(re.findall(r"^End\s", text, re.MULTILINE)),
+        "timer_sections": len(sections),
+    }
+    rows = []
+    reading_counters = False
+    counter_pattern = re.compile(
+        r"^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$"
+    )
+    for line in text.splitlines():
+        if line.startswith("Counters:"):
+            reading_counters = True
+            continue
+        if line.startswith("Timers Summary:"):
+            reading_counters = False
+            continue
+        if reading_counters and (match := counter_pattern.fullmatch(line)):
+            rows.append(match.groups())
     if rows:
-        counters["zones"] = {zone: {"TS": int(ts), "NR": int(nr), "Jacobian": int(jac), "Deriv": int(deriv), "CrossSect": int(cross)} for zone, ts, nr, jac, deriv, cross in rows}
-    return timers, counters
+        counters["zones"] = {
+            zone: {
+                "TS": int(ts),
+                "NR": int(nr),
+                "Jacobian": int(jac),
+                "Deriv": int(deriv),
+                "CrossSect": int(cross),
+            }
+            for zone, ts, nr, jac, deriv, cross in rows
+        }
+    return timers, counters, sections
 
 
-def run_timed_and_compare(regression: Any, executable: Path, case: Any, work: Path, timeout_seconds: float) -> tuple[float, tuple[Any, ...]]:
+def run_timed_and_compare(
+    regression: Any,
+    executable: Path,
+    case: Any,
+    work: Path,
+    timeout_seconds: float,
+) -> tuple[float, tuple[Any, ...]]:
     """Time only the existing runner's subprocess helper, then characterize it."""
     reference = regression.load_reference(case.reference)
     regression.validate_reference_for_case(case, reference)
@@ -136,10 +227,22 @@ def run_timed_and_compare(regression: Any, executable: Path, case: Any, work: Pa
     regression.run_xnet(executable, case, prepared, timeout_seconds=timeout_seconds)
     elapsed = time.monotonic() - started
     diagnostic = (prepared / "net_diag01").read_text(encoding="utf-8")
-    missing = tuple(marker for marker in case.required_diagnostic_markers if marker not in diagnostic)
+    missing = tuple(
+        marker
+        for marker in case.required_diagnostic_markers
+        if marker not in diagnostic
+    )
     if missing:
-        raise regression.ParsingFailure("required diagnostic marker is missing: " + ", ".join(repr(marker) for marker in missing))
-    states = regression.parse_diagnostic(diagnostic, case.expected_zones, case.expected_species, case.expected_diagnostic_groups)
+        markers = ", ".join(repr(marker) for marker in missing)
+        raise regression.ParsingFailure(
+            f"required diagnostic marker is missing: {markers}"
+        )
+    states = regression.parse_diagnostic(
+        diagnostic,
+        case.expected_zones,
+        case.expected_species,
+        case.expected_diagnostic_groups,
+    )
     diagnostics = regression.calculate_composition_norms(states, reference)
     regression._write_composition_diagnostics(prepared, diagnostics, reference)
     regression.compare_final_states(states, reference)
@@ -148,10 +251,21 @@ def run_timed_and_compare(regression: Any, executable: Path, case: Any, work: Pa
 
 
 def inventory(record: Path) -> list[dict[str, object]]:
-    ignored = {"inventory.json"}
+    inventory_path = record / "inventory.json"
     rows = []
-    for path in sorted((item for item in record.rglob("*") if item.is_file() and item.name not in ignored), key=lambda item: item.relative_to(record).as_posix()):
-        rows.append({"path": path.relative_to(record).as_posix(), "bytes": path.stat().st_size, "sha256": sha256(path)})
+    paths = (
+        item
+        for item in record.rglob("*")
+        if item.is_file() and item != inventory_path
+    )
+    for path in sorted(paths, key=lambda item: item.relative_to(record).as_posix()):
+        rows.append(
+            {
+                "path": path.relative_to(record).as_posix(),
+                "bytes": path.stat().st_size,
+                "sha256": sha256(path),
+            }
+        )
     return rows
 
 

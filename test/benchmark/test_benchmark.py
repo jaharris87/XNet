@@ -191,10 +191,11 @@ def main(record: Path) -> None:
         diagnostic = scientific / "repetitions" / "1" / "net_diag01"
         text = diagnostic.read_text(encoding="utf-8")
         mutated, count = re.subn(
-            r"(?<![A-Za-z])([1-9]\.\d{4,}E[+-]\d+)",
-            "9.999999E+01",
+            r"^(End\s+\d+\s+\d+\s+\S+\s+\S+\s+)\S+",
+            r"\g<1>9.9999999E+01",
             text,
             count=1,
+            flags=re.MULTILINE,
         )
         if count != 1:
             raise RuntimeError("test record lacks a mutable scientific value")

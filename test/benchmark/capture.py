@@ -301,6 +301,7 @@ def retain_command_output(
     record: Path,
     name: str,
     command: list[str],
+    redact_labels: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Run an optional host-inspection command and retain its complete output."""
     path = record / f"{name}.txt"
@@ -311,6 +312,12 @@ def retain_command_output(
     except OSError as error:
         output = f"unavailable: {error}\n"
         status = "unavailable"
+    if redact_labels:
+        output = "\n".join(
+            line
+            for line in output.splitlines()
+            if not any(label in line.lower() for label in redact_labels)
+        ) + "\n"
     path.write_text(output, encoding="utf-8")
     return {
         "path": path.name,
@@ -365,13 +372,30 @@ def command_evidence(
         affinity: list[int] | str = sorted(os.sched_getaffinity(0))
     except (AttributeError, OSError):
         affinity = "unavailable"
-    return {
+    runtime = retain_command_output(record, "runtime-libraries", runtime_command)
+    topology = retain_command_output(
+        record,
+        "topology",
+        topology_command,
+        redact_labels=("serial number", "hardware uuid", "provisioning udid"),
+    )
+    compiler = compiler_evidence(record, settings)
+    version = compiler.get("version")
+    evidence = {
         "cpu_count": os.cpu_count(),
         "affinity": affinity,
-        "compiler": compiler_evidence(record, settings),
-        "runtime": retain_command_output(record, "runtime-libraries", runtime_command),
-        "topology": retain_command_output(record, "topology", topology_command),
+        "compiler": compiler,
+        "runtime": runtime,
+        "topology": topology,
     }
+    statuses = (
+        version.get("status") if isinstance(version, dict) else None,
+        runtime.get("status"),
+        topology.get("status"),
+    )
+    if any(status != 0 for status in statuses):
+        raise BenchmarkError("required operational evidence command failed")
+    return evidence
 
 
 def make_record_document(

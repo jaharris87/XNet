@@ -320,11 +320,12 @@ def validate_capture_provenance(
         path = entry.get("path")
         digest = entry.get("sha256")
         argv = entry.get("argv")
+        status = entry.get("status")
         if not isinstance(digest, str):
             raise BenchmarkError(f"malformed {name} provenance")
         if not re.fullmatch(r"[0-9a-f]{64}", digest):
             raise BenchmarkError(f"malformed {name} provenance")
-        if not isinstance(argv, list) or not argv:
+        if not isinstance(argv, list) or not argv or status != 0:
             raise BenchmarkError(f"malformed {name} provenance")
         artifact = retained_path(
             record,

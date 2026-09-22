@@ -137,7 +137,7 @@ def main(record: Path) -> None:
         document["repetitions"][0]["timers_seconds"]["Total"] += 1.0
         document["repetitions"][0]["timer_sections_seconds"][-1]["Total"] += 1.0
         write_document(changed_total, document)
-        reject("changed Total", changed_total, root, "retained diagnostic disagrees")
+        reject("changed Total", changed_total, root, "retained diagnostics disagree")
 
         changed_counter = copy_record(temporary_path, record, "changed-counter")
         document = read_document(changed_counter)
@@ -146,7 +146,7 @@ def main(record: Path) -> None:
         )
         document["repetitions"][0]["counters"]["zones"][first_zone]["TS"] += 1
         write_document(changed_counter, document)
-        reject("changed counter", changed_counter, root, "retained diagnostic disagrees")
+        reject("changed counter", changed_counter, root, "retained diagnostics disagree")
 
         build_config = copy_record(temporary_path, record, "build-config")
         config = build_config / "build-config.txt"

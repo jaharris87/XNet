@@ -731,8 +731,60 @@ def validate_capture_provenance(
         commands = accelerator.get("commands")
         if not isinstance(commands, list) or not commands:
             raise BenchmarkError("accelerator runtime evidence is incomplete")
+        backend = accelerator["backend"]
+        expected_commands = (
+            (
+                ("nvidia-smi", "-L"),
+                (
+                    "nvidia-smi",
+                    "--query-gpu=index,uuid,name,driver_version",
+                    "--format=csv,noheader",
+                ),
+            )
+            if backend == "CUDA"
+            else (
+                (
+                    "rocm-smi",
+                    "--showuniqueid",
+                    "--showproductname",
+                    "--showdriverversion",
+                ),
+            )
+        )
+        if len(commands) != len(expected_commands):
+            raise BenchmarkError("accelerator runtime evidence is incomplete")
         for index, entry in enumerate(commands, start=1):
-            validate_transcript(f"accelerator runtime {index}", entry)
+            transcript = validate_transcript(f"accelerator runtime {index}", entry)
+            argv = entry.get("argv") if isinstance(entry, dict) else None
+            tool_digest = entry.get("tool_sha256") if isinstance(entry, dict) else None
+            expected = expected_commands[index - 1]
+            if (
+                not isinstance(argv, list)
+                or Path(argv[0]).name != expected[0]
+                or tuple(argv[1:]) != expected[1:]
+                or not isinstance(tool_digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", tool_digest)
+            ):
+                raise BenchmarkError("accelerator identity command does not match backend")
+            output = transcript.read_text(encoding="utf-8", errors="replace")
+            if backend == "CUDA":
+                recognizable = (
+                    (index == 1 and "GPU " in output and "UUID:" in output)
+                    or (index == 2 and any(
+                        len(line.split(",")) >= 4
+                        for line in output.splitlines()
+                    ))
+                )
+            else:
+                recognizable = bool(
+                    re.search(
+                        r"Unique ID|Device|GPU|Card series|Driver version",
+                        output,
+                        re.IGNORECASE,
+                    )
+                )
+            if not recognizable:
+                raise BenchmarkError("accelerator identity output is not recognizable")
     runtime_argv = operational["runtime"]["argv"]
     if (
         Path(runtime_argv[0]).name not in {"ldd", "otool"}

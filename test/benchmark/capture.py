@@ -642,9 +642,13 @@ def accelerator_evidence(record: Path, backend: str | None) -> dict[str, object]
     for command in candidates:
         executable = shutil.which(command[0])
         if executable:
-            entries.append(
-                retain_command_output(record, f"accelerator-{len(entries) + 1}", [executable, *command[1:]])
+            entry = retain_command_output(
+                record,
+                f"accelerator-{len(entries) + 1}",
+                [executable, *command[1:]],
             )
+            entry["tool_sha256"] = sha256(Path(executable))
+            entries.append(entry)
     if not entries or any(entry.get("status") != 0 for entry in entries):
         raise BenchmarkError("accelerator runtime/device identity command failed")
     return {"backend": backend, "commands": entries}

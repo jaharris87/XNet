@@ -23,8 +23,8 @@ Program xnet_benchmark_gpu_probe
   Character(32) :: rank_text
   Integer :: rank_length
   Integer :: rank_status
+  Integer :: parse_status
 
-  myid = 0
   nproc = 1
   tid = 1
   nthread = 1
@@ -39,6 +39,8 @@ Program xnet_benchmark_gpu_probe
   If ( rank_status /= 0 ) &
     & Call get_environment_variable('PMI_RANK',rank_text,rank_length,rank_status)
   If ( rank_status /= 0 ) rank_text = '0'
+  Read(rank_text,*,IOSTAT=parse_status) myid
+  If ( parse_status /= 0 .or. myid < 0 ) Stop 2
 
   Call gpu_init()
   offloaded = .false.

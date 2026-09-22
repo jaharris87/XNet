@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a portable V9 benchmark record without requiring a live checkout."""
+"""Validate a portable XNet benchmark record without requiring a live checkout."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from typing import Any
 
 from benchmark import (
     BenchmarkError,
-    HISTORICAL_SHA,
     TIMER_NAMES,
     inventory,
     load_regression,
@@ -405,10 +404,12 @@ def compare_retained_diagnostic(
     comparison_paths: dict[str, Path],
     factory_name: str,
 ) -> None:
-    """Run the captured historical comparator without a live source checkout."""
+    """Run the captured comparator without a live source checkout."""
     try:
         regression = load_regression(comparison_paths["comparator"])
-        with tempfile.TemporaryDirectory(prefix="xnet-v9-comparison-") as temporary:
+        with tempfile.TemporaryDirectory(
+            prefix="xnet-benchmark-comparison-"
+        ) as temporary:
             locator = Path(temporary)
             case = getattr(regression, factory_name)(locator)
             case = replace(case, reference=comparison_paths["reference"])
@@ -581,6 +582,7 @@ def rehydrate(
     entries: list[dict[str, str]],
     document: dict[str, object],
 ) -> None:
+    source_revision = document.get("source_revision")
     if repository:
         try:
             revision = subprocess.check_output(
@@ -588,8 +590,10 @@ def rehydrate(
             ).strip()
         except (OSError, subprocess.CalledProcessError) as error:
             raise BenchmarkError("rehydration repository is not a Git checkout") from error
-        if revision != HISTORICAL_SHA:
-            raise BenchmarkError("rehydration repository is not the historical source")
+        if revision != source_revision:
+            raise BenchmarkError(
+                "rehydration repository does not match record source revision"
+            )
         dirty = subprocess.check_output(
             ["git", "-C", str(repository), "status", "--porcelain"],
             text=True,
@@ -631,7 +635,7 @@ def main() -> int:
     parser.add_argument(
         "--repository",
         type=Path,
-        help="optional historical checkout for rehydration checks",
+        help="optional source checkout for rehydration checks",
     )
     parser.add_argument(
         "--executable",
@@ -648,10 +652,11 @@ def main() -> int:
     record = args.record.resolve()
     document = read_record(record)
     validate_harness_identity(document)
-    if document.get("historical_source_sha") != HISTORICAL_SHA:
-        raise BenchmarkError("record does not bind the exact historical source")
-    if document.get("source_sha") != HISTORICAL_SHA:
-        raise BenchmarkError("record source SHA is not historical")
+    source_revision = document.get("source_revision")
+    if not isinstance(source_revision, str) or not re.fullmatch(
+        r"[0-9a-f]{40}", source_revision
+    ):
+        raise BenchmarkError("record has malformed source revision")
 
     cases, profiles = read_registry(Path(__file__).parent)
     case, expected = validate_case_and_execution(document, cases, profiles)

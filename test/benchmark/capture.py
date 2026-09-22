@@ -17,7 +17,7 @@ from typing import Any
 
 from benchmark import (
     BenchmarkError,
-    HISTORICAL_SHA,
+    RECORD_SCHEMA,
     case_inputs,
     input_manifest,
     inventory,
@@ -25,7 +25,7 @@ from benchmark import (
     manifest_digest,
     parse_diagnostic_metrics,
     read_registry,
-    require_clean_historical_repository,
+    require_clean_repository,
     run_timed_and_compare,
     sha256,
     write_json,
@@ -44,13 +44,17 @@ def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path)
     parser.add_argument(
+        "--source-revision",
+        help="exact full Git SHA required for the source checkout",
+    )
+    parser.add_argument(
         "--input-bundle",
         type=Path,
-        help="versioned input tree; defaults to the frozen source checkout",
+        help="versioned input tree; defaults to the source checkout",
     )
     parser.add_argument(
         "--input-bundle-revision",
-        help="exact bundle revision; defaults to the frozen source SHA",
+        help="exact bundle revision; defaults to --source-revision",
     )
     parser.add_argument("--build-dir", type=Path)
     parser.add_argument("--records", type=Path)
@@ -114,11 +118,17 @@ def list_cases(cases: dict[str, Any]) -> None:
 
 
 def require_capture_arguments(args: argparse.Namespace) -> None:
-    required = (args.repository, args.build_dir, args.records, args.case)
+    required = (
+        args.repository,
+        args.source_revision,
+        args.build_dir,
+        args.records,
+        args.case,
+    )
     if not all(required) or args.repetitions < 1:
         raise BenchmarkError(
-            "--repository, --build-dir, --records, --case, and positive "
-            "--repetitions are required"
+            "--repository, --source-revision, --build-dir, --records, --case, "
+            "and positive --repetitions are required"
         )
 
 
@@ -139,7 +149,7 @@ def verify_input_bundle_revision(bundle: Path, revision: str) -> None:
         raise BenchmarkError("input bundle checkout does not match its revision")
 
 
-def build_historical_xnet(
+def build_xnet(
     repository: Path,
     build_dir: Path,
     record: Path,
@@ -170,7 +180,7 @@ def build_historical_xnet(
 
     settings = config_values(config)
     if settings.get("SOURCE_ROOT") != str(repository):
-        raise BenchmarkError("fresh build does not bind the historical source")
+        raise BenchmarkError("fresh build does not bind the source repository")
     if settings.get("MATRIX_SOLVER") != profile["dimensions"]["solver"]:
         raise BenchmarkError("fresh build is not the requested dense solver build")
     for key in (
@@ -203,7 +213,7 @@ def capture_repetition(
     process_wall_seconds: float | None = None
     comparison_error: str | None = None
 
-    with tempfile.TemporaryDirectory(prefix="xnet-v9-benchmark-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="xnet-benchmark-") as temporary:
         work = Path(temporary) / "work"
         try:
             process_wall_seconds, _ = run_timed_and_compare(
@@ -414,12 +424,12 @@ def make_record_document(
     operational: dict[str, object],
     build_argv: list[str],
     comparison: dict[str, object],
+    source_revision: str,
 ) -> dict[str, object]:
     """Assemble only portable values and retained-artifact identities."""
     return {
-        "schema": "xnet-v9-benchmark-record-v3",
-        "historical_source_sha": HISTORICAL_SHA,
-        "source_sha": HISTORICAL_SHA,
+        "schema": RECORD_SCHEMA,
+        "source_revision": source_revision,
         "case": {
             "case_id": case_id,
             "network": case.network,
@@ -496,11 +506,11 @@ def main() -> int:
     ):
         raise BenchmarkError("capture requires a clean committed benchmark harness")
 
-    repository = require_clean_historical_repository(args.repository)
+    repository = require_clean_repository(args.repository, args.source_revision)
     input_bundle = (args.input_bundle or repository).resolve()
     if not input_bundle.is_dir():
         raise BenchmarkError("--input-bundle must name a readable directory")
-    input_bundle_revision = args.input_bundle_revision or HISTORICAL_SHA
+    input_bundle_revision = args.input_bundle_revision or args.source_revision
     build_dir = args.build_dir.resolve()
     case = cases[args.case]
     identity = case.input_identity
@@ -517,7 +527,7 @@ def main() -> int:
     record = args.records.resolve() / f"{args.case}-{stamp}-{os.getpid()}"
     record.mkdir()
     profile = profiles["serial-dense"]
-    executable, build_log, build_argv, settings = build_historical_xnet(
+    executable, build_log, build_argv, settings = build_xnet(
         repository,
         build_dir,
         record,
@@ -560,6 +570,7 @@ def main() -> int:
         operational,
         build_argv,
         comparison,
+        args.source_revision,
     )
     write_json(record / "record.json", document)
     write_json(record / "inventory.json", inventory(record))

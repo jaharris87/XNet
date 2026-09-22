@@ -1,8 +1,12 @@
-# Pre-V9 benchmark records
+# XNet benchmark records
 
-This directory captures reproducible baseline evidence for issue #127, not a
-performance winner, platform qualification, or regression-suite replacement.
-Capture permits only a clean checkout at
+This directory captures reproducible XNet benchmark evidence, not a performance
+winner, platform qualification, or regression-suite replacement. Capture
+requires an explicit full source revision and a clean checkout at that exact
+revision.
+
+Issue #127 currently uses this tooling for the pre-v9 baseline campaign. That
+campaign is pinned to source revision
 `86e867c2a64267a674ce4fbf6a3064af39e2f4e0`.
 
 `cases.json` is the sole registry. It keeps case ID, scientific network and
@@ -12,10 +16,12 @@ choices into case IDs.
 
 ```sh
 python3 test/benchmark/capture.py --list-cases
-python3 test/benchmark/capture.py --repository /scratch/xnet-v9-staging \
-  --input-bundle /scratch/xnet-v9-inputs \
+python3 test/benchmark/capture.py --repository /scratch/xnet-source \
+  --source-revision 86e867c2a64267a674ce4fbf6a3064af39e2f4e0 \
+  --input-bundle /scratch/xnet-benchmark-inputs \
   --input-bundle-revision 86e867c2a64267a674ce4fbf6a3064af39e2f4e0 \
-  --build-dir /scratch/xnet-v9-build --records /scratch/xnet-v9-records \
+  --build-dir /scratch/xnet-benchmark-build \
+  --records /scratch/xnet-benchmark-records \
   --case batch_alpha --repetitions 5
 ```
 
@@ -40,8 +46,8 @@ and final artifact checksum inventory are kept. Portable validation reparses
 the raw diagnostic and reruns the captured comparator after timing.
 
 ```sh
-python3 test/benchmark/validate.py /scratch/xnet-v9-records/batch_alpha-...
-python3 test/benchmark/test_benchmark.py /scratch/xnet-v9-records/batch_alpha-...
+python3 test/benchmark/validate.py /scratch/xnet-benchmark-records/batch_alpha-...
+python3 test/benchmark/test_benchmark.py /scratch/xnet-benchmark-records/batch_alpha-...
 ```
 
 `validate.py` works offline. Optional `--repository` and `--executable`
@@ -55,5 +61,4 @@ thermodynamic state and composition projection across network sizes; it is the
 appropriate basis for scaling conclusions. Candidate CCSN and ECSN families
 remain unavailable until their reviewed workload and provenance are defined.
 
-See [the self-contained Frontier and Perlmutter prompt drafts](facility-prompts.md)
-for smoke and later facility execution guidance.
+Facility runs require separately reviewed launcher and execution-profile support.

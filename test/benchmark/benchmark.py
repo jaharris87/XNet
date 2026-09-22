@@ -1,4 +1,4 @@
-"""Shared standard-library support for immutable XNet V9 benchmark records."""
+"""Shared standard-library support for immutable XNet benchmark records."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import sys
 import time
 from typing import Any, Iterable
 
-HISTORICAL_SHA = "86e867c2a64267a674ce4fbf6a3064af39e2f4e0"
-RECORD_SCHEMA = "xnet-v9-benchmark-record-v3"
+RECORD_SCHEMA = "xnet-benchmark-record-v1"
+CASE_REGISTRY_SCHEMA = "xnet-benchmark-cases-v1"
 TIMER_NAMES = (
     "Total",
     "TimeStep",
@@ -60,7 +60,7 @@ def read_registry(
 ) -> tuple[dict[str, BenchmarkCase], dict[str, dict[str, Any]]]:
     document = json.loads((directory / "cases.json").read_text(encoding="utf-8"))
     if (
-        document.get("schema") != "xnet-v9-benchmark-cases-v1"
+        document.get("schema") != CASE_REGISTRY_SCHEMA
         or not isinstance(document.get("cases"), list)
     ):
         raise BenchmarkError("invalid cases.json schema")
@@ -90,8 +90,12 @@ def read_cases(directory: Path) -> dict[str, BenchmarkCase]:
     return read_registry(directory)[0]
 
 
-def require_clean_historical_repository(repository: Path) -> Path:
+def require_clean_repository(repository: Path, source_revision: str) -> Path:
+    """Require a clean checkout at the explicitly requested source revision."""
     repository = repository.resolve()
+
+    if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
+        raise BenchmarkError("--source-revision must be a full lowercase Git SHA")
 
     def git(*args: str) -> str:
         return subprocess.check_output(
@@ -103,8 +107,10 @@ def require_clean_historical_repository(repository: Path) -> Path:
         dirty = git("status", "--porcelain")
     except (OSError, subprocess.CalledProcessError) as error:
         raise BenchmarkError(f"not a readable Git checkout: {repository}") from error
-    if revision != HISTORICAL_SHA or dirty:
-        raise BenchmarkError(f"repository must be clean at historical SHA {HISTORICAL_SHA}")
+    if revision != source_revision:
+        raise BenchmarkError("repository HEAD does not match --source-revision")
+    if dirty:
+        raise BenchmarkError("source repository must be clean")
     return repository
 
 
@@ -118,9 +124,9 @@ def tracked_files(repository: Path, relative: Path) -> list[Path]:
 
 def load_regression(path: Path):
     """Load the comparator from the declared benchmark-input bundle."""
-    spec = importlib.util.spec_from_file_location("xnet_v9_historical_regression", path)
+    spec = importlib.util.spec_from_file_location("xnet_benchmark_comparator", path)
     if spec is None or spec.loader is None:
-        raise BenchmarkError(f"could not load historical comparator: {path}")
+        raise BenchmarkError(f"could not load benchmark comparator: {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     previous = sys.dont_write_bytecode

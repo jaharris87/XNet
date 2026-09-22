@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused false-pass probes for a valid V9 benchmark record."""
+"""Focused false-pass probes for a valid XNet benchmark record."""
 
 from __future__ import annotations
 
@@ -13,7 +13,13 @@ import sys
 import tempfile
 from typing import Any
 
-from benchmark import inventory, manifest_digest, write_json
+from benchmark import (
+    BenchmarkError,
+    inventory,
+    manifest_digest,
+    require_clean_repository,
+    write_json,
+)
 
 
 def reject(
@@ -62,7 +68,7 @@ def main(record: Path) -> None:
     root = Path(__file__).parent
     subprocess.run([sys.executable, str(root / "validate.py"), str(record)], check=True)
 
-    with tempfile.TemporaryDirectory(prefix="xnet-v9-benchmark-tests-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="xnet-benchmark-tests-") as temporary:
         temporary_path = Path(temporary)
 
         malformed = copy_record(temporary_path, record, "malformed")
@@ -247,6 +253,21 @@ def main(record: Path) -> None:
         write_document(fake_revision, document)
         reject("fake harness revision", fake_revision, root, "harness revision")
 
+        malformed_source = copy_record(
+            temporary_path,
+            record,
+            "malformed-source-revision",
+        )
+        document = read_document(malformed_source)
+        document["source_revision"] = "not-a-full-git-sha"
+        write_document(malformed_source, document)
+        reject(
+            "malformed source revision",
+            malformed_source,
+            root,
+            "malformed source revision",
+        )
+
         scientific = copy_record(temporary_path, record, "scientific-value")
         diagnostic = scientific / "repetitions" / "1" / "net_diag01"
         text = diagnostic.read_text(encoding="utf-8")
@@ -288,6 +309,16 @@ def main(record: Path) -> None:
     if fake.returncode == 0:
         raise RuntimeError("false pass: arbitrary executable option")
 
+    try:
+        require_clean_repository(root.parents[1], "0" * 40)
+    except BenchmarkError as error:
+        if "does not match --source-revision" not in str(error):
+            raise RuntimeError(
+                f"unexpected wrong source-revision rejection: {error}"
+            ) from error
+    else:
+        raise RuntimeError("false pass: capture accepted the wrong source revision")
+
     wrong_head = subprocess.run(
         [
             sys.executable,
@@ -299,8 +330,11 @@ def main(record: Path) -> None:
         capture_output=True,
         text=True,
     )
-    if wrong_head.returncode == 0 or "not the historical source" not in wrong_head.stderr:
-        raise RuntimeError("false pass: rehydration accepted a nonhistorical HEAD")
+    if (
+        wrong_head.returncode == 0
+        or "does not match record source revision" not in wrong_head.stderr
+    ):
+        raise RuntimeError("false pass: rehydration accepted the wrong source HEAD")
     print("benchmark false-pass probes: passed")
 
 

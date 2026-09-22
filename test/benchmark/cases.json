@@ -1,5 +1,5 @@
 {
-  "schema": "xnet-v9-benchmark-cases-v1",
+  "schema": "xnet-benchmark-cases-v1",
   "execution_profiles": {
     "serial-dense": {
       "launcher": "none",

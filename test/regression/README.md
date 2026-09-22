@@ -269,9 +269,14 @@ The committed reference is a serial-CPU characterization, not scientific
 validation. It records all 16 complete ordered 14-species endpoints,
 requested/achieved time, temperature, density, electron fraction, End and
 solver-counter diagnostics, source provenance, and hashes. It uses the
-existing `xnet-comparison-v1` exact policy for observed stable printed values,
-selected species, and complete-vector L1/L-infinity gates; L2 remains
-diagnostic-only. Normal execution only reads this reference.
+existing `xnet-comparison-v1` exact policy except for a `1e-13` allowance on
+selected values, printed sums, and complete-vector L1/L-infinity gates; L2
+remains diagnostic-only. The allowance records a hosted GNU serial observation:
+the repeated zones 2/6/10/14 print `ne20` and their mass-fraction sum one final
+decimal place below the macOS GNU 16.1.0 characterization, while all other
+reported values and batch associations agree. It is a printed-last-digit
+portability allowance, not a revised scientific endpoint. Normal execution
+only reads this reference.
 
 Implementation evidence also ran the same inputs at `nzbatchmx = 1` and 6.
 Block size 1 produced 16 singleton diagnostic groups and the same parsed

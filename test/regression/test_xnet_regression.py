@@ -2133,6 +2133,32 @@ def test_batch_alpha_runtime_configuration_preserves_batched_input() -> None:
     assert "nzbatchmx = 4" in configuration
 
 
+def test_batch_alpha_hosted_last_digit_allowance_is_bounded() -> None:
+    reference = load_reference(batch_alpha_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 2)
+    hosted_mass_fractions = dict(state.mass_fractions)
+    hosted_mass_fractions["ne20"] = 7.7185062e-6
+    hosted_state = replace(state, mass_fractions=hosted_mass_fractions)
+    assert abs(hosted_mass_fractions["ne20"] - state.mass_fractions["ne20"]) == pytest.approx(
+        1.0e-13, abs=1.0e-20
+    )
+    compare_final_states(
+        (hosted_state,), replace(reference, expected_zones=(2,))
+    )
+
+    excessive_mass_fractions = dict(hosted_mass_fractions)
+    excessive_mass_fractions["ne20"] = 7.7185061e-6
+    with pytest.raises(ComparisonFailure) as failure:
+        compare_final_states(
+            (replace(hosted_state, mass_fractions=excessive_mass_fractions),),
+            replace(reference, expected_zones=(2,)),
+        )
+    diagnostics = str(failure.value)
+    assert "L1" in diagnostics
+    assert "L-infinity" in diagnostics
+    assert "printed mass-fraction sum" in diagnostics
+
+
 @pytest.mark.parametrize(
     ("index", "replacement", "message"),
     (

@@ -480,9 +480,9 @@
   },
   "mass_fraction_tolerances": {
     "all_selected": {
-      "atol": 0,
+      "atol": 1e-13,
       "rtol": 0,
-      "exact": true
+      "exact": false
     }
   },
   "mass_fraction_printed_sum": {
@@ -504,13 +504,13 @@
       "15": 1.0,
       "16": 0.9999999909783399
     },
-    "atol": 0,
+    "atol": 1e-13,
     "rtol": 0,
-    "exact": true
+    "exact": false
   },
   "composition_norm_limits": {
-    "l1": 0,
-    "linf": 0
+    "l1": 1e-13,
+    "linf": 1e-13
   },
   "mass_fractions": {
     "he4": {

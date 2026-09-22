@@ -106,61 +106,29 @@ def write_abundance_file(
     path.write_text(title + "\n" + "\n".join(lines) + "\n", encoding="ascii")
 
 
-def control_text(
+def runtime_config_text(
     *,
     title: str,
     data_name: str,
     abundance_name: str,
     output_species: tuple[str, ...],
 ) -> str:
-    species_line = "".join(f"{name:>5}" for name in output_species)
-    return f"""## Problem Description
-{title}
-One fixed-thermodynamic-condition zone
-Strong reactions only for fixed-Ye validation
-## Job Controls
-1         Initial Zone
-1         # of Zones
-0         Include Weak Reactions (yes=1,no=0,only=-1)
-0         Include Screening (yes=1)
-1         Process Nuclear Data at Run Time (yes=1,no=0)
-## Neutrinos
-0         Include Neutrino Reactions (yes=1, no=0)
-## NSE Initial Conditions
-11.0      Temperature in GK to use NSE initial conditions instead of file
-## Integration Controls
-1         Choice of integration Scheme
-6000      Max. number of timesteps before quit
-5         Max. iterations per step
-4         Rebuild the jacobian every ijac iterations after the first
-0         Convergence Condition
-1.00E-01  Max. Abundance Change per timestep
-1.00E-07  Smallest Abundance used in timestep calculation
-1.00E-06  Mass Conservation Limit
-1.00E-04  Convergence Criterion
-1.00E-30  Lower Abundance limit, smaller abundances = 0
-2.00E+00  Max. Factor to change dt in a timestep
-## Self-heating Controls
-0         Include self-heating
-1.00E-02  Max. Temperature Change per timestep
-1.00E-04  Temperature Convergence Criterion
-## Zone Batching Controls
-1         Blocking size for zone loop
-## Output Controls
-0         Diagnostic Output Level
-0         Per Timestep Output Level
-# ASCII output filename root
-ev_surrogate_check_
-# Binary output filename root
-ts_surrogate_check_
-# Species to output in ASCII output (format 14a5): 14
-{species_line}
-## Input Controls
-# Nuclear Data Directory
-{data_name}
-# Initial Abundance and Thermodynamic Trajectory Files
-{data_name}/{abundance_name}
-th_short
+    species_line = ", ".join(f"'{name}'" for name in output_species)
+    return f"""&xnet_config
+ description = '{title}', 'One fixed-thermodynamic-condition zone',
+   'Strong reactions only for fixed-Ye validation',
+ szone = 1, nzone = 1, iweak0 = 0, iscrn = 0, iprocess = 1,
+ ineutrino = 0, t9nse = 11.0,
+ isolv = 1, kstmx = 6000, kitmx = 5, ijac = 4, iconvc = 0,
+ changemx = 1.00E-01, yacc = 1.00E-07, tolm = 1.00E-06,
+ tolc = 1.00E-04, ymin = 1.00E-30, tdel_maxmult = 2.00E+00,
+ iheat = 0, changemxt = 1.00E-02, tolt9 = 1.00E-04, nzbatchmx = 1,
+ idiag = 0, itsout = 0, ev_file_base = 'ev_surrogate_check_',
+ bin_file_base = 'ts_surrogate_check_',
+ nnucout = {len(output_species)}, output_nuclei = {species_line},
+ data_dir = '{data_name}', inab_files(1) = '{data_name}/{abundance_name}',
+ thermo_files(1) = 'th_short',
+/
 """
 
 
@@ -194,8 +162,8 @@ def prepare_case(
             "Composition evolved by a preceding fixed-state full_net call",
         )
     (work_directory / helm_table.name).symlink_to(helm_table.resolve())
-    (work_directory / "control").write_text(
-        control_text(
+    (work_directory / "xnet.nml").write_text(
+        runtime_config_text(
             title=f"token={run_token} {title}",
             data_name=source_data.name,
             abundance_name=abundance_name,

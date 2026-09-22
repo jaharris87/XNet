@@ -39,7 +39,7 @@ The suite enforces a 30-second per-case process timeout. Use
 ## Isolated execution and retained output
 
 pytest supplies a new empty temporary directory for each case. The runner
-copies the maintained `xnet.nml` input into it, creates a local writable network
+copies the maintained `controls.nml` input into it, creates a local writable network
 directory containing the case's declared tracked source inputs, and stages
 every trajectory, Helmholtz EOS table, and any explicitly declared nested
 input at a safe relative destination. Duplicate destinations and unsafe paths
@@ -73,11 +73,11 @@ failures; and out-of-policy values or invariants as comparison failures.
 
 ## Case inputs and legacy provenance
 
-For every migrated case, `cases/<case>/xnet.nml` is the maintained runtime
+For every migrated case, `cases/<case>/controls.nml` is the maintained runtime
 input copied by the runner and read by XNet. The adjacent `control` file is a
 retained historical normalized-concatenation fixture; it is not copied or read
 by the runner. References whose input-inventory key is still named `control`
-bind the SHA-256 of the maintained `xnet.nml` path, not the historical fixture.
+bind the SHA-256 of the maintained `controls.nml` path, not the historical fixture.
 
 Legacy ID 1 in `test/test_xnet.sh` names `tnsn_alpha` and calls
 `do_test_small`, which historically concatenates `test/test_settings_small`
@@ -90,7 +90,7 @@ executable file argument is recognized, runs ten identical zones, reads
 `net_diag01` into `Test_Results` for comparison.
 
 The retained `cases/tnsn_alpha/control` is the one-time historical concatenated
-input; the maintained `cases/tnsn_alpha/xnet.nml` carries its runtime settings.
+input; the maintained `cases/tnsn_alpha/controls.nml` carries its runtime settings.
 Trailing whitespace was removed, and two deliberate path changes support
 isolated execution: the `Test_Results/` prefixes were removed from the ASCII
 and binary output roots, and each `Test_Problems/th_sn1aflame` path became
@@ -119,7 +119,7 @@ use `th_co_burn_1` through `th_co_burn_6`, covering densities from
 `net_diag_heat_alpha` reference is present in a clean checkout.
 
 The retained `cases/heat_alpha/control` is the one-time historical concatenated
-input; the maintained `cases/heat_alpha/xnet.nml` carries its runtime settings.
+input; the maintained `cases/heat_alpha/controls.nml` carries its runtime settings.
 Trailing whitespace was removed, the `Test_Results/` prefixes were removed
 from both output roots, and the six `Test_Problems/` prefixes were removed from
 the trajectory paths. All numerical controls, zone ordering, `Data_alpha`
@@ -587,7 +587,7 @@ The required outputs totaled 30,663,926 bytes: 47,898 bytes for `net_diag01`,
 histories. Isolated preprocessing created `ab_blank`, `match_data`,
 `match_read`, `matr_shape`, `net_desc`, `net_diag`, `nets3`, `nets4`,
 `nuc_data`, and `sparse_ind`, totaling 847,933 bytes. The committed complete
-JSON reference is 52,447 bytes. Hashes for the maintained `xnet.nml`, five network sources,
+JSON reference is 52,447 bytes. Hashes for the maintained `controls.nml`, five network sources,
 six trajectories, and EOS table are recorded in the reference; the tracked
 inputs remained unchanged after the runs. The post-run ignored-file check
 was scoped to every repository input and case directory that the execution
@@ -644,7 +644,7 @@ scientific validation.
 
 The reference was generated on 2026-08-05 from production and input revision
 `a8b64764a6d614f406da6c897e6b051fb3e1972d` on macOS 26.6 arm64 with GNU
-Fortran 16.1.0, Python 3.13.0, and pytest 9.1.1. The maintained `xnet.nml` is bound
+Fortran 16.1.0, Python 3.13.0, and pytest 9.1.1. The maintained `controls.nml` is bound
 by its SHA-256 hash in the reference. The following commands and executable
 path record that revision's historical build; they are not current build
 instructions:
@@ -670,7 +670,7 @@ forms the same `test_settings_bdf + setup_bdf_sn160` concatenation as
 `do_test_bdf`, strips trailing whitespace, applies the two isolated path
 normalizations, changes only the block-size line from 4 to 1, and requires an
 exact match with the retained historical control. The reference records SHA-256 hashes
-for the maintained `xnet.nml`, the five network sources, abundance input, six trajectories,
+for the maintained `controls.nml`, the five network sources, abundance input, six trajectories,
 and EOS table. It also records integration choice 3, the maintained solver
 identity, and the effective `changemx = changemxt = 1e10` state imposed by
 XNet.

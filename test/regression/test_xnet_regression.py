@@ -6,6 +6,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -1611,8 +1612,8 @@ def test_bdf_sn160_definition_reuses_isolated_sn160_staging(
 def test_bdf_runtime_configuration_selects_bdf_and_preserves_batching() -> None:
     configuration = bdf_sn160_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
     assert "&xnet_config" in configuration
-    assert "isolv = 3" in configuration
-    assert "nzbatchmx = 1" in configuration
+    assert re.search(r"(?m)^\s*isolv\s*=\s*3\s*,?\s*$", configuration)
+    assert re.search(r"(?m)^\s*nzbatchmx\s*=\s*1\s*,?\s*$", configuration)
 
 
 def test_bdf_reference_records_end_steps_and_all_solver_counter_fields() -> None:
@@ -1680,7 +1681,7 @@ def test_bdf_reference_rejects_missing_required_metadata(
 def test_bdf_run_rejects_stale_input_hash_before_execution(tmp_path: Path) -> None:
     case = bdf_sn160_case(REPOSITORY_ROOT)
     document = json.loads(case.reference.read_text(encoding="utf-8"))
-    control_label = "test/regression/cases/bdf_sn160/xnet.nml"
+    control_label = "test/regression/cases/bdf_sn160/controls.nml"
     document["input_sha256"][control_label] = "0" * 64
     reference_path = tmp_path / "stale-input-hash.json"
     reference_path.write_text(json.dumps(document), encoding="utf-8")
@@ -2129,8 +2130,8 @@ def test_batch_alpha_stages_nested_prefix_inputs(tmp_path: Path) -> None:
 def test_batch_alpha_runtime_configuration_preserves_batched_input() -> None:
     configuration = batch_alpha_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
     assert "&xnet_config" in configuration
-    assert "nzone = 16" in configuration
-    assert "nzbatchmx = 4" in configuration
+    assert re.search(r"(?m)^\s*nzone\s*=\s*16\s*,?\s*$", configuration)
+    assert re.search(r"(?m)^\s*nzbatchmx\s*=\s*4\s*,?\s*$", configuration)
 
 
 def test_batch_alpha_hosted_last_digit_allowance_is_bounded() -> None:

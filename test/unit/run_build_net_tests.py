@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 
-class ContractError(RuntimeError):
+class BuildNetTestError(RuntimeError):
     pass
 
 
@@ -44,7 +44,7 @@ GENERATED_ARTIFACTS = (
 
 
 def fail(message: str) -> None:
-    raise ContractError(message)
+    raise BuildNetTestError(message)
 
 
 def fixed_rate_header(
@@ -339,7 +339,7 @@ def parse_netsu(path: Path) -> dict[str, object]:
             marker = int(line[:2])
             q_value = float(line[52:64].replace("D", "E"))
         except ValueError as error:
-            raise ContractError(f"netsu header is malformed at line {index + 1}") from error
+            raise BuildNetTestError(f"netsu header is malformed at line {index + 1}") from error
         names = tuple(line[5 + 5 * item : 10 + 5 * item].strip() for item in range(6))
         descriptor = line[43:47].strip()
         resonance = line[47:48]
@@ -359,7 +359,7 @@ def parse_netwinv(path: Path) -> dict[str, object]:
     try:
         count = int(lines[0])
     except (IndexError, ValueError) as error:
-        raise ContractError("netwinv header is malformed") from error
+        raise BuildNetTestError("netwinv header is malformed") from error
     species = tuple(line.strip() for line in lines[2 : 2 + count])
     records = []
     index = 2 + count
@@ -397,14 +397,14 @@ def parse_netweak(path: Path) -> tuple[tuple[object, ...], ...]:
         try:
             q_value = float(header[52:64].replace("D", "E"))
         except ValueError as error:
-            raise ContractError("netweak Q value is malformed") from error
+            raise BuildNetTestError("netweak Q value is malformed") from error
         index += 1
         values = []
         while index < len(lines) and len(values) < 286:
             try:
                 values.extend(float(value) for value in lines[index].split())
             except ValueError as error:
-                raise ContractError("netweak table is malformed") from error
+                raise BuildNetTestError("netweak table is malformed") from error
             index += 1
         if len(values) != 286:
             fail("netweak table is truncated")
@@ -497,7 +497,7 @@ def verify_output(directory: Path, *, weak_enabled: bool) -> tuple[object, ...]:
 def expect_verifier_failure(label: str, directory: Path, *, weak_enabled: bool) -> None:
     try:
         verify_output(directory, weak_enabled=weak_enabled)
-    except ContractError:
+    except BuildNetTestError:
         return
     fail(f"semantic verifier accepted controlled corruption: {label}")
 
@@ -641,7 +641,7 @@ def write_smoke_inputs(directory: Path, helm_table: Path) -> None:
  data_dir = '.', inab_files(1) = 'initial_abundances', thermo_files(1) = 'thermo',
 /
 """
-    (directory / "xnet.nml").write_text(runtime_config, encoding="ascii")
+    (directory / "controls.nml").write_text(runtime_config, encoding="ascii")
     (directory / "helm_table.dat").symlink_to(helm_table)
 
 
@@ -671,7 +671,7 @@ def verify_smoke(directory: Path, result: subprocess.CompletedProcess[str]) -> N
 def main(argv: list[str]) -> int:
     if len(argv) != 8:
         print(
-            "usage: run_build_net_contracts.py WORK_DIR BUILD_NET NET_SETUP "
+            "usage: run_build_net_tests.py WORK_DIR BUILD_NET NET_SETUP "
             "READER_CHECK INPUT_MUTATOR XNET HELM_TABLE",
             file=sys.stderr,
         )
@@ -836,13 +836,13 @@ def main(argv: list[str]) -> int:
     smoke_result = run_process([str(xnet)], downstream, timeout=60.0)
     verify_smoke(downstream, smoke_result)
 
-    print("build_net construction, preprocessing, and one-zone smoke contracts passed")
+    print("build_net construction, preprocessing, and one-zone smoke tests passed")
     return 0
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(main(sys.argv))
-    except (ContractError, OSError, subprocess.TimeoutExpired) as error:
+    except (BuildNetTestError, OSError, subprocess.TimeoutExpired) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         raise SystemExit(1)

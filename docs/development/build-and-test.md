@@ -241,14 +241,14 @@ timeouts, reference provenance, and comparison policy.
 
 ## Runtime inputs
 
-The stand-alone driver reads `xnet.nml` from its working directory. Its
+The stand-alone driver reads `controls.nml` from its working directory. Its
 `xnet_config` namelist, compiled defaults, layering rules, and migration from
 historical controls are documented in
 [`runtime-configuration.md`](runtime-configuration.md). The driver does not
 select the former positional `control` parser.
 
 Historical problems retain their source inputs for provenance, but maintained
-pytest cases stage committed `xnet.nml` files. The configuration refers to
+pytest cases stage committed `controls.nml` files. The configuration refers to
 thermodynamic trajectories, initial abundances, and nuclear data under
 `test/Data_*`. Source code remains authoritative for values and behavior.
 

@@ -168,7 +168,7 @@ test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPRO
 	@bash run_sparse_solver_tests.sh $(SPARSE_WORK_DIR) $(abspath $(DENSE_COMPONENT_EXE)) \
 	  $(abspath $(MA48_COMPONENT_EXE)) $(abspath $(PARDISO_COMPONENT_EXE)) \
 	  $(abspath $(PARDISO_MKL_COMPONENT_EXE)) $(abspath $(XNET_DIR)/sparse_controls.nml)
-	@python3 run_build_net_contracts.py $(BUILD_NET_WORK_DIR) $(abspath $(BUILD_NET_EXE)) \
+	@python3 run_build_net_tests.py $(BUILD_NET_WORK_DIR) $(abspath $(BUILD_NET_EXE)) \
 	  $(abspath $(PREPROCESS_NET_SETUP_EXE)) $(abspath $(BUILD_NET_READER_EXE)) \
 	  $(abspath $(NUCLEAR_INPUT_MUTATOR_EXE)) $(abspath $(PRODUCTION_XNET_EXE)) \
 	  $(abspath $(HELM_TABLE))

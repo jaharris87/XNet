@@ -52,7 +52,7 @@ these areas, especially through shared module state.
 
 1. initializes serial or MPI execution, determines the OpenMP thread count,
    initializes GPU execution when selected, and starts setup timing;
-2. reads and validates `xnet.nml` through `xnet_controls`;
+2. reads and validates `controls.nml` through `xnet_controls`;
 3. preprocesses the requested network when needed, then reads nuclear,
    reaction, Jacobian, and match data;
 4. initializes screening, flux evaluation, the selected EOS and integrator,
@@ -149,7 +149,7 @@ makes their interfaces compile-time requirements across implementations.
 
 The stand-alone runtime interface includes:
 
-- the layered `xnet_config` namelist in `xnet.nml`;
+- the layered `xnet_config` namelist in `controls.nml`;
 - nuclear data and pre-built network files under `Data_*` directories;
 - thermodynamic histories and abundance inputs;
 - fixed-format diagnostic and timestep outputs.

@@ -162,7 +162,7 @@ def prepare_case(
             "Composition evolved by a preceding fixed-state full_net call",
         )
     (work_directory / helm_table.name).symlink_to(helm_table.resolve())
-    (work_directory / "xnet.nml").write_text(
+    (work_directory / "controls.nml").write_text(
         runtime_config_text(
             title=f"token={run_token} {title}",
             data_name=source_data.name,

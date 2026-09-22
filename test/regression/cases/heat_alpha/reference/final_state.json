@@ -18,7 +18,7 @@
     "LAPACK_VER": "NETLIB"
   },
   "inputs": {
-    "control": "test/regression/cases/heat_alpha/xnet.nml",
+    "control": "test/regression/cases/heat_alpha/controls.nml",
     "network_data": "test/Data_alpha",
     "initial_abundance": "test/Data_alpha/ab_co",
     "trajectories": [

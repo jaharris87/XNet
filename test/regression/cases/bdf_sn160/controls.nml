@@ -1,0 +1,71 @@
+! Maintained standalone input for the bdf_sn160 regression case.
+&xnet_config
+  ! Problem Description
+  description(1) = '2000 timesteps',
+  description(2) = 'diagnostic level 1',
+  description(3) = 'New parameters',
+
+  ! Job and Zone Batching Controls
+  szone          = 1,
+  nzone          = 6,
+  iweak0         = 1,
+  iscrn          = 1,
+  iprocess       = 1,
+  nzbatchmx      = 1,
+
+  ! Integration Controls
+  isolv          = 3,
+  kstmx          = 9999,
+  kitmx          = 10,
+  ijac           = 1,
+  iconvc         = 3,
+  changemx       = 1.00e-01,
+  yacc           = 1.00e-07,
+  tolm           = 1.00e-06,
+  tolc           = 1.00e-04,
+  ymin           = 1.00e-99,
+  tdel_maxmult   = 2.00e+00,
+
+  ! Self-heating, NSE, and Neutrino Controls
+  iheat          = 1,
+  changemxt      = 1.00e-02,
+  tolt9          = 1.00e-04,
+  t9nse          = 11.0,
+  ineutrino      = 0,
+
+  ! Output Controls
+  idiag          = 0,
+  itsout         = 2,
+  ev_file_base   = 'ev_bdf_sn160_',
+  bin_file_base  = 'ts_bdf_sn160_',
+  nnucout        = 14,
+  output_nuclei(1)  = 'p',
+  output_nuclei(2)  = 'he4',
+  output_nuclei(3)  = 'c12',
+  output_nuclei(4)  = 'o16',
+  output_nuclei(5)  = 'ne20',
+  output_nuclei(6)  = 'mg24',
+  output_nuclei(7)  = 'si28',
+  output_nuclei(8)  = 'ca40',
+  output_nuclei(9)  = 'ti44',
+  output_nuclei(10) = 'cr48',
+  output_nuclei(11) = 'fe52',
+  output_nuclei(12) = 'fe54',
+  output_nuclei(13) = 'ni56',
+  output_nuclei(14) = 'zn60',
+
+  ! Standalone Input Controls
+  data_dir        = 'Data_SN160',
+  inab_files(1)   = 'Data_SN160/ab_co',
+  inab_files(2)   = 'Data_SN160/ab_co',
+  inab_files(3)   = 'Data_SN160/ab_co',
+  inab_files(4)   = 'Data_SN160/ab_co',
+  inab_files(5)   = 'Data_SN160/ab_co',
+  inab_files(6)   = 'Data_SN160/ab_co',
+  thermo_files(1) = 'th_co_burn_1',
+  thermo_files(2) = 'th_co_burn_2',
+  thermo_files(3) = 'th_co_burn_3',
+  thermo_files(4) = 'th_co_burn_4',
+  thermo_files(5) = 'th_co_burn_5',
+  thermo_files(6) = 'th_co_burn_6',
+/

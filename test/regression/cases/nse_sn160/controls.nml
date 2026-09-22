@@ -1,0 +1,59 @@
+! Maintained standalone input for the nse_sn160 regression case.
+&xnet_config
+  ! Problem Description
+  description(1) = 'SN160 NSE initialization followed by an ordinary trajectory evolution',
+  description(2) = 'diagnostic level 1',
+  description(3) = 'Issue 40 characterization',
+
+  ! Job, batching, and integration Controls
+  szone = 1,
+  nzone = 1,
+  iweak0 = 1,
+  iscrn = 0,
+  iprocess = 1,
+  nzbatchmx = 1,
+  isolv = 1,
+  kstmx = 6000,
+  kitmx = 5,
+  ijac = 4,
+  iconvc = 0,
+  changemx = 1.00e-01,
+  yacc = 1.00e-07,
+  tolm = 1.00e-06,
+  tolc = 1.00e-04,
+  ymin = 1.00e-30,
+  tdel_maxmult = 2.00e+00,
+
+  ! Self-heating, NSE, and Neutrino Controls
+  iheat = 0,
+  changemxt = 1.00e-02,
+  tolt9 = 1.00e-04,
+  t9nse = 8.0,
+  ineutrino = 0,
+
+  ! Output Controls
+  idiag = 0,
+  itsout = 2,
+  ev_file_base = 'ev_nse_sn160_',
+  bin_file_base = 'ts_nse_sn160_',
+  nnucout = 14,
+  output_nuclei(1) = 'n',
+  output_nuclei(2) = 'p',
+  output_nuclei(3) = 'he4',
+  output_nuclei(4) = 'fe54',
+  output_nuclei(5) = 'co55',
+  output_nuclei(6) = 'ni56',
+  output_nuclei(7) = 'ni57',
+  output_nuclei(8) = 'ni58',
+  output_nuclei(9) = 'cu58',
+  output_nuclei(10) = 'zn60',
+  output_nuclei(11) = 'zn61',
+  output_nuclei(12) = 'ge64',
+  output_nuclei(13) = 'ge65',
+  output_nuclei(14) = 'as68',
+
+  ! Standalone Input Controls
+  data_dir = 'Data_SN160',
+  inab_files(1) = 'Data_SN160/ab_ye49',
+  thermo_files(1) = 'th_frohlich2006_nse',
+/

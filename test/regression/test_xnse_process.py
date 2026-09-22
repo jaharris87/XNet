@@ -1,4 +1,4 @@
-"""Bounded process contracts for the standalone NSE executable."""
+"""Bounded process checks for the standalone NSE executable."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ def _mass_and_charge(species: str) -> tuple[int, int]:
 def _prepare_work_directory(tmp_path: Path) -> Path:
     work_directory = tmp_path / "xnse"
     work_directory.mkdir()
-    shutil.copy2(CASE_DIRECTORY / "xnet.nml", work_directory / "xnet.nml")
+    shutil.copy2(CASE_DIRECTORY / "controls.nml", work_directory / "controls.nml")
     network_directory = work_directory / "Data_SN160"
     network_directory.mkdir()
     source_directory = REPOSITORY_ROOT / "test" / "Data_SN160"

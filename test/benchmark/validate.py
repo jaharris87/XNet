@@ -243,6 +243,21 @@ def validate_runtime_evidence(
         raise BenchmarkError("non-MPI profile has wrong rank count")
     if dimensions["mpi"] == "ON" and ranks < 2:
         raise BenchmarkError("MPI profile lacks multiple ranks")
+    if dimensions["mpi"] == "ON":
+        declared_counts: list[int] = []
+        for index, argument in enumerate(launcher):
+            if argument in {"-n", "-np", "--np", "--ntasks"}:
+                try:
+                    declared_counts.append(int(launcher[index + 1]))
+                except (IndexError, ValueError) as error:
+                    raise BenchmarkError("launcher has malformed rank count") from error
+            elif argument.startswith("--ntasks="):
+                try:
+                    declared_counts.append(int(argument.split("=", 1)[1]))
+                except ValueError as error:
+                    raise BenchmarkError("launcher has malformed rank count") from error
+        if declared_counts != [ranks]:
+            raise BenchmarkError("launcher rank count does not match requested ranks")
     if dimensions["openmp"] == "OFF" and threads != 1:
         raise BenchmarkError("non-OpenMP profile has wrong thread count")
     if dimensions["openmp"] == "ON" and (

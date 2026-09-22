@@ -26,7 +26,7 @@ def main():
     validate_runtime_evidence(profile, runtime, [*runtime["launcher_argv"], "/build/bin/xnet"], "/build/bin/xnet", {})
     for name, mutate, text in (
         ("fabricated placement", lambda x: x["launcher_probe"].update(observations=[]), "rank IDs"),
-        ("wrong launcher ranks", lambda x: x.update(requested_ranks=1), "multiple ranks"),
+        ("wrong launcher ranks", lambda x: x["launcher_argv"].__setitem__(2, "1"), "launcher rank count"),
         ("wrong XNet ranks", lambda x: x["xnet_topology"]["ranks"].pop(), "rank topology"),
         ("missing scheduler", lambda x: x["launcher_probe"].update(allocation={"kind": "scheduler", "environment": {}}), "scheduler"),
     ):

@@ -396,9 +396,15 @@ def observe_launcher(record: Path, launcher: list[str]) -> dict[str, object]:
                 observations.append(json.loads(line.removeprefix("XNET_EXECUTION_PROBE ")))
             except json.JSONDecodeError as error:
                 raise BenchmarkError("malformed launcher probe output") from error
+    scheduler_names = (
+        "SLURM_JOB_ID", "SLURM_NODELIST", "SLURM_JOB_NUM_NODES",
+        "SLURM_NTASKS", "SLURM_CPUS_PER_TASK", "SLURM_GPUS",
+        "SLURM_GPUS_PER_NODE", "SLURM_GPUS_PER_TASK", "SLURM_JOB_PARTITION",
+        "PBS_JOBID", "PBS_NODEFILE", "PBS_NP", "LSB_JOBID", "LSB_HOSTS",
+    )
     scheduler_environment = {
         key: os.environ[key]
-        for key in ("SLURM_JOB_ID", "SLURM_NODELIST", "PBS_JOBID", "LSB_JOBID")
+        for key in scheduler_names
         if key in os.environ
     }
     allocation = (
@@ -503,8 +509,18 @@ def environment_identity() -> dict[str, str]:
         "MODULEPATH",
         "SLURM_JOB_ID",
         "SLURM_NODELIST",
+        "SLURM_JOB_NUM_NODES",
+        "SLURM_NTASKS",
+        "SLURM_CPUS_PER_TASK",
+        "SLURM_GPUS",
+        "SLURM_GPUS_PER_NODE",
+        "SLURM_GPUS_PER_TASK",
+        "SLURM_JOB_PARTITION",
         "PBS_JOBID",
+        "PBS_NODEFILE",
+        "PBS_NP",
         "LSB_JOBID",
+        "LSB_HOSTS",
         "OMP_NUM_THREADS",
         "CUDA_VISIBLE_DEVICES",
         "ROCR_VISIBLE_DEVICES",

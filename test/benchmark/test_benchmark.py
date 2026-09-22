@@ -293,8 +293,11 @@ def main(record: Path) -> None:
             raise RuntimeError("test record lacks a mutable scientific value")
         diagnostic.write_text(mutated, encoding="utf-8")
         document = read_document(scientific)
-        # The summary remains valid: this mutation targets a scientific value,
-        # not a timer or counter.  Refresh inventory to exercise comparison.
+        # Refresh the artifact hash and inventory so this probe reaches the
+        # independent numerical replay rather than stopping at the checksum.
+        for worker in document["repetitions"][0]["worker_metrics"]:
+            if worker["path"].endswith("/net_diag01"):
+                worker["sha256"] = hashlib.sha256(diagnostic.read_bytes()).hexdigest()
         write_document(scientific, document)
         reject(
             "scientific diagnostic mutation",
@@ -305,7 +308,7 @@ def main(record: Path) -> None:
 
         artifact = copy_record(temporary_path, record, "missing-artifact")
         (artifact / "repetitions" / "1" / "net_diag01").unlink()
-        reject("missing artifact", artifact, root, "missing retained repetition artifacts")
+        reject("missing artifact", artifact, root, "retained worker diagnostic hash mismatch")
 
         output = copy_record(temporary_path, record, "artifact-tamper")
         stream = output / "repetitions" / "1" / "xnet.stdout.txt"

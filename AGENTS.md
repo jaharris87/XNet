@@ -87,6 +87,26 @@ produced diagnostics, then inspect diff files before reporting numerical
 agreement. See `docs/development/build-and-test.md` for tracked defaults,
 utility targets, runtime inputs, test side effects, and evidence requirements.
 
+## Shared HPC facility work
+
+When operating on a managed HPC facility:
+
+- Treat facility documentation and facility-provided agent guidance as
+  authoritative for scheduler, module, filesystem, network, accelerator,
+  and placement behavior. Verify local facts rather than guessing them.
+- Establish whether commands are running on a login node or inside an
+  allocated compute environment before doing resource-intensive work.
+- Do not submit, cancel, requeue, or modify scheduler jobs or allocations
+  without explicit maintainer approval.
+- Keep filesystem searches bounded to known repository, build, input, and
+  output roots. Do not recursively inspect shared facility filesystems.
+- Treat shared/project data and software installations as read-only unless
+  the task explicitly authorizes modification.
+- Keep source, builds, runtime inputs, and benchmark records separated using
+  facility-appropriate storage.
+- Record actual modules, compiler/runtime versions, launcher commands,
+  scheduler resources, CPU/GPU placement, and binding for facility evidence.
+
 ## Core change rules
 
 - Keep changes within the issue. Separate functional work from unrelated

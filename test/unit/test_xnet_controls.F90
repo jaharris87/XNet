@@ -54,9 +54,11 @@ Program test_xnet_controls
   controls%nzone = 8
   controls%data_dir = 'Data_HDF'
   Deallocate(controls%inab_files,controls%thermo_files)
-  Allocate(controls%inab_files(1),controls%thermo_files(1))
+  Allocate(controls%inab_files(2),controls%thermo_files(2))
   controls%inab_files(1) = 'abundance.h5'
   controls%thermo_files(1) = 'particles.HDF5'
+  controls%inab_files(2) = 'abundance-2.hdf'
+  controls%thermo_files(2) = 'particles-2.h5'
   Call normalize_xnet_controls(controls,message)
   If ( Len_Trim(message) /= 0 ) Error Stop 'HDF5 controls normalization failed: '//Trim(message)
   If ( Size(controls%inab_files) /= controls%nzone .or. &
@@ -65,12 +67,29 @@ Program test_xnet_controls
   EndIf
   If ( Trim(controls%inab_files(1)) /= 'abundance.h5' .or. &
     & Trim(controls%thermo_files(1)) /= 'particles.HDF5' .or. &
-    & Len_Trim(controls%inab_files(2)) /= 0 .or. &
-    & Len_Trim(controls%thermo_files(2)) /= 0 ) Then
+    & Trim(controls%inab_files(2)) /= 'abundance-2.hdf' .or. &
+    & Trim(controls%thermo_files(2)) /= 'particles-2.h5' .or. &
+    & Len_Trim(controls%inab_files(3)) /= 0 .or. &
+    & Len_Trim(controls%thermo_files(3)) /= 0 ) Then
     Error Stop 'HDF5 input filenames were expanded as per-zone ASCII inputs'
   EndIf
   Call validate_standalone_controls(controls,ierr,message)
   If ( ierr /= 0 ) Error Stop 'HDF5 controls failed standalone validation: '//Trim(message)
+
+  controls%inab_files(2) = ' '
+  controls%thermo_files(2) = ' '
+  controls%inab_files(3) = 'abundance-3.h5'
+  controls%thermo_files(3) = 'particles-3.h5'
+  Call validate_standalone_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'HDF5 controls unexpectedly accepted a hole in the file list'
+
+  controls%nzone = 1
+  controls%inab_files(2) = 'abundance-2.h5'
+  controls%thermo_files(2) = 'particles-2.h5'
+  Call normalize_xnet_controls(controls,message)
+  If ( Index(message,'cannot exceed nzone') == 0 ) Then
+    Error Stop 'HDF5 controls silently truncated an overlong file list'
+  EndIf
 
   Write(*,'(a)') 'xnet_controls defaults and validation checks passed'
 End Program test_xnet_controls

@@ -677,11 +677,20 @@ Contains
 
     ! Local variables
     Character(80) :: inab_file_base, thermo_file_base
-    Integer :: izone, last_input_index
+    Integer :: izone, last_inab_index, last_input_index, last_thermo_index
     Logical :: hdf_input
 
     message = ' '
     If ( controls%nzone < 1 ) Return
+
+    ! The established execution state stores at most one input-file pair per zone.  Reject an
+    ! overlong list before resizing so that a malformed namelist cannot be silently truncated.
+    last_inab_index = last_nonblank_index(controls%inab_files)
+    last_thermo_index = last_nonblank_index(controls%thermo_files)
+    If ( Max(last_inab_index,last_thermo_index) > controls%nzone ) Then
+      message = 'the number of input file pairs cannot exceed nzone'
+      Return
+    EndIf
 
     Call resize_input_controls(controls,controls%nzone,message)
     If ( Len_Trim(message) /= 0 ) Return

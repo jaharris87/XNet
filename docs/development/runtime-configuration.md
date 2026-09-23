@@ -63,7 +63,8 @@ and can be extracted as a new `controls.nml`. No separate resolved file is made.
 The maintained standalone build currently selects the ASCII model-input reader.
 XNet post-processing drivers also use HDF5 inputs that contain many zones per
 file. Controls ending in `.h5`, `.hdf`, or `.hdf5` therefore retain their supplied,
-contiguous file-pair list rather than receiving per-zone filename suffixes. The
+contiguous file-pair list rather than receiving per-zone filename suffixes. As in
+the established execution state, the list may contain at most `nzone` pairs. The
 HDF5 reader and its build integration will be maintained in a separate change.
 
 After validation, `apply_xnet_controls` transfers the value into the existing

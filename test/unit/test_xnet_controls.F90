@@ -1,6 +1,6 @@
 Program test_xnet_controls
-  Use xnet_controls, Only: set_xnet_controls_defaults, validate_standalone_controls, &
-    & validate_xnet_controls, xnet_controls_t
+  Use xnet_controls, Only: normalize_xnet_controls, set_xnet_controls_defaults, &
+    & validate_standalone_controls, validate_xnet_controls, xnet_controls_t
   Use xnet_types, Only: dp
   Implicit None
 
@@ -48,6 +48,29 @@ Program test_xnet_controls
   Call validate_standalone_controls(controls,ierr,message)
   If ( ierr == 0 ) Error Stop 'standalone controls unexpectedly accepted blank problem inputs'
   If ( Index(message,'data_dir') == 0 ) Error Stop 'standalone controls returned an unexpected error'
+
+  ! HDF5 post-processing files contain many zones and must not receive per-zone filename suffixes.
+  Call set_xnet_controls_defaults(controls)
+  controls%nzone = 8
+  controls%data_dir = 'Data_HDF'
+  Deallocate(controls%inab_files,controls%thermo_files)
+  Allocate(controls%inab_files(1),controls%thermo_files(1))
+  controls%inab_files(1) = 'abundance.h5'
+  controls%thermo_files(1) = 'particles.HDF5'
+  Call normalize_xnet_controls(controls,message)
+  If ( Len_Trim(message) /= 0 ) Error Stop 'HDF5 controls normalization failed: '//Trim(message)
+  If ( Size(controls%inab_files) /= controls%nzone .or. &
+    & Size(controls%thermo_files) /= controls%nzone ) Then
+    Error Stop 'HDF5 controls arrays were not prepared for the execution-state transfer'
+  EndIf
+  If ( Trim(controls%inab_files(1)) /= 'abundance.h5' .or. &
+    & Trim(controls%thermo_files(1)) /= 'particles.HDF5' .or. &
+    & Len_Trim(controls%inab_files(2)) /= 0 .or. &
+    & Len_Trim(controls%thermo_files(2)) /= 0 ) Then
+    Error Stop 'HDF5 input filenames were expanded as per-zone ASCII inputs'
+  EndIf
+  Call validate_standalone_controls(controls,ierr,message)
+  If ( ierr /= 0 ) Error Stop 'HDF5 controls failed standalone validation: '//Trim(message)
 
   Write(*,'(a)') 'xnet_controls defaults and validation checks passed'
 End Program test_xnet_controls

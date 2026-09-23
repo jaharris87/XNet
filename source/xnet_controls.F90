@@ -240,12 +240,28 @@ Contains
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
+    ! Local variables
+    Integer :: input_count
+
     Call validate_xnet_controls(controls,ierr,message)
     If ( ierr /= 0 ) Return
 
     ierr = 1
     If ( Len_Trim(controls%data_dir) == 0 ) Then
       message = 'data_dir is required for the standalone driver'
+    ElseIf ( Size(controls%inab_files) == 0 .or. Size(controls%thermo_files) == 0 ) Then
+      message = 'inab_files and thermo_files are required for the standalone driver'
+    ElseIf ( is_hdf_thermo_file(controls%thermo_files(1)) ) Then
+      ! HDF5 post-processing inputs contain many zones in each file.  Preserve the supplied list of
+      ! file pairs; the driver using the HDF5 reader determines how those files map to its MPI ranks.
+      input_count = Max(last_nonblank_index(controls%inab_files), &
+        & last_nonblank_index(controls%thermo_files))
+      If ( Any(Len_Trim(controls%inab_files(:input_count)) == 0) .or. &
+        & Any(Len_Trim(controls%thermo_files(:input_count)) == 0) ) Then
+        message = 'each HDF5 input entry needs both inab_files and thermo_files'
+      Else
+        ierr = 0
+      EndIf
     ElseIf ( Size(controls%inab_files) < controls%nzone .or. &
       & Size(controls%thermo_files) < controls%nzone ) Then
       message = 'one inab_files and thermo_files entry is required per zone'
@@ -662,6 +678,7 @@ Contains
     ! Local variables
     Character(80) :: inab_file_base, thermo_file_base
     Integer :: izone, last_input_index
+    Logical :: hdf_input
 
     message = ' '
     If ( controls%nzone < 1 ) Return
@@ -669,8 +686,9 @@ Contains
     Call resize_input_controls(controls,controls%nzone,message)
     If ( Len_Trim(message) /= 0 ) Return
 
-    ! One input-file pair may be expanded over all zones with name_ordered.  Otherwise XNet requires
-    ! a complete pair for every zone; standalone validation rejects any remaining holes.
+    ! One ASCII input-file pair may be expanded over all zones with name_ordered.  HDF5
+    ! post-processing inputs hold many zones per file and retain the supplied list of file pairs.
+    ! Otherwise XNet requires a complete pair for every zone.
     last_input_index = 0
     Do izone = 1, controls%nzone
       If ( Len_Trim(controls%inab_files(izone)) == 0 .neqv. &
@@ -680,6 +698,10 @@ Contains
       EndIf
       If ( Len_Trim(controls%inab_files(izone)) /= 0 ) last_input_index = izone
     EndDo
+
+    hdf_input = is_hdf_thermo_file(controls%thermo_files(1))
+    ! The HDF5 reader and its driver own the file-to-zone mapping.
+    If ( hdf_input ) Return
 
     If ( last_input_index == 1 .and. controls%nzone > 1 ) Then
       inab_file_base = controls%inab_files(1)
@@ -696,6 +718,37 @@ Contains
 
     Return
   End Subroutine normalize_xnet_controls
+
+  Logical Function is_hdf_thermo_file(filename)
+    !-----------------------------------------------------------------------------------------------
+    ! This function identifies the HDF5 thermodynamic inputs used by XNet post-processing drivers.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_util, Only: string_lc
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: filename
+
+    ! Local variables
+    Character(Len(filename)) :: lowercase_filename
+    Integer :: filename_length
+
+    lowercase_filename = filename
+    Call string_lc(lowercase_filename)
+    filename_length = Len_Trim(lowercase_filename)
+    is_hdf_thermo_file = .False.
+    If ( filename_length >= 3 ) Then
+      is_hdf_thermo_file = lowercase_filename(filename_length-2:filename_length) == '.h5'
+    EndIf
+    If ( .not. is_hdf_thermo_file .and. filename_length >= 4 ) Then
+      is_hdf_thermo_file = lowercase_filename(filename_length-3:filename_length) == '.hdf'
+    EndIf
+    If ( .not. is_hdf_thermo_file .and. filename_length >= 5 ) Then
+      is_hdf_thermo_file = lowercase_filename(filename_length-4:filename_length) == '.hdf5'
+    EndIf
+
+    Return
+  End Function is_hdf_thermo_file
 
   Subroutine resolve_include(parent,child,path,message)
     !-----------------------------------------------------------------------------------------------

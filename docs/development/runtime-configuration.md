@@ -9,7 +9,7 @@ used by both the standalone reader and programmatic callers. A caller starts
 with `set_xnet_controls_defaults`, changes the needed fields, and calls
 `validate_xnet_controls`. The standalone reader additionally calls
 `validate_standalone_controls`, which requires the nuclear-data directory and
-the abundance and ASCII thermodynamic-history inputs needed by the executable.
+the abundance and thermodynamic-history inputs needed by the executable.
 
 The compiled defaults are ordinary Fortran assignments in
 `source/controls.defaults`. `set_xnet_controls_defaults` includes that file, so
@@ -59,6 +59,12 @@ the resolved value. `write_controls` emits a complete, flattened, re-readable
 `&xnet_controls` block to the ordinary diagnostic stream. The block records
 effective post-application values (including the BDF change-limit transformation)
 and can be extracted as a new `controls.nml`. No separate resolved file is made.
+
+The maintained standalone build currently selects the ASCII model-input reader.
+XNet post-processing drivers also use HDF5 inputs that contain many zones per
+file. Controls ending in `.h5`, `.hdf`, or `.hdf5` therefore retain their supplied,
+contiguous file-pair list rather than receiving per-zone filename suffixes. The
+HDF5 reader and its build integration will be maintained in a separate change.
 
 After validation, `apply_xnet_controls` transfers the value into the existing
 module variables used by XNet execution. That bounded migration seam preserves

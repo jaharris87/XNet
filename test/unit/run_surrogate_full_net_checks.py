@@ -113,21 +113,54 @@ def runtime_config_text(
     abundance_name: str,
     output_species: tuple[str, ...],
 ) -> str:
-    species_line = ", ".join(f"'{name}'" for name in output_species)
-    return f"""&xnet_config
- description = '{title}', 'One fixed-thermodynamic-condition zone',
-   'Strong reactions only for fixed-Ye validation',
- szone = 1, nzone = 1, iweak0 = 0, iscrn = 0, iprocess = 1,
- ineutrino = 0, t9nse = 11.0,
- isolv = 1, kstmx = 6000, kitmx = 5, ijac = 4, iconvc = 0,
- changemx = 1.00E-01, yacc = 1.00E-07, tolm = 1.00E-06,
- tolc = 1.00E-04, ymin = 1.00E-30, tdel_maxmult = 2.00E+00,
- iheat = 0, changemxt = 1.00E-02, tolt9 = 1.00E-04, nzbatchmx = 1,
- idiag = 0, itsout = 0, ev_file_base = 'ev_surrogate_check_',
- bin_file_base = 'ts_surrogate_check_',
- nnucout = {len(output_species)}, output_nuclei = {species_line},
- data_dir = '{data_name}', inab_files(1) = '{data_name}/{abundance_name}',
- thermo_files(1) = 'th_short',
+    species_lines = "\n".join(
+        f"  output_nuclei({index}) = '{name}',"
+        for index, name in enumerate(output_species, start=1)
+    )
+    return f"""&xnet_controls
+  ! Problem Description
+  description(1) = '{title}',
+  description(2) = 'One fixed-thermodynamic-condition zone',
+  description(3) = 'Strong reactions only for fixed-Ye validation',
+
+  ! Job Controls
+  szone = 1,
+  nzone = 1,
+  iweak0 = 0,
+  iscrn = 0,
+  iprocess = 1,
+  nzbatchmx = 1,
+
+  ! Integration Controls
+  isolv = 1,
+  kstmx = 6000,
+  kitmx = 5,
+  ijac = 4,
+  iconvc = 0,
+  changemx = 1.00E-01,
+  yacc = 1.00E-07,
+  tolm = 1.00E-06,
+  tolc = 1.00E-04,
+  ymin = 1.00E-30,
+  tdel_maxmult = 2.00E+00,
+  iheat = 0,
+  changemxt = 1.00E-02,
+  tolt9 = 1.00E-04,
+  t9nse = 11.0,
+  ineutrino = 0,
+
+  ! Output Controls
+  idiag = 0,
+  itsout = 0,
+  ev_file_base = 'ev_surrogate_check_',
+  bin_file_base = 'ts_surrogate_check_',
+  nnucout = {len(output_species)},
+{species_lines}
+
+  ! Input Controls
+  data_dir = '{data_name}',
+  inab_files(1) = '{data_name}/{abundance_name}',
+  thermo_files(1) = 'th_short',
 /
 """
 

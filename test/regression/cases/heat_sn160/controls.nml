@@ -1,5 +1,5 @@
 ! Maintained standalone input for the heat_sn160 regression case.
-&xnet_config
+&xnet_controls
   description(1) = '2000 timesteps',
   description(2) = 'diagnostic level 1',
   description(3) = 'New parameters',

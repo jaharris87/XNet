@@ -81,10 +81,19 @@ def _run_raw_configuration(
     )
 
 
+def _resolved_controls(work_directory: Path) -> str:
+    diagnostics = sorted(work_directory.glob("net_diag[0-9]*"))
+    assert len(diagnostics) == 1
+    text = diagnostics[0].read_text(encoding="utf-8")
+    start = text.index("&xnet_controls")
+    end = text.index("\n/", start) + 2
+    return text[start:end] + "\n"
+
+
 def _minimal_standalone_configuration(include: str = "") -> str:
-    lines = ["&xnet_config"]
+    lines = ["&xnet_controls"]
     if include:
-        lines.append(f" include = {include},")
+        lines.append(f" include_files(1) = {include},")
     lines.extend(
         (
             " data_dir = 'Data_alpha',",
@@ -111,51 +120,28 @@ def test_namelist_uses_compiled_defaults(
     )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode == 0, result.stdout + result.stderr
-    resolved = (work_directory / "controls.resolved.nml").read_text(encoding="utf-8")
+    resolved = _resolved_controls(work_directory)
     assert "nzone = 1" in resolved
     assert "isolv = 1" in resolved
     assert "kstmx = 9999" in resolved
     assert "nzbatchmx = 1" in resolved
+    assert not (work_directory / "controls.resolved.nml").exists()
 
 
-def test_default_template_matches_compiled_defaults(
+def test_bdf_resolved_namelist_records_effective_change_limits(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path
 ) -> None:
-    compiled_directory = _prepared_configuration_work_directory(
-        tmp_path, "compiled-defaults"
+    work_directory = _prepared_configuration_work_directory(tmp_path, "bdf-effective")
+    configuration = _minimal_standalone_configuration().replace(
+        "&xnet_controls",
+        "&xnet_controls\n isolv = 3,\n changemx = 1.25e-1,\n changemxt = 2.5e-2,",
     )
-    (compiled_directory / "controls.nml").write_text(
-        _minimal_standalone_configuration(), encoding="utf-8"
-    )
-    compiled_result = _run_raw_configuration(
-        xnet_executable, compiled_directory, xnet_timeout
-    )
-    assert compiled_result.returncode == 0, compiled_result.stdout + compiled_result.stderr
-
-    work_directory = _prepared_configuration_work_directory(tmp_path, "default-template")
-    shutil.copy2(
-        REPOSITORY_ROOT / "controls.defaults.nml",
-        work_directory / "defaults.nml",
-    )
-    (work_directory / "problem.nml").write_text(
-        _minimal_standalone_configuration(), encoding="utf-8"
-    )
-    (work_directory / "controls.nml").write_text(
-        "&xnet_config\n"
-        "  include(1) = 'defaults.nml',\n"
-        "  include(2) = 'problem.nml',\n"
-        "/\n",
-        encoding="utf-8",
-    )
+    (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
-    assert result.returncode == 0, result.stdout + result.stderr
-    compiled_resolved = (compiled_directory / "controls.resolved.nml").read_text(
-        encoding="utf-8"
-    )
-    template_resolved = (work_directory / "controls.resolved.nml").read_text(
-        encoding="utf-8"
-    )
-    assert template_resolved == compiled_resolved
+    assert (work_directory / "net_diag01").exists(), result.stdout + result.stderr
+    resolved = _resolved_controls(work_directory)
+    assert "changemx =   1.0000000000000000E+10" in resolved
+    assert "changemxt =   1.0000000000000000E+10" in resolved
 
 
 def test_resolved_namelist_escapes_and_round_trips_character_values(
@@ -163,8 +149,8 @@ def test_resolved_namelist_escapes_and_round_trips_character_values(
 ) -> None:
     first_directory = _prepared_configuration_work_directory(tmp_path, "quoted-input")
     quoted_configuration = _minimal_standalone_configuration().replace(
-        "&xnet_config",
-        "&xnet_config\n description(1) = 'O''Brien test',\n"
+        "&xnet_controls",
+        "&xnet_controls\n description(1) = 'O''Brien test',\n"
         " ev_file_base = 'O''Brien_',",
     )
     (first_directory / "controls.nml").write_text(
@@ -174,9 +160,7 @@ def test_resolved_namelist_escapes_and_round_trips_character_values(
         xnet_executable, first_directory, xnet_timeout
     )
     assert first_result.returncode == 0, first_result.stdout + first_result.stderr
-    first_resolved = (first_directory / "controls.resolved.nml").read_text(
-        encoding="utf-8"
-    )
+    first_resolved = _resolved_controls(first_directory)
     assert "description(1) = 'O''Brien test'" in first_resolved
     assert "ev_file_base = 'O''Brien_'" in first_resolved
 
@@ -188,9 +172,7 @@ def test_resolved_namelist_escapes_and_round_trips_character_values(
         xnet_executable, second_directory, xnet_timeout
     )
     assert second_result.returncode == 0, second_result.stdout + second_result.stderr
-    second_resolved = (second_directory / "controls.resolved.nml").read_text(
-        encoding="utf-8"
-    )
+    second_resolved = _resolved_controls(second_directory)
     assert second_resolved == first_resolved
 
 
@@ -212,12 +194,28 @@ def test_namelist_rejects_controls_used_as_divisors(
         tmp_path, setting.split()[0]
     )
     configuration = _minimal_standalone_configuration().replace(
-        "&xnet_config", f"&xnet_config\n {setting}"
+        "&xnet_controls", f"&xnet_controls\n {setting}"
     )
     (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
     assert expected in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("name", ("output_nuclei", "inab_files", "thermo_files", "include_files"))
+def test_namelist_requires_explicit_array_indices(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path, name: str
+) -> None:
+    work_directory = _prepared_configuration_work_directory(tmp_path, f"unindexed-{name}")
+    configuration = _minimal_standalone_configuration().replace(
+        "&xnet_controls", f"&xnet_controls\n {name} = 'unsupported',"
+    )
+    (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert "Array-valued controls require explicit positive indices" in (
+        result.stdout + result.stderr
+    )
 
 
 def test_namelist_include_precedence_and_nested_relative_paths(
@@ -231,19 +229,20 @@ def test_namelist_include_precedence_and_nested_relative_paths(
         _minimal_standalone_configuration(), encoding="utf-8"
     )
     (nested / "first.nml").write_text(
-        "&xnet_config\n include = 'deeper/base.nml', isolv = 3\n/\n",
+        "&xnet_controls\n include_files(1) = 'deeper/base.nml',\n isolv = 3\n/\n",
         encoding="utf-8",
     )
     (nested / "second.nml").write_text(
-        "&xnet_config\n isolv = 1\n/\n", encoding="utf-8"
+        "&xnet_controls\n isolv = 1\n/\n", encoding="utf-8"
     )
     (work_directory / "controls.nml").write_text(
-        "&xnet_config\n include = 'nested/first.nml', 'nested/second.nml'\n/\n",
+        "&xnet_controls\n include_files(1) = 'nested/first.nml',\n"
+        " include_files(2) = 'nested/second.nml'\n/\n",
         encoding="utf-8",
     )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode == 0, result.stdout + result.stderr
-    resolved = (work_directory / "controls.resolved.nml").read_text(encoding="utf-8")
+    resolved = _resolved_controls(work_directory)
     assert "nzone = 1" in resolved
     assert "isolv = 1" in resolved
 
@@ -251,9 +250,9 @@ def test_namelist_include_precedence_and_nested_relative_paths(
 @pytest.mark.parametrize(
     ("configuration", "expected"),
     (
-        ("&xnet_config\n nzone = 'invalid'\n/\n", "malformed or unknown xnet_config namelist"),
-        ("&xnet_config\n unknown_setting = 1\n/\n", "malformed or unknown xnet_config namelist"),
-        ("&xnet_config\n include = 'child.nml'\n/\n", "configuration include cycle"),
+        ("&xnet_controls\n nzone = 'invalid'\n/\n", "Malformed or unknown xnet_controls namelist"),
+        ("&xnet_controls\n unknown_setting = 1\n/\n", "Malformed or unknown xnet_controls namelist"),
+        ("&xnet_controls\n include_files(1) = 'child.nml'\n/\n", "Controls include cycle"),
     ),
 )
 def test_namelist_rejects_malformed_unknown_and_include_cycle_input(
@@ -265,7 +264,7 @@ def test_namelist_rejects_malformed_unknown_and_include_cycle_input(
     (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
     if "child.nml" in configuration:
         (work_directory / "child.nml").write_text(
-            "&xnet_config\n include = 'controls.nml'\n/\n", encoding="utf-8"
+            "&xnet_controls\n include_files(1) = 'controls.nml'\n/\n", encoding="utf-8"
         )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
@@ -286,26 +285,26 @@ def test_namelist_rejects_lexical_alias_include_cycles(
     work_directory = tmp_path / "alias-cycle"
     work_directory.mkdir()
     (work_directory / "controls.nml").write_text(
-        f"&xnet_config\n include = {root_include}\n/\n", encoding="utf-8"
+        f"&xnet_controls\n include_files(1) = {root_include}\n/\n", encoding="utf-8"
     )
     if child_include is not None:
         nested = work_directory / "nested"
         nested.mkdir()
         (nested / "child.nml").write_text(
-            f"&xnet_config\n include = {child_include}\n/\n", encoding="utf-8"
+            f"&xnet_controls\n include_files(1) = {child_include}\n/\n", encoding="utf-8"
         )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
-    assert "configuration include cycle" in result.stdout + result.stderr
+    assert "Controls include cycle" in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(
     ("configuration", "expected"),
     (
-        (None, "failed to open configuration file: controls.nml"),
+        (None, "Failed to open controls file: controls.nml"),
         (
-            "&xnet_config\n include = 'missing.nml'\n/\n",
-            "failed to open configuration file: missing.nml",
+            "&xnet_controls\n include_files(1) = 'missing.nml'\n/\n",
+            "Failed to open controls file: missing.nml",
         ),
     ),
 )
@@ -327,7 +326,7 @@ def test_namelist_validates_only_after_all_layers(
 ) -> None:
     work_directory = _prepared_configuration_work_directory(tmp_path, "late-validation")
     (work_directory / "invalid.nml").write_text(
-        "&xnet_config\n nzone = 0\n/\n", encoding="utf-8"
+        "&xnet_controls\n nzone = 0\n/\n", encoding="utf-8"
     )
     (work_directory / "controls.nml").write_text(
         _minimal_standalone_configuration("'invalid.nml'"), encoding="utf-8"
@@ -342,18 +341,19 @@ def test_namelist_allows_a_later_layer_to_repair_root_validation(
 ) -> None:
     work_directory = _prepared_configuration_work_directory(tmp_path, "repaired-validation")
     (work_directory / "repair.nml").write_text(
-        "&xnet_config\n nzone = 1\n/\n", encoding="utf-8"
+        "&xnet_controls\n nzone = 1\n/\n", encoding="utf-8"
     )
     (work_directory / "controls.nml").write_text(
-        "&xnet_config\n"
-        " include = 'repair.nml', nzone = 0, data_dir = 'Data_alpha', iprocess = 1,\n"
-        " inab_files(1) = 'Data_alpha/ab_co', thermo_files(1) = 'th_sn1aflame'\n"
+        "&xnet_controls\n"
+        " include_files(1) = 'repair.nml',\n nzone = 0,\n data_dir = 'Data_alpha',\n"
+        " iprocess = 1,\n inab_files(1) = 'Data_alpha/ab_co',\n"
+        " thermo_files(1) = 'th_sn1aflame'\n"
         "/\n",
         encoding="utf-8",
     )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode == 0, result.stdout + result.stderr
-    resolved = (work_directory / "controls.resolved.nml").read_text(encoding="utf-8")
+    resolved = _resolved_controls(work_directory)
     assert "nzone = 1" in resolved
 
 
@@ -365,12 +365,12 @@ def test_namelist_rejects_excessive_include_depth(
     filenames = ["controls.nml", *(f"layer{index}.nml" for index in range(16))]
     for current, following in zip(filenames, filenames[1:]):
         (work_directory / current).write_text(
-            f"&xnet_config\n include = '{following}'\n/\n", encoding="utf-8"
+            f"&xnet_controls\n include_files(1) = '{following}'\n/\n", encoding="utf-8"
         )
-    (work_directory / filenames[-1]).write_text("&xnet_config\n/\n", encoding="utf-8")
+    (work_directory / filenames[-1]).write_text("&xnet_controls\n/\n", encoding="utf-8")
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
-    assert "configuration include depth limit exceeded" in result.stdout + result.stderr
+    assert "Controls include depth limit exceeded" in result.stdout + result.stderr
 
 
 def test_namelist_rejects_excessive_direct_includes(
@@ -378,13 +378,15 @@ def test_namelist_rejects_excessive_direct_includes(
 ) -> None:
     work_directory = tmp_path / "too-many-includes"
     work_directory.mkdir()
-    includes = ", ".join(f"'layer{index}.nml'" for index in range(17))
+    includes = "\n".join(
+        f" include_files({index + 1}) = 'layer{index}.nml'," for index in range(17)
+    )
     (work_directory / "controls.nml").write_text(
-        f"&xnet_config\n include = {includes}\n/\n", encoding="utf-8"
+        f"&xnet_controls\n{includes}\n/\n", encoding="utf-8"
     )
     for index in range(17):
         (work_directory / f"layer{index}.nml").write_text(
-            "&xnet_config\n/\n", encoding="utf-8"
+            "&xnet_controls\n/\n", encoding="utf-8"
         )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
@@ -405,7 +407,7 @@ def test_namelist_has_no_zone_staging_limit(
     output = result.stdout + result.stderr
     assert result.returncode != 0
     assert "nzone must" not in output
-    assert "malformed or unknown xnet_config" not in output
+    assert "Malformed or unknown xnet_controls" not in output
 
 
 def test_namelist_has_no_output_species_staging_limit(
@@ -424,7 +426,7 @@ def test_namelist_has_no_output_species_staging_limit(
     output = result.stdout + result.stderr
     assert result.returncode != 0
     assert "nnucout exceeds" not in output
-    assert "malformed or unknown xnet_config" not in output
+    assert "Malformed or unknown xnet_controls" not in output
 
 
 def test_tnsn_alpha(

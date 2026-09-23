@@ -32,7 +32,7 @@
     "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
   },
   "input_sha256": {
-    "test/regression/cases/tnsn_torch47/controls.nml": "4248c35cee518b8b5bdf885460cedf80a1e307161038d99652cbe4755e341ad3",
+    "test/regression/cases/tnsn_torch47/controls.nml": "4b50e693b8a9ce34d03ad3ecee95cb91835cc4f694a4f68ea98f4a124d6029dc",
     "test/Data_torch47/sunet": "9ef57a2c8081dcc63c1e907490c5a9b5738bc007f2cd305c92b551c879da5af7",
     "test/Data_torch47/netsu": "1ac76a3f6a80d41dbb7d9059bf81da6edd0c04cc2c0ea9734ddae40cbb2ba59f",
     "test/Data_torch47/netweak": "66ba4aebbf379c5c0e8be22edfbbccdaa4029a4aa3143b41e5987fc4effb14f9",

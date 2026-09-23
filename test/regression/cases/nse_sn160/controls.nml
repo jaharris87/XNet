@@ -1,5 +1,5 @@
 ! Maintained standalone input for the nse_sn160 regression case.
-&xnet_config
+&xnet_controls
   ! Problem Description
   description(1) = 'SN160 NSE initialization followed by an ordinary trajectory evolution',
   description(2) = 'diagnostic level 1',

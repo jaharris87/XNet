@@ -626,19 +626,54 @@ def write_smoke_inputs(directory: Path, helm_table: Path) -> None:
         "1.0e-10 1.0e-2 1.0e4 0.5\n",
         encoding="ascii",
     )
-    output_species = ", ".join(f"'{name}'" for name in EXPECTED_SPECIES)
-    runtime_config = f"""&xnet_config
- description = 'build_net interoperability smoke', 'one zone and one short interval',
-   'structural completion only',
- szone = 1, nzone = 1, iweak0 = 1, iscrn = 0, iprocess = 0,
- ineutrino = 0, t9nse = 11.0,
- isolv = 1, kstmx = 20, kitmx = 5, ijac = 4, iconvc = 0,
- changemx = 1.0e-1, yacc = 1.0e-7, tolm = 1.0e-6, tolc = 1.0e-4,
- ymin = 1.0e-30, tdel_maxmult = 2.0,
- iheat = 0, changemxt = 1.0e-2, tolt9 = 1.0e-4, nzbatchmx = 1,
- idiag = 0, itsout = 0, ev_file_base = 'ev_build_net_', bin_file_base = 'ts_build_net_',
- nnucout = {len(EXPECTED_SPECIES)}, output_nuclei = {output_species},
- data_dir = '.', inab_files(1) = 'initial_abundances', thermo_files(1) = 'thermo',
+    output_species = "\n".join(
+        f"  output_nuclei({index}) = '{name}',"
+        for index, name in enumerate(EXPECTED_SPECIES, start=1)
+    )
+    runtime_config = f"""&xnet_controls
+  ! Problem Description
+  description(1) = 'build_net interoperability smoke',
+  description(2) = 'one zone and one short interval',
+  description(3) = 'structural completion only',
+
+  ! Job Controls
+  szone = 1,
+  nzone = 1,
+  iweak0 = 1,
+  iscrn = 0,
+  iprocess = 0,
+  nzbatchmx = 1,
+
+  ! Integration Controls
+  isolv = 1,
+  kstmx = 20,
+  kitmx = 5,
+  ijac = 4,
+  iconvc = 0,
+  changemx = 1.0e-1,
+  yacc = 1.0e-7,
+  tolm = 1.0e-6,
+  tolc = 1.0e-4,
+  ymin = 1.0e-30,
+  tdel_maxmult = 2.0,
+  iheat = 0,
+  changemxt = 1.0e-2,
+  tolt9 = 1.0e-4,
+  t9nse = 11.0,
+  ineutrino = 0,
+
+  ! Output Controls
+  idiag = 0,
+  itsout = 0,
+  ev_file_base = 'ev_build_net_',
+  bin_file_base = 'ts_build_net_',
+  nnucout = {len(EXPECTED_SPECIES)},
+{output_species}
+
+  ! Input Controls
+  data_dir = '.',
+  inab_files(1) = 'initial_abundances',
+  thermo_files(1) = 'thermo',
 /
 """
     (directory / "controls.nml").write_text(runtime_config, encoding="ascii")

@@ -1,5 +1,5 @@
 ! Maintained standalone input for the standalone NSE-process check.
-&xnet_config
+&xnet_controls
   description(1) = 'NSE process verification',
   description(2) = 'SN160 software behavior',
   description(3) = 'characterization only',

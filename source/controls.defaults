@@ -1,0 +1,52 @@
+!***************************************************************************************************
+! controls.defaults
+! This source include contains the compiled defaults for xnet_controls_t.
+!***************************************************************************************************
+
+! Problem Description
+controls%description = ' '
+
+! Job Controls
+controls%szone = 1       ! Starting zone
+controls%nzone = 1       ! Number of zones
+controls%iweak0 = 1      ! Include strong and weak reactions
+controls%iscrn = 1       ! Include screening
+controls%iprocess = 0    ! Use already processed nuclear data
+
+! Zone Batching Controls
+controls%nzbatchmx = 1   ! Maximum number of zones in a batch
+
+! Integration Controls
+controls%isolv = 1                 ! Backward Euler integration
+controls%kstmx = 9999              ! Maximum number of timesteps
+controls%kitmx = 5                 ! Maximum iterations per timestep
+controls%ijac = 1                  ! Jacobian rebuild interval after the first iteration
+controls%iconvc = 0                ! Converge on mass conservation
+controls%changemx = 1.0e-1_dp      ! Maximum abundance change per timestep
+controls%yacc = 1.0e-7_dp          ! Smallest abundance used to choose the timestep
+controls%tolm = 1.0e-6_dp          ! Maximum network mass error
+controls%tolc = 1.0e-4_dp          ! Iterative convergence limit
+controls%ymin = 1.0e-30_dp         ! Abundances below this value are set to zero
+controls%tdel_maxmult = 2.0_dp     ! Maximum timestep growth factor
+
+! Self-heating Controls
+controls%iheat = 0                 ! Disable self-heating
+controls%changemxt = 1.0e-2_dp     ! Maximum temperature change per timestep
+controls%tolt9 = 1.0e-4_dp         ! Iterative temperature convergence limit
+
+! NSE Initial Conditions Controls
+controls%t9nse = 8.0_dp            ! Initial NSE threshold in GK
+
+! Neutrino Controls
+controls%ineutrino = 0             ! Disable neutrino capture reactions
+
+! Output Controls
+controls%idiag = 0                 ! Diagnostic output level
+controls%itsout = 0                ! Per-timestep output level
+controls%ev_file_base = 'ev_'      ! ASCII output filename base
+controls%bin_file_base = 'ts_'     ! Binary output filename base
+controls%nnucout = 0               ! Number of species in condensed output
+
+! Standalone Input Controls
+! Problem inputs remain blank until supplied by a standalone controls file.
+controls%data_dir = ' '

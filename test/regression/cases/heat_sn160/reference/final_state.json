@@ -39,7 +39,7 @@
     "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
   },
   "input_sha256": {
-    "test/regression/cases/heat_sn160/controls.nml": "c19672a780c3a501d71f7c65479fdfcea81e292967a4a4007f7feeb9c8da2264",
+    "test/regression/cases/heat_sn160/controls.nml": "6317fadd80be6350d96b0aad45b38903f7bd6a4e5596fd159cf20396c9fd36f7",
     "test/Data_SN160/sunet": "d20da4d9fae2b4093e67d258530c5506cc44b50775b09b797893a1c41effdaac",
     "test/Data_SN160/netsu": "9dca0e4ae011f9ef3de4090f512ad9b6b31e70454e897e60506cdb75a9867b48",
     "test/Data_SN160/netweak": "a374458b8b9439ab6c00d71292b89216d08a98c09dd0104f4046e93f28a4ae0f",

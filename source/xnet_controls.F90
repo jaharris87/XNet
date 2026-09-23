@@ -18,45 +18,46 @@ Module xnet_controls
   Implicit None
 
   Character(*), Parameter :: standalone_controls_file = 'controls.nml'
-  Character(*), Parameter :: resolved_controls_file = 'controls.resolved.nml'
   Integer, Parameter :: max_includes_per_file = 16 ! Prevent accidental unbounded include fan-out
   Integer, Parameter :: max_include_depth = 16     ! Bound recursive input and detect runaway nesting
-  Integer, Parameter :: config_path_length = 1024  ! Explicit configuration-path storage length
+  Integer, Parameter :: controls_path_length = 1024 ! Bounded storage for controls-file paths
 
   Type :: xnet_controls_t
+    ! Component initializers are deterministic invalid sentinels.  Use set_xnet_controls_defaults
+    ! before changing fields in a value intended for validation or execution.
     ! Problem Description
     Character(80) :: description(3) = ' '
 
     ! Job Controls
-    Integer :: szone = 1      ! Starting zone
-    Integer :: nzone = 1      ! Number of zones
-    Integer :: iweak0 = 1     ! >0: strong and weak; =0: no weak; <0: weak only
-    Integer :: iscrn = 1      ! If =0, screening is ignored
+    Integer :: szone = 0      ! Starting zone
+    Integer :: nzone = 0      ! Number of zones
+    Integer :: iweak0 = 0     ! >0: strong and weak; =0: no weak; <0: weak only
+    Integer :: iscrn = 0      ! If =0, screening is ignored
     Integer :: iprocess = 0   ! If >0, process nuclear data at run time
 
     ! Zone Batching Controls
-    Integer :: nzbatchmx = 1  ! Maximum number of zones in a batch
+    Integer :: nzbatchmx = 0  ! Maximum number of zones in a batch
 
     ! Integration Controls
-    Integer :: isolv = 1                ! Integration method (1=BE, 3=BDF)
-    Integer :: kstmx = 9999             ! Maximum number of timesteps before exit
-    Integer :: kitmx = 5                ! Maximum iterations within a timestep
-    Integer :: ijac = 1                 ! Jacobian rebuild interval after the first iteration
+    Integer :: isolv = 0                ! Integration method (1=BE, 3=BDF)
+    Integer :: kstmx = 0                ! Maximum number of timesteps before exit
+    Integer :: kitmx = 0                ! Maximum iterations within a timestep
+    Integer :: ijac = 0                 ! Jacobian rebuild interval after the first iteration
     Integer :: iconvc = 0               ! Convergence condition (0=mass conservation)
-    Real(dp) :: changemx = 1.0e-1_dp    ! Relative abundance change used to choose the timestep
-    Real(dp) :: yacc = 1.0e-7_dp        ! Minimum abundance used in timestep determination
-    Real(dp) :: tolm = 1.0e-6_dp        ! Maximum network mass error
-    Real(dp) :: tolc = 1.0e-4_dp        ! Iterative convergence limit
-    Real(dp) :: ymin = 1.0e-30_dp       ! Abundances below this value are set to zero
-    Real(dp) :: tdel_maxmult = 2.0_dp   ! Maximum timestep growth factor
+    Real(dp) :: changemx = -1.0_dp      ! Relative abundance change used to choose the timestep
+    Real(dp) :: yacc = -1.0_dp          ! Minimum abundance used in timestep determination
+    Real(dp) :: tolm = -1.0_dp          ! Maximum network mass error
+    Real(dp) :: tolc = -1.0_dp          ! Iterative convergence limit
+    Real(dp) :: ymin = -1.0_dp          ! Abundances below this value are set to zero
+    Real(dp) :: tdel_maxmult = -1.0_dp  ! Maximum timestep growth factor
 
     ! Self-heating Controls
     Integer :: iheat = 0                ! If >0, couple the network implicitly to temperature
-    Real(dp) :: changemxt = 1.0e-2_dp   ! Relative temperature change used to choose the timestep
-    Real(dp) :: tolt9 = 1.0e-4_dp       ! Iterative temperature convergence limit
+    Real(dp) :: changemxt = -1.0_dp     ! Relative temperature change used to choose the timestep
+    Real(dp) :: tolt9 = -1.0_dp         ! Iterative temperature convergence limit
 
     ! NSE Initial Conditions Controls
-    Real(dp) :: t9nse = 8.0_dp          ! Temperature in GK above which NSE initial conditions are used
+    Real(dp) :: t9nse = -1.0_dp         ! Temperature in GK above which NSE initial conditions are used
 
     ! Neutrino Controls
     Integer :: ineutrino = 0            ! If >0, include neutrino capture reactions
@@ -64,9 +65,9 @@ Module xnet_controls
     ! Output Controls
     Integer :: idiag = 0                ! Diagnostic output level
     Integer :: itsout = 0               ! Per-timestep output level
-    Character(80) :: ev_file_base = 'ev_'  ! ASCII output filename base
-    Character(80) :: bin_file_base = 'ts_' ! Binary output filename base
-    Integer :: nnucout = 0              ! Number of species in condensed output
+    Character(80) :: ev_file_base = ' '  ! ASCII output filename base
+    Character(80) :: bin_file_base = ' ' ! Binary output filename base
+    Integer :: nnucout = -1             ! Number of species in condensed output
     Character(5), Allocatable :: output_nuclei(:)
 
     ! Input Controls used by the standalone driver
@@ -120,7 +121,7 @@ Module xnet_controls
   Real(dp) :: tolt9                  ! Iterative temperature convergence limit
 
   ! NSE Initial Conditions Controls
-  Real(dp) :: t9nse = 8.0_dp         ! Temperature in GK above which NSE is used initially
+  Real(dp) :: t9nse                  ! Temperature in GK above which NSE is used initially
 
   ! Neutrino Controls
   Integer :: ineutrino               ! If >0, include neutrino capture reactions
@@ -151,11 +152,6 @@ Module xnet_controls
   Character(Len=1) :: sweep            ! Current hydrodynamic sweep: x, y, or z
   !$omp threadprivate(tid,sweep)
 
-  Interface write_controls_line
-    Module Procedure write_controls_line_i
-    Module Procedure write_controls_line_r
-  End Interface write_controls_line
-
   ! These execution controls are read by accelerator kernels and remain resident after input is
   ! applied.  Configuration parsing must not remove their established device declarations.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
@@ -173,11 +169,12 @@ Contains
 
     controls = xnet_controls_t()
     Allocate(controls%output_nuclei(0),controls%inab_files(0),controls%thermo_files(0))
+    Include 'controls.defaults'
 
     Return
   End Subroutine set_xnet_controls_defaults
 
-  Subroutine validate_xnet_controls(controls,message)
+  Subroutine validate_xnet_controls(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! This routine validates controls shared by standalone and programmatic XNet callers.  It does
     ! not require standalone nuclear-data, abundance, or thermodynamic-history filenames.
@@ -188,8 +185,10 @@ Contains
     Type(xnet_controls_t), Intent(in) :: controls
 
     ! Output variables
+    Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
+    ierr = 1
     message = ' '
 
     If ( .not. Allocated(controls%inab_files) .or. .not. Allocated(controls%thermo_files) .or. &
@@ -213,12 +212,14 @@ Contains
       message = 'tdel_maxmult must be positive'
     ElseIf ( controls%tolc <= 0.0_dp .or. controls%tolm <= 0.0_dp .or. controls%ymin < 0.0_dp ) Then
       message = 'integration tolerances must be positive and ymin nonnegative'
+    Else
+      ierr = 0
     EndIf
 
     Return
   End Subroutine validate_xnet_controls
 
-  Subroutine validate_standalone_controls(controls,message)
+  Subroutine validate_standalone_controls(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! This routine adds the file-input requirements of the standalone XNet driver to the validation
     ! shared with programmatic callers.
@@ -229,11 +230,13 @@ Contains
     Type(xnet_controls_t), Intent(in) :: controls
 
     ! Output variables
+    Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
-    Call validate_xnet_controls(controls,message)
-    If ( Len_Trim(message) /= 0 ) Return
+    Call validate_xnet_controls(controls,ierr,message)
+    If ( ierr /= 0 ) Return
 
+    ierr = 1
     If ( Len_Trim(controls%data_dir) == 0 ) Then
       message = 'data_dir is required for the standalone driver'
     ElseIf ( Size(controls%inab_files) < controls%nzone .or. &
@@ -242,18 +245,22 @@ Contains
     ElseIf ( Any(Len_Trim(controls%inab_files(:controls%nzone)) == 0) .or. &
       & Any(Len_Trim(controls%thermo_files(:controls%nzone)) == 0) ) Then
       message = 'one inab_files and thermo_files entry is required per zone'
+    Else
+      ierr = 0
     EndIf
 
     Return
   End Subroutine validate_standalone_controls
 
-  Subroutine read_xnet_controls(controls,filename,message)
+  Subroutine read_xnet_controls(controls,filename,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads the complete layered namelist on the XNet I/O rank, normalizes and validates
-    ! the result, and broadcasts the same value to every rank.  Files named in include are applied in
-    ! listed order after their including file, so the last included value has highest precedence.
+    ! the result, and broadcasts the same value to every rank.  Files named in include_files are
+    ! applied in listed order after their including file, so the last included value has highest
+    ! precedence.
     !-----------------------------------------------------------------------------------------------
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_util, Only: normalize_path
     Implicit None
 
     ! Input variables
@@ -261,26 +268,30 @@ Contains
 
     ! Output variables
     Type(xnet_controls_t), Intent(out) :: controls
+    Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
     ! Local variables
-    Character(config_path_length) :: normalized_filename
-    Character(config_path_length) :: ancestor_paths(max_include_depth)
+    Character(controls_path_length) :: normalized_filename
+    Character(controls_path_length) :: ancestor_paths(max_include_depth)
 
     Call set_xnet_controls_defaults(controls)
+    ierr = 0
     message = ' '
     ancestor_paths = ' '
 
     If ( parallel_IOProcessor() ) Then
-      Call normalize_config_path(filename,normalized_filename,message)
+      Call normalize_path(filename,normalized_filename,message)
       If ( Len_Trim(message) == 0 ) Then
         Call read_controls_file(controls,normalized_filename,1,ancestor_paths,message)
       EndIf
       If ( Len_Trim(message) == 0 ) Call normalize_xnet_controls(controls,message)
-      If ( Len_Trim(message) == 0 ) Call validate_standalone_controls(controls,message)
+      If ( Len_Trim(message) == 0 ) Call validate_standalone_controls(controls,ierr,message)
+      If ( Len_Trim(message) /= 0 ) ierr = 1
     EndIf
 
     Call broadcast_xnet_controls(controls)
+    Call parallel_bcast(ierr)
     Call parallel_bcast(message)
 
     Return
@@ -288,11 +299,11 @@ Contains
 
   Recursive Subroutine read_controls_file(controls,filename,depth,ancestor_paths,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine applies one xnet_config namelist and then each of its includes in order.  A stack
+    ! This routine applies one xnet_controls namelist and then each of its includes in order.  A stack
     ! of lexically normalized paths detects direct and indirect cycles without delimiter parsing.
     ! Symbolic links are deliberately not resolved.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_util, Only: string_lc
+    Use xnet_util, Only: normalize_path, string_lc
     Implicit None
 
     ! Input variables
@@ -301,13 +312,13 @@ Contains
 
     ! Input/Output variables
     Type(xnet_controls_t), Intent(inout) :: controls
-    Character(config_path_length), Intent(inout) :: ancestor_paths(:)
+    Character(controls_path_length), Intent(inout) :: ancestor_paths(:)
 
     ! Output variables
     Character(*), Intent(out) :: message
 
     ! Namelist staging variables
-    Character(config_path_length) :: include(max_includes_per_file+1)
+    Character(controls_path_length) :: include_files(max_includes_per_file+1)
     Character(80) :: description(3), ev_file_base, bin_file_base, data_dir
     Character(80), Allocatable :: inab_files(:), thermo_files(:)
     Character(5), Allocatable :: output_nuclei(:)
@@ -316,26 +327,27 @@ Contains
     Integer :: iheat, ineutrino, idiag, itsout, nnucout
     Real(dp) :: changemx, yacc, tolm, tolc, ymin, tdel_maxmult
     Real(dp) :: changemxt, tolt9, t9nse
-    Namelist /xnet_config/ description, szone, nzone, iweak0, iscrn, iprocess, nzbatchmx, isolv, &
+    Namelist /xnet_controls/ description, szone, nzone, iweak0, iscrn, iprocess, nzbatchmx, isolv, &
       & kstmx, kitmx, ijac, iconvc, changemx, yacc, tolm, tolc, ymin, tdel_maxmult, iheat, &
       & changemxt, tolt9, t9nse, ineutrino, idiag, itsout, ev_file_base, bin_file_base, data_dir, &
-      & nnucout, output_nuclei, inab_files, thermo_files, include
+      & nnucout, output_nuclei, inab_files, thermo_files, include_files
 
     ! Local variables
-    Character(config_path_length) :: include_path, normalized_filename
+    Character(controls_path_length) :: include_path, normalized_filename
     Character(:), Allocatable :: line
-    Integer :: lun, ierr, i, array_capacity, input_count, output_count, file_size
+    Integer :: lun, ierr, i, staging_size, input_count, output_count, file_size
+    Integer :: largest_inab_index, largest_thermo_index, largest_output_index, largest_include_index
 
     message = ' '
-    Call normalize_config_path(filename,normalized_filename,message)
+    Call normalize_path(filename,normalized_filename,message)
     If ( Len_Trim(message) /= 0 ) Return
 
     If ( depth > max_include_depth ) Then
-      message = 'configuration include depth limit exceeded: '//Trim(normalized_filename)
+      message = 'Controls include depth limit exceeded: '//Trim(normalized_filename)
       Return
     ElseIf ( depth > 1 ) Then
       If ( Any(ancestor_paths(:depth-1) == normalized_filename) ) Then
-        message = 'configuration include cycle: '//Trim(normalized_filename)
+        message = 'Controls include cycle: '//Trim(normalized_filename)
         Return
       EndIf
     EndIf
@@ -343,56 +355,70 @@ Contains
 
     Open(newunit=lun,file=Trim(normalized_filename),status='old',action='read',iostat=ierr)
     If ( ierr /= 0 ) Then
-      message = 'failed to open configuration file: '//Trim(normalized_filename)
+      message = 'Failed to open controls file: '//Trim(normalized_filename)
       Return
     EndIf
 
     Inquire(unit=lun,size=file_size,iostat=ierr)
     If ( ierr /= 0 ) Then
-      message = 'failed to inspect configuration file: '//Trim(normalized_filename)
+      message = 'Failed to inspect controls file: '//Trim(normalized_filename)
       Close(lun)
       Return
     EndIf
+    ! The total file size is a safe upper bound for one formatted record during the limited scan
+    ! for explicitly indexed array controls, so a long assignment cannot be truncated.
     Allocate(Character(Max(1,file_size)) :: line,stat=ierr)
     If ( ierr /= 0 ) Then
-      message = 'unable to allocate configuration input record'
+      message = 'Failed to allocate controls input buffer'
       Close(lun)
       Return
     EndIf
 
-    ! Count separators and records, and inspect explicit subscripts, to obtain a file-derived upper
-    ! bound for local namelist arrays.  This avoids imposing an XNet zone or output-species limit
-    ! merely for namelist staging.
-    array_capacity = Max(1,Size(controls%inab_files),Size(controls%thermo_files), &
-      & Size(controls%output_nuclei))
+    ! XNet array-valued controls use explicit positive indices.  Only the largest index is needed to
+    ! size local namelist storage; XNet does not attempt to parse general list-directed syntax.
+    largest_inab_index = 0
+    largest_thermo_index = 0
+    largest_output_index = 0
+    largest_include_index = 0
     Do
       Read(lun,'(a)',iostat=ierr) line
       If ( ierr < 0 ) Exit
       If ( ierr > 0 ) Then
-        message = 'failed to inspect configuration file: '//Trim(normalized_filename)
+        message = 'Failed to inspect controls file: '//Trim(normalized_filename)
         Close(lun)
         Return
       EndIf
-      array_capacity = array_capacity + 1
-      Do i = 1, Len_Trim(line)
-        If ( line(i:i) == ',' ) array_capacity = array_capacity + 1
-      EndDo
       Call string_lc(line)
-      array_capacity = Max(array_capacity,max_namelist_index(line,'inab_files'), &
-        & max_namelist_index(line,'thermo_files'),max_namelist_index(line,'output_nuclei'))
+      Call inspect_array_control(line,'inab_files',largest_inab_index,ierr)
+      If ( ierr == 0 ) Call inspect_array_control(line,'thermo_files',largest_thermo_index,ierr)
+      If ( ierr == 0 ) Call inspect_array_control(line,'output_nuclei',largest_output_index,ierr)
+      If ( ierr == 0 ) Call inspect_array_control(line,'include_files',largest_include_index,ierr)
+      If ( ierr /= 0 ) Then
+        message = 'Array-valued controls require explicit positive indices in '// &
+          & Trim(normalized_filename)
+        Close(lun)
+        Return
+      ElseIf ( largest_include_index > max_includes_per_file+1 ) Then
+        Write(message,'(a,i0,a)') 'Controls file has more than ',max_includes_per_file, &
+          & ' direct includes: '//Trim(normalized_filename)
+        Close(lun)
+        Return
+      EndIf
     EndDo
     Rewind(lun)
 
-    Allocate(inab_files(array_capacity),thermo_files(array_capacity), &
-      & output_nuclei(array_capacity),stat=ierr)
+    staging_size = Max(1,Size(controls%inab_files),Size(controls%thermo_files), &
+      & Size(controls%output_nuclei),largest_inab_index,largest_thermo_index,largest_output_index)
+    Allocate(inab_files(staging_size),thermo_files(staging_size), &
+      & output_nuclei(staging_size),stat=ierr)
     If ( ierr /= 0 ) Then
-      message = 'unable to allocate configuration staging arrays'
+      message = 'Failed to allocate controls arrays'
       Close(lun)
       Return
     EndIf
 
     ! Begin with the value assembled by earlier layers.  Namelist input changes only named fields.
-    include = ' '
+    include_files = ' '
     description = controls%description
     szone = controls%szone
     nzone = controls%nzone
@@ -435,14 +461,14 @@ Contains
       output_nuclei(:Size(controls%output_nuclei)) = controls%output_nuclei
     EndIf
 
-    Read(lun,nml=xnet_config,iostat=ierr)
+    Read(lun,nml=xnet_controls,iostat=ierr)
     Close(lun)
     If ( ierr /= 0 ) Then
-      Write(message,'(a,i0,a)') 'malformed or unknown xnet_config namelist, iostat=',ierr, &
+      Write(message,'(a,i0,a)') 'Malformed or unknown xnet_controls namelist, iostat=',ierr, &
         & ' in '//Trim(normalized_filename)
       Return
-    ElseIf ( Len_Trim(include(max_includes_per_file+1)) /= 0 ) Then
-      Write(message,'(a,i0,a)') 'configuration file has more than ',max_includes_per_file, &
+    ElseIf ( Len_Trim(include_files(max_includes_per_file+1)) /= 0 ) Then
+      Write(message,'(a,i0,a)') 'Controls file has more than ',max_includes_per_file, &
         & ' direct includes: '//Trim(normalized_filename)
       Return
     EndIf
@@ -478,8 +504,8 @@ Contains
     controls%data_dir = data_dir
     controls%nnucout = nnucout
 
-    input_count = Max(last_nonblank(inab_files),last_nonblank(thermo_files))
-    output_count = last_nonblank(output_nuclei)
+    input_count = Max(last_nonblank_index(inab_files),last_nonblank_index(thermo_files))
+    output_count = last_nonblank_index(output_nuclei)
     Call resize_input_controls(controls,input_count,message)
     If ( Len_Trim(message) /= 0 ) Return
     Call resize_output_controls(controls,output_count,message)
@@ -490,11 +516,10 @@ Contains
     EndIf
     If ( output_count > 0 ) controls%output_nuclei = output_nuclei(:output_count)
 
-    ! Apply includes after this file.  Later entries therefore have higher precedence, matching the
-    ! established Model Generator input layering convention.
+    ! Apply includes after this file.  Later entries therefore have higher precedence.
     Do i = 1, max_includes_per_file
-      If ( Len_Trim(include(i)) == 0 ) Cycle
-      Call resolve_include(normalized_filename,include(i),include_path,message)
+      If ( Len_Trim(include_files(i)) == 0 ) Cycle
+      Call resolve_include(normalized_filename,include_files(i),include_path,message)
       If ( Len_Trim(message) /= 0 ) Return
       Call read_controls_file(controls,include_path,depth+1,ancestor_paths,message)
       If ( Len_Trim(message) /= 0 ) Return
@@ -504,36 +529,68 @@ Contains
     Return
   End Subroutine read_controls_file
 
-  Integer Function max_namelist_index(line,name)
+  Subroutine inspect_array_control(line,name,largest_index,ierr)
     !-----------------------------------------------------------------------------------------------
-    ! This function returns the largest explicit positive subscript used for one namelist array on
-    ! a line.  Malformed subscripts are left for the Fortran namelist reader to diagnose.
+    ! This routine finds explicit positive indices for one array-valued control.  An occurrence
+    ! without an explicit scalar index is rejected because XNet does not implement a separate parser
+    ! for general Fortran namelist array-list syntax.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: line, name
 
-    ! Local variables
-    Integer :: close_parenthesis, ierr, offset, search_from, subscript
+    ! Input/Output variables
+    Integer, Intent(inout) :: largest_index
 
-    max_namelist_index = 0
+    ! Output variables
+    Integer, Intent(out) :: ierr
+
+    ! Local variables
+    Integer :: close_parenthesis, name_position, offset, search_from, index_value
+    Integer :: first_nonblank, comment_position
+
+    ierr = 0
     search_from = 1
+    comment_position = Index(line,'!')
     Do
-      offset = Index(line(search_from:),Trim(name)//'(')
-      If ( offset == 0 ) Exit
-      offset = search_from+offset+Len_Trim(name)-1
-      close_parenthesis = Index(line(offset+1:),')')
-      If ( close_parenthesis == 0 ) Exit
-      close_parenthesis = offset+close_parenthesis
-      Read(line(offset+1:close_parenthesis-1),*,iostat=ierr) subscript
-      If ( ierr == 0 .and. subscript > 0 ) max_namelist_index = Max(max_namelist_index,subscript)
+      offset = Index(line(search_from:),Trim(name))
+      If ( offset == 0 ) Return
+      name_position = search_from+offset-1
+      If ( comment_position > 0 .and. name_position > comment_position ) Return
+      If ( name_position > 1 ) Then
+        If ( Len_Trim(line(:name_position-1)) /= 0 ) Then
+          search_from = name_position+Len_Trim(name)
+          Cycle
+        EndIf
+      EndIf
+      first_nonblank = name_position+Len_Trim(name)
+      Do While ( first_nonblank <= Len_Trim(line) )
+        If ( line(first_nonblank:first_nonblank) /= ' ' ) Exit
+        first_nonblank = first_nonblank+1
+      EndDo
+      If ( first_nonblank > Len_Trim(line) .or. line(first_nonblank:first_nonblank) /= '(' ) Then
+        ierr = 1
+        Return
+      EndIf
+      close_parenthesis = Index(line(first_nonblank+1:),')')
+      If ( close_parenthesis == 0 ) Then
+        ierr = 1
+        Return
+      EndIf
+      close_parenthesis = first_nonblank+close_parenthesis
+      Read(line(first_nonblank+1:close_parenthesis-1),*,iostat=ierr) index_value
+      If ( ierr /= 0 .or. index_value < 1 ) Then
+        ierr = 1
+        Return
+      EndIf
+      largest_index = Max(largest_index,index_value)
       search_from = close_parenthesis+1
-      If ( search_from > Len_Trim(line) ) Exit
+      If ( search_from > Len_Trim(line) ) Return
     EndDo
 
     Return
-  End Function max_namelist_index
+  End Subroutine inspect_array_control
 
   Subroutine normalize_xnet_controls(controls,message)
     !-----------------------------------------------------------------------------------------------
@@ -551,7 +608,7 @@ Contains
 
     ! Local variables
     Character(80) :: inab_file_base, thermo_file_base
-    Integer :: izone, nfiles
+    Integer :: izone, last_input_index
 
     message = ' '
     If ( controls%nzone < 1 ) Return
@@ -559,17 +616,19 @@ Contains
     Call resize_input_controls(controls,controls%nzone,message)
     If ( Len_Trim(message) /= 0 ) Return
 
-    nfiles = 0
+    ! One input-file pair may be expanded over all zones with name_ordered.  Otherwise XNet requires
+    ! a complete pair for every zone; standalone validation rejects any remaining holes.
+    last_input_index = 0
     Do izone = 1, controls%nzone
       If ( Len_Trim(controls%inab_files(izone)) == 0 .neqv. &
         & Len_Trim(controls%thermo_files(izone)) == 0 ) Then
         message = 'each input file entry needs both inab_files and thermo_files'
         Return
       EndIf
-      If ( Len_Trim(controls%inab_files(izone)) /= 0 ) nfiles = izone
+      If ( Len_Trim(controls%inab_files(izone)) /= 0 ) last_input_index = izone
     EndDo
 
-    If ( nfiles == 1 .and. controls%nzone > 1 .and. &
+    If ( last_input_index == 1 .and. controls%nzone > 1 .and. &
       & Index(controls%thermo_files(1),'.h5') == 0 .and. &
       & Index(controls%thermo_files(1),'.hdf') == 0 ) Then
       inab_file_base = controls%inab_files(1)
@@ -580,108 +639,34 @@ Contains
         Call name_ordered(controls%inab_files(izone),izone,controls%nzone)
         Call name_ordered(controls%thermo_files(izone),izone,controls%nzone)
       EndDo
-    ElseIf ( nfiles /= controls%nzone ) Then
+    ElseIf ( last_input_index /= controls%nzone ) Then
       message = 'one input file pair or one pair per zone is required'
     EndIf
 
     Return
   End Subroutine normalize_xnet_controls
 
-  Subroutine normalize_config_path(input_path,path,message)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine lexically removes repeated separators and . or .. components.  It intentionally
-    ! does not resolve symbolic links or query the filesystem for a canonical path.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
-
-    ! Input variables
-    Character(*), Intent(in) :: input_path
-
-    ! Output variables
-    Character(config_path_length), Intent(out) :: path
-    Character(*), Intent(out) :: message
-
-    ! Local variables
-    Character(config_path_length), Allocatable :: part(:)
-    Integer :: first, last, input_length, nparts, i
-    Logical :: absolute
-
-    path = ' '
-    message = ' '
-    input_length = Len_Trim(input_path)
-    If ( input_length == 0 ) Return
-    If ( input_length > config_path_length ) Then
-      message = 'configuration path exceeds supported length'
-      Return
-    EndIf
-
-    Allocate(part(Max(1,input_length)))
-    part = ' '
-    absolute = input_path(1:1) == '/'
-    nparts = 0
-    first = 1
-
-    ! Treat the end of the input as a final separator so every component is handled in one loop.
-    Do last = 1, input_length+1
-      If ( last <= input_length ) Then
-        If ( input_path(last:last) /= '/' ) Cycle
-      EndIf
-
-      If ( last > first ) Then
-        If ( input_path(first:last-1) == '.' ) Then
-          Continue
-        ElseIf ( input_path(first:last-1) == '..' ) Then
-          If ( nparts > 0 .and. Trim(part(nparts)) /= '..' ) Then
-            nparts = nparts - 1
-          ElseIf ( .not. absolute ) Then
-            nparts = nparts + 1
-            part(nparts) = '..'
-          EndIf
-        Else
-          nparts = nparts + 1
-          part(nparts) = input_path(first:last-1)
-        EndIf
-      EndIf
-      first = last + 1
-    EndDo
-
-    If ( absolute ) path = '/'
-    Do i = 1, nparts
-      If ( Len_Trim(path) > 0 .and. Trim(path) /= '/' ) path = Trim(path)//'/'
-      path = Trim(path)//Trim(part(i))
-    EndDo
-    If ( Len_Trim(path) == 0 ) Then
-      If ( absolute ) Then
-        path = '/'
-      Else
-        path = '.'
-      EndIf
-    EndIf
-
-    Deallocate(part)
-    Return
-  End Subroutine normalize_config_path
-
   Subroutine resolve_include(parent,child,path,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine resolves a configuration include relative to the directory of its including file.
+    ! This routine resolves a controls include relative to the directory of its including file.
     !-----------------------------------------------------------------------------------------------
+    Use xnet_util, Only: normalize_path
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: parent, child
 
     ! Output variables
-    Character(config_path_length), Intent(out) :: path
+    Character(controls_path_length), Intent(out) :: path
     Character(*), Intent(out) :: message
 
     ! Local variables
-    Character(2*config_path_length+1) :: combined_path
+    Character(2*controls_path_length+1) :: combined_path
     Integer :: slash
 
     combined_path = ' '
     If ( Len_Trim(child) == 0 ) Then
-      message = 'configuration include path is empty'
+      message = 'Controls include path is empty'
       Return
     ElseIf ( child(1:1) == '/' ) Then
       combined_path = Trim(child)
@@ -694,7 +679,7 @@ Contains
       EndIf
     EndIf
 
-    Call normalize_config_path(Trim(combined_path),path,message)
+    Call normalize_path(Trim(combined_path),path,message)
 
     Return
   End Subroutine resolve_include
@@ -720,7 +705,7 @@ Contains
 
     message = ' '
     If ( new_size < 0 ) Then
-      message = 'configuration input-array size must be nonnegative'
+      message = 'Controls input-array size must be nonnegative'
       Return
     ElseIf ( Size(controls%inab_files) == new_size .and. &
       & Size(controls%thermo_files) == new_size ) Then
@@ -729,7 +714,7 @@ Contains
 
     Allocate(new_inab_files(new_size),new_thermo_files(new_size),stat=ierr)
     If ( ierr /= 0 ) Then
-      message = 'unable to allocate standalone input filenames'
+      message = 'Failed to allocate standalone input filenames'
       Return
     EndIf
     new_inab_files = ' '
@@ -766,7 +751,7 @@ Contains
 
     message = ' '
     If ( new_size < 0 ) Then
-      message = 'configuration output-array size must be nonnegative'
+      message = 'Controls output-array size must be nonnegative'
       Return
     ElseIf ( Size(controls%output_nuclei) == new_size ) Then
       Return
@@ -774,7 +759,7 @@ Contains
 
     Allocate(new_output_nuclei(new_size),stat=ierr)
     If ( ierr /= 0 ) Then
-      message = 'unable to allocate output_nuclei'
+      message = 'Failed to allocate output_nuclei'
       Return
     EndIf
     new_output_nuclei = ' '
@@ -785,7 +770,7 @@ Contains
     Return
   End Subroutine resize_output_controls
 
-  Integer Function last_nonblank(strings)
+  Integer Function last_nonblank_index(strings)
     !-----------------------------------------------------------------------------------------------
     ! This function returns the final nonblank element of a namelist character array.
     !-----------------------------------------------------------------------------------------------
@@ -797,16 +782,16 @@ Contains
     ! Local variables
     Integer :: i
 
-    last_nonblank = 0
+    last_nonblank_index = 0
     Do i = Size(strings), 1, -1
       If ( Len_Trim(strings(i)) /= 0 ) Then
-        last_nonblank = i
+        last_nonblank_index = i
         Exit
       EndIf
     EndDo
 
     Return
-  End Function last_nonblank
+  End Function last_nonblank_index
 
   Subroutine apply_xnet_controls(controls,data_dir)
     !-----------------------------------------------------------------------------------------------
@@ -823,9 +808,10 @@ Contains
 
     ! Local variables
     Character(256) :: message
+    Integer :: ierr
 
-    Call validate_standalone_controls(controls,message)
-    If ( Len_Trim(message) /= 0 ) Error Stop Trim(message)
+    Call validate_standalone_controls(controls,ierr,message)
+    If ( ierr /= 0 ) Error Stop Trim(message)
 
     descript = controls%description
     szone = controls%szone
@@ -894,7 +880,6 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine reads, validates, applies, and records the standalone XNet controls.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_parallel, Only: parallel_IOProcessor
     Use xnet_util, Only: xnet_terminate
     Implicit None
 
@@ -904,11 +889,11 @@ Contains
     ! Local variables
     Type(xnet_controls_t) :: controls
     Character(256) :: message
+    Integer :: ierr
 
-    Call read_xnet_controls(controls,standalone_controls_file,message)
-    If ( Len_Trim(message) /= 0 ) Call xnet_terminate(Trim(message))
+    Call read_xnet_controls(controls,standalone_controls_file,ierr,message)
+    If ( ierr /= 0 ) Call xnet_terminate(Trim(message))
     Call apply_xnet_controls(controls,data_dir)
-    If ( parallel_IOProcessor() ) Call write_resolved_controls(controls,resolved_controls_file)
 
     Return
   End Subroutine read_controls
@@ -916,7 +901,7 @@ Contains
   Character(160) Function escape_namelist_string(value)
     !-----------------------------------------------------------------------------------------------
     ! This function doubles apostrophes so a character value remains valid inside a single-quoted
-    ! Fortran namelist value.  Configuration character controls are at most 80 characters long.
+    ! Fortran namelist value.  XNet character controls are at most 80 characters long.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -941,75 +926,11 @@ Contains
     Return
   End Function escape_namelist_string
 
-  Subroutine write_resolved_controls(controls,filename)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine writes the fully resolved controls as a human-readable reproducibility artifact.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
-
-    ! Input variables
-    Type(xnet_controls_t), Intent(in) :: controls
-    Character(*), Intent(in) :: filename
-
-    ! Local variables
-    Integer :: lun, i, ierr
-
-    Open(newunit=lun,file=filename,status='replace',action='write',iostat=ierr)
-    If ( ierr /= 0 ) Return
-
-    Write(lun,'(a)') '! Resolved defaults and layered overrides used for this run.'
-    Write(lun,'(a)') '&xnet_config'
-    Do i = 1, 3
-      Write(lun,'(a,i0,a,a,a)') '  description(',i,") = '", &
-        & Trim(escape_namelist_string(controls%description(i))),"',"
-    EndDo
-    Write(lun,'(a,i0,a)') '  szone = ',controls%szone,','
-    Write(lun,'(a,i0,a)') '  nzone = ',controls%nzone,','
-    Write(lun,'(a,i0,a)') '  iweak0 = ',controls%iweak0,','
-    Write(lun,'(a,i0,a)') '  iscrn = ',controls%iscrn,','
-    Write(lun,'(a,i0,a)') '  iprocess = ',controls%iprocess,','
-    Write(lun,'(a,i0,a)') '  nzbatchmx = ',controls%nzbatchmx,','
-    Write(lun,'(a,i0,a)') '  isolv = ',controls%isolv,','
-    Write(lun,'(a,i0,a)') '  kstmx = ',controls%kstmx,','
-    Write(lun,'(a,i0,a)') '  kitmx = ',controls%kitmx,','
-    Write(lun,'(a,i0,a)') '  ijac = ',controls%ijac,','
-    Write(lun,'(a,i0,a)') '  iconvc = ',controls%iconvc,','
-    Write(lun,'(a,es24.16,a)') '  changemx = ',controls%changemx,','
-    Write(lun,'(a,es24.16,a)') '  yacc = ',controls%yacc,','
-    Write(lun,'(a,es24.16,a)') '  tolm = ',controls%tolm,','
-    Write(lun,'(a,es24.16,a)') '  tolc = ',controls%tolc,','
-    Write(lun,'(a,es24.16,a)') '  ymin = ',controls%ymin,','
-    Write(lun,'(a,es24.16,a)') '  tdel_maxmult = ',controls%tdel_maxmult,','
-    Write(lun,'(a,i0,a)') '  iheat = ',controls%iheat,','
-    Write(lun,'(a,es24.16,a)') '  changemxt = ',controls%changemxt,','
-    Write(lun,'(a,es24.16,a)') '  tolt9 = ',controls%tolt9,','
-    Write(lun,'(a,es24.16,a)') '  t9nse = ',controls%t9nse,','
-    Write(lun,'(a,i0,a)') '  ineutrino = ',controls%ineutrino,','
-    Write(lun,'(a,i0,a)') '  idiag = ',controls%idiag,','
-    Write(lun,'(a,i0,a)') '  itsout = ',controls%itsout,','
-    Write(lun,'(3a)') "  ev_file_base = '",Trim(escape_namelist_string(controls%ev_file_base)),"',"
-    Write(lun,'(3a)') "  bin_file_base = '",Trim(escape_namelist_string(controls%bin_file_base)),"',"
-    Write(lun,'(a,i0,a)') '  nnucout = ',controls%nnucout,','
-    Do i = 1, controls%nnucout
-      Write(lun,'(a,i0,a,a,a)') '  output_nuclei(',i,") = '", &
-        & Trim(escape_namelist_string(controls%output_nuclei(i))),"',"
-    EndDo
-    Write(lun,'(3a)') "  data_dir = '",Trim(escape_namelist_string(controls%data_dir)),"',"
-    Do i = 1, controls%nzone
-      Write(lun,'(a,i0,a,a,a)') '  inab_files(',i,") = '", &
-        & Trim(escape_namelist_string(controls%inab_files(i))),"',"
-      Write(lun,'(a,i0,a,a,a)') '  thermo_files(',i,") = '", &
-        & Trim(escape_namelist_string(controls%thermo_files(i))),"',"
-    EndDo
-    Write(lun,'(a)') '/'
-    Close(lun)
-
-    Return
-  End Subroutine write_resolved_controls
-
   Subroutine write_controls(lun_out,data_dir)
     !-----------------------------------------------------------------------------------------------
-    ! This routine writes the active XNet controls to diagnostic output in the historical format.
+    ! This routine writes the effective XNet execution controls as a complete, re-readable namelist.
+    ! Values changed while controls are applied, including the unused BDF change limits, are recorded
+    ! as their effective values so re-reading this block reproduces the active execution state.
     !-----------------------------------------------------------------------------------------------
     Use xnet_parallel, Only: parallel_IOProcessor
     Implicit None
@@ -1022,101 +943,55 @@ Contains
     Integer :: i, izone
 
     If ( idiag >= 0 .or. ( idiag >= -1 .and. parallel_IOProcessor() ) ) Then
-      Write(lun_out,'(a)') '## Problem Description'
-      Write(lun_out,'(a)') (descript(i), i=1,3)
-      Write(lun_out,'(a)') '## Job Controls'
-      Call write_controls_line(lun_out,szone,'Initial Zone')
-      Call write_controls_line(lun_out,nzone,'# of Zones')
-      Call write_controls_line(lun_out,iweak0,'Include Weak Reactions (yes=1,no=0,only=-1)')
-      Call write_controls_line(lun_out,iscrn,'Include Screening (yes=1)')
-      Call write_controls_line(lun_out,iprocess,'Process Nuclear Data at Run Time (yes=1,no=0)')
-      Write(lun_out,'(a)') '## Neutrinos'
-      Call write_controls_line(lun_out,ineutrino,'Include Neutrino Reactions (yes=1, no=0)')
-      Write(lun_out,'(a)') '## NSE Initial Conditions'
-      Call write_controls_line(lun_out,t9nse,'Temperature in GK to use NSE initial conditions instead of file')
-      Write(lun_out,'(a)') '## Integration Controls'
-      Call write_controls_line(lun_out,isolv,'Choice of integration Scheme (1=Backward Euler, 3=Backward Differentiation'// &
-        & ' Formula, 2=obsolete Bader-Deuflhard)')
-      Call write_controls_line(lun_out,kstmx,'Max. number of timesteps before quit')
-      Call write_controls_line(lun_out,kitmx,'Max. iterations per step')
-      Call write_controls_line(lun_out,ijac,'Rebuild the jacobian every ijac iterations after the first')
-      Call write_controls_line(lun_out,iconvc,'Convergence Condition (Mass Cons.=0, (dY/Y small)=1)')
-      Call write_controls_line(lun_out,changemx,'Max. Abundance Change per timestep')
-      Call write_controls_line(lun_out,yacc,'Smallest Abundance used in timestep calculation')
-      Call write_controls_line(lun_out,tolm,'Mass Conservation Limit')
-      Call write_controls_line(lun_out,tolc,'Convergence Criterion')
-      Call write_controls_line(lun_out,ymin,'Lower Abundance limit, smaller abundances = 0')
-      Call write_controls_line(lun_out,tdel_maxmult,'Max. Factor to change dt in a timestep')
-      Write(lun_out,'(a)') '## Self-heating Controls'
-      Call write_controls_line(lun_out,iheat,'Include self-heating (yes=1,no=0)')
-      Call write_controls_line(lun_out,changemxt,'Max. Temperature Change per timestep')
-      Call write_controls_line(lun_out,tolt9,'Temperature Convergence Criterion')
-      Write(lun_out,'(a)') '## Zone Batching Controls'
-      Call write_controls_line(lun_out,nzbatchmx,'Blocking size for zone loop')
-      Write(lun_out,*); Write(lun_out,'(a)') '## Output Controls'
-      Call write_controls_line(lun_out,idiag,'Diagnostic Output Level')
-      Call write_controls_line(lun_out,itsout,'Per Timestep Output Level')
-      Write(lun_out,'(a)') '# ASCII output filename root, network will append zone number'
-      Write(lun_out,'(a)') Trim(Adjustl(ev_file_base))
-      Write(lun_out,'(a)') '# Binary output filename root, network will append zone number'
-      Write(lun_out,'(a)') Trim(Adjustl(bin_file_base))
-      Write(lun_out,'(a)') '# Species to output in ASCII output (format 14a5): 14'
-      Write(lun_out,'(14a5)') output_nuc
-      Write(lun_out,'(a)') '## Input Controls'
-      Write(lun_out,'(a)') '# Nuclear Data Directory'
-      Write(lun_out,'(a)') Trim(Adjustl(data_dir))
-      Write(lun_out,'(a)') '# Initial Abundance and Thermodynamic Trajectory Files'
-      Do izone = 1, nzone
-        Write(lun_out,'(a)') inab_file(izone)
-        Write(lun_out,'(a)') thermo_file(izone)
+      Write(lun_out,'(a)') '! Resolved/effective XNet controls for this run'
+      Write(lun_out,'(a)') '&xnet_controls'
+      Do i = 1, 3
+        Write(lun_out,'(a,i0,a,a,a)') '  description(',i,") = '", &
+          & Trim(escape_namelist_string(descript(i))),"',"
       EndDo
+      Write(lun_out,'(a,i0,a)') '  szone = ',szone,','
+      Write(lun_out,'(a,i0,a)') '  nzone = ',nzone,','
+      Write(lun_out,'(a,i0,a)') '  iweak0 = ',iweak0,','
+      Write(lun_out,'(a,i0,a)') '  iscrn = ',iscrn,','
+      Write(lun_out,'(a,i0,a)') '  iprocess = ',iprocess,','
+      Write(lun_out,'(a,i0,a)') '  nzbatchmx = ',nzbatchmx,','
+      Write(lun_out,'(a,i0,a)') '  isolv = ',isolv,','
+      Write(lun_out,'(a,i0,a)') '  kstmx = ',kstmx,','
+      Write(lun_out,'(a,i0,a)') '  kitmx = ',kitmx,','
+      Write(lun_out,'(a,i0,a)') '  ijac = ',ijac,','
+      Write(lun_out,'(a,i0,a)') '  iconvc = ',iconvc,','
+      Write(lun_out,'(a,es24.16,a)') '  changemx = ',changemx,','
+      Write(lun_out,'(a,es24.16,a)') '  yacc = ',yacc,','
+      Write(lun_out,'(a,es24.16,a)') '  tolm = ',tolm,','
+      Write(lun_out,'(a,es24.16,a)') '  tolc = ',tolc,','
+      Write(lun_out,'(a,es24.16,a)') '  ymin = ',ymin,','
+      Write(lun_out,'(a,es24.16,a)') '  tdel_maxmult = ',tdel_maxmult,','
+      Write(lun_out,'(a,i0,a)') '  iheat = ',iheat,','
+      Write(lun_out,'(a,es24.16,a)') '  changemxt = ',changemxt,','
+      Write(lun_out,'(a,es24.16,a)') '  tolt9 = ',tolt9,','
+      Write(lun_out,'(a,es24.16,a)') '  t9nse = ',t9nse,','
+      Write(lun_out,'(a,i0,a)') '  ineutrino = ',ineutrino,','
+      Write(lun_out,'(a,i0,a)') '  idiag = ',idiag,','
+      Write(lun_out,'(a,i0,a)') '  itsout = ',itsout,','
+      Write(lun_out,'(3a)') "  ev_file_base = '",Trim(escape_namelist_string(ev_file_base)),"',"
+      Write(lun_out,'(3a)') "  bin_file_base = '",Trim(escape_namelist_string(bin_file_base)),"',"
+      Write(lun_out,'(a,i0,a)') '  nnucout = ',nnucout,','
+      Do i = 1, nnucout
+        Write(lun_out,'(a,i0,a,a,a)') '  output_nuclei(',i,") = '", &
+          & Trim(escape_namelist_string(output_nuc(i))),"',"
+      EndDo
+      Write(lun_out,'(3a)') "  data_dir = '",Trim(escape_namelist_string(data_dir)),"',"
+      Do izone = 1, nzone
+        Write(lun_out,'(a,i0,a,a,a)') '  inab_files(',izone,") = '", &
+          & Trim(escape_namelist_string(inab_file(izone))),"',"
+        Write(lun_out,'(a,i0,a,a,a)') '  thermo_files(',izone,") = '", &
+          & Trim(escape_namelist_string(thermo_file(izone))),"',"
+      EndDo
+      Write(lun_out,'(a)') '/'
     EndIf
 
     Return
   End Subroutine write_controls
-
-  Subroutine write_controls_line_i(lun_out,inum,desc)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine writes a left-aligned integer control and its description to diagnostic output.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
-
-    ! Input variables
-    Integer, Intent(in) :: lun_out, inum
-    Character(*), Intent(in) :: desc
-
-    ! Local variables
-    Character(9) :: str_num
-    Character(Len=Len_Trim(Adjustl(desc))+10) :: line
-
-    Write(str_num,'(i9)') inum
-    Write(line,'(a9,1x,a)') Adjustl(str_num), Trim(Adjustl(desc))
-    Write(lun_out,'(a)') Adjustl(line)
-
-    Return
-  End Subroutine write_controls_line_i
-
-  Subroutine write_controls_line_r(lun_out,rnum,desc)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine writes a left-aligned real control and its description to diagnostic output.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
-
-    ! Input variables
-    Integer, Intent(in) :: lun_out
-    Real(dp), Intent(in) :: rnum
-    Character(*), Intent(in) :: desc
-
-    ! Local variables
-    Character(9) :: str_num
-    Character(Len=Len_Trim(Adjustl(desc))+10) :: line
-
-    Write(str_num,'(ES9.2)') rnum
-    Write(line,'(a9,1x,a)') Adjustl(str_num), Trim(Adjustl(desc))
-    Write(lun_out,'(a)') Adjustl(line)
-
-    Return
-  End Subroutine write_controls_line_r
 
   Subroutine broadcast_xnet_controls(controls)
     !-----------------------------------------------------------------------------------------------

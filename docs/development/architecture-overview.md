@@ -149,7 +149,7 @@ makes their interfaces compile-time requirements across implementations.
 
 The stand-alone runtime interface includes:
 
-- the layered `xnet_config` namelist in `controls.nml`;
+- the layered `xnet_controls` namelist in `controls.nml`;
 - nuclear data and pre-built network files under `Data_*` directories;
 - thermodynamic histories and abundance inputs;
 - fixed-format diagnostic and timestep outputs.

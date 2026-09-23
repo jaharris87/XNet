@@ -1,7 +1,7 @@
 # Runtime configuration
 
 Standalone XNet reads `controls.nml` from the run directory. The supported
-input group is `&xnet_config ... /`; the former line-oriented `control` parser
+input group is `&xnet_controls ... /`; the former line-oriented `control` parser
 is not part of the production path.
 
 `xnet_controls_t` in `source/xnet_controls.F90` is the validated input value
@@ -11,12 +11,13 @@ with `set_xnet_controls_defaults`, changes the needed fields, and calls
 `validate_standalone_controls`, which requires the nuclear-data directory and
 the abundance and thermodynamic-history inputs needed by the executable.
 
-The compiled defaults are the component initializers in `xnet_controls_t`.
-The maintained `controls.defaults.nml` template presents the same defaults in
-a commented, user-readable form. The Fortran initializers remain authoritative;
-the template is checked alongside the compiled-default behavior by the
-configuration tests. `data_dir` and input-file pairs are intentionally blank
-because each standalone problem must supply them.
+The compiled defaults are ordinary Fortran assignments in
+`source/controls.defaults`. `set_xnet_controls_defaults` includes that file, so
+those assignments are the single executable source of default values. Component
+initializers in `xnet_controls_t` are deterministic invalid sentinels: a bare
+object fails validation until the defaults are applied. `data_dir` and
+input-file pairs remain blank after default initialization because each
+standalone problem must supply them.
 
 The supported namelist names match the fields: `description`, `szone`,
 `nzone`, `iweak0`, `iscrn`, `iprocess`, `nzbatchmx`, `isolv`, `kstmx`,
@@ -24,23 +25,36 @@ The supported namelist names match the fields: `description`, `szone`,
 `tdel_maxmult`, `iheat`, `changemxt`, `tolt9`, `t9nse`, `ineutrino`,
 `idiag`, `itsout`, `ev_file_base`, `bin_file_base`, `nnucout`,
 `output_nuclei`, `data_dir`, `inab_files`, and `thermo_files`. The additional
-`include` key names ordered configuration layers; it is not an XNet control.
+`include_files` key names ordered configuration layers; it is not an execution
+control.
 
-An input can name up to 16 direct `include` files. XNet reads the including file,
-then reads listed includes in their listed order; a later include overrides an
-earlier value. This matches the Model Generator layering convention and lets a
-base file be followed by local overrides. Relative paths are interpreted
-relative to the file that names them. The direct-include limit bounds fan-out;
-the separate 16-level nesting limit bounds recursion. Cycles are rejected.
+Array-valued controls use explicit positive scalar indices, one assignment at
+a time: `output_nuclei(1)`, `inab_files(1)`, `thermo_files(1)`, and
+`include_files(1)`. XNet sizes namelist staging arrays from the largest explicit
+index and the values already assembled by earlier layers. Unindexed array-list
+syntax, including repetition syntax, is rejected rather than partially parsed
+by XNet.
+
+An input can name up to 16 direct `include_files` entries. XNet reads the
+including file, then reads listed includes in their listed order; a later
+include overrides an earlier value. This lets a base file be followed by local
+overrides. Relative paths are interpreted relative to the file that names them.
+The direct-include limit bounds fan-out; the separate 16-level nesting limit
+bounds recursion. Cycles are rejected.
 
 Cycle identity lexically normalizes repeated separators and `.` and `..`
 components, so equivalent spelling aliases are rejected. XNet deliberately
 does not resolve symbolic links or claim filesystem canonicalization; a cycle
 that exists only through symbolic-link aliases can reach the depth limit.
+Controls-file paths have a 1024-character storage bound. This bounds stack and
+namelist storage for filenames; it is not a zone, species, or scientific limit.
 
 Validation and legacy single-pair filename expansion occur only after every
-layer has been read.  Rank zero reads and validates the files, then broadcasts
-the resolved value; rank zero writes `controls.resolved.nml` for reproducibility.
+layer has been read. Rank zero reads and validates the files, then broadcasts
+the resolved value. `write_controls` emits a complete, flattened, re-readable
+`&xnet_controls` block to the ordinary diagnostic stream. The block records
+effective post-application values (including the BDF change-limit transformation)
+and can be extracted as a new `controls.nml`. No separate resolved file is made.
 
 After validation, `apply_xnet_controls` transfers the value into the existing
 module variables used by XNet execution. That bounded migration seam preserves

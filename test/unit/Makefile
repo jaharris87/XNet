@@ -26,6 +26,7 @@ LAPACK_OBJECTS := $(patsubst $(NETLIB_DIR)/%.f,$(BUILD_DIR)/lapack/%.o,$(LAPACK_
 PREPROCESS_BUILD_DIR := $(BUILD_DIR)/preprocess
 PREPROCESS_MODULE_FLAGS := -J$(PREPROCESS_BUILD_DIR) -I$(PREPROCESS_BUILD_DIR) -I$(XNET_DIR)
 PREPROCESS_DIRECT_EXE := $(PREPROCESS_BUILD_DIR)/preprocess_direct
+CONTROLS_TEST_EXE := $(PREPROCESS_BUILD_DIR)/test_xnet_controls
 PREPROCESS_NET_SETUP_EXE := $(PREPROCESS_BUILD_DIR)/net_setup
 PREPROCESS_VERIFY_EXE := $(PREPROCESS_BUILD_DIR)/verify_preprocess
 SURROGATE_VERIFY_EXE := $(PREPROCESS_BUILD_DIR)/verify_surrogate_candidate
@@ -148,13 +149,14 @@ BUILD_NET_OBJECTS := \
   surrogate-underflow-trap-test surrogate-verifier
 
 test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
-    $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
+    $(CONTROLS_TEST_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
     $(SURROGATE_UNDERFLOW_TEST) \
     $(SPARSE_DATA_EXE) \
     $(SPARSE_COMPONENT_EXES) $(BUILD_NET_READER_EXE) $(NUCLEAR_INPUT_MUTATOR_EXE) \
     $(BUILD_NET_EXE) model-input-test production-xnet
 	@$(TEST_EXE)
 	@$(SURROGATE_CHECK_EXE)
+	@$(CONTROLS_TEST_EXE)
 	@PYTHONDONTWRITEBYTECODE=1 python3 run_surrogate_full_net_checks.py \
 	  $(abspath $(BUILD_DIR)/surrogate-full-net-work) $(abspath $(PRODUCTION_XNET_EXE)) \
 	  $(abspath $(SURROGATE_VERIFY_EXE)) $(abspath ../Data_alpha) \
@@ -352,6 +354,12 @@ $(BUILD_DIR)/test_nse_scientific_validation.o: test_nse_scientific_validation.F9
 $(PREPROCESS_DIRECT_EXE): $(PREPROCESS_CORE_OBJECTS) $(PREPROCESS_BUILD_DIR)/preprocess_direct.o
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
+$(CONTROLS_TEST_EXE): $(PREPROCESS_BUILD_DIR)/xnet_types.o \
+    $(PREPROCESS_BUILD_DIR)/xnet_constants.o $(PREPROCESS_BUILD_DIR)/xnet_parallel_stubs.o \
+    $(PREPROCESS_BUILD_DIR)/xnet_util.o $(PREPROCESS_BUILD_DIR)/xnet_controls.o \
+    $(PREPROCESS_BUILD_DIR)/test_xnet_controls.o
+	$(LDR) -o $@ $^ $(LDFLAGS)
+
 $(PREPROCESS_NET_SETUP_EXE): $(PREPROCESS_CORE_OBJECTS) $(PREPROCESS_BUILD_DIR)/net_setup.o
 	$(LDR) -o $@ $^ $(LDFLAGS)
 
@@ -409,8 +417,13 @@ $(PREPROCESS_BUILD_DIR)/xnet_util.o: $(XNET_DIR)/xnet_util.F90 \
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/xnet_controls.o: $(XNET_DIR)/xnet_controls.F90 \
+    $(XNET_DIR)/controls.defaults \
     $(PREPROCESS_BUILD_DIR)/xnet_constants.o $(PREPROCESS_BUILD_DIR)/xnet_util.o \
     | $(PREPROCESS_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(PREPROCESS_BUILD_DIR)/test_xnet_controls.o: test_xnet_controls.F90 \
+    $(PREPROCESS_BUILD_DIR)/xnet_controls.o | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/xnet_conditions.o: $(XNET_DIR)/xnet_conditions.F90 \

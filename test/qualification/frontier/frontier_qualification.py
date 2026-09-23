@@ -960,7 +960,7 @@ def _capture_environment(artifact_root: Path) -> dict[str, object]:
 
 def _input_inventory(source_root: Path) -> list[dict[str, object]]:
     partial = source_root / "test" / "qualification" / "parallel_zones"
-    paths = [partial / "control"]
+    paths = [partial / "controls.nml"]
     for zone in EXPECTED_ZONES:
         paths.extend((partial / f"abundance_{zone:02d}", partial / f"thermo_{zone:02d}"))
     paths.extend(
@@ -1053,10 +1053,10 @@ def _run_partial_batch(
         "endpoint_comparison": endpoint,
         "ascii_comparison": ascii_result,
         "cpu_output_inventory": inventory_regular_files(
-            root / "cpu", exclude=(Path("control"),)
+            root / "cpu", exclude=(Path("controls.nml"),)
         ),
         "gpu_output_inventory": inventory_regular_files(
-            root / "gpu", exclude=(Path("control"),)
+            root / "gpu", exclude=(Path("controls.nml"),)
         ),
     }
 
@@ -1145,10 +1145,10 @@ def _run_heat_sn160(
         "ascii_comparison": ascii_result,
         "nonzero_neutrino_loss_zones": nonzero_neutrino_loss_zones,
         "cpu_output_inventory": inventory_regular_files(
-            root / "cpu", exclude=(Path("control"),)
+            root / "cpu", exclude=(Path("controls.nml"),)
         ),
         "gpu_output_inventory": inventory_regular_files(
-            root / "gpu", exclude=(Path("control"),)
+            root / "gpu", exclude=(Path("controls.nml"),)
         ),
     }
 

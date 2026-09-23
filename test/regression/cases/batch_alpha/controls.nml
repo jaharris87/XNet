@@ -1,5 +1,5 @@
 ! Maintained standalone input for the batch_alpha regression case.
-&xnet_config
+&xnet_controls
   ! Problem Description
   description(1) = '2000 timesteps',
   description(2) = 'diagnostic level 1',

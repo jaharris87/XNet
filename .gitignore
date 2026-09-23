@@ -60,8 +60,5 @@ core*
 test/ab*
 test/th*
 
-# runtime controls
-control*
-!controls.defaults.nml
-!test/regression/cases/*/control
-!test/qualification/parallel_zones/control
+# legacy runtime control in the repository root
+/control

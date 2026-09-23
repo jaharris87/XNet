@@ -1,41 +1,41 @@
 ! Maintained standalone input for the tnsn_alpha regression case.
-&xnet_config
+&xnet_controls
   description(1) = '2000 timesteps',
   description(2) = 'diagnostic level 1',
   description(3) = 'New parameters',
 
   ! Job and Zone Batching Controls
-  szone = 1,
-  nzone = 10,
-  iweak0 = 1,
-  iscrn = 0,
-  iprocess = 1,
-  nzbatchmx = 1,
+  szone = 1,          ! Starting zone
+  nzone = 10,         ! Number of zones
+  iweak0 = 1,         ! Include strong and weak reactions
+  iscrn = 0,          ! Ignore screening
+  iprocess = 1,       ! Process nuclear data at run time
+  nzbatchmx = 1,      ! Maximum zones in one batch
 
   ! Integration Controls
-  isolv = 1,
-  kstmx = 6000,
-  kitmx = 5,
-  ijac = 4,
-  iconvc = 0,
-  changemx = 1.00e-01,
-  yacc = 1.00e-07,
-  tolm = 1.00e-06,
-  tolc = 1.00e-04,
-  ymin = 1.00e-30,
-  tdel_maxmult = 2.00e+00,
-  iheat = 0,
-  changemxt = 1.00e-02,
-  tolt9 = 1.00e-04,
-  t9nse = 11.0,
-  ineutrino = 0,
+  isolv = 1,          ! Backward Euler integration
+  kstmx = 6000,       ! Maximum number of timesteps
+  kitmx = 5,          ! Maximum iterations per timestep
+  ijac = 4,           ! Jacobian rebuild interval after the first iteration
+  iconvc = 0,         ! Converge on mass conservation
+  changemx = 1.00e-01,! Maximum abundance change per timestep
+  yacc = 1.00e-07,    ! Smallest abundance used to choose the timestep
+  tolm = 1.00e-06,    ! Maximum network mass error
+  tolc = 1.00e-04,    ! Iterative convergence limit
+  ymin = 1.00e-30,    ! Abundances below this value are set to zero
+  tdel_maxmult = 2.00e+00, ! Maximum timestep growth factor
+  iheat = 0,          ! Disable self-heating
+  changemxt = 1.00e-02, ! Maximum temperature change per timestep
+  tolt9 = 1.00e-04,   ! Iterative temperature convergence limit
+  t9nse = 11.0,       ! Initial NSE threshold in GK
+  ineutrino = 0,      ! Disable neutrino capture reactions
 
   ! Output Controls
-  idiag = 0,
-  itsout = 2,
-  ev_file_base = 'ev_tnsn_alpha_',
-  bin_file_base = 'ts_tnsn_alpha_',
-  nnucout = 14,
+  idiag = 0,          ! Diagnostic output level
+  itsout = 2,         ! Per-timestep output level
+  ev_file_base = 'ev_tnsn_alpha_', ! ASCII output filename base
+  bin_file_base = 'ts_tnsn_alpha_',! Binary output filename base
+  nnucout = 14,       ! Species written to condensed output
   output_nuclei(1) = 'he4',
   output_nuclei(2) = 'c12',
   output_nuclei(3) = 'o16',

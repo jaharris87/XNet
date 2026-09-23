@@ -242,7 +242,7 @@ timeouts, reference provenance, and comparison policy.
 ## Runtime inputs
 
 The stand-alone driver reads `controls.nml` from its working directory. Its
-`xnet_config` namelist, compiled defaults, layering rules, and migration from
+`xnet_controls` namelist, compiled defaults, layering rules, and migration from
 historical controls are documented in
 [`runtime-configuration.md`](runtime-configuration.md). The driver does not
 select the former positional `control` parser.

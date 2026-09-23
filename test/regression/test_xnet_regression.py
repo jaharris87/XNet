@@ -1611,7 +1611,7 @@ def test_bdf_sn160_definition_reuses_isolated_sn160_staging(
 
 def test_bdf_runtime_configuration_selects_bdf_and_preserves_batching() -> None:
     configuration = bdf_sn160_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
-    assert "&xnet_config" in configuration
+    assert "&xnet_controls" in configuration
     assert re.search(r"(?m)^\s*isolv\s*=\s*3\s*,?\s*$", configuration)
     assert re.search(r"(?m)^\s*nzbatchmx\s*=\s*1\s*,?\s*$", configuration)
 
@@ -2129,7 +2129,7 @@ def test_batch_alpha_stages_nested_prefix_inputs(tmp_path: Path) -> None:
 
 def test_batch_alpha_runtime_configuration_preserves_batched_input() -> None:
     configuration = batch_alpha_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
-    assert "&xnet_config" in configuration
+    assert "&xnet_controls" in configuration
     assert re.search(r"(?m)^\s*nzone\s*=\s*16\s*,?\s*$", configuration)
     assert re.search(r"(?m)^\s*nzbatchmx\s*=\s*4\s*,?\s*$", configuration)
 

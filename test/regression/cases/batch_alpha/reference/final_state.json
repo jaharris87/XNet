@@ -176,7 +176,7 @@
     "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
   },
   "input_sha256": {
-    "test/regression/cases/batch_alpha/controls.nml": "ab82e54e843a0b4ae469333fe58374b2c7cd76f6a8e5e804ce0071fc1aa0ec4f",
+    "test/regression/cases/batch_alpha/controls.nml": "a1d4b898876b3006a642df1c6b53792fe5b66a6485c1fe50732633072be14e3c",
     "test/Data_alpha/sunet": "cee68d91608fbe3212b177c13c0a89cf003f158044a35e78b009b4db12efb4b1",
     "test/Data_alpha/netsu": "d8db4febcd495b29075039deabd84217d962cf11b868aac68f9e43ac7e716131",
     "test/Data_alpha/netweak": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

@@ -23,8 +23,9 @@ Module xnet_controls
   Integer, Parameter :: controls_path_length = 1024 ! Bounded storage for controls-file paths
 
   Type :: xnet_controls_t
-    ! Component initializers are deterministic invalid sentinels.  Use set_xnet_controls_defaults
-    ! before changing fields in a value intended for validation or execution.
+    ! Component initializers leave a bare value deterministic and invalid as a whole.  Controls
+    ! whose historical domains include zero retain that meaningful value; callers must use
+    ! set_xnet_controls_defaults before changing fields for validation or execution.
     ! Problem Description
     Character(80) :: description(3) = ' '
 
@@ -380,8 +381,8 @@ Contains
       Return
     EndIf
 
-    ! XNet array-valued controls use explicit positive indices.  Only the largest index is needed to
-    ! size local namelist storage; XNet does not attempt to parse general list-directed syntax.
+    ! Dynamically sized XNet controls use explicit positive indices.  Only the largest index is
+    ! needed to size local namelist storage; XNet does not parse general array-list syntax.
     largest_inab_index = 0
     largest_thermo_index = 0
     largest_output_index = 0
@@ -400,7 +401,7 @@ Contains
       If ( ierr == 0 ) Call inspect_array_control(line,'output_nuclei',largest_output_index,ierr)
       If ( ierr == 0 ) Call inspect_array_control(line,'include_files',largest_include_index,ierr)
       If ( ierr /= 0 ) Then
-        message = 'Array-valued controls require explicit positive indices in '// &
+        message = 'Dynamically sized controls require explicit positive indices in '// &
           & Trim(normalized_filename)
         Close(lun)
         Return
@@ -680,9 +681,7 @@ Contains
       If ( Len_Trim(controls%inab_files(izone)) /= 0 ) last_input_index = izone
     EndDo
 
-    If ( last_input_index == 1 .and. controls%nzone > 1 .and. &
-      & Index(controls%thermo_files(1),'.h5') == 0 .and. &
-      & Index(controls%thermo_files(1),'.hdf') == 0 ) Then
+    If ( last_input_index == 1 .and. controls%nzone > 1 ) Then
       inab_file_base = controls%inab_files(1)
       thermo_file_base = controls%thermo_files(1)
       Do izone = 1, controls%nzone
@@ -824,7 +823,7 @@ Contains
 
   Integer Function last_nonblank_index(strings)
     !-----------------------------------------------------------------------------------------------
-    ! This function returns the final nonblank element of a namelist character array.
+    ! This function returns the index of the final nonblank element of a character array.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -848,7 +847,7 @@ Contains
   Subroutine apply_xnet_controls(controls,data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine transfers one validated input value to the established XNet module execution state.
-    ! Keeping this boundary local avoids a global-state refactor in the configuration migration.
+    ! Existing network routines continue to use the module variables populated here.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 

@@ -218,7 +218,7 @@ def test_namelist_requires_explicit_array_indices(
     (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     assert result.returncode != 0
-    assert "Array-valued controls require explicit positive indices" in (
+    assert "Dynamically sized controls require explicit positive indices" in (
         result.stdout + result.stderr
     )
 

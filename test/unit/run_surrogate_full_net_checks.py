@@ -106,7 +106,7 @@ def write_abundance_file(
     path.write_text(title + "\n" + "\n".join(lines) + "\n", encoding="ascii")
 
 
-def runtime_config_text(
+def runtime_controls_text(
     *,
     title: str,
     data_name: str,
@@ -196,7 +196,7 @@ def prepare_case(
         )
     (work_directory / helm_table.name).symlink_to(helm_table.resolve())
     (work_directory / "controls.nml").write_text(
-        runtime_config_text(
+        runtime_controls_text(
             title=f"token={run_token} {title}",
             data_name=source_data.name,
             abundance_name=abundance_name,

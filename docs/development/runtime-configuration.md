@@ -9,13 +9,14 @@ used by both the standalone reader and programmatic callers. A caller starts
 with `set_xnet_controls_defaults`, changes the needed fields, and calls
 `validate_xnet_controls`. The standalone reader additionally calls
 `validate_standalone_controls`, which requires the nuclear-data directory and
-the abundance and thermodynamic-history inputs needed by the executable.
+the abundance and ASCII thermodynamic-history inputs needed by the executable.
 
 The compiled defaults are ordinary Fortran assignments in
 `source/controls.defaults`. `set_xnet_controls_defaults` includes that file, so
 those assignments are the single executable source of default values. Component
-initializers in `xnet_controls_t` are deterministic invalid sentinels: a bare
-object fails validation until the defaults are applied. `data_dir` and
+initializers in `xnet_controls_t` leave a bare object deterministic and invalid
+as a whole, although flags for which zero has historical meaning retain that
+meaningful value. A bare object fails validation until the defaults are applied. `data_dir` and
 input-file pairs remain blank after default initialization because each
 standalone problem must supply them.
 
@@ -28,12 +29,15 @@ The supported namelist names match the fields: `description`, `szone`,
 `include_files` key names ordered configuration layers; it is not an execution
 control.
 
-Array-valued controls use explicit positive scalar indices, one assignment at
-a time: `output_nuclei(1)`, `inab_files(1)`, `thermo_files(1)`, and
-`include_files(1)`. XNet sizes namelist staging arrays from the largest explicit
-index and the values already assembled by earlier layers. Unindexed array-list
-syntax, including repetition syntax, is rejected rather than partially parsed
-by XNet.
+Dynamically sized array controls `output_nuclei`, `inab_files`, `thermo_files`,
+and `include_files` use explicit positive scalar indices, one assignment at a
+time. XNet sizes their namelist staging arrays from the largest explicit index
+and the values already assembled by earlier layers. This deliberate restriction
+avoids implementing a second general Fortran namelist parser. Unindexed
+array-list syntax, including repetition syntax, is rejected.
+
+The maintained [`tnsn_alpha` controls input](../../test/regression/cases/tnsn_alpha/controls.nml)
+is a fully annotated example of the supported standalone input format.
 
 An input can name up to 16 direct `include_files` entries. XNet reads the
 including file, then reads listed includes in their listed order; a later

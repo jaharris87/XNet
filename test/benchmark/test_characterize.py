@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 
@@ -29,6 +30,18 @@ def require_line(text: str, prefix: str, description: str) -> None:
 
 
 def main() -> None:
+    registry = json.loads(
+        Path(__file__).with_name("cases.json").read_text(encoding="utf-8")
+    )
+    controlled = registry["workload_specifications"]["controlled-scaling"]
+    history = controlled["thermodynamic_history"]
+    if controlled["status"] != "approved-early-plateau-workload":
+        raise RuntimeError("controlled workload does not record maintainer approval")
+    if history["end_time_seconds"] != 10.0:
+        raise RuntimeError("controlled workload duration is not the approved 10 seconds")
+    if "not an equilibrium claim" not in history["end_time_policy"]:
+        raise RuntimeError("controlled workload misstates the early plateau as equilibrium")
+
     bdf = control_text("Data_test", SPECIES, True, "bdf", 1.0e-6, 1.0e-10)
     require_line(bdf, "0", "Include Weak Reactions")
     require_line(bdf, "1", "Include Screening")

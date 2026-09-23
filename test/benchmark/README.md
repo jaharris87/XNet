@@ -108,12 +108,14 @@ own right; byte-for-byte regeneration with `build_net` is not required.
 
 The primary controlled state has `T9=1.7`, `rho=1.0e8 g cm^-3`, `Ye=0.5`,
 `X(C12)=0.5`, and `X(O16)=0.5`, with all other species initially zero. It uses
-fixed thermodynamics and self-heating off. `characterize.py` first measures the
-approach of every ladder network to its own asymptotic composition with weak
-reactions off. The maintainer-approved smallest common time from that study
-will then be used as the identical physical duration for performance runs with
-normal weak reactions back on. The weak-on performance endpoints need not
-equal the weak-off calibration equilibria.
+fixed thermodynamics and self-heating off. Weak-off BDF characterization found
+an apparent common early plateau around 1--10 seconds, followed by substantial
+later composition evolution whose cause is not yet established. The maintainer
+selected 10 seconds, the end of that apparent plateau, as the bounded workload
+duration. This is a benchmark-workload definition, not a claim that any network
+has reached equilibrium. Performance runs use the same 10-second physical
+duration with normal weak reactions restored; their endpoints need not match
+the weak-off characterization.
 
 Endpoint characterization uses the maintained BDF controls rather than merely
 changing the BE selector: `isolv=3`, ten nonlinear iterations, convergence
@@ -123,12 +125,14 @@ records both tolerances and supports deliberate tolerance-sensitivity runs.
 Screening is an explicit `--screening on|off` choice; weak reactions and
 self-heating remain off for this calibration regardless.
 
-No common endpoint is encoded merely because a characterization command
-finishes. The report gives successive-composition norms, distance from the
-latest successful sample, solver counters, and sensitivity to candidate
+`cases.json` encodes the approved 10-second early-plateau duration explicitly.
+`characterize.py` does not infer or authorize that choice merely because a
+command finishes. Its report gives successive-composition norms, distance from
+the latest successful sample, solver counters, and sensitivity to candidate
 composition criteria and BDF tolerances. A failed late-time integration is
 retained as a numerical limit, not reclassified as equilibrium. Issue #127
-records the resulting evidence and the maintainer's endpoint decision.
+records the evidence and maintainer decision; issue #138 tracks the unresolved
+late evolution separately for scientific diagnosis.
 
 Characterization owns a fresh serial-dense build from the requested clean
 source revision; it does not accept a caller-supplied executable. Its report

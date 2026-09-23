@@ -2,7 +2,7 @@
   "schema": "xnet-benchmark-cases-v1",
   "workload_specifications": {
     "controlled-scaling": {
-      "status": "endpoint-characterization-required",
+      "status": "approved-early-plateau-workload",
       "purpose": "isolate algorithmic performance trends across network sizes; not representative of a coupled CCSN, ECSN, or NSM timestep or trajectory",
       "network_bundle": {
         "source_revision": "a958556833eaddcf956e8e17c27219818035fae1",
@@ -10,8 +10,8 @@
       },
       "thermodynamic_history": {
         "start_time_seconds": 0.0,
-        "end_time_seconds": null,
-        "end_time_policy": "maintainer-approved smallest common weak-off equilibrium time from characterize.py",
+        "end_time_seconds": 10.0,
+        "end_time_policy": "maintainer-selected end of the apparent common early plateau in weak-off BDF characterization; this defines a bounded benchmark workload and is not an equilibrium claim",
         "temperature_gk": [1.7, 1.7],
         "density_g_cm3": [100000000.0, 100000000.0],
         "electron_fraction": 0.5,
@@ -131,7 +131,7 @@
         "id": "controlled-scaling-alpha",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
       },
       "input_identity": {"network_root": "test/Data_alpha", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
@@ -143,7 +143,7 @@
         "id": "controlled-scaling-ccsn52",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
       },
       "input_identity": {"network_root": "test/Data_CCSN52", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
@@ -155,7 +155,7 @@
         "id": "controlled-scaling-sn160",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
       },
       "input_identity": {"network_root": "test/Data_SN160", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
@@ -167,7 +167,7 @@
         "id": "controlled-scaling-ccsn179",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
       },
       "input_identity": {"network_root": "test/Data_CCSN179", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
@@ -179,7 +179,7 @@
         "id": "controlled-scaling-ecsn350",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
       },
       "input_identity": {"network_root": "test/Data_ECSN350", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },

@@ -410,16 +410,15 @@ Contains
       EndIf
 
       If ( last > first ) Then
-        If ( input_path(first:last-1) == '.' ) Then
-          Continue
-        ElseIf ( input_path(first:last-1) == '..' ) Then
+        ! A . component does not change the accumulated path.
+        If ( input_path(first:last-1) == '..' ) Then
           If ( nparts > 0 .and. Trim(part(nparts)) /= '..' ) Then
             nparts = nparts - 1
           ElseIf ( .not. absolute ) Then
             nparts = nparts + 1
             part(nparts) = '..'
           EndIf
-        Else
+        ElseIf ( input_path(first:last-1) /= '.' ) Then
           nparts = nparts + 1
           part(nparts) = input_path(first:last-1)
         EndIf

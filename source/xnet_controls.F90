@@ -153,8 +153,8 @@ Module xnet_controls
   Character(Len=1) :: sweep            ! Current hydrodynamic sweep: x, y, or z
   !$omp threadprivate(tid,sweep)
 
-  ! These execution controls are read by accelerator kernels and remain resident after input is
-  ! applied.  Configuration parsing must not remove their established device declarations.
+  ! Accelerator kernels read these execution controls, which remain device-resident after
+  ! apply_xnet_controls updates their host values.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
 
 Contains
@@ -997,7 +997,7 @@ Contains
 
   Subroutine read_controls(data_dir)
     !-----------------------------------------------------------------------------------------------
-    ! This routine reads, validates, applies, and records the standalone XNet controls.
+    ! This routine reads, validates, and applies the standalone XNet controls.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: xnet_terminate
     Implicit None

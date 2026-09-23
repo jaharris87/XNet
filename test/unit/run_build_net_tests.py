@@ -630,7 +630,7 @@ def write_smoke_inputs(directory: Path, helm_table: Path) -> None:
         f"  output_nuclei({index}) = '{name}',"
         for index, name in enumerate(EXPECTED_SPECIES, start=1)
     )
-    runtime_config = f"""&xnet_controls
+    runtime_controls = f"""&xnet_controls
   ! Problem Description
   description(1) = 'build_net interoperability smoke',
   description(2) = 'one zone and one short interval',
@@ -676,7 +676,7 @@ def write_smoke_inputs(directory: Path, helm_table: Path) -> None:
   thermo_files(1) = 'thermo',
 /
 """
-    (directory / "controls.nml").write_text(runtime_config, encoding="ascii")
+    (directory / "controls.nml").write_text(runtime_controls, encoding="ascii")
     (directory / "helm_table.dat").symlink_to(helm_table)
 
 

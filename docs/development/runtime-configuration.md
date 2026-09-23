@@ -55,8 +55,8 @@ Controls-file paths have a 1024-character storage bound. This bounds stack and
 namelist storage for filenames; it is not a zone, species, or scientific limit.
 
 Validation and legacy single-pair filename expansion occur only after every
-layer has been read. Rank zero reads and validates the files, then broadcasts
-the resolved value. `write_controls` emits a complete, flattened, re-readable
+layer has been read. The XNet I/O rank reads and validates the files, then
+broadcasts the resolved value. `write_controls` emits a complete, flattened, re-readable
 `&xnet_controls` block to the ordinary diagnostic stream. The block records
 effective post-application values (including the BDF change-limit transformation)
 and can be extracted as a new `controls.nml`. No separate resolved file is made.

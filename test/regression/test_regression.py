@@ -188,7 +188,7 @@ def test_resolved_namelist_escapes_and_round_trips_character_values(
         ("t9nse = -1.0,", "t9nse must be nonnegative"),
     ),
 )
-def test_namelist_rejects_controls_used_as_divisors(
+def test_namelist_rejects_invalid_numeric_controls(
     xnet_executable: Path,
     xnet_timeout: float,
     tmp_path: Path,
@@ -404,15 +404,18 @@ def test_namelist_has_no_zone_staging_limit(
     work_directory = _prepared_configuration_work_directory(tmp_path, "many-zones")
     (work_directory / "controls.nml").write_text(
         _minimal_standalone_configuration().replace(
-            " iprocess = 1,", " nzone = 4097,\n iprocess = 0,"
+            " iprocess = 1,",
+            " nzone = 4097,\n"
+            " iprocess = 0,\n"
+            " inab_files(4097) = 'Data_alpha/ab_co',\n"
+            " thermo_files(4097) = 'th_sn1aflame',",
         ),
         encoding="utf-8",
     )
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     output = result.stdout + result.stderr
     assert result.returncode != 0
-    assert "nzone must" not in output
-    assert "Malformed or unknown xnet_controls" not in output
+    assert "one inab_files and thermo_files entry is required per zone" in output
 
 
 def test_namelist_has_no_output_species_staging_limit(

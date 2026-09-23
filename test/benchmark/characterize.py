@@ -15,15 +15,18 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from typing import Any
 
 from benchmark import (
     BenchmarkError,
+    inventory,
     load_regression,
     require_clean_repository,
     sha256,
+    write_json,
 )
 
 
@@ -54,7 +57,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--source-repository", type=Path, required=True)
     parser.add_argument("--source-revision", required=True)
-    parser.add_argument("--executable", type=Path, required=True)
+    parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
@@ -126,6 +129,57 @@ def read_build_config(path: Path) -> dict[str, str]:
             name, value = line.split("=", 1)
             settings[name.strip()] = value.strip()
     return settings
+
+
+def build_characterization_executable(
+    source_repository: Path,
+    build_directory: Path,
+    build_log: Path,
+) -> tuple[Path, Path, list[str], dict[str, str]]:
+    """Own a fresh serial-dense build and bind it to the clean source tree."""
+    if build_directory.exists():
+        raise BenchmarkError("characterization owns a fresh, nonexistent --build-dir")
+    command = [
+        "make",
+        "-C",
+        str(source_repository),
+        f"BUILD_DIR={build_directory}",
+        "MPI_MODE=OFF",
+        "OPENMP_MODE=OFF",
+        "GPU_MODE=OFF",
+        "OPENACC_MODE=OFF",
+        "OPENMP_OL_MODE=OFF",
+        "MATRIX_SOLVER=dense",
+        "xnet",
+    ]
+    with build_log.open("w", encoding="utf-8") as log:
+        completed = subprocess.run(
+            command,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+    if completed.returncode:
+        raise BenchmarkError(f"characterization build failed; see {build_log}")
+
+    executable = build_directory / "bin/xnet"
+    config = build_directory / "config.txt"
+    if not executable.is_file() or not config.is_file():
+        raise BenchmarkError("characterization build lacks executable or config.txt")
+    settings = read_build_config(config)
+    expected = {
+        "SOURCE_ROOT": str(source_repository),
+        "MPI_MODE": "OFF",
+        "OPENMP_MODE": "OFF",
+        "GPU_MODE": "OFF",
+        "OPENACC_MODE": "OFF",
+        "OPENMP_OL_MODE": "OFF",
+        "MATRIX_SOLVER": "dense",
+    }
+    if any(settings.get(name) != value for name, value in expected.items()):
+        raise BenchmarkError("characterization build config does not match request")
+    return executable, config, command, settings
 
 
 def require_bundle(repository: Path) -> tuple[str, list[dict[str, str]]]:
@@ -313,26 +367,51 @@ def run_one(
             check=False,
         )
     except subprocess.TimeoutExpired as error:
-        raise BenchmarkError(f"XNet timed out; artifacts: {run_directory}") from error
+        stdout = error.stdout.decode(errors="replace") if isinstance(error.stdout, bytes) else (error.stdout or "")
+        stderr = error.stderr.decode(errors="replace") if isinstance(error.stderr, bytes) else (error.stderr or "")
+        (run_directory / "xnet.stdout.txt").write_text(stdout, encoding="utf-8")
+        (run_directory / "xnet.stderr.txt").write_text(stderr, encoding="utf-8")
+        (run_directory / "xnet.status.txt").write_text("timeout\n", encoding="utf-8")
+        return {
+            "status": "timeout",
+            "diagnostic": f"XNet timed out after {timeout:g} seconds",
+        }
     (run_directory / "xnet.stdout.txt").write_text(completed.stdout, encoding="utf-8")
     (run_directory / "xnet.stderr.txt").write_text(completed.stderr, encoding="utf-8")
     (run_directory / "xnet.status.txt").write_text(
         f"return_code={completed.returncode}\n", encoding="utf-8"
     )
     if completed.returncode:
-        raise BenchmarkError(
-            f"XNet returned {completed.returncode}; artifacts: {run_directory}"
-        )
+        result: dict[str, Any] = {
+            "status": "nonzero-exit",
+            "return_code": completed.returncode,
+            "diagnostic": f"XNet returned {completed.returncode}",
+        }
+        diagnostic = run_directory / "net_diag01"
+        if diagnostic.is_file():
+            result["diagnostic_sha256"] = sha256(diagnostic)
+        return result
     diagnostic = run_directory / "net_diag01"
     if not diagnostic.is_file():
-        raise BenchmarkError(f"XNet produced no net_diag01; artifacts: {run_directory}")
-    state = regression.parse_diagnostic(
-        diagnostic.read_text(encoding="utf-8", errors="replace"),
-        (1,),
-        species,
-        ((1,),),
-    )[0]
+        return {
+            "status": "missing-diagnostic",
+            "diagnostic": "XNet returned zero but produced no net_diag01",
+        }
+    try:
+        state = regression.parse_diagnostic(
+            diagnostic.read_text(encoding="utf-8", errors="replace"),
+            (1,),
+            species,
+            ((1,),),
+        )[0]
+    except regression.RegressionFailure as error:
+        return {
+            "status": "invalid-diagnostic",
+            "diagnostic": f"{type(error).__name__}: {error}",
+            "diagnostic_sha256": sha256(diagnostic),
+        }
     return {
+        "status": "success",
         "step": state.step,
         "target_time_seconds": state.target_time,
         "time_seconds": state.time,
@@ -360,12 +439,29 @@ def norm_difference(
 
 
 def add_convergence_history(runs: list[dict[str, Any]]) -> dict[str, Any]:
-    latest = runs[-1]["mass_fractions"]
-    for index, run in enumerate(runs):
+    successful = [run for run in runs if run.get("status") == "success"]
+    failed = [
+        {
+            "requested_end_time_seconds": run["requested_end_time_seconds"],
+            "status": run.get("status"),
+            "diagnostic": run.get("diagnostic"),
+        }
+        for run in runs
+        if run.get("status") != "success"
+    ]
+    if not successful:
+        return {
+            "diagnostic_note": "No successful samples were available for convergence diagnostics.",
+            "failed_samples": failed,
+            "threshold_sensitivity": [],
+        }
+
+    latest = successful[-1]["mass_fractions"]
+    for index, run in enumerate(successful):
         current = run["mass_fractions"]
         if index:
             l1, linf, species = norm_difference(
-                current, runs[index - 1]["mass_fractions"]
+                current, successful[index - 1]["mass_fractions"]
             )
             run["change_from_previous"] = {
                 "l1_mass_fraction": l1,
@@ -382,9 +478,9 @@ def add_convergence_history(runs: list[dict[str, Any]]) -> dict[str, Any]:
     sensitivity = []
     for threshold in DIAGNOSTIC_THRESHOLDS:
         earliest = None
-        for index, run in enumerate(runs[1:], start=1):
-            later = runs[index:]
-            if all(
+        for index, run in enumerate(successful[1:], start=1):
+            later = successful[index:]
+            if not failed and all(
                 item["change_from_previous"]["linf_mass_fraction"] <= threshold
                 and item["distance_from_latest_sample"]["linf_mass_fraction"] <= threshold
                 for item in later
@@ -401,8 +497,10 @@ def add_convergence_history(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "diagnostic_note": (
             "Criteria are sensitivity diagnostics, not accepted scientific tolerances. "
             "They use printed final mass fractions and require every later sampled interval "
-            "to satisfy both successive-change and latest-sample L-infinity bounds."
+            "to satisfy both successive-change and latest-sample L-infinity bounds. "
+            "Any failed requested sample suppresses an endpoint recommendation."
         ),
+        "failed_samples": failed,
         "threshold_sensitivity": sensitivity,
     }
 
@@ -413,15 +511,6 @@ def main() -> int:
     source_repository = require_clean_repository(
         args.source_repository, args.source_revision
     )
-    executable = args.executable.resolve()
-    if not executable.is_file():
-        raise BenchmarkError(f"missing executable: {executable}")
-    build_config = executable.parent.parent / "config.txt"
-    if not build_config.is_file():
-        raise BenchmarkError("characterization executable lacks adjacent config.txt")
-    settings = read_build_config(build_config)
-    if settings.get("SOURCE_ROOT") != str(source_repository):
-        raise BenchmarkError("characterization executable config does not bind source repository")
     if args.artifacts.exists():
         raise BenchmarkError("--artifacts must name a nonexistent directory")
     if args.output.exists():
@@ -455,6 +544,15 @@ def main() -> int:
     )
     screening = args.screening == "on"
     args.artifacts.mkdir(parents=True)
+    executable, build_config, build_command, settings = (
+        build_characterization_executable(
+            source_repository,
+            args.build_dir.resolve(),
+            args.artifacts / "build.log",
+        )
+    )
+    retained_build_config = args.artifacts / "build-config.txt"
+    shutil.copy2(build_config, retained_build_config)
     helm_table = repository / "tools/starkiller-helmholtz/helm_table.dat"
     results = []
     for network in networks:
@@ -540,10 +638,17 @@ def main() -> int:
         "executable_sha256": sha256(executable),
         "source_revision": args.source_revision,
         "source_repository": str(source_repository),
-        "build_config_sha256": sha256(build_config),
+        "build_config_path": "build-config.txt",
+        "build_config_sha256": sha256(retained_build_config),
+        "build_log_path": "build.log",
+        "build_log_sha256": sha256(args.artifacts / "build.log"),
+        "build_argv": build_command,
         "build_settings": settings,
         "results": results,
     }
+    artifact_inventory = inventory(args.artifacts)
+    report["artifact_inventory"] = artifact_inventory
+    write_json(args.artifacts / "inventory.json", artifact_inventory)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"

@@ -88,7 +88,7 @@ benchmark launcher. A passing record requires a device-resident mapped solve,
 the observed rank-to-device mapping, and retained `nvidia-smi` or `rocm-smi`
 physical-device/runtime output. Visible-device environment variables alone are
 not evidence. `--ranks-per-gpu` is explicit and its observed host/device group
-counts must match for the one- and two-ranks-per-GPU slices;
+counts must match the requested bounded ranks-per-GPU slice;
 site launch options remain explicit argv rather than site-specific harness
 forks.
 
@@ -129,6 +129,14 @@ latest successful sample, solver counters, and sensitivity to candidate
 composition criteria and BDF tolerances. A failed late-time integration is
 retained as a numerical limit, not reclassified as equilibrium. Issue #127
 records the resulting evidence and the maintainer's endpoint decision.
+
+Characterization owns a fresh serial-dense build from the requested clean
+source revision; it does not accept a caller-supplied executable. Its report
+binds the build command, retained build log/configuration, executable hash,
+network manifest, generated inputs, raw results, and final artifact inventory.
+Timeouts, nonzero exits, and malformed diagnostics remain explicit failed
+samples while independent network/time points continue. Any failed requested
+sample suppresses an endpoint recommendation.
 
 Normal fixed-work comparisons use 1024 zones; the partial-final-batch point
 uses 1025. CPU OpenMP scaling uses `nzbatchmx=1`. GPU batch-size scaling uses

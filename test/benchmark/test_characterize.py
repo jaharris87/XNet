@@ -3,7 +3,17 @@
 
 from __future__ import annotations
 
-from characterize import abundance_text, control_text
+from pathlib import Path
+import tempfile
+
+from benchmark import BenchmarkError
+from characterize import (
+    abundance_text,
+    add_convergence_history,
+    build_characterization_executable,
+    control_text,
+    run_one,
+)
 
 
 SPECIES = ("n", "p", "d", "t", "he4", "c12", "o16", "ne20", "mg24")
@@ -45,6 +55,75 @@ def main() -> None:
         or "o16  3.1250000E-02" not in abundance
     ):
         raise RuntimeError("controlled C/O mass fractions were not converted to Y=X/A")
+
+    with tempfile.TemporaryDirectory(prefix="xnet-characterize-test-") as temporary:
+        root = Path(temporary)
+        substituted = root / "substituted-build"
+        (substituted / "bin").mkdir(parents=True)
+        (substituted / "bin/xnet").write_text("not XNet\n", encoding="utf-8")
+        (substituted / "config.txt").write_text(
+            "SOURCE_ROOT=/claimed/source\n", encoding="utf-8"
+        )
+        try:
+            build_characterization_executable(
+                root / "source", substituted, root / "build.log"
+            )
+        except BenchmarkError as error:
+            if "fresh, nonexistent --build-dir" not in str(error):
+                raise RuntimeError("unexpected substituted-build rejection") from error
+        else:
+            raise RuntimeError("false pass: substituted characterization executable")
+
+        nonzero = root / "nonzero"
+        nonzero.write_text(
+            "#!/bin/sh\necho partial-output\necho failed >&2\nexit 7\n",
+            encoding="utf-8",
+        )
+        nonzero.chmod(0o755)
+        nonzero_run = root / "nonzero-run"
+        nonzero_run.mkdir()
+        result = run_one(None, nonzero, nonzero_run, SPECIES, 1.0)
+        if result.get("status") != "nonzero-exit" or result.get("return_code") != 7:
+            raise RuntimeError("nonzero characterization result was not retained")
+        if not all(
+            (nonzero_run / name).is_file()
+            for name in ("xnet.stdout.txt", "xnet.stderr.txt", "xnet.status.txt")
+        ):
+            raise RuntimeError("nonzero characterization streams were not retained")
+
+        timeout = root / "timeout"
+        timeout.write_text("#!/bin/sh\nsleep 2\n", encoding="utf-8")
+        timeout.chmod(0o755)
+        timeout_run = root / "timeout-run"
+        timeout_run.mkdir()
+        result = run_one(None, timeout, timeout_run, SPECIES, 0.01)
+        if result.get("status") != "timeout":
+            raise RuntimeError("timeout characterization result was not retained")
+
+    convergence = add_convergence_history(
+        [
+            {
+                "status": "success",
+                "requested_end_time_seconds": 1.0,
+                "mass_fractions": {"c12": 0.5, "o16": 0.5},
+            },
+            {
+                "status": "nonzero-exit",
+                "requested_end_time_seconds": 10.0,
+                "diagnostic": "intentional failure",
+            },
+            {
+                "status": "success",
+                "requested_end_time_seconds": 100.0,
+                "mass_fractions": {"c12": 0.5, "o16": 0.5},
+            },
+        ]
+    )
+    if not convergence["failed_samples"] or any(
+        item["earliest_candidate_seconds"] is not None
+        for item in convergence["threshold_sensitivity"]
+    ):
+        raise RuntimeError("failed sample did not suppress endpoint recommendation")
     print("controlled-workload input probes: passed")
 
 

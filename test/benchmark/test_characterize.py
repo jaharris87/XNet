@@ -41,6 +41,10 @@ def main() -> None:
         raise RuntimeError("controlled workload duration is not the approved 10 seconds")
     if "not an equilibrium claim" not in history["end_time_policy"]:
         raise RuntimeError("controlled workload misstates the early plateau as equilibrium")
+    if history["endpoint_calibration_weak_reactions"] is not False:
+        raise RuntimeError("controlled endpoint characterization must keep weak rates off")
+    if history["performance_measurement_weak_reactions"] is not True:
+        raise RuntimeError("controlled performance measurements must restore weak rates")
 
     bdf = control_text("Data_test", SPECIES, True, "bdf", 1.0e-6, 1.0e-10)
     require_line(bdf, "0", "Include Weak Reactions")

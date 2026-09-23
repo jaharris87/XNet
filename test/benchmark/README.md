@@ -58,13 +58,13 @@ rehydrates the versioned benchmark-input manifest when it is locally available.
 
 `batch_alpha` and `heat_sn160` are representative application cases. They
 support statements about those real standalone workloads, not general scaling
-conclusions. A future controlled family will use a reviewed common
-thermodynamic state and composition projection across network sizes; it is the
-appropriate basis for scaling conclusions. The registry records the proposed
-fixed C/O state, projection rule, zone counts, and separate CPU/GPU batching
-dimensions explicitly; its status remains `proposed-awaiting-scientific-approval`.
-Candidate CCSN and ECSN cases remain unavailable until that approval, their
-network/input provenance, and accepted numerical references are complete.
+conclusions. The controlled-scaling family uses the reviewed common fixed C/O
+state, identity composition projection, and approved 10-second early-plateau
+duration across network sizes; it is the appropriate basis for bounded scaling
+conclusions, not an equilibrium claim. The registry records that workload,
+zone counts, and separate CPU/GPU batching dimensions explicitly. Controlled
+cases remain candidates until accepted numerical references and applicable
+execution-profile qualification are complete.
 
 MPI captures require `--launcher 'mpiexec -n N'`, `--ranks N`, and the actual
 thread count. The harness runs its own probe through that exact launcher and

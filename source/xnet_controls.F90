@@ -251,6 +251,9 @@ Contains
       message = 'data_dir is required for the standalone driver'
     ElseIf ( Size(controls%inab_files) == 0 .or. Size(controls%thermo_files) == 0 ) Then
       message = 'inab_files and thermo_files are required for the standalone driver'
+    ElseIf ( Max(last_nonblank_index(controls%inab_files), &
+      & last_nonblank_index(controls%thermo_files)) > controls%nzone ) Then
+      message = 'the number of input file pairs cannot exceed nzone'
     ElseIf ( is_hdf_thermo_file(controls%thermo_files(1)) ) Then
       ! HDF5 post-processing inputs contain many zones in each file.  Preserve the supplied list of
       ! file pairs; the driver using the HDF5 reader determines how those files map to its MPI ranks.

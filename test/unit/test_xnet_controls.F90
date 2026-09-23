@@ -90,6 +90,10 @@ Program test_xnet_controls
   If ( Index(message,'cannot exceed nzone') == 0 ) Then
     Error Stop 'HDF5 controls silently truncated an overlong file list'
   EndIf
+  Call validate_standalone_controls(controls,ierr,message)
+  If ( Index(message,'cannot exceed nzone') == 0 ) Then
+    Error Stop 'HDF5 controls validation accepted an overlong file list'
+  EndIf
 
   Write(*,'(a)') 'xnet_controls defaults and validation checks passed'
 End Program test_xnet_controls

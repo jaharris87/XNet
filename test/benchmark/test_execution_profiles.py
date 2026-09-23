@@ -40,6 +40,18 @@ def rank_observation(rank: int, cpu: int) -> dict[str, Any]:
     return {"rank": str(rank), "host": "node0", "affinity": [cpu]}
 
 
+def add_slurm_step(
+    observation: dict[str, Any], ranks: int, threads: int = 1
+) -> dict[str, Any]:
+    observation["slurm_step"] = {
+        "SLURM_STEP_ID": "7",
+        "SLURM_STEP_NUM_TASKS": str(ranks),
+        "SLURM_NTASKS": str(ranks),
+        "SLURM_CPUS_PER_TASK": str(threads),
+    }
+    return observation
+
+
 def xnet_topology(ranks: int, threads: int = 1) -> dict[str, Any]:
     thread_rows = []
     if threads > 1:
@@ -63,6 +75,7 @@ def mpi_runtime() -> dict[str, Any]:
         "launcher_probe": {
             "allocation": {
                 "kind": "scheduler",
+                "scope": "allocation",
                 "environment": scheduler,
                 "scheduler_probe": {
                     "fields": {
@@ -264,6 +277,27 @@ def main() -> None:
 
     mpi = mpi_runtime()
     validate(profiles["mpi-dense"], mpi, {})
+
+    # One allocation may legitimately host several sequential, smaller srun
+    # steps. Allocation evidence proves capacity; launcher, step, probe, and
+    # XNet evidence continue to prove the exact two-rank execution geometry.
+    oversized_allocation = deepcopy(mpi)
+    oversized_environment = oversized_allocation["launcher_probe"]["allocation"][
+        "environment"
+    ]
+    oversized_environment["SLURM_NTASKS"] = "8"
+    oversized_environment["SLURM_CPUS_PER_TASK"] = "4"
+    oversized_fields = oversized_allocation["launcher_probe"]["allocation"][
+        "scheduler_probe"
+    ]["fields"]
+    oversized_fields["NumTasks"] = "8"
+    oversized_fields["CPUs/Task"] = "4"
+    oversized_fields["AllocTRES"] = "cpu=32,gres/gpu=4"
+    oversized_allocation["launcher_probe"]["observations"] = [
+        add_slurm_step(rank_observation(0, 0), 2),
+        add_slurm_step(rank_observation(1, 1), 2),
+    ]
+    validate(profiles["mpi-dense"], oversized_allocation, {})
     mpi_mutations = (
         (
             "fabricated placement",
@@ -285,18 +319,42 @@ def main() -> None:
             lambda value: value["launcher_probe"]["allocation"]["environment"].update(
                 SLURM_NTASKS="1"
             ),
-            "Slurm task count",
+            "Slurm allocation lacks sufficient task capacity",
         ),
         (
             "wrong scheduler query ranks",
             lambda value: value["launcher_probe"]["allocation"][
                 "scheduler_probe"
             ]["fields"].update(NumTasks="1"),
-            "Slurm query task count",
+            "Slurm allocation query lacks sufficient task capacity",
         ),
     )
     for name, change, message in mpi_mutations:
         reject(name, profiles["mpi-dense"], mutated(mpi, change), {}, message)
+    reject(
+        "allocation and query task disagreement",
+        profiles["mpi-dense"],
+        mutated(
+            oversized_allocation,
+            lambda value: value["launcher_probe"]["allocation"][
+                "scheduler_probe"
+            ]["fields"].update(NumTasks="4"),
+        ),
+        {},
+        "task count disagrees with the allocation",
+    )
+    reject(
+        "wrong Slurm step ranks",
+        profiles["mpi-dense"],
+        mutated(
+            oversized_allocation,
+            lambda value: value["launcher_probe"]["observations"][1][
+                "slurm_step"
+            ].update(SLURM_STEP_NUM_TASKS="1"),
+        ),
+        {},
+        "step task count",
+    )
 
     threaded = openmp_runtime()
     validate(profiles["openmp-dense"], threaded, {"OMP_NUM_THREADS": "2"})
@@ -403,6 +461,7 @@ def main() -> None:
 
     shared_gpu = mpi_runtime()
     shared_gpu.update(
+        launcher_argv=["srun", "-n", "2", "-c", "4"],
         requested_ranks_per_gpu=2,
         gpu_backend="CUDA",
         accelerator_mode="openacc",
@@ -412,13 +471,23 @@ def main() -> None:
         },
     )
     scheduler = shared_gpu["launcher_probe"]["allocation"]["environment"]
-    scheduler["SLURM_GPUS_PER_NODE"] = "1"
+    scheduler.update(
+        SLURM_NTASKS="8",
+        SLURM_CPUS_PER_TASK="4",
+        SLURM_GPUS_PER_NODE="4",
+    )
     scheduler_fields = shared_gpu["launcher_probe"]["allocation"][
         "scheduler_probe"
     ]["fields"]
-    scheduler_fields["AllocTRES"] = "cpu=2,gres/gpu=1"
-    for observation in shared_gpu["launcher_probe"]["observations"]:
+    scheduler_fields.update(
+        NumTasks="8",
+        **{"CPUs/Task": "4", "AllocTRES": "cpu=32,gres/gpu=4"},
+    )
+    for rank, observation in enumerate(
+        shared_gpu["launcher_probe"]["observations"]
+    ):
         observation["cuda_visible"] = "GPU-a"
+        add_slurm_step(observation, 2, 4)
     validate(profiles["mpi-accelerator-dense"], shared_gpu, {})
     reject(
         "incorrect ranks-per-GPU placement",

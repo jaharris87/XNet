@@ -429,6 +429,8 @@ def validate_runtime_evidence(
     ):
         raise BenchmarkError("parallel profile lacks observed allocation context")
     if needs_placement and allocation["kind"] == "scheduler":
+        if allocation.get("scope") != "allocation":
+            raise BenchmarkError("Slurm scheduler evidence is not allocation-scoped")
         scheduler = allocation.get("environment")
         if not isinstance(scheduler, dict) or "SLURM_JOB_ID" not in scheduler:
             raise BenchmarkError("parallel profile lacks supported Slurm allocation evidence")
@@ -437,8 +439,8 @@ def validate_runtime_evidence(
             slurm_threads = int(scheduler["SLURM_CPUS_PER_TASK"])
         except (KeyError, TypeError, ValueError) as error:
             raise BenchmarkError("Slurm allocation lacks rank or thread counts") from error
-        if slurm_ranks != ranks:
-            raise BenchmarkError("Slurm task count does not match requested ranks")
+        if slurm_ranks < ranks:
+            raise BenchmarkError("Slurm allocation lacks sufficient task capacity")
         if slurm_threads < threads:
             raise BenchmarkError("Slurm CPUs per task do not cover requested threads")
         scheduler_probe = allocation.get("scheduler_probe")
@@ -456,10 +458,39 @@ def validate_runtime_evidence(
             queried_threads = int(fields["CPUs/Task"])
         except (KeyError, TypeError, ValueError) as error:
             raise BenchmarkError("Slurm query lacks rank or thread counts") from error
-        if queried_ranks != ranks or queried_ranks != slurm_ranks:
-            raise BenchmarkError("Slurm query task count does not match requested ranks")
+        if queried_ranks < ranks:
+            raise BenchmarkError("Slurm allocation query lacks sufficient task capacity")
+        if queried_ranks != slurm_ranks:
+            raise BenchmarkError("Slurm query task count disagrees with the allocation")
         if queried_threads < threads or queried_threads != slurm_threads:
             raise BenchmarkError("Slurm query CPUs per task disagree with the allocation")
+        step_rows = [item.get("slurm_step") for item in observations]
+        if any(step_rows):
+            if any(not isinstance(item, dict) or not item for item in step_rows):
+                raise BenchmarkError("launcher probe has incomplete Slurm step evidence")
+            step_ids = {
+                item.get("SLURM_STEP_ID")
+                for item in step_rows
+                if item.get("SLURM_STEP_ID") is not None
+            }
+            if len(step_ids) > 1:
+                raise BenchmarkError("launcher probe ranks disagree on Slurm step identity")
+            for item in step_rows:
+                step_rank_text = item.get(
+                    "SLURM_STEP_NUM_TASKS", item.get("SLURM_NTASKS")
+                )
+                try:
+                    step_ranks = int(step_rank_text)
+                except (TypeError, ValueError) as error:
+                    raise BenchmarkError("Slurm step lacks a valid task count") from error
+                if step_ranks != ranks:
+                    raise BenchmarkError("Slurm step task count does not match launcher ranks")
+                try:
+                    step_threads = int(item["SLURM_CPUS_PER_TASK"])
+                except (KeyError, TypeError, ValueError) as error:
+                    raise BenchmarkError("Slurm step lacks a valid CPUs-per-task count") from error
+                if step_threads < threads:
+                    raise BenchmarkError("Slurm step CPUs per task do not cover requested threads")
     if dimensions["mpi"] == "ON":
         observed_ranks = {item.get("rank") for item in observations if isinstance(item, dict)}
         if observed_ranks != {str(rank) for rank in range(ranks)}:

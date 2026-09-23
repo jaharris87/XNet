@@ -388,11 +388,16 @@ def observe_launcher(record: Path, launcher: list[str]) -> dict[str, object]:
     code = (
         "import json,os,socket; "
         "keys=('OMPI_COMM_WORLD_RANK','PMI_RANK','PMIX_RANK','SLURM_PROCID'); "
+        "step_keys=('SLURM_STEP_ID','SLURM_STEP_NUM_TASKS','SLURM_NTASKS',"
+        "'SLURM_CPUS_PER_TASK','SLURM_STEP_GPUS','SLURM_GPUS_ON_NODE',"
+        "'SLURM_LOCALID'); "
         "rank=next((os.environ[k] for k in keys if k in os.environ),None); "
+        "step={k:os.environ[k] for k in step_keys if k in os.environ}; "
         "aff=sorted(os.sched_getaffinity(0)) if hasattr(os,'sched_getaffinity') else None; "
         "print('XNET_EXECUTION_PROBE '+json.dumps({'rank':rank,'host':socket.gethostname(),"
         "'affinity':aff,'cuda_visible':os.environ.get('CUDA_VISIBLE_DEVICES'),"
-        "'rocr_visible':os.environ.get('ROCR_VISIBLE_DEVICES')},sort_keys=True))"
+        "'rocr_visible':os.environ.get('ROCR_VISIBLE_DEVICES'),'slurm_step':step},"
+        "sort_keys=True))"
     )
     argv = [*launcher, sys.executable, "-c", code]
     transcript = retain_command_output(record, "execution-probe", argv)
@@ -423,6 +428,7 @@ def observe_launcher(record: Path, launcher: list[str]) -> dict[str, object]:
         scheduler_probe["tool_sha256"] = sha256(Path(scontrol))
         allocation = {
             "kind": "scheduler",
+            "scope": "allocation",
             "environment": scheduler_environment,
             "scheduler_probe": {
                 "probe": scheduler_probe,

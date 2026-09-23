@@ -7,14 +7,12 @@
 
 Module xnet_controls
   !-------------------------------------------------------------------------------------------------
-  ! This module contains the flags and limits which control the behavior of the network.  Standalone
-  ! XNet reads these values from a namelist into xnet_controls_t, validates the complete layered
-  ! value, and then applies it to the established module execution state.  Programmatic callers can
-  ! construct and validate xnet_controls_t without using the standalone file input.
+  ! This module contains the controls used by XNet and routines to read and validate them.
   !-------------------------------------------------------------------------------------------------
   Use, Intrinsic :: iso_fortran_env, Only: lun_stderr=>error_unit, lun_stdin=>input_unit, &
     & lun_stdout=>output_unit
   Use xnet_types, Only: dp
+  Use xnet_util, Only: last_nonblank_index
   Implicit None
 
   Character(*), Parameter :: standalone_controls_file = 'controls.nml'
@@ -23,9 +21,7 @@ Module xnet_controls
   Integer, Parameter :: controls_path_length = 1024 ! Bounded storage for controls-file paths
 
   Type :: xnet_controls_t
-    ! Component initializers leave a bare value deterministic and invalid as a whole.  Controls
-    ! whose historical domains include zero retain that meaningful value; callers must use
-    ! set_xnet_controls_defaults before changing fields for validation or execution.
+    ! The initial values below are intentionally invalid.  Use set_xnet_controls_defaults before use.
     ! Problem Description
     Character(80) :: description(3) = ' '
 
@@ -153,15 +149,14 @@ Module xnet_controls
   Character(Len=1) :: sweep            ! Current hydrodynamic sweep: x, y, or z
   !$omp threadprivate(tid,sweep)
 
-  ! Accelerator kernels read these execution controls, which remain device-resident after
-  ! apply_standalone_controls updates their host values.
+  ! Accelerator kernels use these controls on the device.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
 
 Contains
 
   Subroutine set_xnet_controls_defaults(controls)
     !-----------------------------------------------------------------------------------------------
-    ! This routine constructs the compiled XNet controls without reading standalone input files.
+    ! Set the default XNet controls.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -177,8 +172,7 @@ Contains
 
   Subroutine validate_xnet_controls(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine validates controls shared by standalone and programmatic XNet callers.  It does
-    ! not require standalone nuclear-data, abundance, or thermodynamic-history filenames.
+    ! Check the XNet controls for valid values.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Implicit None
@@ -242,8 +236,7 @@ Contains
 
   Subroutine validate_standalone_controls(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine adds the file-input requirements of the standalone XNet driver to the validation
-    ! shared with programmatic callers.
+    ! Check the additional controls required by standalone XNet.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -269,8 +262,7 @@ Contains
       & last_nonblank_index(controls%thermo_files)) > controls%nzone ) Then
       message = 'the number of input file pairs cannot exceed nzone'
     ElseIf ( is_hdf_thermo_file(controls%thermo_files(1)) ) Then
-      ! HDF5 post-processing inputs contain many zones in each file.  Preserve the supplied list of
-      ! file pairs; the driver using the HDF5 reader determines how those files map to its MPI ranks.
+      ! HDF5 input files may contain several zones.
       input_count = Max(last_nonblank_index(controls%inab_files), &
         & last_nonblank_index(controls%thermo_files))
       If ( Any(Len_Trim(controls%inab_files(:input_count)) == 0) .or. &
@@ -294,10 +286,7 @@ Contains
 
   Subroutine read_xnet_controls(controls,filename,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine reads the complete layered namelist on the XNet I/O rank, normalizes and validates
-    ! the result, and broadcasts the same value to every rank.  Files named in include_files are
-    ! applied in listed order after their including file, so the last included value has highest
-    ! precedence.
+    ! Read, validate, and broadcast XNet controls.
     !-----------------------------------------------------------------------------------------------
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_util, Only: normalize_path
@@ -339,9 +328,7 @@ Contains
 
   Recursive Subroutine read_controls_file(controls,filename,depth,ancestor_paths,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine applies one xnet_controls namelist and then each of its includes in order.  A stack
-    ! of lexically normalized paths detects direct and indirect cycles without delimiter parsing.
-    ! Symbolic links are deliberately not resolved.
+    ! Read one controls file and then its included files in order.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: normalize_path, string_lc
     Implicit None
@@ -405,8 +392,7 @@ Contains
       Close(lun)
       Return
     EndIf
-    ! The total file size is a safe upper bound for one formatted record during the limited scan
-    ! for explicitly indexed array controls, so a long assignment cannot be truncated.
+    ! Use the file size to avoid truncating a long record during the array-index scan.
     Allocate(Character(Max(1,file_size)) :: line,stat=ierr)
     If ( ierr /= 0 ) Then
       message = 'Failed to allocate controls input buffer'
@@ -414,8 +400,7 @@ Contains
       Return
     EndIf
 
-    ! Dynamically sized XNet controls use explicit positive indices.  Only the largest index is
-    ! needed to size local namelist storage; XNet does not parse general array-list syntax.
+    ! Find the largest indices needed for the namelist arrays.
     largest_inab_index = 0
     largest_thermo_index = 0
     largest_output_index = 0
@@ -457,7 +442,7 @@ Contains
       Return
     EndIf
 
-    ! Begin with the value assembled by earlier layers.  Namelist input changes only named fields.
+    ! Begin with values read from earlier files.  Namelist input changes only named fields.
     include_files = ' '
     description = controls%description
     szone = controls%szone
@@ -513,7 +498,7 @@ Contains
       Return
     EndIf
 
-    ! Transfer the local namelist staging value to the single validated controls representation.
+    ! Copy the namelist values to the XNet controls.
     controls%description = description
     controls%szone = szone
     controls%nzone = nzone
@@ -556,7 +541,7 @@ Contains
     EndIf
     If ( output_count > 0 ) controls%output_nuclei = output_nuclei(:output_count)
 
-    ! Apply includes after this file.  Later entries therefore have higher precedence.
+    ! Later include files override values read earlier.
     Do i = 1, max_includes_per_file
       If ( Len_Trim(include_files(i)) == 0 ) Cycle
       Call resolve_include(normalized_filename,include_files(i),include_path,message)
@@ -571,9 +556,7 @@ Contains
 
   Subroutine inspect_array_control(line,name,largest_index,ierr)
     !-----------------------------------------------------------------------------------------------
-    ! This routine finds explicit positive indices for one array-valued control.  An occurrence
-    ! without an explicit scalar index is rejected because XNet does not implement a separate parser
-    ! for general Fortran namelist array-list syntax.
+    ! Find the largest explicit index used for an array control.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -600,9 +583,7 @@ Contains
       quote = ' '
       skip_character = .False.
 
-      ! Locate the next control name outside character values and comments.  This is only enough
-      ! lexical inspection to enforce the XNet explicit-index convention; the compiler remains
-      ! responsible for namelist parsing.
+      ! Find the next occurrence outside quoted strings and comments.
       Do line_position = search_from, line_length
         If ( skip_character ) Then
           skip_character = .False.
@@ -648,6 +629,7 @@ Contains
         first_nonblank = offset
         If ( line(offset:offset) /= ' ' ) Exit
       EndDo
+      ! Array controls must use explicit indices so the array can be allocated before the read.
       If ( first_nonblank > line_length ) Then
         ierr = 1
         Return
@@ -680,8 +662,7 @@ Contains
 
   Subroutine normalize_xnet_controls(controls,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine expands the historical one-file-pair input convention after all namelist layers
-    ! have been applied.  It does not change numerical controls.
+    ! Expand standalone input filenames as needed for the selected zones.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: name_ordered
     Implicit None
@@ -700,8 +681,7 @@ Contains
     message = ' '
     If ( controls%nzone < 1 ) Return
 
-    ! The established execution state stores at most one input-file pair per zone.  Reject an
-    ! overlong list before resizing so that a malformed namelist cannot be silently truncated.
+    ! Reject a file list longer than the number of zones before resizing it.
     last_inab_index = last_nonblank_index(controls%inab_files)
     last_thermo_index = last_nonblank_index(controls%thermo_files)
     If ( Max(last_inab_index,last_thermo_index) > controls%nzone ) Then
@@ -712,9 +692,7 @@ Contains
     Call resize_input_controls(controls,controls%nzone,message)
     If ( Len_Trim(message) /= 0 ) Return
 
-    ! One ASCII input-file pair may be expanded over all zones with name_ordered.  HDF5
-    ! post-processing inputs hold many zones per file and retain the supplied list of file pairs.
-    ! Otherwise XNet requires a complete pair for every zone.
+    ! Check that each entry contains a complete file pair.
     last_input_index = 0
     Do izone = 1, controls%nzone
       If ( Len_Trim(controls%inab_files(izone)) == 0 .neqv. &
@@ -726,10 +704,11 @@ Contains
     EndDo
 
     hdf_input = is_hdf_thermo_file(controls%thermo_files(1))
-    ! The HDF5 reader and its driver own the file-to-zone mapping.
+    ! HDF5 files may contain several zones, so do not append zone numbers.
     If ( hdf_input ) Return
 
     If ( last_input_index == 1 .and. controls%nzone > 1 ) Then
+      ! Expand a single ASCII input-file pair to one pair per zone.
       inab_file_base = controls%inab_files(1)
       thermo_file_base = controls%thermo_files(1)
       Do izone = 1, controls%nzone
@@ -747,7 +726,7 @@ Contains
 
   Logical Function is_hdf_thermo_file(filename)
     !-----------------------------------------------------------------------------------------------
-    ! This function identifies the HDF5 thermodynamic inputs used by XNet post-processing drivers.
+    ! Check whether a thermodynamic input filename has an HDF5 extension.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: string_lc
     Implicit None
@@ -778,7 +757,7 @@ Contains
 
   Subroutine resolve_include(parent,child,path,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine resolves a controls include relative to the directory of its including file.
+    ! Resolve an included controls filename relative to its parent file.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: normalize_path
     Implicit None
@@ -816,7 +795,7 @@ Contains
 
   Subroutine resize_input_controls(controls,new_size,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine resizes the standalone filename arrays while preserving assembled layered values.
+    ! Resize the abundance and thermodynamic filename arrays.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -862,7 +841,7 @@ Contains
 
   Subroutine resize_output_controls(controls,new_size,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine resizes the condensed-output species array while preserving layered values.
+    ! Resize the output-nuclei array.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -900,33 +879,9 @@ Contains
     Return
   End Subroutine resize_output_controls
 
-  Integer Function last_nonblank_index(strings)
-    !-----------------------------------------------------------------------------------------------
-    ! This function returns the index of the final nonblank element of a character array.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
-
-    ! Input variables
-    Character(*), Intent(in) :: strings(:)
-
-    ! Local variables
-    Integer :: i
-
-    last_nonblank_index = 0
-    Do i = Size(strings), 1, -1
-      If ( Len_Trim(strings(i)) /= 0 ) Then
-        last_nonblank_index = i
-        Exit
-      EndIf
-    EndDo
-
-    Return
-  End Function last_nonblank_index
-
   Subroutine apply_standalone_controls(controls,data_dir)
     !-----------------------------------------------------------------------------------------------
-    ! This routine validates standalone requirements and transfers the controls to the established
-    ! XNet module execution state.  Existing network routines use the module variables populated here.
+    ! Copy the standalone controls to the module variables used by XNet.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -996,8 +951,7 @@ Contains
     zb_hi = zb_offset+nzbatchmx
     !$omp end parallel
 
-    ! Update scalar controls and create per-zone arrays on the selected device after the validated
-    ! controls have been applied.  These directives preserve the pre-namelist accelerator behavior.
+    ! Keep the device copies synchronized after the controls are applied.
     !XDIR XUPDATE XASYNC(tid) &
     !XDIR XDEVICE(iheat,iscrn,iconvc,ymin)
 
@@ -1009,7 +963,7 @@ Contains
 
   Subroutine read_controls(data_dir)
     !-----------------------------------------------------------------------------------------------
-    ! This routine reads, validates, and applies the standalone XNet controls.
+    ! Read and apply the standalone XNet controls.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -1031,8 +985,7 @@ Contains
 
   Character(160) Function escape_namelist_string(value)
     !-----------------------------------------------------------------------------------------------
-    ! This function doubles apostrophes so a character value remains valid inside a single-quoted
-    ! Fortran namelist value.  XNet character controls are at most 80 characters long.
+    ! Escape apostrophes in a namelist character value.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -1059,9 +1012,7 @@ Contains
 
   Subroutine write_controls(lun_out,data_dir)
     !-----------------------------------------------------------------------------------------------
-    ! This routine writes the effective XNet execution controls as a complete, re-readable namelist.
-    ! Values changed while controls are applied, including the unused BDF change limits, are recorded
-    ! as their effective values so re-reading this block reproduces the active execution state.
+    ! Write the current XNet controls as a namelist.
     !-----------------------------------------------------------------------------------------------
     Use xnet_parallel, Only: parallel_IOProcessor
     Implicit None
@@ -1126,8 +1077,7 @@ Contains
 
   Subroutine broadcast_xnet_controls(controls)
     !-----------------------------------------------------------------------------------------------
-    ! This routine broadcasts one assembled XNet-control value.  Array extents are sent first so
-    ! ranks other than the I/O rank can allocate the exact storage required by the input.
+    ! Broadcast the XNet controls to all MPI ranks.
     !-----------------------------------------------------------------------------------------------
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Implicit None

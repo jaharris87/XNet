@@ -369,10 +369,32 @@ Contains
     Return
   End Subroutine name_ordered
 
+  Integer Function last_nonblank_index(strings)
+    !-----------------------------------------------------------------------------------------------
+    ! Return the index of the last nonblank string.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: strings(:)
+
+    ! Local variables
+    Integer :: i
+
+    last_nonblank_index = 0
+    Do i = Size(strings), 1, -1
+      If ( Len_Trim(strings(i)) /= 0 ) Then
+        last_nonblank_index = i
+        Exit
+      EndIf
+    EndDo
+
+    Return
+  End Function last_nonblank_index
+
   Subroutine normalize_path(input_path,path,message)
     !-----------------------------------------------------------------------------------------------
-    ! This routine lexically removes repeated separators and . or .. components from a path.  It
-    ! deliberately does not resolve symbolic links or query the filesystem for a canonical path.
+    ! Simplify a path by removing repeated separators and . or .. components.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 

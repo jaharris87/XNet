@@ -35,6 +35,7 @@ time. XNet sizes their namelist staging arrays from the largest explicit index
 and the values already assembled by earlier layers. This deliberate restriction
 avoids implementing a second general Fortran namelist parser. Unindexed
 array-list syntax, including repetition syntax, is rejected.
+Every `output_nuclei` entry from 1 through `nnucout` must be nonblank.
 
 The maintained [`tnsn_alpha` controls input](../../test/regression/cases/tnsn_alpha/controls.nml)
 is a fully annotated example of the supported standalone input format.

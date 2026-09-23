@@ -419,19 +419,40 @@ def test_namelist_has_no_output_species_staging_limit(
     xnet_executable: Path, xnet_timeout: float, tmp_path: Path
 ) -> None:
     work_directory = _prepared_configuration_work_directory(tmp_path, "many-output-species")
+    output_nuclei = "\n".join(
+        f" output_nuclei({index}) = 'he4'," for index in range(1, 257)
+    )
+    output_nuclei += "\n OUTPUT_NUCLEI(257) = 'he4',"
     configuration = _minimal_standalone_configuration().replace(
         " iprocess = 1,",
         " iprocess = 0,\n"
         " nnucout = 257,\n"
-        " output_nuclei(1) = 'he4',\n"
-        " OUTPUT_NUCLEI(257) = 'he4',",
+        f"{output_nuclei}",
     )
     (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
     output = result.stdout + result.stderr
     assert result.returncode != 0
+    assert "Failed to open nets4 file" in output
+    assert "one output_nuclei entry is required" not in output
     assert "nnucout exceeds" not in output
     assert "Malformed or unknown xnet_controls" not in output
+
+
+def test_namelist_rejects_blank_requested_output_species(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    work_directory = _prepared_configuration_work_directory(tmp_path, "blank-output-species")
+    configuration = _minimal_standalone_configuration().replace(
+        " iprocess = 1,",
+        " iprocess = 0,\n"
+        " nnucout = 3,\n"
+        " output_nuclei(3) = 'he4',",
+    )
+    (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    assert result.returncode != 0
+    assert "one output_nuclei entry is required" in result.stdout + result.stderr
 
 
 def test_tnsn_alpha(

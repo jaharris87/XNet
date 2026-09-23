@@ -201,6 +201,9 @@ Contains
       message = 'nnucout must be nonnegative'
     ElseIf ( controls%nnucout > Size(controls%output_nuclei) ) Then
       message = 'nnucout exceeds the number of supplied output_nuclei'
+    ElseIf ( controls%nnucout > 0 .and. &
+      & Any(Len_Trim(controls%output_nuclei(:controls%nnucout)) == 0) ) Then
+      message = 'one output_nuclei entry is required for each requested output species'
     ElseIf ( controls%szone < 1 .or. controls%szone > controls%nzone ) Then
       message = 'szone must select an existing zone'
     ElseIf ( controls%isolv /= 1 .and. controls%isolv /= 3 ) Then

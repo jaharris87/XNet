@@ -44,6 +44,18 @@ Program test_xnet_controls
   If ( ierr == 0 ) Error Stop 'invalid t9nse sentinel passed validation'
   Call set_xnet_controls_defaults(controls)
 
+  ! Every requested condensed-output species must have a nonblank name.
+  controls%nnucout = 3
+  Deallocate(controls%output_nuclei)
+  Allocate(controls%output_nuclei(3))
+  controls%output_nuclei = ' '
+  controls%output_nuclei(3) = 'he4'
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'output_nuclei') == 0 ) Then
+    Error Stop 'generic controls validation accepted blank output_nuclei entries'
+  EndIf
+  Call set_xnet_controls_defaults(controls)
+
   ! Standalone execution additionally requires problem-specific files and nuclear data.
   Call validate_standalone_controls(controls,ierr,message)
   If ( ierr == 0 ) Error Stop 'standalone controls unexpectedly accepted blank problem inputs'

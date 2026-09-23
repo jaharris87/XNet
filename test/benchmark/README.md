@@ -12,8 +12,8 @@ campaign is pinned to source revision
 `cases.json` is the sole registry. It keeps case ID, scientific network and
 workload identity, and execution profile separate. The bounded profiles are
 `serial-dense`, `openmp-dense`, `mpi-dense`, `accelerator-dense`,
-`mpi-accelerator-dense`, and opt-in `serial-ma48`; workload dimensions never
-become profile or case identities.
+`mpi-accelerator-dense`, and opt-in `serial-ma48` and `openmp-ma48`; workload
+dimensions never become profile or case identities.
 
 ```sh
 python3 test/benchmark/capture.py --list-cases
@@ -92,6 +92,54 @@ counts must match for the one- and two-ranks-per-GPU slices;
 site launch options remain explicit argv rather than site-specific harness
 forks.
 
-`serial-ma48` is available only with `--ma48-dir` naming a licensed external
-`MA48.f`. Its hash and the resulting build/executable identities are retained,
-but neither the licensed source nor its contents are copied into the record.
+The MA48 profiles are available only with `--ma48-dir` naming a licensed
+external `MA48.f`. Its hash and the resulting build/executable identities are
+retained, but neither the licensed source nor its contents are copied into the
+record.
+
+## Controlled workload definitions
+
+The authoritative network payloads for controlled scaling are the committed
+`test/Data_alpha`, `test/Data_CCSN52`, `test/Data_SN160`,
+`test/Data_CCSN179`, and `test/Data_ECSN350` trees from upstream revision
+`a958556833eaddcf956e8e17c27219818035fae1`. Their exact files and hashes are
+recorded in `network-bundle-a9585568.json`. They are benchmark inputs in their
+own right; byte-for-byte regeneration with `build_net` is not required.
+
+The primary controlled state has `T9=1.7`, `rho=1.0e8 g cm^-3`, `Ye=0.5`,
+`X(C12)=0.5`, and `X(O16)=0.5`, with all other species initially zero. It uses
+fixed thermodynamics and self-heating off. `characterize.py` first measures the
+approach of every ladder network to its own asymptotic composition with weak
+reactions off. The maintainer-approved smallest common time from that study
+will then be used as the identical physical duration for performance runs with
+normal weak reactions back on. The weak-on performance endpoints need not
+equal the weak-off calibration equilibria.
+
+Endpoint characterization uses the maintained BDF controls rather than merely
+changing the BE selector: `isolv=3`, ten nonlinear iterations, convergence
+selector 3, and `ymin=1e-99`. XNet then disables the BE step-change caps and
+uses `yacc` and `tolc` as BDF absolute and relative error tolerances. The tool
+records both tolerances and supports deliberate tolerance-sensitivity runs.
+Screening is an explicit `--screening on|off` choice; weak reactions and
+self-heating remain off for this calibration regardless.
+
+No common endpoint is encoded merely because a characterization command
+finishes. The report gives successive-composition norms, distance from the
+latest successful sample, solver counters, and sensitivity to candidate
+composition criteria and BDF tolerances. A failed late-time integration is
+retained as a numerical limit, not reclassified as equilibrium. Issue #127
+records the resulting evidence and the maintainer's endpoint decision.
+
+Normal fixed-work comparisons use 1024 zones; the partial-final-batch point
+uses 1025. CPU OpenMP scaling uses `nzbatchmx=1`. GPU batch-size scaling uses
+`1,4,16,64,128`. Rank-sharing work is defined per GPU: one GPU receives 1024
+zones, so batch 128 supplies eight independent batches for a bounded maximum
+of eight ranks sharing that GPU. Multi-GPU runs scale total zones to preserve
+1024 zones per GPU.
+
+Primary cross-network scaling keeps self-heating off. A separate sensitivity
+slice compares self-heating off/on on SN160, CCSN179, and ECSN350 without
+interpreting the result as pure network-size scaling. The secondary O/Ne/Mg
+state (`X(O16)=0.6`, `X(Ne20)=0.3`, `X(Mg24)=0.1`) is first characterized at
+`T9=2.0,2.2,2.5` on SN160 and CCSN179. It remains a bounded regime check, not a
+duplicate of the full matrix.

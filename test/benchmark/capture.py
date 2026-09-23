@@ -45,8 +45,11 @@ HARNESS_FILES = (
     "capture.py",
     "validate.py",
     "test_benchmark.py",
+    "test_characterize.py",
     "test_execution_profiles.py",
+    "characterize.py",
     "cases.json",
+    "network-bundle-a9585568.json",
     "gpu_execution_probe.F90",
     "openmp_execution_probe.F90",
     "gpu_probe.mk",
@@ -216,7 +219,7 @@ def build_xnet(
     if profile.get("external_source"):
         ma48_dir = profile.get("_ma48_dir")
         if not isinstance(ma48_dir, Path) or not (ma48_dir / "MA48.f").is_file():
-            raise BenchmarkError("serial-ma48 requires --ma48-dir containing licensed MA48.f")
+            raise BenchmarkError("MA48 profiles require --ma48-dir containing licensed MA48.f")
         command.append(f"MA48_DIR={ma48_dir}")
     command.append("xnet")
     if profile.get("accelerator"):

@@ -1,0 +1,29 @@
+{
+  "schema": "xnet-benchmark-network-bundle-v1",
+  "source_repository": "https://github.com/starkiller-astro/XNet",
+  "source_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+  "purpose": "authoritative public network payloads for controlled benchmark inputs",
+  "files": [
+    {"path": "test/Data_alpha/netsu", "sha256": "d8db4febcd495b29075039deabd84217d962cf11b868aac68f9e43ac7e716131"},
+    {"path": "test/Data_alpha/netweak", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    {"path": "test/Data_alpha/netwinv", "sha256": "679b59567a95076ba771e38b0bff999ca94c21f8b1784025748197774c93cf95"},
+    {"path": "test/Data_alpha/sunet", "sha256": "cee68d91608fbe3212b177c13c0a89cf003f158044a35e78b009b4db12efb4b1"},
+    {"path": "test/Data_CCSN52/netsu", "sha256": "72e688a24b156bb22d5acd96f896ce6bf5fcb39ce1ebbc4697fff61d68d3a503"},
+    {"path": "test/Data_CCSN52/netweak", "sha256": "ae23bc5ab5bd9fe0d31b79986665040fddf8f5d0c0af0a47e791a9c65569ed50"},
+    {"path": "test/Data_CCSN52/netwinv", "sha256": "d292f7ec1f3de0c4c79df82ce9d0c835e518a4fb1deaec87a2d424cfb3a36d87"},
+    {"path": "test/Data_CCSN52/sunet", "sha256": "0d1b53ba4a59187b2c99115aef1afc765f19a88fe82db58dca3f1d4573a2c59a"},
+    {"path": "test/Data_SN160/netsu", "sha256": "9dca0e4ae011f9ef3de4090f512ad9b6b31e70454e897e60506cdb75a9867b48"},
+    {"path": "test/Data_SN160/netweak", "sha256": "a374458b8b9439ab6c00d71292b89216d08a98c09dd0104f4046e93f28a4ae0f"},
+    {"path": "test/Data_SN160/netwinv", "sha256": "af69be084dc05bfd27643696ff6213fd08c085afefb6ce4032a5d04e5fe4a2b2"},
+    {"path": "test/Data_SN160/sunet", "sha256": "d20da4d9fae2b4093e67d258530c5506cc44b50775b09b797893a1c41effdaac"},
+    {"path": "test/Data_CCSN179/netsu", "sha256": "9d465fd7be1dcc9e604db3f55e764f6813c665536ae23555663e3e2d1c634dfc"},
+    {"path": "test/Data_CCSN179/netweak", "sha256": "63ec85452b34e22817c51fbc497e240f70dad633678018692cfbaeaaba289ab0"},
+    {"path": "test/Data_CCSN179/netwinv", "sha256": "03adb3b8a3ef1db0f4b16fd8b91bbbec06974dcf4570038002dc0e1c230f586d"},
+    {"path": "test/Data_CCSN179/sunet", "sha256": "abb849246a82c32a84440310ab250390e88d172b88478fb8c924fb3b9440482d"},
+    {"path": "test/Data_ECSN350/netsu", "sha256": "cf77c9b7b0f295db428639194a15b60e031015c3326620b9ad1d8fc07d511ed8"},
+    {"path": "test/Data_ECSN350/netweak", "sha256": "edbca4ae436711bccc1b1bc23ed95b4f83fa15073197c6e9ef3a5824dc824f68"},
+    {"path": "test/Data_ECSN350/netwinv", "sha256": "edb111707242e95cb19d96293590e3b340e50e457a02987aec2847e2fb3139af"},
+    {"path": "test/Data_ECSN350/sunet", "sha256": "75a783ac7f99f06e3e1f827832aaba2984dde10c1a32d33737aa3926631c7163"}
+  ],
+  "regeneration_policy": "These committed files are authoritative benchmark inputs. build_net byte identity is not required."
+}

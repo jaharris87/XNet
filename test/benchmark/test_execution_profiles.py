@@ -337,6 +337,26 @@ def main() -> None:
         "affinity cannot cover",
     )
 
+    # OpenMP+MA48 uses the same observed thread/placement evidence as the
+    # dense OpenMP path, but its registry identity and build selectors must
+    # remain unambiguously MA48 and require the licensed external source.
+    openmp_ma48 = profiles["openmp-ma48"]
+    validate(openmp_ma48, threaded, {"OMP_NUM_THREADS": "2"})
+    if (
+        openmp_ma48["dimensions"]["solver"] != "MA48"
+        or openmp_ma48["build_selectors"]["MATRIX_SOLVER"] != "MA48"
+        or openmp_ma48.get("external_source") != "MA48.f"
+        or openmp_ma48 == profiles["openmp-dense"]
+    ):
+        raise RuntimeError("openmp-ma48 is not distinct from openmp-dense")
+    reject(
+        "wrong OpenMP+MA48 thread count",
+        openmp_ma48,
+        threaded,
+        {"OMP_NUM_THREADS": "1"},
+        "thread evidence",
+    )
+
     accelerator = accelerator_runtime()
     missing_offload = deepcopy(accelerator)
     missing_offload.pop("offload_probe")

@@ -2,14 +2,27 @@
   "schema": "xnet-benchmark-cases-v1",
   "workload_specifications": {
     "controlled-scaling": {
-      "status": "proposed-awaiting-scientific-approval",
-      "purpose": "isolate algorithmic performance trends across network sizes; not representative CCSN or ECSN physics",
+      "status": "endpoint-characterization-required",
+      "purpose": "isolate algorithmic performance trends across network sizes; not representative of a coupled CCSN, ECSN, or NSM timestep or trajectory",
+      "network_bundle": {
+        "source_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+        "paths": ["test/Data_alpha", "test/Data_CCSN52", "test/Data_SN160", "test/Data_CCSN179", "test/Data_ECSN350"]
+      },
       "thermodynamic_history": {
-        "time_seconds": [0.0, 0.1],
+        "start_time_seconds": 0.0,
+        "end_time_seconds": null,
+        "end_time_policy": "maintainer-approved smallest common weak-off equilibrium time from characterize.py",
         "temperature_gk": [1.7, 1.7],
         "density_g_cm3": [100000000.0, 100000000.0],
         "electron_fraction": 0.5,
-        "self_heating": false
+        "self_heating": false,
+        "endpoint_calibration_weak_reactions": false,
+        "endpoint_calibration_integrator": "bdf",
+        "endpoint_calibration_numerical_sensitivity": {
+          "maintained_controls": {"relative_tolerance": 0.0001, "absolute_abundance_tolerance": 1e-7},
+          "tight_controls": {"relative_tolerance": 1e-6, "absolute_abundance_tolerance": 1e-10}
+        },
+        "performance_measurement_weak_reactions": true
       },
       "composition": {
         "basis": "mass-fraction",
@@ -21,10 +34,38 @@
         "sum_z_times_y": 0.5
       },
       "matrix_dimensions": {
-        "fixed_total_zones": 256,
-        "partial_final_batch_zones": 257,
+        "fixed_total_zones": 1024,
+        "partial_final_batch_zones": 1025,
         "cpu_thread_scaling_nzbatchmx": 1,
-        "gpu_batch_sizes": [1, 4, 16, 64]
+        "gpu_batch_sizes": [1, 4, 16, 64, 128],
+        "maximum_ranks_per_gpu": 8,
+        "ranks_per_gpu_work_policy": "1024 zones per GPU; scale total zones with GPU count"
+      }
+    },
+    "controlled-one-mg": {
+      "status": "temperature-characterization-required",
+      "purpose": "bounded secondary reaction-regime check; not a second full performance matrix",
+      "network_bundle": {
+        "source_revision": "a958556833eaddcf956e8e17c27219818035fae1"
+      },
+      "thermodynamic_history": {
+        "start_time_seconds": 0.0,
+        "end_time_seconds": null,
+        "temperature_candidates_gk": [2.0, 2.2, 2.5],
+        "density_g_cm3": [100000000.0, 100000000.0],
+        "electron_fraction": 0.5,
+        "self_heating": false,
+        "endpoint_calibration_weak_reactions": false,
+        "endpoint_calibration_integrator": "bdf"
+      },
+      "composition": {
+        "basis": "mass-fraction",
+        "values": {"o16": 0.6, "ne20": 0.3, "mg24": 0.1},
+        "projection": "identity for O16, Ne20, and Mg24; every other network species is zero",
+        "excluded_mass_fraction": 0.0,
+        "renormalization": "none",
+        "sum_a_times_y": 1.0,
+        "sum_z_times_y": 0.5
       }
     }
   },
@@ -72,63 +113,75 @@
       "dimensions": {"mpi": "OFF", "openmp": "OFF", "gpu": "OFF", "solver": "MA48"},
       "build_selectors": {"MPI_MODE": "OFF", "OPENMP_MODE": "OFF", "GPU_MODE": "OFF", "OPENACC_MODE": "OFF", "OPENMP_OL_MODE": "OFF", "MATRIX_SOLVER": "MA48"},
       "external_source": "MA48.f"
+    },
+    "openmp-ma48": {
+      "launcher": "optional",
+      "placement_policy": "distinct-thread-places",
+      "dimensions": {"mpi": "OFF", "openmp": "ON", "gpu": "OFF", "solver": "MA48"},
+      "build_selectors": {"MPI_MODE": "OFF", "OPENMP_MODE": "ON", "GPU_MODE": "OFF", "OPENACC_MODE": "OFF", "OPENMP_OL_MODE": "OFF", "MATRIX_SOLVER": "MA48"},
+      "external_source": "MA48.f"
     }
   },
   "cases": [
     {
       "case_id": "alpha_controlled_scaling",
       "status": "candidate",
-      "network": {"id": "alpha-small", "species_count": 14},
+      "network": {"id": "alpha-small", "species_count": 14, "path": "test/Data_alpha"},
       "workload": {
         "id": "controlled-scaling-alpha",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Proposed common fixed C/O state; awaiting scientific approval and an accepted reference."
-      }
+        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+      },
+      "input_identity": {"network_root": "test/Data_alpha", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
     {
       "case_id": "ccsn52_controlled_scaling",
       "status": "candidate",
-      "network": {"id": "CCSN52", "species_count": 52},
+      "network": {"id": "CCSN52", "species_count": 52, "path": "test/Data_CCSN52"},
       "workload": {
         "id": "controlled-scaling-ccsn52",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Proposed common fixed C/O state; awaiting scientific approval, an authorized exact species list, generated inputs, and an accepted reference."
-      }
+        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+      },
+      "input_identity": {"network_root": "test/Data_CCSN52", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
     {
       "case_id": "sn160_controlled_scaling",
       "status": "candidate",
-      "network": {"id": "SN160", "species_count": 160},
+      "network": {"id": "SN160", "species_count": 160, "path": "test/Data_SN160"},
       "workload": {
         "id": "controlled-scaling-sn160",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Proposed common fixed C/O state; awaiting scientific approval, regenerated controlled inputs, and an accepted reference."
-      }
+        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+      },
+      "input_identity": {"network_root": "test/Data_SN160", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
     {
       "case_id": "ccsn179_controlled_scaling",
       "status": "candidate",
-      "network": {"id": "CCSN179", "species_count": 179},
+      "network": {"id": "CCSN179", "species_count": 179, "path": "test/Data_CCSN179"},
       "workload": {
         "id": "controlled-scaling-ccsn179",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Proposed common fixed C/O state; awaiting scientific approval, generated controlled inputs, and an accepted reference."
-      }
+        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+      },
+      "input_identity": {"network_root": "test/Data_CCSN179", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
     {
       "case_id": "ecsn350_controlled_scaling",
       "status": "candidate",
-      "network": {"id": "ECSN350", "species_count": 350},
+      "network": {"id": "ECSN350", "species_count": 350, "path": "test/Data_ECSN350"},
       "workload": {
         "id": "controlled-scaling-ecsn350",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Proposed common fixed C/O state; awaiting scientific approval, a redistributable exact species list or new descriptive network rule, generated inputs, and an accepted reference."
-      }
+        "description": "Approved fixed C/O state using authoritative public network data; awaiting weak-off endpoint approval and an accepted reference."
+      },
+      "input_identity": {"network_root": "test/Data_ECSN350", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
     },
     {
       "case_id": "batch_alpha",
@@ -198,7 +251,7 @@
       "workload": {
         "id": "ccsn52-representative",
         "family": "representative-application",
-        "description": "CCSN52 needs a reviewed workload plus licence and provenance binding."
+        "description": "The public network is authoritative; a reviewed representative standalone workload and reference are still required."
       }
     },
     {
@@ -218,7 +271,7 @@
       "workload": {
         "id": "ecsn350-representative",
         "family": "representative-application",
-        "description": "ECSN350 needs a reviewed workload plus licence and provenance binding."
+        "description": "The public network is authoritative; a reviewed representative standalone workload and reference are still required."
       }
     }
   ]

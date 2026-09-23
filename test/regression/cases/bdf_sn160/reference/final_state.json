@@ -22,7 +22,7 @@
     "LAPACK_VER": "NETLIB"
   },
   "inputs": {
-    "control": "test/regression/cases/bdf_sn160/control",
+    "control": "test/regression/cases/bdf_sn160/controls.nml",
     "network_data": "test/Data_SN160",
     "network_source_inputs": [
       "sunet",
@@ -60,7 +60,7 @@
     }
   },
   "input_sha256": {
-    "test/regression/cases/bdf_sn160/control": "e0976b89e4a968d9c2408dc46262e049ac25b0294fb450845c77adfb707e7b6f",
+    "test/regression/cases/bdf_sn160/controls.nml": "56c1a6e57f2922939ddc2bb0a77326325b8eef9641901405a4d529048e03820b",
     "test/Data_SN160/sunet": "d20da4d9fae2b4093e67d258530c5506cc44b50775b09b797893a1c41effdaac",
     "test/Data_SN160/netsu": "9dca0e4ae011f9ef3de4090f512ad9b6b31e70454e897e60506cdb75a9867b48",
     "test/Data_SN160/netweak": "a374458b8b9439ab6c00d71292b89216d08a98c09dd0104f4046e93f28a4ae0f",

@@ -52,7 +52,7 @@ these areas, especially through shared module state.
 
 1. initializes serial or MPI execution, determines the OpenMP thread count,
    initializes GPU execution when selected, and starts setup timing;
-2. reads `control` through `xnet_controls`;
+2. reads and validates `controls.nml` through `xnet_controls`;
 3. preprocesses the requested network when needed, then reads nuclear,
    reaction, Jacobian, and match data;
 4. initializes screening, flux evaluation, the selected EOS and integrator,
@@ -63,6 +63,10 @@ these areas, especially through shared module state.
 7. finalizes accelerator and parallel resources.
 
 The exact order and conditional calls live in `source/net.F90`.
+`xnet_controls_t` is the validated configuration value shared with programmatic
+callers. The current executable uses `apply_standalone_controls` to enforce its
+file-input requirements and copy the value into the existing module execution
+state. A supported embedded application lifecycle remains separate work.
 
 ## Per-timestep flow
 
@@ -149,7 +153,7 @@ makes their interfaces compile-time requirements across implementations.
 
 The stand-alone runtime interface includes:
 
-- the ordered, block-oriented `control` file;
+- the layered `xnet_controls` namelist in `controls.nml`;
 - nuclear data and pre-built network files under `Data_*` directories;
 - thermodynamic histories and abundance inputs;
 - fixed-format diagnostic and timestep outputs.

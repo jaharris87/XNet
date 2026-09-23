@@ -23,6 +23,27 @@ Program test_xnet_controls
     Error Stop 'compiled XNet changemx default has an unexpected value'
   EndIf
 
+  controls%changemx = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid changemx sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%yacc = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid yacc sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%changemxt = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid changemxt sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%tolt9 = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid tolt9 sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%t9nse = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid t9nse sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+
   ! Standalone execution additionally requires problem-specific files and nuclear data.
   Call validate_standalone_controls(controls,ierr,message)
   If ( ierr == 0 ) Error Stop 'standalone controls unexpectedly accepted blank problem inputs'

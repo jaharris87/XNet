@@ -181,6 +181,11 @@ def test_resolved_namelist_escapes_and_round_trips_character_values(
     (
         ("ijac = 0,", "ijac must be positive"),
         ("tdel_maxmult = 0.0,", "tdel_maxmult must be positive"),
+        ("changemx = -1.0,", "changemx must be positive"),
+        ("yacc = -1.0,", "yacc nonnegative"),
+        ("changemxt = -1.0,", "self-heating change and convergence limits"),
+        ("tolt9 = -1.0,", "self-heating change and convergence limits"),
+        ("t9nse = -1.0,", "t9nse must be nonnegative"),
     ),
 )
 def test_namelist_rejects_controls_used_as_divisors(
@@ -208,7 +213,7 @@ def test_namelist_requires_explicit_array_indices(
 ) -> None:
     work_directory = _prepared_configuration_work_directory(tmp_path, f"unindexed-{name}")
     configuration = _minimal_standalone_configuration().replace(
-        "&xnet_controls", f"&xnet_controls\n {name} = 'unsupported',"
+        "&xnet_controls", f"&xnet_controls\n nzone = 1, {name} = 'unsupported',"
     )
     (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
     result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)

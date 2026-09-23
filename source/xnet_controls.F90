@@ -210,6 +210,12 @@ Contains
       message = 'batch, iteration, and step limits must be positive'
     ElseIf ( controls%tdel_maxmult <= 0.0_dp ) Then
       message = 'tdel_maxmult must be positive'
+    ElseIf ( controls%changemx <= 0.0_dp .or. controls%yacc < 0.0_dp ) Then
+      message = 'changemx must be positive and yacc nonnegative'
+    ElseIf ( controls%changemxt <= 0.0_dp .or. controls%tolt9 <= 0.0_dp ) Then
+      message = 'self-heating change and convergence limits must be positive'
+    ElseIf ( controls%t9nse < 0.0_dp ) Then
+      message = 't9nse must be nonnegative'
     ElseIf ( controls%tolc <= 0.0_dp .or. controls%tolm <= 0.0_dp .or. controls%ymin < 0.0_dp ) Then
       message = 'integration tolerances must be positive and ymin nonnegative'
     Else
@@ -547,33 +553,79 @@ Contains
     Integer, Intent(out) :: ierr
 
     ! Local variables
-    Integer :: close_parenthesis, name_position, offset, search_from, index_value
-    Integer :: first_nonblank, comment_position
+    Character :: quote
+    Integer :: close_parenthesis, name_end, name_position, offset, search_from, index_value
+    Integer :: first_nonblank, line_length, line_position
+    Logical :: skip_character
 
     ierr = 0
     search_from = 1
-    comment_position = Index(line,'!')
+    line_length = Len_Trim(line)
     Do
-      offset = Index(line(search_from:),Trim(name))
-      If ( offset == 0 ) Return
-      name_position = search_from+offset-1
-      If ( comment_position > 0 .and. name_position > comment_position ) Return
-      If ( name_position > 1 ) Then
-        If ( Len_Trim(line(:name_position-1)) /= 0 ) Then
-          search_from = name_position+Len_Trim(name)
+      name_position = 0
+      quote = ' '
+      skip_character = .False.
+
+      ! Locate the next control name outside character values and comments.  This is only enough
+      ! lexical inspection to enforce the XNet explicit-index convention; the compiler remains
+      ! responsible for namelist parsing.
+      Do line_position = search_from, line_length
+        If ( skip_character ) Then
+          skip_character = .False.
           Cycle
+        ElseIf ( quote /= ' ' ) Then
+          If ( line(line_position:line_position) == quote ) Then
+            If ( line_position < line_length ) Then
+              If ( line(line_position+1:line_position+1) == quote ) Then
+                skip_character = .True.
+              Else
+                quote = ' '
+              EndIf
+            Else
+              quote = ' '
+            EndIf
+          EndIf
+          Cycle
+        ElseIf ( line(line_position:line_position) == "'" .or. &
+          & line(line_position:line_position) == '"' ) Then
+          quote = line(line_position:line_position)
+          Cycle
+        ElseIf ( line(line_position:line_position) == '!' ) Then
+          Return
         EndIf
-      EndIf
-      first_nonblank = name_position+Len_Trim(name)
-      Do While ( first_nonblank <= Len_Trim(line) )
-        If ( line(first_nonblank:first_nonblank) /= ' ' ) Exit
-        first_nonblank = first_nonblank+1
+
+        name_end = line_position+Len_Trim(name)-1
+        If ( name_end > line_length ) Cycle
+        If ( line(line_position:name_end) /= Trim(name) ) Cycle
+        If ( line_position > 1 ) Then
+          If ( Index('abcdefghijklmnopqrstuvwxyz0123456789_', &
+            & line(line_position-1:line_position-1)) /= 0 ) Cycle
+        EndIf
+        If ( name_end < line_length ) Then
+          If ( Index('abcdefghijklmnopqrstuvwxyz0123456789_',line(name_end+1:name_end+1)) /= 0 ) Cycle
+        EndIf
+        name_position = line_position
+        Exit
       EndDo
-      If ( first_nonblank > Len_Trim(line) .or. line(first_nonblank:first_nonblank) /= '(' ) Then
+      If ( name_position == 0 ) Return
+
+      first_nonblank = name_position+Len_Trim(name)
+      Do offset = first_nonblank, line_length
+        first_nonblank = offset
+        If ( line(offset:offset) /= ' ' ) Exit
+      EndDo
+      If ( first_nonblank > line_length ) Then
+        ierr = 1
+        Return
+      ElseIf ( line(first_nonblank:first_nonblank) /= '(' ) Then
         ierr = 1
         Return
       EndIf
-      close_parenthesis = Index(line(first_nonblank+1:),')')
+      If ( first_nonblank == line_length ) Then
+        ierr = 1
+        Return
+      EndIf
+      close_parenthesis = Index(line(first_nonblank+1:line_length),')')
       If ( close_parenthesis == 0 ) Then
         ierr = 1
         Return
@@ -586,7 +638,7 @@ Contains
       EndIf
       largest_index = Max(largest_index,index_value)
       search_from = close_parenthesis+1
-      If ( search_from > Len_Trim(line) ) Return
+      If ( search_from > line_length ) Return
     EndDo
 
     Return

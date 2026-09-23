@@ -2,6 +2,8 @@ Program test_xnet_controls
   Use xnet_controls, Only: normalize_xnet_controls, set_xnet_controls_defaults, &
     & validate_standalone_controls, validate_xnet_controls, xnet_controls_t
   Use xnet_types, Only: dp
+  Use, Intrinsic :: ieee_arithmetic, Only: ieee_negative_inf, ieee_positive_inf, &
+    & ieee_quiet_nan, ieee_value
   Implicit None
 
   Type(xnet_controls_t) :: controls
@@ -42,6 +44,26 @@ Program test_xnet_controls
   controls%t9nse = -1.0_dp
   Call validate_xnet_controls(controls,ierr,message)
   If ( ierr == 0 ) Error Stop 'invalid t9nse sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+
+  ! Programmatic callers can construct IEEE values even when a namelist runtime rejects their text.
+  controls%changemx = ieee_value(0.0_dp,ieee_quiet_nan)
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'must be finite') == 0 ) Then
+    Error Stop 'generic controls validation accepted a quiet NaN'
+  EndIf
+  Call set_xnet_controls_defaults(controls)
+  controls%yacc = ieee_value(0.0_dp,ieee_positive_inf)
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'must be finite') == 0 ) Then
+    Error Stop 'generic controls validation accepted positive infinity'
+  EndIf
+  Call set_xnet_controls_defaults(controls)
+  controls%t9nse = ieee_value(0.0_dp,ieee_negative_inf)
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'must be finite') == 0 ) Then
+    Error Stop 'generic controls validation accepted negative infinity'
+  EndIf
   Call set_xnet_controls_defaults(controls)
 
   ! Every requested condensed-output species must have a nonblank name.

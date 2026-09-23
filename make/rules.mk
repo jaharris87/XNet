@@ -15,7 +15,9 @@ else
 	@$(XNET_CPP) $(CPP_EFFECTIVE_FLAGS) '$(1)' > '$$@.$$$$.tmp' && mv '$$@.$$$$.tmp' '$$@'
 endif
 $(2): $(3) | $(call parent_dir,$(2)) $(MOD_DIR)
-	$(COMPILE_FC) $(COMPILE_FFLAGS) $(COMPILE_F90FLAGS) $(MODULE_FLAGS) \
+	$(COMPILE_FC) $(COMPILE_FFLAGS) \
+	  $(if $(filter xnet_controls.F90,$(notdir $(1))),$(XNET_CONTROLS_FFLAGS)) \
+	  $(COMPILE_F90FLAGS) $(MODULE_FLAGS) \
 	  $(LAPACK_INC) $(SOLVER_INC) $(CPP_INCLUDE_FLAGS) $(GPU_MODULE_FLAGS) \
 	  -c '$$<' -o '$$@'
 endef

@@ -63,6 +63,10 @@ these areas, especially through shared module state.
 7. finalizes accelerator and parallel resources.
 
 The exact order and conditional calls live in `source/net.F90`.
+`xnet_controls_t` is the validated configuration value shared with programmatic
+callers. The current executable uses `apply_standalone_controls` to enforce its
+file-input requirements and copy the value into the existing module execution
+state. A supported embedded application lifecycle remains separate work.
 
 ## Per-timestep flow
 

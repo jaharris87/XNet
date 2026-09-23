@@ -16,9 +16,9 @@ The compiled defaults are ordinary Fortran assignments in
 those assignments are the single executable source of default values. Component
 initializers in `xnet_controls_t` leave a bare object deterministic and invalid
 as a whole, although flags for which zero has historical meaning retain that
-meaningful value. A bare object fails validation until the defaults are applied. `data_dir` and
-input-file pairs remain blank after default initialization because each
-standalone problem must supply them.
+meaningful value. A bare object fails validation until the defaults are applied.
+`data_dir` and input-file pairs remain blank after default initialization because
+each standalone problem must supply them.
 
 The supported namelist names match the fields: `description`, `szone`,
 `nzone`, `iweak0`, `iscrn`, `iprocess`, `nzbatchmx`, `isolv`, `kstmx`,
@@ -66,12 +66,16 @@ XNet post-processing drivers also use HDF5 inputs that contain many zones per
 file. Controls ending in `.h5`, `.hdf`, or `.hdf5` therefore retain their supplied,
 contiguous file-pair list rather than receiving per-zone filename suffixes. As in
 the established execution state, the list may contain at most `nzone` pairs. The
-HDF5 reader and its build integration will be maintained in a separate change.
+HDF5 reader, mode-selection policy, and build integration are tracked in issue
+[#139](https://github.com/jaharris87/XNet/issues/139).
 
-After validation, `apply_xnet_controls` transfers the value into the existing
-module variables used by XNet execution. That bounded migration seam preserves
-the current internal interfaces and accelerator data-management directives;
-this configuration change does not pass the new type throughout the network.
+`xnet_controls_t` is the shared configuration value for standalone and
+programmatic callers. `apply_standalone_controls` adds the standalone file-input
+requirements and transfers the value into the existing module variables used by
+the executable. That compatibility transfer preserves the current internal
+interfaces and accelerator data-management directives. A generic embedded apply
+operation is outside this change and belongs to the supported lifecycle work in
+issue [#129](https://github.com/jaharris87/XNet/issues/129).
 
 For migration, the historical blocks map directly: Job Controls map to
 `szone` through `iprocess`; Integration Controls map to `isolv` through

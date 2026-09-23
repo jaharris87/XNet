@@ -420,7 +420,7 @@ $(PREPROCESS_BUILD_DIR)/xnet_controls.o: $(XNET_DIR)/xnet_controls.F90 \
     $(XNET_DIR)/controls.defaults \
     $(PREPROCESS_BUILD_DIR)/xnet_constants.o $(PREPROCESS_BUILD_DIR)/xnet_util.o \
     | $(PREPROCESS_BUILD_DIR)
-	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+	$(FC) $(FFLAGS) $(XNET_CONTROLS_FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_BUILD_DIR)/test_xnet_controls.o: test_xnet_controls.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_controls.o | $(PREPROCESS_BUILD_DIR)

@@ -154,7 +154,7 @@ Module xnet_controls
   !$omp threadprivate(tid,sweep)
 
   ! Accelerator kernels read these execution controls, which remain device-resident after
-  ! apply_xnet_controls updates their host values.
+  ! apply_standalone_controls updates their host values.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
 
 Contains
@@ -180,6 +180,7 @@ Contains
     ! This routine validates controls shared by standalone and programmatic XNet callers.  It does
     ! not require standalone nuclear-data, abundance, or thermodynamic-history filenames.
     !-----------------------------------------------------------------------------------------------
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Implicit None
 
     ! Input variables
@@ -195,6 +196,16 @@ Contains
     If ( .not. Allocated(controls%inab_files) .or. .not. Allocated(controls%thermo_files) .or. &
       & .not. Allocated(controls%output_nuclei) ) Then
       message = 'XNet control arrays must be allocated'
+    ElseIf ( .not. ieee_is_finite(controls%changemx) .or. &
+      & .not. ieee_is_finite(controls%yacc) .or. &
+      & .not. ieee_is_finite(controls%tolm) .or. &
+      & .not. ieee_is_finite(controls%tolc) .or. &
+      & .not. ieee_is_finite(controls%ymin) .or. &
+      & .not. ieee_is_finite(controls%tdel_maxmult) .or. &
+      & .not. ieee_is_finite(controls%changemxt) .or. &
+      & .not. ieee_is_finite(controls%tolt9) .or. &
+      & .not. ieee_is_finite(controls%t9nse) ) Then
+      message = 'XNet real-valued controls must be finite'
     ElseIf ( controls%nzone < 1 ) Then
       message = 'nzone must be positive'
     ElseIf ( controls%nnucout < 0 ) Then
@@ -912,11 +923,12 @@ Contains
     Return
   End Function last_nonblank_index
 
-  Subroutine apply_xnet_controls(controls,data_dir)
+  Subroutine apply_standalone_controls(controls,data_dir)
     !-----------------------------------------------------------------------------------------------
-    ! This routine transfers one validated input value to the established XNet module execution state.
-    ! Existing network routines continue to use the module variables populated here.
+    ! This routine validates standalone requirements and transfers the controls to the established
+    ! XNet module execution state.  Existing network routines use the module variables populated here.
     !-----------------------------------------------------------------------------------------------
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -930,7 +942,7 @@ Contains
     Integer :: ierr
 
     Call validate_standalone_controls(controls,ierr,message)
-    If ( ierr /= 0 ) Error Stop Trim(message)
+    If ( ierr /= 0 ) Call xnet_terminate(Trim(message))
 
     descript = controls%description
     szone = controls%szone
@@ -993,7 +1005,7 @@ Contains
     !XDIR XCREATE(lzactive,iweak,kmon,ktot)
 
     Return
-  End Subroutine apply_xnet_controls
+  End Subroutine apply_standalone_controls
 
   Subroutine read_controls(data_dir)
     !-----------------------------------------------------------------------------------------------
@@ -1012,7 +1024,7 @@ Contains
 
     Call read_xnet_controls(controls,standalone_controls_file,ierr,message)
     If ( ierr /= 0 ) Call xnet_terminate(Trim(message))
-    Call apply_xnet_controls(controls,data_dir)
+    Call apply_standalone_controls(controls,data_dir)
 
     Return
   End Subroutine read_controls

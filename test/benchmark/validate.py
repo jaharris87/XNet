@@ -473,24 +473,47 @@ def validate_runtime_evidence(
                 for item in step_rows
                 if item.get("SLURM_STEP_ID") is not None
             }
-            if len(step_ids) > 1:
-                raise BenchmarkError("launcher probe ranks disagree on Slurm step identity")
-            for item in step_rows:
-                step_rank_text = item.get(
-                    "SLURM_STEP_NUM_TASKS", item.get("SLURM_NTASKS")
+            if len(step_ids) != 1:
+                raise BenchmarkError(
+                    "launcher probe lacks one consistent Slurm step identity"
                 )
+            for name in ("SLURM_STEP_NUM_TASKS", "SLURM_NTASKS"):
+                values = [item.get(name) for item in step_rows]
+                if any(value is not None for value in values) and any(
+                    value is None for value in values
+                ):
+                    raise BenchmarkError("launcher probe has incomplete Slurm step evidence")
+                for value in values:
+                    if value is None:
+                        continue
+                    try:
+                        step_ranks = int(value)
+                    except (TypeError, ValueError) as error:
+                        raise BenchmarkError("Slurm step has an invalid task count") from error
+                    if step_ranks != ranks:
+                        raise BenchmarkError(
+                            "Slurm step task count does not match launcher ranks"
+                        )
+            step_cpu_values = [
+                item.get("SLURM_CPUS_PER_TASK") for item in step_rows
+            ]
+            if any(value is not None for value in step_cpu_values) and any(
+                value is None for value in step_cpu_values
+            ):
+                raise BenchmarkError("launcher probe has incomplete Slurm step evidence")
+            for value in step_cpu_values:
+                if value is None:
+                    continue
                 try:
-                    step_ranks = int(step_rank_text)
+                    step_threads = int(value)
                 except (TypeError, ValueError) as error:
-                    raise BenchmarkError("Slurm step lacks a valid task count") from error
-                if step_ranks != ranks:
-                    raise BenchmarkError("Slurm step task count does not match launcher ranks")
-                try:
-                    step_threads = int(item["SLURM_CPUS_PER_TASK"])
-                except (KeyError, TypeError, ValueError) as error:
-                    raise BenchmarkError("Slurm step lacks a valid CPUs-per-task count") from error
+                    raise BenchmarkError(
+                        "Slurm step has an invalid CPUs-per-task count"
+                    ) from error
                 if step_threads < threads:
-                    raise BenchmarkError("Slurm step CPUs per task do not cover requested threads")
+                    raise BenchmarkError(
+                        "Slurm step CPUs per task do not cover requested threads"
+                    )
     if dimensions["mpi"] == "ON":
         observed_ranks = {item.get("rank") for item in observations if isinstance(item, dict)}
         if observed_ranks != {str(rank) for rank in range(ranks)}:

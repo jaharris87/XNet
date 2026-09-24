@@ -61,12 +61,19 @@ def copy_record(parent: Path, source: Path, name: str) -> Path:
 
 
 def replacement_case_id(case_id: str) -> str:
+    if case_id.endswith("_controlled_scaling"):
+        return (
+            "ccsn52_controlled_scaling"
+            if case_id == "alpha_controlled_scaling"
+            else "alpha_controlled_scaling"
+        )
     return "heat_sn160" if case_id == "batch_alpha" else "batch_alpha"
 
 
 def main(record: Path) -> None:
     root = Path(__file__).parent
     subprocess.run([sys.executable, str(root / "validate.py"), str(record)], check=True)
+    source_case_id = read_document(record)["case"]["case_id"]
 
     with tempfile.TemporaryDirectory(prefix="xnet-benchmark-tests-") as temporary:
         temporary_path = Path(temporary)
@@ -106,13 +113,27 @@ def main(record: Path) -> None:
             for case in registry["cases"]
             if case["case_id"] == replacement_case_id(document["case"]["case_id"])
         )
-        document["case"] = {
+        replacement_case = {
             key: replacement[key]
             for key in ("case_id", "network", "workload", "input_identity")
         }
-        document["expected"] = replacement["expected"]
+        replacement_case["workload_configuration"] = document["case"].get(
+            "workload_configuration"
+        )
+        document["case"] = replacement_case
+        if "expected" in replacement:
+            document["expected"] = replacement["expected"]
         write_document(full_relabel, document)
-        reject("full case relabel", full_relabel, root, "input manifest binding mismatch")
+        reject(
+            "full case relabel",
+            full_relabel,
+            root,
+            (
+                "case relabel or workload binding mismatch"
+                if source_case_id.endswith("_controlled_scaling")
+                else "input manifest binding mismatch"
+            ),
+        )
 
         short = copy_record(temporary_path, record, "short-repetitions")
         document = read_document(short)
@@ -128,6 +149,85 @@ def main(record: Path) -> None:
         )
         write_document(profile, document)
         reject("execution profile", profile, root, "execution profile does not match")
+
+        if document.get("record_status") == "qualification-only":
+            publishable = copy_record(
+                temporary_path,
+                record,
+                "candidate-marked-publishable",
+            )
+            candidate = read_document(publishable)
+            candidate["record_status"] = "publishable"
+            write_document(publishable, candidate)
+            reject(
+                "candidate marked publishable",
+                publishable,
+                root,
+                "candidate reference is not qualification-only",
+            )
+
+            workload = copy_record(
+                temporary_path,
+                record,
+                "changed-controlled-workload",
+            )
+            candidate = read_document(workload)
+            candidate["case"]["workload_configuration"]["weak_reactions"] = False
+            write_document(workload, candidate)
+            reject(
+                "changed controlled workload",
+                workload,
+                root,
+                "controlled workload configuration is inconsistent",
+            )
+
+            controlled_input = copy_record(
+                temporary_path,
+                record,
+                "changed-controlled-input",
+            )
+            control = controlled_input / "controlled-inputs" / "control"
+            control.write_text(
+                control.read_text(encoding="utf-8").replace(
+                    "1         Include Weak Reactions",
+                    "0         Include Weak Reactions",
+                ),
+                encoding="utf-8",
+            )
+            write_document(controlled_input, read_document(controlled_input))
+            reject(
+                "changed controlled input",
+                controlled_input,
+                root,
+                "retained controlled input mismatch",
+            )
+
+            changed_reference = copy_record(
+                temporary_path,
+                record,
+                "changed-controlled-reference",
+            )
+            candidate = read_document(changed_reference)
+            reference_entry = candidate["comparison"]["reference"]
+            reference = changed_reference / reference_entry["path"]
+            reference.write_text(
+                reference.read_text(encoding="utf-8").replace(
+                    '"atol": 1e-06',
+                    '"atol": 2e-06',
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            reference_entry["sha256"] = hashlib.sha256(
+                reference.read_bytes()
+            ).hexdigest()
+            write_document(changed_reference, candidate)
+            reject(
+                "changed controlled reference",
+                changed_reference,
+                root,
+                "captured controlled reference does not match harness",
+            )
 
         timer = copy_record(temporary_path, record, "timer-section")
         document = read_document(timer)

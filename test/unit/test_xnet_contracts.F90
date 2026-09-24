@@ -19,6 +19,7 @@ Contains
       & new_unittest('safe exponential', test_safe_exp), &
       & new_unittest('mass normalization', test_norm), &
       & new_unittest('mass and charge normalization', test_ye_norm), &
+      & new_unittest('positive logical unit allocation', test_get_new_unit), &
       & new_unittest('ordered output suffix', test_name_ordered), &
       & new_unittest('trajectory scalar boundaries', test_t9rhofind_scalar), &
       & new_unittest('trajectory vector mask', test_t9rhofind_vector), &
@@ -102,6 +103,36 @@ Contains
 
     Return
   End Subroutine test_ye_norm
+
+  Subroutine test_get_new_unit(error)
+    Use xnet_util, Only: getNewUnit
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Integer :: first_unit, ierr, second_unit
+
+    first_unit = getNewUnit()
+    Call check(error,first_unit > 0)
+    If ( allocated(error) ) Return
+    Call check(error,first_unit < 100 .or. first_unit > 102)
+    If ( allocated(error) ) Return
+
+    Open(unit=first_unit,status='scratch',action='readwrite',iostat=ierr)
+    Call check(error,ierr,0)
+    If ( allocated(error) ) Return
+
+    second_unit = getNewUnit()
+    Call check(error,second_unit > 0)
+    If ( allocated(error) ) Then
+      Close(first_unit)
+      Return
+    EndIf
+    Call check(error,second_unit /= first_unit)
+    Close(first_unit)
+
+    Return
+  End Subroutine test_get_new_unit
 
   Subroutine test_name_ordered(error)
     Use xnet_util, Only: name_ordered

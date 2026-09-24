@@ -1448,6 +1448,31 @@ def test_each_required_output_must_be_present_and_nonempty(
         )
 
 
+def test_implicit_fortran_output_is_rejected(tmp_path: Path) -> None:
+    executable = _make_executable(
+        tmp_path,
+        "\n".join(
+            (
+                "from pathlib import Path",
+                "Path('net_diag01').write_bytes(b'fresh')",
+                "Path('ev_fake_1').write_bytes(b'fresh')",
+                "Path('ts_fake_1').write_bytes(b'fresh')",
+                "Path('fort.-2').write_bytes(b'misdirected diagnostic')",
+            )
+        ),
+    )
+    work_directory = tmp_path / "work"
+    work_directory.mkdir()
+
+    with pytest.raises(ExecutionFailure, match="unexpected implicit Fortran output.*fort.-2"):
+        run_xnet(
+            executable,
+            _fake_case(tmp_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+
+
 def test_nonempty_work_directory_is_a_setup_failure(tmp_path: Path) -> None:
     work_directory = tmp_path / "work"
     work_directory.mkdir()

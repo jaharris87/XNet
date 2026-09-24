@@ -92,7 +92,7 @@ Contains
 
   Integer Function getNewUnit(unit)
     !-----------------------------------------------------------------------------------------------
-    ! Get a free unit number within range 7-999.
+    ! Get a free positive unit number within range 7-999. Units 100-102 are reserved by CCE.
     !-----------------------------------------------------------------------------------------------
     Implicit None
     Integer, Intent(out), Optional :: unit
@@ -100,6 +100,7 @@ Contains
     Integer :: number
     getNewUnit = 0
     Do number = 7,999
+      If ( number >= 100 .and. number <= 102 ) Cycle
       Inquire(unit=number, opened=connected)
       If ( .not. connected ) Then
         getNewUnit = number

@@ -301,23 +301,28 @@ def parse_openmp_probe(path: Path) -> list[dict[str, Any]]:
     observations = []
     for line in path.read_text(encoding="utf-8").splitlines():
         fields = line.split()
-        labels = fields[1::2] if len(fields) == 11 else []
+        labels = fields[1::2] if len(fields) == 13 else []
         if fields[:1] == ["XNET_BENCHMARK_OPENMP"] and labels != [
             "rank",
             "thread",
             "team",
             "place",
             "binding",
+            "cpus",
         ]:
             raise BenchmarkError("malformed OpenMP probe output")
-        if len(fields) == 11 and labels == [
+        if len(fields) == 13 and labels == [
             "rank",
             "thread",
             "team",
             "place",
             "binding",
+            "cpus",
         ]:
             try:
+                cpus = [int(cpu) for cpu in fields[12].split(",")]
+                if not cpus:
+                    raise ValueError
                 observations.append(
                     {
                         "rank": fields[2],
@@ -325,6 +330,7 @@ def parse_openmp_probe(path: Path) -> list[dict[str, Any]]:
                         "team": int(fields[6]),
                         "place": int(fields[8]),
                         "binding": int(fields[10]),
+                        "affinity": cpus,
                     }
                 )
             except ValueError as error:

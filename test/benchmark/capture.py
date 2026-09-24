@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
@@ -275,8 +276,7 @@ def capture_repetition(
     process_wall_seconds: float | None = None
     comparison_error: str | None = None
 
-    with tempfile.TemporaryDirectory(prefix="xnet-benchmark-") as temporary:
-        work = Path(temporary) / "work"
+    with shared_run_directory(record) as work:
         try:
             process_wall_seconds, _ = run_timed_and_compare(
                 regression,
@@ -376,6 +376,15 @@ def capture_repetition(
         "worker_metrics": worker_metrics,
         "artifacts": artifacts,
     }
+
+
+@contextmanager
+def shared_run_directory(record: Path) -> Any:
+    """Provide a transient run directory visible to launcher-created workers."""
+    with tempfile.TemporaryDirectory(
+        prefix=".xnet-benchmark-work-", dir=record
+    ) as temporary:
+        yield Path(temporary) / "work"
 
 
 RANK_ENVIRONMENT = (
@@ -575,11 +584,21 @@ def compiler_evidence(record: Path, settings: dict[str, str]) -> dict[str, objec
     compiler = shutil.which(candidate or "gfortran")
     if compiler is None:
         return {"path": None, "sha256": None, "version": "unavailable"}
-    version = retain_command_output(record, "compiler-version", [compiler, "--version"])
+    attempts = []
+    for arguments in (("--version",), ("--version", "-c")):
+        attempt = retain_command_output(
+            record,
+            f"compiler-version-{len(attempts) + 1}",
+            [compiler, *arguments],
+        )
+        attempts.append(attempt)
+        if attempt["status"] == 0:
+            break
     return {
         "path": compiler,
         "sha256": sha256(Path(compiler)),
-        "version": version,
+        "version": attempts[-1],
+        "version_attempts": attempts,
     }
 
 

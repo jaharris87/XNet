@@ -15,6 +15,7 @@ from benchmark import (
     parse_slurm_job,
     read_registry,
 )
+from capture import compiler_evidence, shared_run_directory
 from validate import (
     require_transcript_summary,
     validate_accelerator_identity_entry,
@@ -110,8 +111,8 @@ def openmp_runtime() -> dict[str, Any]:
         "xnet_topology": xnet_topology(1, 2),
         "openmp_probe": {
             "observations": [
-                {"rank": "0", "thread": 0, "team": 2, "place": 0, "binding": 3},
-                {"rank": "0", "thread": 1, "team": 2, "place": 1, "binding": 3},
+                {"rank": "0", "thread": 0, "team": 2, "place": 0, "binding": 3, "affinity": [0]},
+                {"rank": "0", "thread": 1, "team": 2, "place": 1, "binding": 3, "affinity": [1]},
             ]
         },
     }
@@ -175,7 +176,7 @@ def check_transcript_boundaries() -> None:
     samples = (
         (
             "openmp",
-            "XNET_BENCHMARK_OPENMP rank 0 thread 0 team 1 place 0 binding 3\n",
+            "XNET_BENCHMARK_OPENMP rank 0 thread 0 team 1 place 0 binding 3 cpus 0,128\n",
             parse_openmp_probe,
         ),
         (
@@ -212,7 +213,7 @@ def check_transcript_boundaries() -> None:
         malformed_samples = (
             (
                 "openmp labels",
-                "XNET_BENCHMARK_OPENMP rank 0 banana 0 team 1 place 0 binding 3\n",
+                "XNET_BENCHMARK_OPENMP rank 0 banana 0 team 1 place 0 binding 3 cpus 0\n",
                 parse_openmp_probe,
             ),
             (
@@ -382,18 +383,84 @@ def main() -> None:
         {"OMP_NUM_THREADS": "2"},
         "distinct bound places",
     )
+    perlmutter_threaded = deepcopy(threaded)
+    perlmutter_threaded["launcher_argv"] = [
+        "srun", "-n", "1", "-c", "8", "--cpu-bind=cores"
+    ]
+    perlmutter_threaded["requested_threads"] = 4
+    perlmutter_threaded["xnet_topology"] = xnet_topology(1, 4)
+    scheduler = slurm_environment(2, 8)
+    perlmutter_threaded["launcher_probe"] = {
+        "allocation": {
+            "kind": "scheduler",
+            "scope": "allocation",
+            "environment": scheduler,
+            "scheduler_probe": {
+                "fields": {
+                    "JobId": scheduler["SLURM_JOB_ID"],
+                    "NumTasks": scheduler["SLURM_NTASKS"],
+                    "CPUs/Task": scheduler["SLURM_CPUS_PER_TASK"],
+                    "AllocTRES": "cpu=16",
+                }
+            },
+        },
+        "observations": [
+            add_slurm_step(rank_observation(0, 0), 1, 8)
+        ],
+    }
+    perlmutter_threaded["launcher_probe"]["observations"][0]["affinity"] = [
+        0, 128
+    ]
+    perlmutter_threaded["openmp_probe"]["observations"] = [
+        {"rank": "0", "thread": thread, "team": 4, "place": thread,
+         "binding": 4, "affinity": [thread, thread + 128]}
+        for thread in range(4)
+    ]
+    validate(
+        profiles["openmp-dense"],
+        perlmutter_threaded,
+        {"OMP_NUM_THREADS": "4"},
+    )
     reject(
-        "insufficient OpenMP affinity",
+        "overlapping OpenMP CPU sets",
         profiles["openmp-dense"],
         mutated(
             threaded,
-            lambda value: value["launcher_probe"]["observations"][0].update(
+            lambda value: value["openmp_probe"]["observations"][1].update(
                 affinity=[0]
             ),
         ),
         {"OMP_NUM_THREADS": "2"},
-        "affinity cannot cover",
+        "disjoint bound CPU sets",
     )
+
+    with tempfile.TemporaryDirectory(prefix="xnet-compiler-evidence-test-") as temporary:
+        temporary_path = Path(temporary)
+        compiler = temporary_path / "linking-wrapper"
+        compiler.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$#\" -eq 1 ]; then\n"
+            "  echo 'simulated link failure' >&2\n"
+            "  exit 2\n"
+            "fi\n"
+            "echo 'wrapped compiler 1.0'\n",
+            encoding="utf-8",
+        )
+        compiler.chmod(0o755)
+        evidence = compiler_evidence(temporary_path, {"FC": str(compiler)})
+        attempts = evidence.get("version_attempts")
+        if (
+            not isinstance(attempts, list)
+            or [attempt.get("status") for attempt in attempts] != [2, 0]
+            or attempts[-1].get("argv") != [str(compiler), "--version", "-c"]
+            or evidence.get("version") != attempts[-1]
+        ):
+            raise RuntimeError("compiler-version fallback evidence is incomplete")
+        record = temporary_path / "record"
+        record.mkdir()
+        with shared_run_directory(record) as work:
+            if work.parent.parent != record or not work.parent.is_dir():
+                raise RuntimeError("launcher work directory is not record-local")
 
     # OpenMP+MA48 uses the same observed thread/placement evidence as the
     # dense OpenMP path, but its registry identity and build selectors must

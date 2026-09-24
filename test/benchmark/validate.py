@@ -560,6 +560,13 @@ def validate_runtime_evidence(
             or item["place"] < 0
             or not isinstance(item.get("binding"), int)
             or item["binding"] == 0
+            or not isinstance(item.get("affinity"), list)
+            or not item["affinity"]
+            or any(
+                not isinstance(cpu, int) or cpu < 0
+                for cpu in item["affinity"]
+            )
+            or len(set(item["affinity"])) != len(item["affinity"])
             for item in placement
         ):
             raise BenchmarkError("OpenMP placement probe lacks active thread binding")
@@ -568,10 +575,20 @@ def validate_runtime_evidence(
             places_by_rank.setdefault(str(item["rank"]), set()).add(item["place"])
         if any(len(places) != threads for places in places_by_rank.values()):
             raise BenchmarkError("OpenMP threads do not occupy distinct bound places")
-        for item in observations:
-            affinity = item.get("affinity") if isinstance(item, dict) else None
-            if not isinstance(affinity, list) or len(set(affinity)) < threads:
-                raise BenchmarkError("launcher affinity cannot cover requested OpenMP threads")
+        affinity_by_rank: dict[str, list[set[int]]] = {}
+        for item in placement:
+            affinity_by_rank.setdefault(str(item["rank"]), []).append(
+                set(item["affinity"])
+            )
+        for thread_affinities in affinity_by_rank.values():
+            for index, affinity in enumerate(thread_affinities):
+                if any(
+                    affinity & other
+                    for other in thread_affinities[index + 1 :]
+                ):
+                    raise BenchmarkError(
+                        "OpenMP threads do not have disjoint bound CPU sets"
+                    )
     if dimensions["gpu"] == "ON":
         accelerator_evidence = runtime.get("accelerator_evidence")
         if (
@@ -789,7 +806,9 @@ def validate_capture_provenance(
     ):
         raise BenchmarkError("compiler provenance does not match the build config")
 
-    def validate_transcript(name: str, entry: object) -> Path:
+    def validate_transcript(
+        name: str, entry: object, *, require_success: bool = True
+    ) -> Path:
         if not isinstance(entry, dict):
             raise BenchmarkError(f"capture lacks {name} provenance")
         path = entry.get("path")
@@ -800,7 +819,12 @@ def validate_capture_provenance(
             raise BenchmarkError(f"malformed {name} provenance")
         if not re.fullmatch(r"[0-9a-f]{64}", digest):
             raise BenchmarkError(f"malformed {name} provenance")
-        if not isinstance(argv, list) or not argv or status != 0:
+        if (
+            not isinstance(argv, list)
+            or not argv
+            or not isinstance(status, int)
+            or (require_success and status != 0)
+        ):
             raise BenchmarkError(f"malformed {name} provenance")
         artifact = retained_path(
             record,
@@ -811,9 +835,27 @@ def validate_capture_provenance(
             raise BenchmarkError(f"retained {name} evidence hash mismatch")
         return artifact
 
-    validate_transcript("compiler version", compiler.get("version"))
-    compiler_version = compiler["version"]
-    if compiler_version.get("argv") != [compiler_path, "--version"]:
+    attempts = compiler.get("version_attempts")
+    if not isinstance(attempts, list) or not attempts:
+        raise BenchmarkError("capture lacks compiler version attempts")
+    allowed_version_commands = [
+        [compiler_path, "--version"],
+        [compiler_path, "--version", "-c"],
+    ]
+    if len(attempts) > len(allowed_version_commands):
+        raise BenchmarkError("compiler version query sequence is malformed")
+    for index, attempt in enumerate(attempts):
+        validate_transcript(
+            f"compiler version attempt {index + 1}",
+            attempt,
+            require_success=False,
+        )
+        if attempt.get("argv") != allowed_version_commands[index]:
+            raise BenchmarkError("compiler version command does not match the compiler")
+        if index + 1 < len(attempts) and attempt.get("status") == 0:
+            raise BenchmarkError("compiler version fallback ran after a successful query")
+    compiler_version = compiler.get("version")
+    if compiler_version != attempts[-1] or compiler_version.get("status") != 0:
         raise BenchmarkError("compiler version command does not match the compiler")
     for name in ("runtime", "topology"):
         validate_transcript(name, operational.get(name))

@@ -6,8 +6,9 @@ XNet physics problem. It checks scalar and vector `MPI_MIN`, `MPI_MAX`, and
 and rooted-reduce paths, wrapper-owned MPI initialization, caller-owned MPI
 initialization, and an optional caller communicator.
 
-The test requires GNU Fortran and an Open MPI installation that provides
-`mpifort` and `mpirun`. From the repository root, run:
+The test requires an MPI Fortran compiler wrapper and a compatible launcher.
+The script defaults to `mpifort` and `mpirun` for ordinary local installations.
+From the repository root, run:
 
 ```bash
 make -C test/mpi test
@@ -18,6 +19,16 @@ Override the compiler or launcher when necessary:
 ```bash
 make -C test/mpi test MPIFC=/path/to/mpifort MPIEXEC=/path/to/mpirun
 ```
+
+On an HPE Cray Programming Environment, use the supported Cray wrapper and
+launcher from one resolved module environment inside an allocation:
+
+```bash
+make -C test/mpi test MPIFC=ftn MPIEXEC=srun
+```
+
+Do not infer that another MPI implementation is supported merely because its
+module or wrapper is installed on a facility system.
 
 The positive checks require exactly two ranks. A final one-rank negative probe
 must fail with the expected topology diagnostic, preventing a substituted

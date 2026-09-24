@@ -122,7 +122,10 @@ def main(record: Path) -> None:
 
         profile = copy_record(temporary_path, record, "profile")
         document = read_document(profile)
-        document["execution"]["dimensions"]["solver"] = "MA48"
+        current_solver = document["execution"]["dimensions"]["solver"]
+        document["execution"]["dimensions"]["solver"] = (
+            "dense" if current_solver == "MA48" else "MA48"
+        )
         write_document(profile, document)
         reject("execution profile", profile, root, "execution profile does not match")
 

@@ -1,4 +1,5 @@
 program test_parallel_integer_reductions
+  use, intrinsic :: iso_fortran_env, only: output_unit
   use xnet_mpi
   use xnet_parallel, only: parallel_finalize, parallel_initialize, &
        parallel_myproc, parallel_nprocs, parallel_reduce
@@ -6,6 +7,8 @@ program test_parallel_integer_reductions
   implicit none
 
   character(len=32) :: mode
+  integer, parameter :: required_ranks = 2
+  integer(i8), parameter :: large_value = 5000000000_i8
   integer :: caller_comm, ierr, rank, size
   integer(i8) :: actual, expected, input
   integer(i8) :: actual_vector(2), expected_vector(2), input_vector(2)
@@ -24,31 +27,47 @@ program test_parallel_integer_reductions
 
   rank = parallel_myproc()
   size = parallel_nprocs()
-  input = int(rank + 1, i8)
+  if (size /= required_ranks) then
+    write (output_unit,'(a,i0,a,i0)') 'ERROR requires exactly ', &
+         required_ranks, ' MPI ranks; observed ', size
+    flush (output_unit)
+    call MPI_Abort(MPI_COMM_WORLD, 2, ierr)
+  end if
+
+  input = large_value + int(rank + 1, i8)
 
   call parallel_reduce(actual, input, MPI_MIN)
-  call check_scalar('minimum', actual, 1_i8)
+  call check_scalar('minimum', actual, large_value + 1_i8)
 
   call parallel_reduce(actual, input, MPI_MAX)
-  call check_scalar('maximum', actual, int(size, i8))
+  call check_scalar('maximum', actual, large_value + int(size, i8))
 
-  expected = int(size * (size + 1) / 2, i8)
+  expected = int(size, i8) * large_value + int(size * (size + 1) / 2, i8)
   call parallel_reduce(actual, input, MPI_SUM)
   call check_scalar('sum', actual, expected)
 
-  input_vector = [int(rank + 1, i8), int(10 - rank, i8)]
-  expected_vector = [int(size, i8), 10_i8]
+  input_vector = [large_value + int(rank + 1, i8), &
+       -large_value - int(rank + 1, i8)]
+  expected_vector = [large_value + int(size, i8), -large_value - 1_i8]
   call parallel_reduce(actual_vector, input_vector, MPI_MAX)
   call check_vector('vector maximum', actual_vector, expected_vector)
 
-  expected_vector = [1_i8, int(10 - (size - 1), i8)]
+  expected_vector = [large_value + 1_i8, -large_value - int(size, i8)]
   call parallel_reduce(actual_vector, input_vector, MPI_MIN)
   call check_vector('vector minimum', actual_vector, expected_vector)
 
-  expected_vector = [int(size * (size + 1) / 2, i8), &
-       int(10 * size - size * (size - 1) / 2, i8)]
+  expected_vector = [expected, -expected]
   call parallel_reduce(actual_vector, input_vector, MPI_SUM)
   call check_vector('vector sum', actual_vector, expected_vector)
+
+  call parallel_reduce(actual, input, MPI_SUM, proc=0)
+  if (rank == 0) call check_scalar('rooted sum', actual, expected)
+
+  call parallel_reduce(actual_vector, input_vector, MPI_MAX, proc=1)
+  if (rank == 1) then
+    expected_vector = [large_value + int(size, i8), -large_value - 1_i8]
+    call check_vector('rooted vector maximum', actual_vector, expected_vector)
+  end if
 
   call parallel_finalize(do_finalize_MPI=.not. caller_owned)
   if (caller_owned) then

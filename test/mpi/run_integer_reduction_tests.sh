@@ -24,3 +24,18 @@ mkdir -p "$BUILD_DIR/mod"
 
 "$MPIEXEC" -n 2 "$BUILD_DIR/test_parallel_integer_reductions" wrapper-owned
 "$MPIEXEC" -n 2 "$BUILD_DIR/test_parallel_integer_reductions" caller-owned
+
+set +e
+single_rank_output=$("$MPIEXEC" -n 1 \
+  "$BUILD_DIR/test_parallel_integer_reductions" wrapper-owned 2>&1)
+single_rank_status=$?
+set -e
+if [[ $single_rank_status -eq 0 ]]; then
+  echo 'one-rank negative probe unexpectedly passed' >&2
+  exit 1
+fi
+if ! grep -Fq 'requires exactly 2 MPI ranks' <<<"$single_rank_output"; then
+  echo 'one-rank negative probe failed for the wrong reason' >&2
+  printf '%s\n' "$single_rank_output" >&2
+  exit 1
+fi

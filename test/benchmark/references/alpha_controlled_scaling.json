@@ -1,0 +1,145 @@
+{
+  "comparison_schema": "xnet-comparison-v1",
+  "baseline_kind": "characterization",
+  "baseline_status": "provisional characterization-only; not independently validated scientific truth; comparison policy requires maintainer acceptance",
+  "reference_policy_status": "candidate-maintainer-approval-required",
+  "reference_policy_basis": "initial bounds follow the maintained heat_sn160 field/species scale; Frontier and Perlmutter controlled-profile qualification must test suitability without automatic widening",
+  "generated_from_source_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
+  "network_bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+  "generated_on": "2026-09-24",
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "compiler": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+  "build": {
+    "CMODE": "OPT",
+    "PE_ENV": "GNU",
+    "MPI_MODE": "OFF",
+    "OPENMP_MODE": "OFF",
+    "GPU_MODE": "OFF",
+    "EOS": "STARKILLER",
+    "MATRIX_SOLVER": "dense",
+    "LAPACK_VER": "NETLIB"
+  },
+  "workload": {
+    "temperature_gk": 1.7,
+    "density_g_cm3": 100000000.0,
+    "initial_electron_fraction": 0.5,
+    "initial_mass_fractions": {
+      "c12": 0.5,
+      "o16": 0.5
+    },
+    "end_time_seconds": 10.0,
+    "weak_reactions": true,
+    "screening": true,
+    "self_heating": false,
+    "integrator": "backward-euler",
+    "zones_generated": 1
+  },
+  "case": "alpha_controlled_scaling",
+  "expected_zones": [
+    1
+  ],
+  "final_step": 231,
+  "solver_counters": {
+    "ts": 231,
+    "nr": 231,
+    "jacobian": 231,
+    "derivative": 232,
+    "cross_section": 232
+  },
+  "fields": {
+    "target_time": {
+      "value": 10.0,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "achieved_time": {
+      "value": 10.0,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "temperature_gk": {
+      "value": 1.7,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "density": {
+      "value": 100000000.0,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "electron_fraction": {
+      "value": 0.5,
+      "atol": 5e-08,
+      "rtol": 0.0,
+      "exact": false
+    }
+  },
+  "mass_fraction_selection": {
+    "1": [
+      "c12",
+      "o16",
+      "ne20",
+      "mg24",
+      "si28",
+      "s32",
+      "ar36",
+      "ca40",
+      "ti44",
+      "cr48",
+      "fe52",
+      "ni56"
+    ]
+  },
+  "mass_fraction_tolerances": {
+    "all_selected": {
+      "atol": 1e-06,
+      "rtol": 0.0,
+      "exact": false
+    }
+  },
+  "mass_fraction_printed_sum": {
+    "value": 0.9999999983323637,
+    "atol": 1e-06,
+    "rtol": 0.0,
+    "exact": false
+  },
+  "composition_norm_limits": {
+    "l1": 1e-05,
+    "linf": 1e-06
+  },
+  "mass_fractions": {
+    "he4": 1.0274664e-11,
+    "c12": 0.00062293265,
+    "o16": 0.35501767,
+    "ne20": 0.39625061,
+    "mg24": 0.20215705,
+    "si28": 0.045137749,
+    "s32": 0.00081323537,
+    "ar36": 7.5128219e-07,
+    "ca40": 1.9898906e-11,
+    "ti44": 1.2729685e-16,
+    "cr48": 1.6120591e-24,
+    "fe52": 0.0,
+    "ni56": 0.0,
+    "zn60": 0.0
+  },
+  "mass_fraction_sum_atol": 1.0016676362513123e-06,
+  "generation_evidence": {
+    "source_checkout_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
+    "source_checkout_clean": true,
+    "network_payload_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+    "network_manifest_path": "test/benchmark/network-bundle-a9585568.json",
+    "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2",
+    "executable_sha256": "47b691608ffe93c96b9c36748b3f3e21469af5953d798a16d49a36c24898bddc",
+    "build_config_sha256": "daa2a948e346376d5f20294b890f3ce5475dd394e02beaf176c511a8cbd761cb",
+    "control_sha256": "d777abf167c661436f40b4965dfd06abb696133371b191259746c08d91e3adc5",
+    "abundance_sha256": "02f9750971f6f083ac1ed8557b83cf79f890e146f9190e193876a42b1c0c66a5",
+    "trajectory_sha256": "963b7439e0e71f5ef799a3ec09d8549a8a9a4be2206be33c9476a3cbff04f2f1",
+    "diagnostic_sha256": "ce0400861cba117c9ef311e1b4c0cc35d91c051bd1463fc8ef3ce0bf339d495e",
+    "process_status": "return_code=0"
+  }
+}

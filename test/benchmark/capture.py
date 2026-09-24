@@ -39,6 +39,16 @@ from benchmark import (
     worker_topology,
     write_json,
 )
+from controlled import (
+    expand_uniform_reference,
+    expected_record as controlled_expected_record,
+    is_controlled,
+    make_regression_case as make_controlled_regression_case,
+    materialize_inputs as materialize_controlled_inputs,
+    prepare_work_directory as prepare_controlled_work_directory,
+    reference_relative_path as controlled_reference_path,
+    validate_case_dimensions as validate_controlled_dimensions,
+)
 from validate import validate_runtime_evidence
 
 HARNESS_FILES = (
@@ -47,13 +57,23 @@ HARNESS_FILES = (
     "validate.py",
     "test_benchmark.py",
     "test_characterize.py",
+    "test_controlled.py",
     "test_execution_profiles.py",
     "characterize.py",
+    "controlled.py",
     "cases.json",
     "network-bundle-a9585568.json",
     "gpu_execution_probe.F90",
     "openmp_execution_probe.F90",
     "gpu_probe.mk",
+    "references/alpha_controlled_scaling.json",
+    "references/ccsn52_controlled_scaling.json",
+    "references/sn160_controlled_scaling.json",
+    "references/ccsn179_controlled_scaling.json",
+    "references/ecsn350_controlled_scaling.json",
+    "references/sn160_controlled_scaling-self-heating.json",
+    "references/ccsn179_controlled_scaling-self-heating.json",
+    "references/ecsn350_controlled_scaling-self-heating.json",
 )
 
 
@@ -84,6 +104,21 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--ranks", type=int, default=1)
     parser.add_argument("--ranks-per-gpu", type=int, default=1)
+    parser.add_argument(
+        "--zones",
+        type=int,
+        help="total zones for a controlled-scaling case",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        help="nzbatchmx for a controlled-scaling case",
+    )
+    parser.add_argument(
+        "--self-heating",
+        action="store_true",
+        help="enable the separate controlled self-heating sensitivity workload",
+    )
     parser.add_argument("--gpu-backend", choices=("CUDA", "HIP"))
     parser.add_argument("--accelerator-mode", choices=("openacc", "openmp-offload"))
     parser.add_argument("--ma48-dir", type=Path)
@@ -97,6 +132,11 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--timeout-seconds", type=float, default=1800.0)
     parser.add_argument("--list-cases", action="store_true")
+    parser.add_argument(
+        "--qualification-only",
+        action="store_true",
+        help="allow a reference-candidate case but mark its record non-publishable",
+    )
     return parser.parse_args()
 
 
@@ -269,6 +309,8 @@ def capture_repetition(
     regression_case: Any,
     timeout_seconds: float,
     expected_zones: list[int],
+    reference_transform: Any | None = None,
+    prepare_callback: Any | None = None,
 ) -> dict[str, object]:
     """Run one timed XNet invocation and retain its post-timing comparison."""
     artifact = record / "repetitions" / str(number)
@@ -285,6 +327,8 @@ def capture_repetition(
                 regression_case,
                 work,
                 timeout_seconds,
+                reference_transform,
+                prepare_callback,
             )
             numerical = "pass"
         except Exception as error:
@@ -703,16 +747,21 @@ def make_record_document(
     source_revision: str,
     run_argv: list[str],
     runtime: dict[str, object],
+    expected: dict[str, object],
+    workload_configuration: dict[str, object] | None,
+    record_status: str,
 ) -> dict[str, object]:
     """Assemble only portable values and retained-artifact identities."""
     return {
         "schema": RECORD_SCHEMA,
+        "record_status": record_status,
         "source_revision": source_revision,
         "case": {
             "case_id": case_id,
             "network": case.network,
             "workload": case.workload,
             "input_identity": case.input_identity,
+            "workload_configuration": workload_configuration,
         },
         "execution": {"profile": profile["_name"], **{key: value for key, value in profile.items() if not key.startswith("_")}},
         "capture": {
@@ -739,7 +788,7 @@ def make_record_document(
             "entries": manifest,
             "manifest_sha256": manifest_digest(manifest),
         },
-        "expected": case.expected,
+        "expected": expected,
         "comparison": comparison,
         "repetitions": repetitions,
     }
@@ -747,16 +796,17 @@ def make_record_document(
 
 def retain_comparison_inputs(
     record: Path,
-    bundle_root: Path,
     identity: dict[str, Any],
+    comparator_source: Path,
+    reference_source: Path,
 ) -> dict[str, object]:
-    """Copy the small comparator/reference pair required for offline checking."""
+    """Copy the comparator/reference pair required for offline checking."""
     comparison_dir = record / "comparison"
     comparison_dir.mkdir()
     retained: dict[str, dict[str, str]] = {}
-    for name in ("comparator", "reference"):
+    sources = {"comparator": comparator_source, "reference": reference_source}
+    for name, source in sources.items():
         source_relative = identity[name]
-        source = bundle_root / source_relative
         destination = comparison_dir / source.name
         shutil.copy2(source, destination)
         retained[name] = {
@@ -775,8 +825,18 @@ def main() -> int:
         return 0
 
     require_capture_arguments(args)
-    if args.case not in cases or cases[args.case].status != "ready":
+    if args.case not in cases:
         raise BenchmarkError(f"case is not ready for capture: {args.case}")
+    selected_status = cases[args.case].status
+    if selected_status != "ready" and not (
+        selected_status == "reference-candidate" and args.qualification_only
+    ):
+        raise BenchmarkError(f"case is not ready for capture: {args.case}")
+    if args.qualification_only and selected_status == "ready":
+        raise BenchmarkError("--qualification-only requires a reference-candidate case")
+    record_status = (
+        "qualification-only" if selected_status == "reference-candidate" else "publishable"
+    )
 
     harness = harness_identity()
     if harness["dirty"] is not False or not isinstance(
@@ -799,12 +859,49 @@ def main() -> int:
     verify_input_bundle_revision(input_bundle, input_bundle_revision)
     comparator = input_bundle / identity["comparator"]
     regression = load_regression(comparator)
-    regression_case = getattr(regression, case.workload["regression_factory"])(input_bundle)
 
     args.records.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     record = args.records.resolve() / f"{args.case}-{stamp}-{os.getpid()}"
     record.mkdir()
+    controlled = is_controlled(case)
+    if controlled:
+        controlled_run = validate_controlled_dimensions(
+            case,
+            args.zones,
+            args.batch_size,
+            args.self_heating,
+        )
+        _, controlled_inputs = materialize_controlled_inputs(
+            record / "controlled-inputs",
+            case,
+            input_bundle,
+            controlled_run,
+        )
+        reference_source = (
+            Path(__file__).parent / controlled_reference_path(case, controlled_run)
+        )
+        regression_case = make_controlled_regression_case(
+            regression,
+            case,
+            controlled_inputs,
+            reference_source,
+        )
+        expected = controlled_expected_record(controlled_run)
+        workload_configuration = controlled_run.as_record()
+        reference_transform = expand_uniform_reference
+        prepare_callback = prepare_controlled_work_directory
+    else:
+        if args.zones is not None or args.batch_size is not None or args.self_heating:
+            raise BenchmarkError(
+                "--zones, --batch-size, and --self-heating apply only to controlled cases"
+            )
+        regression_case = getattr(regression, case.workload["regression_factory"])(input_bundle)
+        reference_source = input_bundle / identity["reference"]
+        expected = case.expected
+        workload_configuration = None
+        reference_transform = None
+        prepare_callback = None
     if args.profile not in profiles:
         raise BenchmarkError(f"unknown execution profile: {args.profile}")
     if args.threads < 1 or args.ranks < 1 or args.ranks_per_gpu < 1:
@@ -846,13 +943,35 @@ def main() -> int:
         profile,
         build_options,
     )
-    bundle_inputs = case_inputs(input_bundle, regression_case, comparator)
+    if controlled:
+        bundle_inputs = [
+            comparator,
+            controlled_inputs["helm_table"],
+            *(
+                controlled_inputs["network_data"] / name
+                for name in ("sunet", "netsu", "netweak", "netwinv")
+            ),
+        ]
+    else:
+        bundle_inputs = case_inputs(input_bundle, regression_case, comparator)
     if any(not path.is_file() for path in bundle_inputs):
         raise BenchmarkError("input bundle lacks a required case-relative input")
     manifest = input_manifest(input_bundle, bundle_inputs)
     if manifest_digest(manifest) != identity.get("manifest_sha256"):
         raise BenchmarkError("case registry input-manifest binding mismatch")
-    comparison = retain_comparison_inputs(record, input_bundle, identity)
+    comparison = retain_comparison_inputs(
+        record,
+        {
+            **identity,
+            "reference": (
+                controlled_reference_path(case, controlled_run)
+                if controlled
+                else identity["reference"]
+            ),
+        },
+        comparator,
+        reference_source,
+    )
     operational = command_evidence(record, executable, settings)
     accelerator = accelerator_evidence(record, args.gpu_backend)
     launcher_probe = observe_launcher(record, launcher)
@@ -880,7 +999,9 @@ def main() -> int:
             run_argv,
             regression_case,
             args.timeout_seconds,
-            case.expected["zones"],
+            expected["zones"],
+            reference_transform,
+            prepare_callback,
         )
         for number in range(1, args.repetitions + 1)
     ]
@@ -930,6 +1051,9 @@ def main() -> int:
         args.source_revision,
         run_argv,
         runtime,
+        expected,
+        workload_configuration,
+        record_status,
     )
     write_json(record / "record.json", document)
     write_json(record / "inventory.json", inventory(record))

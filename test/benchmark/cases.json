@@ -39,7 +39,8 @@
         "cpu_thread_scaling_nzbatchmx": 1,
         "gpu_batch_sizes": [1, 4, 16, 64, 128],
         "maximum_ranks_per_gpu": 8,
-        "ranks_per_gpu_work_policy": "1024 zones per GPU; scale total zones with GPU count"
+        "ranks_per_gpu_work_policy": "1024 zones per GPU; scale total zones with GPU count",
+        "self_heating_networks": ["SN160", "CCSN179", "ECSN350"]
       }
     },
     "controlled-one-mg": {
@@ -125,63 +126,121 @@
   "cases": [
     {
       "case_id": "alpha_controlled_scaling",
-      "status": "candidate",
+      "status": "reference-candidate",
       "network": {"id": "alpha-small", "species_count": 14, "path": "test/Data_alpha"},
       "workload": {
         "id": "controlled-scaling-alpha",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
       },
-      "input_identity": {"network_root": "test/Data_alpha", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
+      "input_identity": {
+        "comparator": "test/regression/xnet_regression.py",
+        "reference": "references/alpha_controlled_scaling.json",
+        "reference_origin": "harness",
+        "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
+        "network_root": "test/Data_alpha",
+        "bundle_revision": "d090bd4e91fa72ecbd6d07fcfa3c56f2d6e78c4d",
+        "network_provenance_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+        "network_manifest": "test/benchmark/network-bundle-a9585568.json",
+        "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2",
+        "manifest_sha256": "d6c234b07421f3b8a7442bb3e47edec10811ad108d21a3992ce451e71225f33e"
+      }
     },
     {
       "case_id": "ccsn52_controlled_scaling",
-      "status": "candidate",
+      "status": "reference-candidate",
       "network": {"id": "CCSN52", "species_count": 52, "path": "test/Data_CCSN52"},
       "workload": {
         "id": "controlled-scaling-ccsn52",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
       },
-      "input_identity": {"network_root": "test/Data_CCSN52", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
+      "input_identity": {
+        "comparator": "test/regression/xnet_regression.py",
+        "reference": "references/ccsn52_controlled_scaling.json",
+        "reference_origin": "harness",
+        "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
+        "network_root": "test/Data_CCSN52",
+        "bundle_revision": "d090bd4e91fa72ecbd6d07fcfa3c56f2d6e78c4d",
+        "network_provenance_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+        "network_manifest": "test/benchmark/network-bundle-a9585568.json",
+        "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2",
+        "manifest_sha256": "94ae7b4747f0af973277d9ba9a7447b95abee10dd289e37e56706b6cb4878a4a"
+      }
     },
     {
       "case_id": "sn160_controlled_scaling",
-      "status": "candidate",
+      "status": "reference-candidate",
       "network": {"id": "SN160", "species_count": 160, "path": "test/Data_SN160"},
       "workload": {
         "id": "controlled-scaling-sn160",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
       },
-      "input_identity": {"network_root": "test/Data_SN160", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
+      "input_identity": {
+        "comparator": "test/regression/xnet_regression.py",
+        "reference": "references/sn160_controlled_scaling.json",
+        "self_heating_reference": "references/sn160_controlled_scaling-self-heating.json",
+        "reference_origin": "harness",
+        "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
+        "network_root": "test/Data_SN160",
+        "bundle_revision": "d090bd4e91fa72ecbd6d07fcfa3c56f2d6e78c4d",
+        "network_provenance_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+        "network_manifest": "test/benchmark/network-bundle-a9585568.json",
+        "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2",
+        "manifest_sha256": "610a613a0ceb679d5415cfbb4bbbf4adc3a299fafe5897892ac63677135070d9"
+      }
     },
     {
       "case_id": "ccsn179_controlled_scaling",
-      "status": "candidate",
+      "status": "reference-candidate",
       "network": {"id": "CCSN179", "species_count": 179, "path": "test/Data_CCSN179"},
       "workload": {
         "id": "controlled-scaling-ccsn179",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
       },
-      "input_identity": {"network_root": "test/Data_CCSN179", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
+      "input_identity": {
+        "comparator": "test/regression/xnet_regression.py",
+        "reference": "references/ccsn179_controlled_scaling.json",
+        "self_heating_reference": "references/ccsn179_controlled_scaling-self-heating.json",
+        "reference_origin": "harness",
+        "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
+        "network_root": "test/Data_CCSN179",
+        "bundle_revision": "d090bd4e91fa72ecbd6d07fcfa3c56f2d6e78c4d",
+        "network_provenance_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+        "network_manifest": "test/benchmark/network-bundle-a9585568.json",
+        "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2",
+        "manifest_sha256": "410faa4d87b3fc706e727e7a5096c00ba5561ed03e923f4c1dab7ca7a32d16e9"
+      }
     },
     {
       "case_id": "ecsn350_controlled_scaling",
-      "status": "candidate",
+      "status": "reference-candidate",
       "network": {"id": "ECSN350", "species_count": 350, "path": "test/Data_ECSN350"},
       "workload": {
         "id": "controlled-scaling-ecsn350",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; awaiting an accepted numerical reference."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
       },
-      "input_identity": {"network_root": "test/Data_ECSN350", "bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1", "network_manifest": "test/benchmark/network-bundle-a9585568.json", "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2"}
+      "input_identity": {
+        "comparator": "test/regression/xnet_regression.py",
+        "reference": "references/ecsn350_controlled_scaling.json",
+        "self_heating_reference": "references/ecsn350_controlled_scaling-self-heating.json",
+        "reference_origin": "harness",
+        "helm_table": "tools/starkiller-helmholtz/helm_table.dat",
+        "network_root": "test/Data_ECSN350",
+        "bundle_revision": "d090bd4e91fa72ecbd6d07fcfa3c56f2d6e78c4d",
+        "network_provenance_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+        "network_manifest": "test/benchmark/network-bundle-a9585568.json",
+        "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2",
+        "manifest_sha256": "34c4dbc17d7e80ec98cb278d971b067bf9b1dc01b73f3724148c6b1ba10d8664"
+      }
     },
     {
       "case_id": "batch_alpha",

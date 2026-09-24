@@ -27,10 +27,13 @@ python3 test/benchmark/capture.py --repository /scratch/xnet-source \
 ```
 
 Capture owns a fresh build directory and never accepts an arbitrary executable.
-The frozen source checkout supplies only the executable. The separately
-identified input bundle supplies the comparator, reference, network, workload,
-and runtime inputs; the ready historical cases use the same checkout for both
-roles, while later reviewed bundles may have a newer identity.
+The source checkout supplies only the executable. The separately identified
+input bundle supplies the comparator, network, EOS table, and historical-case
+inputs. Controlled workload files are generated from the harness registry and
+retained in the record; their compact references are also bound to the exact
+harness revision. The ready historical cases use the same checkout for source
+and input roles, while controlled cases deliberately use newer public network
+inputs with the frozen pre-v9 executable.
 Each fresh process uses the registered input bundle's maintained
 `test/regression/xnet_regression.py` characterization for `batch_alpha` or
 `heat_sn160`. XNet execution is timed separately; parsing and comparison are
@@ -63,8 +66,9 @@ state, identity composition projection, and approved 10-second early-plateau
 duration across network sizes; it is the appropriate basis for bounded scaling
 conclusions, not an equilibrium claim. The registry records that workload,
 zone counts, and separate CPU/GPU batching dimensions explicitly. Controlled
-cases remain candidates until accepted numerical references and applicable
-execution-profile qualification are complete.
+cases are currently `reference-candidate`: capture rejects them until the
+maintainer accepts their explicit comparison policy. Execution-profile
+qualification follows that decision.
 
 MPI captures require `--launcher 'mpiexec -n N'`, `--ranks N`, and the actual
 thread count. The harness runs its own probe through that exact launcher and
@@ -110,6 +114,16 @@ The authoritative network payloads for controlled scaling are the committed
 recorded in `network-bundle-a9585568.json`. They are benchmark inputs in their
 own right; byte-for-byte regeneration with `build_net` is not required.
 
+The controlled registry binds its comparator, EOS table, and network files to
+input-bundle revision `d090bd4e91fa72ecbd6d07fcfa3c56f2d6e78c4d`. The
+network-file identity within that bundle remains the authoritative
+`a958556833eaddcf956e8e17c27219818035fae1` manifest. This separation permits
+the frozen pre-v9 source to consume reviewed inputs that did not exist in its
+tree. The generated control, abundance, and trajectory files are retained and
+reconstructed during offline validation. For this campaign they use the
+historical line-oriented `control` interface required by the frozen source;
+the newer comparator is used only after execution to parse and compare output.
+
 The primary controlled state has `T9=1.7`, `rho=1.0e8 g cm^-3`, `Ye=0.5`,
 `X(C12)=0.5`, and `X(O16)=0.5`, with all other species initially zero. It uses
 fixed thermodynamics and self-heating off. Weak-off BDF characterization found
@@ -152,6 +166,49 @@ uses 1025. CPU OpenMP scaling uses `nzbatchmx=1`. GPU batch-size scaling uses
 zones, so batch 128 supplies eight independent batches for a bounded maximum
 of eight ranks sharing that GPU. Multi-GPU runs scale total zones to preserve
 1024 zones per GPU.
+
+Controlled capture uses explicit workload dimensions rather than adding case
+IDs or execution profiles:
+
+```sh
+python3 test/benchmark/capture.py \
+  --repository /scratch/xnet-source-86e867c2 \
+  --source-revision 86e867c2a64267a674ce4fbf6a3064af39e2f4e0 \
+  --input-bundle /scratch/xnet-inputs-d090bd4e \
+  --input-bundle-revision d090bd4e91fa72ecbd6d07fcfa3c56f2d6e78c4d \
+  --build-dir /scratch/xnet-build-alpha \
+  --records /scratch/xnet-benchmark-records \
+  --case alpha_controlled_scaling --profile serial-dense \
+  --zones 1024 --batch-size 1 --repetitions 5
+```
+
+Until the case status changes from `reference-candidate` to `ready`, the same
+command requires `--qualification-only` and produces a record explicitly
+marked as non-publishable. This permits bounded local/facility qualification
+without treating a provisional numerical policy as an accepted baseline.
+`--self-heating` selects the separate
+sensitivity workload and its separate reference, and is limited to SN160,
+CCSN179, and ECSN350. Weak reactions and screening remain on in every actual
+performance capture. The primary integrator is Backward Euler; BDF remains the
+separate bounded matrix spot-check rather than silently changing the primary
+workload.
+
+Each provisional reference is a one-zone serial-dense characterization from
+the frozen source, expanded during comparison because controlled zones have
+identical inputs. Alpha, CCSN179, and ECSN350 checks at 16 zones produced
+bit-identical endpoint states and counters for batch sizes 1 and 4; all five
+networks passed a 16-zone comparison against the compact reference. The
+self-heating references passed corresponding four-zone checks for SN160,
+CCSN179, and ECSN350.
+
+The proposed policy uses `5e-8` absolute tolerance for electron fraction,
+`1e-6` for selected material/anchor mass fractions, and complete-vector limits
+of `L1 <= 1e-5` and `L-infinity <= 1e-6`. Self-heating also permits `2e-6`
+absolute temperature variation. These values are explicit candidates based on
+the maintained `heat_sn160` comparison scale, not accepted scientific truth.
+Frontier and Perlmutter qualification must test them without automatically
+widening a failure. The maintainer must accept or revise this policy before
+the controlled cases become publishable benchmark records.
 
 Primary cross-network scaling keeps self-heating off. A separate sensitivity
 slice compares self-heating off/on on SN160, CCSN179, and ECSN350 without

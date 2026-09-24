@@ -32,6 +32,14 @@ from benchmark import (
     sha256,
     worker_topology,
 )
+from controlled import (
+    expand_uniform_reference,
+    expected_record as controlled_expected_record,
+    is_controlled,
+    make_replay_case as make_controlled_replay_case,
+    run_from_record as controlled_run_from_record,
+    validate_retained_inputs as validate_controlled_inputs,
+)
 
 HARNESS_FILES = {
     "benchmark.py",
@@ -39,13 +47,23 @@ HARNESS_FILES = {
     "validate.py",
     "test_benchmark.py",
     "test_characterize.py",
+    "test_controlled.py",
     "test_execution_profiles.py",
     "characterize.py",
+    "controlled.py",
     "cases.json",
     "network-bundle-a9585568.json",
     "gpu_execution_probe.F90",
     "openmp_execution_probe.F90",
     "gpu_probe.mk",
+    "references/alpha_controlled_scaling.json",
+    "references/ccsn52_controlled_scaling.json",
+    "references/sn160_controlled_scaling.json",
+    "references/ccsn179_controlled_scaling.json",
+    "references/ecsn350_controlled_scaling.json",
+    "references/sn160_controlled_scaling-self-heating.json",
+    "references/ccsn179_controlled_scaling-self-heating.json",
+    "references/ecsn350_controlled_scaling-self-heating.json",
 }
 COUNTER_NAMES = {"TS", "NR", "Jacobian", "Deriv", "CrossSect"}
 
@@ -235,7 +253,13 @@ def validate_case_and_execution(
         raise BenchmarkError("unknown benchmark case")
 
     case = cases[case_id]
-    if case.status != "ready":
+    if case.status == "ready":
+        if document.get("record_status", "publishable") != "publishable":
+            raise BenchmarkError("ready case has a non-publishable record status")
+    elif case.status == "reference-candidate":
+        if document.get("record_status") != "qualification-only":
+            raise BenchmarkError("candidate reference is not qualification-only")
+    else:
         raise BenchmarkError("record binds a case that is not ready")
     if case_document.get("network") != case.network:
         raise BenchmarkError("case relabel or network binding mismatch")
@@ -243,6 +267,15 @@ def validate_case_and_execution(
         raise BenchmarkError("case relabel or workload binding mismatch")
     if case_document.get("input_identity") != case.input_identity:
         raise BenchmarkError("case relabel or input binding mismatch")
+
+    workload_configuration = case_document.get("workload_configuration")
+    if is_controlled(case):
+        controlled_run = controlled_run_from_record(workload_configuration, case)
+        expected = controlled_expected_record(controlled_run)
+    else:
+        if workload_configuration is not None:
+            raise BenchmarkError("representative case has controlled workload dimensions")
+        expected = case.expected
 
     execution = document.get("execution")
     if not isinstance(execution, dict):
@@ -254,7 +287,6 @@ def validate_case_and_execution(
     if execution != expected_execution:
         raise BenchmarkError("execution profile does not match the registry")
 
-    expected = case.expected
     if document.get("expected") != expected:
         raise BenchmarkError("expected outputs or zones do not match the case registry")
     return case, expected
@@ -296,10 +328,10 @@ def validate_input_bundle(
     if manifest_digest(checked_entries) != identity.get("manifest_sha256"):
         raise BenchmarkError("input manifest binding mismatch")
 
-    required_paths = {
-        identity.get(key)
-        for key in ("control", "reference", "helm_table", "comparator")
-    }
+    required_keys = ["helm_table", "comparator"]
+    if identity.get("reference_origin") != "harness":
+        required_keys.extend(("control", "reference"))
+    required_paths = {identity.get(key) for key in required_keys}
     if not required_paths <= seen:
         raise BenchmarkError("case input identity binding mismatch")
     network_root = identity.get("network_root")
@@ -943,6 +975,7 @@ def validate_comparison_binding(
     identity: dict[str, Any],
     record: Path,
     entries: list[dict[str, str]],
+    workload_configuration: object,
 ) -> dict[str, Path]:
     """Verify that the captured comparator/reference are exact bundle copies."""
     comparison = document.get("comparison")
@@ -950,11 +983,20 @@ def validate_comparison_binding(
         raise BenchmarkError("missing captured comparison inputs")
     paths: dict[str, Path] = {}
     manifest_hashes = {entry["path"]: entry["sha256"] for entry in entries}
+    reference_path = identity.get("reference")
+    if identity.get("reference_origin") == "harness":
+        run = controlled_run_from_record(workload_configuration)
+        reference_path = (
+            identity.get("self_heating_reference")
+            if run.self_heating
+            else identity.get("reference")
+        )
+    source_paths = {"comparator": identity.get("comparator"), "reference": reference_path}
     for name in ("comparator", "reference"):
         entry = comparison.get(name)
         if not isinstance(entry, dict):
             raise BenchmarkError("malformed captured comparison input")
-        if entry.get("source_path") != identity.get(name):
+        if entry.get("source_path") != source_paths[name]:
             raise BenchmarkError("captured comparison source path mismatch")
         path = entry.get("path")
         digest = entry.get("sha256")
@@ -967,7 +1009,11 @@ def validate_comparison_binding(
         )
         if not artifact.is_file() or sha256(artifact) != digest:
             raise BenchmarkError("captured comparison input hash mismatch")
-        if digest != manifest_hashes.get(entry["source_path"]):
+        if name == "reference" and identity.get("reference_origin") == "harness":
+            harness_reference = Path(__file__).parent / entry["source_path"]
+            if not harness_reference.is_file() or digest != sha256(harness_reference):
+                raise BenchmarkError("captured controlled reference does not match harness")
+        elif digest != manifest_hashes.get(entry["source_path"]):
             raise BenchmarkError("captured comparison does not match input manifest")
         paths[name] = artifact
     return paths
@@ -977,7 +1023,9 @@ def compare_retained_diagnostics(
     diagnostics: list[Path],
     composition: Path,
     comparison_paths: dict[str, Path],
-    factory_name: str,
+    registry_case: Any,
+    workload_configuration: object,
+    record: Path,
 ) -> None:
     """Run the captured comparator without a live source checkout."""
     try:
@@ -986,9 +1034,38 @@ def compare_retained_diagnostics(
             prefix="xnet-benchmark-comparison-"
         ) as temporary:
             locator = Path(temporary)
-            case = getattr(regression, factory_name)(locator)
-            case = replace(case, reference=comparison_paths["reference"])
-            reference = regression.load_reference(case.reference)
+            if is_controlled(registry_case):
+                run = controlled_run_from_record(workload_configuration, registry_case)
+                compact_reference = regression.load_reference(
+                    comparison_paths["reference"]
+                )
+                species = tuple(compact_reference.mass_fractions[1])
+                validate_controlled_inputs(
+                    record / "controlled-inputs",
+                    registry_case,
+                    run,
+                    species,
+                )
+                case = make_controlled_replay_case(
+                    regression,
+                    registry_case,
+                    run,
+                    species,
+                    locator,
+                    comparison_paths["reference"],
+                )
+                reference = expand_uniform_reference(
+                    regression,
+                    compact_reference,
+                    case,
+                )
+            else:
+                case = getattr(
+                    regression,
+                    registry_case.workload["regression_factory"],
+                )(locator)
+                case = replace(case, reference=comparison_paths["reference"])
+                reference = regression.load_reference(case.reference)
             text = "\n".join(
                 diagnostic.read_text(encoding="utf-8")
                 for diagnostic in diagnostics
@@ -1032,7 +1109,8 @@ def validate_repetition(
     expected: dict[str, object],
     record: Path,
     comparison_paths: dict[str, Path],
-    factory_name: str,
+    registry_case: Any,
+    workload_configuration: object,
     expected_topology: dict[str, object],
 ) -> None:
     if not isinstance(repetition, dict):
@@ -1172,7 +1250,9 @@ def validate_repetition(
         diagnostics,
         composition,
         comparison_paths,
-        factory_name,
+        registry_case,
+        workload_configuration,
+        record,
     )
 
 
@@ -1278,6 +1358,7 @@ def main() -> int:
         case.input_identity,
         record,
         entries,
+        document["case"].get("workload_configuration"),
     )
 
     capture = document.get("capture")
@@ -1298,7 +1379,8 @@ def main() -> int:
             expected,
             record,
             comparison_paths,
-            case.workload["regression_factory"],
+            case,
+            document["case"].get("workload_configuration"),
             topology,
         )
 

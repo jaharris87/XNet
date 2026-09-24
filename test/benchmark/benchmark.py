@@ -423,16 +423,24 @@ def run_timed_and_compare(
     case: Any,
     work: Path,
     timeout_seconds: float,
+    reference_transform: Any | None = None,
+    prepare_callback: Any | None = None,
 ) -> tuple[float, tuple[Any, ...]]:
     """Time only the existing runner's subprocess helper, then characterize it."""
     reference = regression.load_reference(case.reference)
+    if reference_transform is not None:
+        reference = reference_transform(regression, reference, case)
     regression.validate_reference_for_case(case, reference)
-    prepared = regression.prepare_work_directory(case, work)
+    prepared = (
+        regression.prepare_work_directory(case, work)
+        if prepare_callback is None
+        else prepare_callback(case, work)
+    )
     started = time.monotonic()
     # The regression helper is intentionally direct-executable only.  Keep its
     # comparison preparation, but allow this capture harness to time the exact
     # launcher argv retained in the record.
-    if run_argv == [str(executable)]:
+    if run_argv == [str(executable)] and prepare_callback is None:
         regression.run_xnet(executable, case, prepared, timeout_seconds=timeout_seconds)
     else:
         try:

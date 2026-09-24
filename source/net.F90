@@ -45,13 +45,13 @@ Program net
   Use xnet_screening, Only: screening_init
   Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_setup
   Use xnet_types, Only: dp
-  Use xnet_util, Only: name_ordered
+  Use xnet_util, Only: getNewUnit, name_ordered, xnet_terminate
   Use model_input_ascii
   Implicit None
 
   ! Local variables
   Integer :: i, k, izone ! Loop indices
-  Integer :: ierr, inuc
+  Integer :: diag_ierr, ierr, inuc
   Integer :: ibatch, batch_count, izb
   Integer :: kstep
 
@@ -102,13 +102,21 @@ Program net
   ! General output is per zone
   !-------------------------------------------------------------------------------------------------
 
-  ! Open diagnositic output file, per thread if OMP
-  !$omp parallel default(shared) private(diag_file)
+  ! Open diagnostic output file, per thread if OMP. Keep this long-lived stream on a positive
+  ! logical unit; some compiler runtimes can alias negative NEWUNIT values after many short-lived
+  ! per-zone files are opened and closed.
+  !$omp parallel default(shared) private(diag_file,diag_ierr)
   If ( idiag >= 0 ) Then
     diag_file = trim(diag_file_base)
     Call name_ordered(diag_file,myid,nproc)
     Call name_ordered(diag_file,tid,nthread)
-    Open(newunit=lun_diag, file=diag_file, action='write')
+    diag_ierr = 0
+    !$omp critical(diag_open)
+    lun_diag = getNewUnit()
+    If ( lun_diag > 0 ) Open(unit=lun_diag, file=diag_file, action='write', iostat=diag_ierr)
+    !$omp end critical(diag_open)
+    If ( lun_diag == 0 ) Call xnet_terminate('No free logical unit for diagnostic output')
+    If ( diag_ierr /= 0 ) Call xnet_terminate('Failed to open diagnostic output: '//trim(diag_file),diag_ierr)
     Write(lun_diag,"(a5,2i5)") 'MyId',myid,nproc
     !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',tid,' of ',nthread
   Else

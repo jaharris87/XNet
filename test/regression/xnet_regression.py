@@ -1079,6 +1079,15 @@ def run_xnet(
             f"{', '.join(missing)}; artifacts: {work_directory}"
         )
 
+    implicit_outputs = sorted(
+        path.name for path in work_directory.glob("fort.*") if path.is_file()
+    )
+    if implicit_outputs:
+        raise ExecutionFailure(
+            "XNet created unexpected implicit Fortran output: "
+            f"{', '.join(implicit_outputs)}; artifacts: {work_directory}"
+        )
+
     return ProcessResult(
         executable=executable,
         work_directory=work_directory,

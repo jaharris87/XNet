@@ -45,7 +45,8 @@ Contains
     zb_hi = 2
     szbatch = 1
     idiag = 5
-    Open(newunit=lun_diag,status='scratch',action='write')
+    lun_diag = 77
+    Open(unit=lun_diag,status='scratch',action='write')
     iheat = 0
     If ( heat_mode ) iheat = 1
     kitmx = 5
@@ -432,7 +433,7 @@ Contains
     Call check(error,init_abi == 48 .and. init_calls == 1)
     If ( allocated(error) ) Return
 #endif
-    Call check(error,lun_diag < 0)
+    Call check(error,lun_diag > 0)
     If ( allocated(error) ) Return
     If ( tracked_controls ) Then
       Call check(error,icntl(1) == 0 .and. icntl(2) == 0 .and. icntl(3) == 3)

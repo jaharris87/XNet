@@ -53,7 +53,8 @@ endif
 ifeq ($(MPI_MODE),ON)
   MPI_WRAPPER_SHOW := $(shell $(COMPILE_FC) --showme:compile 2>/dev/null || $(COMPILE_FC) -show 2>/dev/null || $(COMPILE_FC) --cray-print-opts=all 2>/dev/null || true)
   MPI_HEADER_DIR := $(shell header=`$(COMPILE_FC) -print-file-name=mpif.h 2>/dev/null`; test -f "$$header" && dirname "$$header" || true)
-  MPI_INCLUDE_FLAGS := $(filter -I%,$(MPI_WRAPPER_SHOW)) $(if $(MPI_HEADER_DIR),-I$(MPI_HEADER_DIR))
+  MPI_INCLUDE_FLAGS := $(filter-out -I,$(filter -I%,$(MPI_WRAPPER_SHOW))) \
+    $(if $(MPI_HEADER_DIR),-I$(MPI_HEADER_DIR))
 endif
 
 CPP_INCLUDE_FLAGS := -I$(SOURCE_DIR) $(sort $(addprefix -I,$(dir $(SOURCE_FREE_SRC) \

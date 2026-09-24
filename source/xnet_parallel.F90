@@ -25,9 +25,6 @@ module xnet_parallel
 
   integer, private :: m_thread_support_level = MPI_THREAD_SINGLE
   integer, private :: mpi_ll_t = -1
-  integer, private :: MPI_MAX_LONG = -1
-  integer, private :: MPI_MIN_LONG = -1
-  integer, private :: MPI_SUM_LONG = -1
 
   interface parallel_reduce
      module procedure parallel_reduce_d
@@ -280,9 +277,6 @@ contains
        call parallel_abort("8-byte int not supported")
     end if
     call MPI_Type_create_f90_integer(15, mpi_ll_t, ierr)
-    call MPI_Op_create(max_long, .true., MPI_MAX_LONG, ierr)
-    call MPI_Op_create(min_long, .true., MPI_MIN_LONG, ierr)
-    call MPI_Op_create(sum_long, .true., MPI_SUM_LONG, ierr)
     call parallel_barrier()
   end subroutine parallel_initialize
 
@@ -452,7 +446,7 @@ contains
     op = mpi_op_long(op_in)
     l_comm = m_comm; if ( present(comm) ) l_comm = comm
     if ( present(proc) ) then
-       CALL MPI_Reduce(a, r, 1, mpi_ll_t, op, proc, l_comm, ierr) 
+       CALL MPI_Reduce(a, r, 1, mpi_ll_t, op, proc, l_comm, ierr)
     else
        call MPI_AllReduce(a, r, 1, mpi_ll_t, op, l_comm, ierr)
     end if
@@ -535,7 +529,7 @@ contains
     op = mpi_op_long(op_in)
     l_comm = m_comm; if ( present(comm) ) l_comm = comm
     if ( present(proc) ) then
-       CALL MPI_Reduce(a, r, size(a), mpi_ll_t, op, proc, l_comm, ierr) 
+       CALL MPI_Reduce(a, r, size(a), mpi_ll_t, op, proc, l_comm, ierr)
     else
        call MPI_AllReduce(a, r, size(a), mpi_ll_t, op, l_comm, ierr)
     end if
@@ -2381,38 +2375,12 @@ contains
          l_root, l_comm, ierr)
   end subroutine parallel_scatter_zv
 
-  subroutine max_long(inv, inoutv, len, type)
-    integer :: len, type, i
-    integer(kind=i8) :: inv(len), inoutv(len)
-    do i = 1, len
-       inoutv(i) = max(inv(i), inoutv(i))
-    end do
-  end subroutine max_long
-  subroutine min_long(inv, inoutv, len, type)
-    integer :: len, type, i
-    integer(kind=i8) :: inv(len), inoutv(len)
-    do i = 1, len
-       inoutv(i) = min(inv(i), inoutv(i))
-    end do
-  end subroutine min_long
-  subroutine sum_long(inv, inoutv, len, type)
-    integer :: len, type, i
-    integer(kind=i8) :: inv(len), inoutv(len)
-    do i = 1, len
-       inoutv(i) = inv(i) + inoutv(i)
-    end do
-  end subroutine sum_long
-
   function mpi_op_long(op) result(r)
     integer, intent(in) :: op
     integer :: r
     select case (op)
-       case (MPI_MAX)
-          r = MPI_MAX_LONG
-       case (MPI_MIN)
-          r = MPI_MIN_LONG
-       case (MPI_SUM)
-          r = MPI_SUM_LONG
+       case (MPI_MAX, MPI_MIN, MPI_SUM)
+          r = op
        case default
           r = -1
           call parallel_abort("unknown MPI_op for i8")

@@ -92,7 +92,7 @@ Contains
 
   Integer Function getNewUnit(unit)
     !-----------------------------------------------------------------------------------------------
-    ! Get a free unit number within range 7-999.
+    ! Get a free positive unit number within range 7-999. Units 100-102 are reserved by CCE.
     !-----------------------------------------------------------------------------------------------
     Implicit None
     Integer, Intent(out), Optional :: unit
@@ -100,6 +100,7 @@ Contains
     Integer :: number
     getNewUnit = 0
     Do number = 7,999
+      If ( number >= 100 .and. number <= 102 ) Cycle
       Inquire(unit=number, opened=connected)
       If ( .not. connected ) Then
         getNewUnit = number
@@ -368,6 +369,101 @@ Contains
 
     Return
   End Subroutine name_ordered
+
+  Integer Function last_nonblank_index(strings)
+    !-----------------------------------------------------------------------------------------------
+    ! Return the index of the last nonblank string.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: strings(:)
+
+    ! Local variables
+    Integer :: i
+
+    last_nonblank_index = 0
+    Do i = Size(strings), 1, -1
+      If ( Len_Trim(strings(i)) /= 0 ) Then
+        last_nonblank_index = i
+        Exit
+      EndIf
+    EndDo
+
+    Return
+  End Function last_nonblank_index
+
+  Subroutine normalize_path(input_path,path,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Simplify a path by removing repeated separators and . or .. components.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: input_path
+
+    ! Output variables
+    Character(*), Intent(out) :: path
+    Character(*), Intent(out) :: message
+
+    ! Local variables
+    Character(Len(path)), Allocatable :: part(:)
+    Integer :: first, last, input_length, nparts, i
+    Logical :: absolute
+
+    path = ' '
+    message = ' '
+    input_length = Len_Trim(input_path)
+    If ( input_length == 0 ) Return
+    If ( input_length > Len(path) ) Then
+      message = 'Path exceeds supported length'
+      Return
+    EndIf
+
+    Allocate(part(Max(1,input_length)))
+    part = ' '
+    absolute = input_path(1:1) == '/'
+    nparts = 0
+    first = 1
+
+    ! Treat the end of the input as a final separator so every component is handled in one loop.
+    Do last = 1, input_length+1
+      If ( last <= input_length ) Then
+        If ( input_path(last:last) /= '/' ) Cycle
+      EndIf
+
+      If ( last > first ) Then
+        ! A . component does not change the accumulated path.
+        If ( input_path(first:last-1) == '..' ) Then
+          If ( nparts > 0 .and. Trim(part(nparts)) /= '..' ) Then
+            nparts = nparts - 1
+          ElseIf ( .not. absolute ) Then
+            nparts = nparts + 1
+            part(nparts) = '..'
+          EndIf
+        ElseIf ( input_path(first:last-1) /= '.' ) Then
+          nparts = nparts + 1
+          part(nparts) = input_path(first:last-1)
+        EndIf
+      EndIf
+      first = last+1
+    EndDo
+
+    If ( absolute ) path = '/'
+    Do i = 1, nparts
+      If ( Len_Trim(path) > 0 .and. Trim(path) /= '/' ) path = Trim(path)//'/'
+      path = Trim(path)//Trim(part(i))
+    EndDo
+    If ( Len_Trim(path) == 0 ) Then
+      If ( absolute ) Then
+        path = '/'
+      Else
+        path = '.'
+      EndIf
+    EndIf
+
+    Return
+  End Subroutine normalize_path
 
   Subroutine string_lc(string)
     !-----------------------------------------------------------------------------------------------

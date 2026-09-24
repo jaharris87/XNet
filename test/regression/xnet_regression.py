@@ -460,7 +460,7 @@ def tnsn_alpha_case(repository_root: Path) -> RegressionCase:
     case_directory = repository_root / "test" / "regression" / "cases" / "tnsn_alpha"
     return RegressionCase(
         name="tnsn_alpha",
-        control=case_directory / "control",
+        control=case_directory / "controls.nml",
         network_data=repository_root / "test" / "Data_alpha",
         trajectories=(
             repository_root / "test" / "Test_Problems" / "th_sn1aflame",
@@ -482,7 +482,7 @@ def heat_alpha_case(repository_root: Path) -> RegressionCase:
     )
     return RegressionCase(
         name="heat_alpha",
-        control=case_directory / "control",
+        control=case_directory / "controls.nml",
         network_data=repository_root / "test" / "Data_alpha",
         trajectories=tuple(
             repository_root / "test" / "Test_Problems" / f"th_co_burn_{zone}"
@@ -505,7 +505,7 @@ def tnsn_torch47_case(repository_root: Path) -> RegressionCase:
     )
     return RegressionCase(
         name="tnsn_torch47",
-        control=case_directory / "control",
+        control=case_directory / "controls.nml",
         network_data=repository_root / "test" / "Data_torch47",
         trajectories=(
             repository_root / "test" / "Test_Problems" / "th_sn1aflame",
@@ -527,7 +527,7 @@ def heat_sn160_case(repository_root: Path) -> RegressionCase:
     )
     return RegressionCase(
         name="heat_sn160",
-        control=case_directory / "control",
+        control=case_directory / "controls.nml",
         network_data=repository_root / "test" / "Data_SN160",
         trajectories=tuple(
             repository_root / "test" / "Test_Problems" / f"th_co_burn_{zone}"
@@ -553,7 +553,7 @@ def batch_alpha_case(repository_root: Path) -> RegressionCase:
     network_data = repository_root / "test" / "Data_alpha"
     return RegressionCase(
         name="batch_alpha",
-        control=case_directory / "control",
+        control=case_directory / "controls.nml",
         network_data=network_data,
         trajectories=(),
         helm_table=(
@@ -634,7 +634,7 @@ def bdf_sn160_case(repository_root: Path) -> RegressionCase:
 
     return RegressionCase(
         name="bdf_sn160",
-        control=case_directory / "control",
+        control=case_directory / "controls.nml",
         network_data=repository_root / "test" / "Data_SN160",
         trajectories=tuple(
             repository_root / "test" / "Test_Problems" / f"th_co_burn_{zone}"
@@ -711,7 +711,7 @@ def nse_sn160_case(repository_root: Path) -> RegressionCase:
     network_data = repository_root / "test" / "Data_SN160"
     return RegressionCase(
         name="nse_sn160",
-        control=case_directory / "control",
+        control=case_directory / "controls.nml",
         network_data=network_data,
         trajectories=(),
         helm_table=(
@@ -856,7 +856,7 @@ def _reserved_work_directory_paths(case: RegressionCase) -> set[Path]:
     """Paths owned by the runner or XNet rather than case-declared staging."""
 
     return {
-        Path("control"),
+        Path("controls.nml"),
         *map(Path, case.required_outputs),
         Path("xnet.stdout.txt"),
         Path("xnet.stderr.txt"),
@@ -867,7 +867,7 @@ def _reserved_work_directory_paths(case: RegressionCase) -> set[Path]:
 
 def _validate_case_inputs(case: RegressionCase) -> None:
     required = {
-        "complete control input": case.control,
+        "complete runtime configuration": case.control,
         "network data directory": case.network_data,
         "Helmholtz EOS table": case.helm_table,
         "characterization reference": case.reference,
@@ -974,7 +974,7 @@ def prepare_work_directory(case: RegressionCase, work_directory: Path) -> Path:
         else:
             work_directory.mkdir(parents=True)
 
-        shutil.copy2(case.control, work_directory / "control")
+        shutil.copy2(case.control, work_directory / "controls.nml")
         for item in _case_staged_inputs(case):
             destination = work_directory / item.destination
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1077,6 +1077,15 @@ def run_xnet(
         raise ExecutionFailure(
             "XNet returned zero but required fresh output is missing or empty: "
             f"{', '.join(missing)}; artifacts: {work_directory}"
+        )
+
+    implicit_outputs = sorted(
+        path.name for path in work_directory.glob("fort.*") if path.is_file()
+    )
+    if implicit_outputs:
+        raise ExecutionFailure(
+            "XNet created unexpected implicit Fortran output: "
+            f"{', '.join(implicit_outputs)}; artifacts: {work_directory}"
         )
 
     return ProcessResult(

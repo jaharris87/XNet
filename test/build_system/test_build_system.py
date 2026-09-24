@@ -185,6 +185,30 @@ def main() -> int:
         assert "FC = ftn" in perlmutter.stdout
         assert "LAPACK_VER = LIBSCI" in perlmutter.stdout
 
+        mpi_wrapper = tools / "mpi-wrapper-with-bare-include"
+        mpi_wrapper.write_text(
+            "#!/bin/sh\n"
+            "case $1 in\n"
+            "  --showme:compile) exit 1;;\n"
+            "  -show) echo 'nvfortran -I -I/opt/mpi/include -DMPI';;\n"
+            "  -print-file-name=mpif.h) echo mpif.h;;\n"
+            "  *) exit 2;;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        mpi_wrapper.chmod(0o755)
+        mpi_includes = make(
+            f"BUILD_DIR={work / 'mpi-wrapper-includes'}",
+            "PE_ENV=GNU",
+            "MPI_MODE=ON",
+            f"COMPILE_FC={mpi_wrapper}",
+            "print-MPI_INCLUDE_FLAGS",
+            environment=generic_environment,
+        )
+        require_success(mpi_includes)
+        assert "MPI_INCLUDE_FLAGS = -I/opt/mpi/include" in mpi_includes.stdout
+        assert "MPI_INCLUDE_FLAGS = -I " not in mpi_includes.stdout
+
         cuda_environment = dict(
             os.environ,
             LMOD_SYSTEM_NAME="perlmutter",

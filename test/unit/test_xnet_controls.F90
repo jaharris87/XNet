@@ -1,0 +1,133 @@
+Program test_xnet_controls
+  Use xnet_controls, Only: normalize_xnet_controls, set_xnet_controls_defaults, &
+    & validate_standalone_controls, validate_xnet_controls, xnet_controls_t
+  Use xnet_types, Only: dp
+  Use, Intrinsic :: ieee_arithmetic, Only: ieee_negative_inf, ieee_positive_inf, &
+    & ieee_quiet_nan, ieee_value
+  Implicit None
+
+  Type(xnet_controls_t) :: controls
+  Character(256) :: message
+  Integer :: ierr
+
+  ! A bare object has deterministic sentinels and must not silently act like configured XNet.
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'raw xnet_controls_t unexpectedly passed validation'
+
+  ! The source include supplies the actual compiled defaults used by programmatic callers.
+  Call set_xnet_controls_defaults(controls)
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr /= 0 ) Error Stop 'compiled XNet controls defaults failed validation: '//Trim(message)
+  If ( controls%nzone /= 1 .or. controls%isolv /= 1 .or. controls%kstmx /= 9999 ) Then
+    Error Stop 'compiled XNet controls defaults have unexpected values'
+  EndIf
+  If ( Abs(controls%changemx-1.0e-1_dp) > Epsilon(controls%changemx) ) Then
+    Error Stop 'compiled XNet changemx default has an unexpected value'
+  EndIf
+
+  controls%changemx = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid changemx sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%yacc = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid yacc sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%changemxt = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid changemxt sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%tolt9 = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid tolt9 sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+  controls%t9nse = -1.0_dp
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'invalid t9nse sentinel passed validation'
+  Call set_xnet_controls_defaults(controls)
+
+  ! Programmatic callers can construct IEEE values even when a namelist runtime rejects their text.
+  controls%changemx = ieee_value(0.0_dp,ieee_quiet_nan)
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'must be finite') == 0 ) Then
+    Error Stop 'generic controls validation accepted a quiet NaN'
+  EndIf
+  Call set_xnet_controls_defaults(controls)
+  controls%yacc = ieee_value(0.0_dp,ieee_positive_inf)
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'must be finite') == 0 ) Then
+    Error Stop 'generic controls validation accepted positive infinity'
+  EndIf
+  Call set_xnet_controls_defaults(controls)
+  controls%t9nse = ieee_value(0.0_dp,ieee_negative_inf)
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'must be finite') == 0 ) Then
+    Error Stop 'generic controls validation accepted negative infinity'
+  EndIf
+  Call set_xnet_controls_defaults(controls)
+
+  ! Every requested condensed-output species must have a nonblank name.
+  controls%nnucout = 3
+  Deallocate(controls%output_nuclei)
+  Allocate(controls%output_nuclei(3))
+  controls%output_nuclei = ' '
+  controls%output_nuclei(3) = 'he4'
+  Call validate_xnet_controls(controls,ierr,message)
+  If ( ierr == 0 .or. Index(message,'output_nuclei') == 0 ) Then
+    Error Stop 'generic controls validation accepted blank output_nuclei entries'
+  EndIf
+  Call set_xnet_controls_defaults(controls)
+
+  ! Standalone execution additionally requires problem-specific files and nuclear data.
+  Call validate_standalone_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'standalone controls unexpectedly accepted blank problem inputs'
+  If ( Index(message,'data_dir') == 0 ) Error Stop 'standalone controls returned an unexpected error'
+
+  ! HDF5 post-processing files contain many zones and must not receive per-zone filename suffixes.
+  Call set_xnet_controls_defaults(controls)
+  controls%nzone = 8
+  controls%data_dir = 'Data_HDF'
+  Deallocate(controls%inab_files,controls%thermo_files)
+  Allocate(controls%inab_files(2),controls%thermo_files(2))
+  controls%inab_files(1) = 'abundance.h5'
+  controls%thermo_files(1) = 'particles.HDF5'
+  controls%inab_files(2) = 'abundance-2.hdf'
+  controls%thermo_files(2) = 'particles-2.h5'
+  Call normalize_xnet_controls(controls,message)
+  If ( Len_Trim(message) /= 0 ) Error Stop 'HDF5 controls normalization failed: '//Trim(message)
+  If ( Size(controls%inab_files) /= controls%nzone .or. &
+    & Size(controls%thermo_files) /= controls%nzone ) Then
+    Error Stop 'HDF5 controls arrays were not prepared for the execution-state transfer'
+  EndIf
+  If ( Trim(controls%inab_files(1)) /= 'abundance.h5' .or. &
+    & Trim(controls%thermo_files(1)) /= 'particles.HDF5' .or. &
+    & Trim(controls%inab_files(2)) /= 'abundance-2.hdf' .or. &
+    & Trim(controls%thermo_files(2)) /= 'particles-2.h5' .or. &
+    & Len_Trim(controls%inab_files(3)) /= 0 .or. &
+    & Len_Trim(controls%thermo_files(3)) /= 0 ) Then
+    Error Stop 'HDF5 input filenames were expanded as per-zone ASCII inputs'
+  EndIf
+  Call validate_standalone_controls(controls,ierr,message)
+  If ( ierr /= 0 ) Error Stop 'HDF5 controls failed standalone validation: '//Trim(message)
+
+  controls%inab_files(2) = ' '
+  controls%thermo_files(2) = ' '
+  controls%inab_files(3) = 'abundance-3.h5'
+  controls%thermo_files(3) = 'particles-3.h5'
+  Call validate_standalone_controls(controls,ierr,message)
+  If ( ierr == 0 ) Error Stop 'HDF5 controls unexpectedly accepted a hole in the file list'
+
+  controls%nzone = 1
+  controls%inab_files(2) = 'abundance-2.h5'
+  controls%thermo_files(2) = 'particles-2.h5'
+  Call normalize_xnet_controls(controls,message)
+  If ( Index(message,'cannot exceed nzone') == 0 ) Then
+    Error Stop 'HDF5 controls silently truncated an overlong file list'
+  EndIf
+  Call validate_standalone_controls(controls,ierr,message)
+  If ( Index(message,'cannot exceed nzone') == 0 ) Then
+    Error Stop 'HDF5 controls validation accepted an overlong file list'
+  EndIf
+
+  Write(*,'(a)') 'xnet_controls defaults and validation checks passed'
+End Program test_xnet_controls

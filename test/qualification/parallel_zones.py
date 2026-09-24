@@ -77,7 +77,7 @@ def _resolve_executable(path: Path, label: str) -> Path:
 
 
 def _validate_fixture() -> None:
-    required = [FIXTURE_DIRECTORY / "control"]
+    required = [FIXTURE_DIRECTORY / "controls.nml"]
     for zone in EXPECTED_ZONES:
         required.extend(
             (
@@ -115,7 +115,7 @@ def prepare_work_directory(work_directory: Path) -> Path:
     else:
         work_directory.mkdir(parents=True)
 
-    shutil.copy2(FIXTURE_DIRECTORY / "control", work_directory / "control")
+    shutil.copy2(FIXTURE_DIRECTORY / "controls.nml", work_directory / "controls.nml")
     data_directory = work_directory / "Data_alpha"
     data_directory.mkdir()
     source_data = REPOSITORY_ROOT / "test" / "Data_alpha"

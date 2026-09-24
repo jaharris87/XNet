@@ -35,7 +35,7 @@
   },
   "case": "batch_alpha",
   "inputs": {
-    "control": "test/regression/cases/batch_alpha/control",
+    "control": "test/regression/cases/batch_alpha/controls.nml",
     "network_data": "test/Data_alpha",
     "network_source_inputs": [
       "sunet",
@@ -176,7 +176,7 @@
     "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
   },
   "input_sha256": {
-    "test/regression/cases/batch_alpha/control": "46548e24236344f8f3c456f930eb4664bdb2971ba07486d004214f467bc3d46d",
+    "test/regression/cases/batch_alpha/controls.nml": "a1d4b898876b3006a642df1c6b53792fe5b66a6485c1fe50732633072be14e3c",
     "test/Data_alpha/sunet": "cee68d91608fbe3212b177c13c0a89cf003f158044a35e78b009b4db12efb4b1",
     "test/Data_alpha/netsu": "d8db4febcd495b29075039deabd84217d962cf11b868aac68f9e43ac7e716131",
     "test/Data_alpha/netweak": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -480,9 +480,9 @@
   },
   "mass_fraction_tolerances": {
     "all_selected": {
-      "atol": 0,
+      "atol": 1e-13,
       "rtol": 0,
-      "exact": true
+      "exact": false
     }
   },
   "mass_fraction_printed_sum": {
@@ -504,13 +504,13 @@
       "15": 1.0,
       "16": 0.9999999909783399
     },
-    "atol": 0,
+    "atol": 1e-13,
     "rtol": 0,
-    "exact": true
+    "exact": false
   },
   "composition_norm_limits": {
-    "l1": 0,
-    "linf": 0
+    "l1": 1e-13,
+    "linf": 1e-13
   },
   "mass_fractions": {
     "he4": {

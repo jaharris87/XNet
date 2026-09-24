@@ -6,6 +6,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -1447,6 +1448,31 @@ def test_each_required_output_must_be_present_and_nonempty(
         )
 
 
+def test_implicit_fortran_output_is_rejected(tmp_path: Path) -> None:
+    executable = _make_executable(
+        tmp_path,
+        "\n".join(
+            (
+                "from pathlib import Path",
+                "Path('net_diag01').write_bytes(b'fresh')",
+                "Path('ev_fake_1').write_bytes(b'fresh')",
+                "Path('ts_fake_1').write_bytes(b'fresh')",
+                "Path('fort.-2').write_bytes(b'misdirected diagnostic')",
+            )
+        ),
+    )
+    work_directory = tmp_path / "work"
+    work_directory.mkdir()
+
+    with pytest.raises(ExecutionFailure, match="unexpected implicit Fortran output.*fort.-2"):
+        run_xnet(
+            executable,
+            _fake_case(tmp_path),
+            work_directory,
+            timeout_seconds=2.0,
+        )
+
+
 def test_nonempty_work_directory_is_a_setup_failure(tmp_path: Path) -> None:
     work_directory = tmp_path / "work"
     work_directory.mkdir()
@@ -1608,26 +1634,11 @@ def test_bdf_sn160_definition_reuses_isolated_sn160_staging(
     )
 
 
-def test_bdf_control_is_the_normalized_legacy_id_54_concatenation() -> None:
-    settings = (REPOSITORY_ROOT / "test/test_settings_bdf").read_text(
-        encoding="utf-8"
-    )
-    setup = (REPOSITORY_ROOT / "test/Test_Problems/setup_bdf_sn160").read_text(
-        encoding="utf-8"
-    )
-    normalized = "\n".join(
-        line.rstrip() for line in (settings + setup).splitlines()
-    ) + "\n"
-    normalized = normalized.replace("Test_Results/", "")
-    normalized = normalized.replace("Test_Problems/", "")
-    normalized = normalized.replace(
-        "4         Blocking size for zone loop",
-        "1         Blocking size for zone loop",
-    )
-
-    assert bdf_sn160_case(REPOSITORY_ROOT).control.read_text(
-        encoding="utf-8"
-    ) == normalized
+def test_bdf_runtime_configuration_selects_bdf_and_preserves_batching() -> None:
+    configuration = bdf_sn160_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
+    assert "&xnet_controls" in configuration
+    assert re.search(r"(?m)^\s*isolv\s*=\s*3\s*,?\s*$", configuration)
+    assert re.search(r"(?m)^\s*nzbatchmx\s*=\s*1\s*,?\s*$", configuration)
 
 
 def test_bdf_reference_records_end_steps_and_all_solver_counter_fields() -> None:
@@ -1695,7 +1706,7 @@ def test_bdf_reference_rejects_missing_required_metadata(
 def test_bdf_run_rejects_stale_input_hash_before_execution(tmp_path: Path) -> None:
     case = bdf_sn160_case(REPOSITORY_ROOT)
     document = json.loads(case.reference.read_text(encoding="utf-8"))
-    control_label = "test/regression/cases/bdf_sn160/control"
+    control_label = "test/regression/cases/bdf_sn160/controls.nml"
     document["input_sha256"][control_label] = "0" * 64
     reference_path = tmp_path / "stale-input-hash.json"
     reference_path.write_text(json.dumps(document), encoding="utf-8")
@@ -2141,17 +2152,37 @@ def test_batch_alpha_stages_nested_prefix_inputs(tmp_path: Path) -> None:
         assert staged.resolve() == item.source.resolve()
 
 
-def test_batch_alpha_control_is_the_normalized_legacy_id_61_concatenation() -> None:
-    settings = (REPOSITORY_ROOT / "test/test_settings_batch").read_text(
-        encoding="utf-8"
+def test_batch_alpha_runtime_configuration_preserves_batched_input() -> None:
+    configuration = batch_alpha_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8")
+    assert "&xnet_controls" in configuration
+    assert re.search(r"(?m)^\s*nzone\s*=\s*16\s*,?\s*$", configuration)
+    assert re.search(r"(?m)^\s*nzbatchmx\s*=\s*4\s*,?\s*$", configuration)
+
+
+def test_batch_alpha_hosted_last_digit_allowance_is_bounded() -> None:
+    reference = load_reference(batch_alpha_case(REPOSITORY_ROOT).reference)
+    state = _state_from_reference(reference, 2)
+    hosted_mass_fractions = dict(state.mass_fractions)
+    hosted_mass_fractions["ne20"] = 7.7185062e-6
+    hosted_state = replace(state, mass_fractions=hosted_mass_fractions)
+    assert abs(hosted_mass_fractions["ne20"] - state.mass_fractions["ne20"]) == pytest.approx(
+        1.0e-13, abs=1.0e-20
     )
-    setup = (REPOSITORY_ROOT / "test/Test_Problems/setup_batch_alpha").read_text(
-        encoding="utf-8"
+    compare_final_states(
+        (hosted_state,), replace(reference, expected_zones=(2,))
     )
-    normalized = "\n".join(line.rstrip() for line in (settings + setup).splitlines()) + "\n"
-    assert batch_alpha_case(REPOSITORY_ROOT).control.read_text(encoding="utf-8") == normalized.replace(
-        "Test_Results/", ""
-    )
+
+    excessive_mass_fractions = dict(hosted_mass_fractions)
+    excessive_mass_fractions["ne20"] = 7.7185061e-6
+    with pytest.raises(ComparisonFailure) as failure:
+        compare_final_states(
+            (replace(hosted_state, mass_fractions=excessive_mass_fractions),),
+            replace(reference, expected_zones=(2,)),
+        )
+    diagnostics = str(failure.value)
+    assert "L1" in diagnostics
+    assert "L-infinity" in diagnostics
+    assert "printed mass-fraction sum" in diagnostics
 
 
 @pytest.mark.parametrize(
@@ -2186,7 +2217,7 @@ def test_batch_alpha_staging_rejects_missing_or_unsafe_inputs(
 
 def test_missing_case_input_is_a_setup_failure(tmp_path: Path) -> None:
     case = replace(tnsn_alpha_case(REPOSITORY_ROOT), control=tmp_path / "missing-control")
-    with pytest.raises(SetupFailure, match="complete control input"):
+    with pytest.raises(SetupFailure, match="complete runtime configuration"):
         prepare_work_directory(case, tmp_path / "work")
 
 

@@ -23,6 +23,8 @@ endif
 # Define compiler specific variables
 #-------------------------------------------------------------------------------
 
+XNET_CONTROLS_FFLAGS =
+
 ifeq ($(PE_ENV),INTEL)
 
     ifneq ($(FC),ftn)
@@ -163,6 +165,9 @@ else ifeq ($(PE_ENV),GNU)
 
     F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -Wno-compare-reals
     F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -ffree-line-length-none
+
+    # -Ofast otherwise permits the compiler to assume that every real value is finite.
+    XNET_CONTROLS_FFLAGS = -fno-finite-math-only
 
     # Linker flags
     OPT_LDFLAGS   =

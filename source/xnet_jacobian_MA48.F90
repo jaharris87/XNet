@@ -205,14 +205,10 @@ Contains
         icntl(5) = 256
       EndIf
 
-      ! MA48 suppresses native output for nonpositive unit numbers. XNet's NEWUNIT may be negative,
-      ! so use it only when positive; wrapper diagnostics continue to use lun_diag in either case.
+      ! Suppress native MA48 output by default. sparse_controls.nml may explicitly select output
+      ! units; wrapper diagnostics continue to use the per-thread lun_diag in either case.
       icntl(1) = 0
       icntl(2) = 0
-      If ( lun_diag > 0 ) Then
-        icntl(1) = lun_diag
-        icntl(2) = lun_diag
-      EndIf
 
       ! Override defaults with user-defined inputs
       Open(newunit=lun_solver, file="sparse_controls.nml", action='read', status='old', iostat=ierr)

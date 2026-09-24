@@ -110,26 +110,29 @@ Contains
 
     Type(error_type), Allocatable, Intent(out) :: error
 
-    Integer :: first_unit, ierr, second_unit
+    Integer :: candidate, i, ierr, opened_count
+    Integer :: opened_units(1000)
 
-    first_unit = getNewUnit()
-    Call check(error,first_unit > 0)
-    If ( allocated(error) ) Return
-    Call check(error,first_unit < 100 .or. first_unit > 102)
-    If ( allocated(error) ) Return
+    opened_count = 0
+    Do
+      candidate = getNewUnit()
+      Call check(error,candidate > 0)
+      If ( allocated(error) ) Exit
+      Call check(error,candidate < 100 .or. candidate > 102)
+      If ( allocated(error) ) Exit
 
-    Open(unit=first_unit,status='scratch',action='readwrite',iostat=ierr)
-    Call check(error,ierr,0)
-    If ( allocated(error) ) Return
+      Open(unit=candidate,status='scratch',action='readwrite',iostat=ierr)
+      Call check(error,ierr,0)
+      If ( allocated(error) ) Exit
+      opened_count = opened_count + 1
+      opened_units(opened_count) = candidate
 
-    second_unit = getNewUnit()
-    Call check(error,second_unit > 0)
-    If ( allocated(error) ) Then
-      Close(first_unit)
-      Return
-    EndIf
-    Call check(error,second_unit /= first_unit)
-    Close(first_unit)
+      If ( candidate > 102 ) Exit
+    EndDo
+
+    Do i = 1, opened_count
+      Close(opened_units(i))
+    EndDo
 
     Return
   End Subroutine test_get_new_unit

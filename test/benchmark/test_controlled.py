@@ -6,7 +6,13 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 
-from benchmark import BenchmarkError, load_regression, read_cases
+from benchmark import (
+    BenchmarkError,
+    input_manifest,
+    load_regression,
+    read_cases,
+    verify_input_manifest,
+)
 from controlled import (
     ControlledRun,
     expand_uniform_reference,
@@ -116,6 +122,16 @@ def main() -> None:
                 tuple(compact.mass_fractions[1]),
             ),
             "retained controlled input mismatch",
+        )
+
+        guarded = root / "guarded-input"
+        guarded.write_text("original\n", encoding="utf-8")
+        manifest = input_manifest(root, (guarded,))
+        verify_input_manifest(root, manifest)
+        guarded.write_text("changed\n", encoding="utf-8")
+        require_rejection(
+            lambda: verify_input_manifest(root, manifest),
+            "input changed after manifest capture",
         )
 
     print("controlled benchmark case probes: passed")

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 import os
@@ -36,6 +37,7 @@ from benchmark import (
     require_clean_repository,
     run_timed_and_compare,
     sha256,
+    verify_input_manifest,
     worker_topology,
     write_json,
 )
@@ -311,6 +313,8 @@ def capture_repetition(
     expected_zones: list[int],
     reference_transform: Any | None = None,
     prepare_callback: Any | None = None,
+    input_bundle: Path | None = None,
+    input_manifest_entries: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
     """Run one timed XNet invocation and retain its post-timing comparison."""
     artifact = record / "repetitions" / str(number)
@@ -318,6 +322,9 @@ def capture_repetition(
     process_wall_seconds: float | None = None
     comparison_error: str | None = None
 
+    if input_bundle is None or input_manifest_entries is None:
+        raise BenchmarkError("capture lacks an input immutability guard")
+    verify_input_manifest(input_bundle, input_manifest_entries)
     with shared_run_directory(record) as work:
         try:
             process_wall_seconds, _ = run_timed_and_compare(
@@ -334,6 +341,8 @@ def capture_repetition(
         except Exception as error:
             numerical = "fail"
             comparison_error = f"{type(error).__name__}: {error}"
+        finally:
+            verify_input_manifest(input_bundle, input_manifest_entries)
 
         artifact.mkdir()
         retained_names = tuple(
@@ -943,6 +952,7 @@ def main() -> int:
         profile,
         build_options,
     )
+    require_clean_repository(repository, args.source_revision)
     if controlled:
         bundle_inputs = [
             comparator,
@@ -971,6 +981,10 @@ def main() -> int:
         },
         comparator,
         reference_source,
+    )
+    regression_case = replace(
+        regression_case,
+        reference=record / comparison["reference"]["path"],
     )
     operational = command_evidence(record, executable, settings)
     accelerator = accelerator_evidence(record, args.gpu_backend)
@@ -1002,6 +1016,8 @@ def main() -> int:
             expected["zones"],
             reference_transform,
             prepare_callback,
+            input_bundle,
+            manifest,
         )
         for number in range(1, args.repetitions + 1)
     ]
@@ -1032,6 +1048,10 @@ def main() -> int:
         str(executable),
         environment_identity(),
     )
+    verify_input_manifest(input_bundle, manifest)
+    require_clean_repository(repository, args.source_revision)
+    if harness_identity() != harness:
+        raise BenchmarkError("benchmark harness changed during capture")
     document = make_record_document(
         args.case,
         case,

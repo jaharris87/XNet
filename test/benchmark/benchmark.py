@@ -166,9 +166,10 @@ def case_inputs(bundle_root: Path, regression_case: Any, comparator: Path) -> li
 
 
 def input_manifest(repository: Path, inputs: Iterable[Path]) -> list[dict[str, str]]:
+    root = repository.resolve()
     entries = []
     for source in inputs:
-        relative = source.resolve().relative_to(repository).as_posix()
+        relative = source.resolve().relative_to(root).as_posix()
         entries.append({"path": relative, "sha256": sha256(source)})
     return entries
 
@@ -180,6 +181,23 @@ def manifest_digest(entries: Iterable[dict[str, str]]) -> str:
         sort_keys=True,
     )
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def verify_input_manifest(
+    bundle_root: Path,
+    entries: Iterable[dict[str, str]],
+) -> None:
+    """Require every declared input to retain its pre-run content identity."""
+    root = bundle_root.resolve()
+    for entry in entries:
+        relative = Path(entry["path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise BenchmarkError("input manifest contains an unsafe path")
+        source = root / relative
+        if not source.is_file() or sha256(source) != entry["sha256"]:
+            raise BenchmarkError(
+                f"input changed after manifest capture: {entry['path']}"
+            )
 
 
 def parse_diagnostic_metrics(

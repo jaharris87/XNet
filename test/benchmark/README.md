@@ -59,6 +59,28 @@ python3 test/benchmark/test_benchmark.py /scratch/xnet-benchmark-records/batch_a
 rehydrate source and executable identity; `--input-bundle` separately
 rehydrates the versioned benchmark-input manifest when it is locally available.
 
+An exact historical source may require a narrowly scoped compatibility patch
+to build with a supported toolchain. Supply each patch in order with a
+caller-computed digest:
+
+```sh
+python3 test/benchmark/capture.py \
+  --repository /scratch/xnet-source \
+  --source-revision 86e867c2a64267a674ce4fbf6a3064af39e2f4e0 \
+  --compatibility-overlay /scratch/0001-mpi-wrapper.patch \
+  --compatibility-overlay-sha256 FULL_64_CHARACTER_SHA256 \
+  ...
+```
+
+Capture verifies the clean original checkout, retains every declared patch,
+and applies the ordered set to a fresh capture-owned Git clone. The record
+distinguishes the original revision and tree, patch SHA-256 values, resulting
+Git tree and changed paths, build configuration, and executable hash. The
+original checkout is never modified. Missing or mismatched declarations and
+any source change beyond the staged patch result are rejected. Supplying
+`--repository` during validation recreates the compatibility tree from the
+retained patches as part of full rehydration.
+
 `batch_alpha` and `heat_sn160` are representative application cases. They
 support statements about those real standalone workloads, not general scaling
 conclusions. The controlled-scaling family uses the reviewed common fixed C/O

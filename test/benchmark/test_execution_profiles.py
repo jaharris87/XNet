@@ -5,15 +5,20 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import subprocess
 import tempfile
 from typing import Any, Callable
 
 from benchmark import (
     BenchmarkError,
+    apply_compatibility_overlays,
+    declared_compatibility_overlays,
     parse_device_probe,
     parse_openmp_probe,
     parse_slurm_job,
     read_registry,
+    sha256,
+    verify_compatibility_checkout,
 )
 from capture import compiler_evidence, shared_run_directory
 from validate import (
@@ -21,6 +26,7 @@ from validate import (
     validate_accelerator_identity_entry,
     validate_runtime_evidence,
     validate_slurm_query_command,
+    validate_source_compatibility,
 )
 
 EXECUTABLE = "/build/bin/xnet"
@@ -272,9 +278,143 @@ def check_transcript_boundaries() -> None:
             raise RuntimeError("false pass: substituted accelerator identity command")
 
 
+def check_compatibility_overlays() -> None:
+    """Prove declared patches are isolated, hashed, and closed to extra edits."""
+    with tempfile.TemporaryDirectory(prefix="xnet-overlay-test-") as temporary:
+        root = Path(temporary)
+        repository = root / "repository"
+        repository.mkdir()
+        subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+        source = repository / "source.txt"
+        source.write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository), "add", "source.txt"], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "-c",
+                "user.name=XNet test",
+                "-c",
+                "user.email=xnet-test@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "base",
+            ],
+            check=True,
+        )
+        revision = subprocess.check_output(
+            ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True
+        ).strip()
+        source.write_text("compatible\n", encoding="utf-8")
+        patch = root / "compatibility.patch"
+        patch.write_bytes(
+            subprocess.check_output(
+                ["git", "-C", str(repository), "diff", "--binary"]
+            )
+        )
+        source.write_text("base\n", encoding="utf-8")
+        digest = sha256(patch)
+        declarations = declared_compatibility_overlays([patch], [digest])
+        if declarations != [(patch.resolve(), digest)]:
+            raise RuntimeError("compatibility overlay declaration changed order")
+        for name, paths, digests, message in (
+            ("missing digest", [patch], [], "requires one ordered"),
+            ("mismatched digest", [patch], ["0" * 64], "SHA-256 mismatch"),
+        ):
+            try:
+                declared_compatibility_overlays(paths, digests)
+            except BenchmarkError as error:
+                if message not in str(error):
+                    raise RuntimeError(f"{name}: unexpected rejection") from error
+            else:
+                raise RuntimeError(f"false pass: {name}")
+
+        checkout = root / "overlay-source"
+        base_tree, result_tree, changed_paths = apply_compatibility_overlays(
+            repository,
+            revision,
+            checkout,
+            [patch],
+        )
+        if (
+            base_tree == result_tree
+            or changed_paths != ["source.txt"]
+            or source.read_text(encoding="utf-8") != "base\n"
+            or (checkout / "source.txt").read_text(encoding="utf-8") != "compatible\n"
+        ):
+            raise RuntimeError("compatibility overlay was not isolated")
+        verify_compatibility_checkout(
+            checkout,
+            revision,
+            result_tree,
+            changed_paths,
+        )
+
+        record = root / "record"
+        retained = record / "compatibility-overlays" / "0001.patch"
+        retained.parent.mkdir(parents=True)
+        retained.write_bytes(patch.read_bytes())
+        document = {
+            "source_revision": revision,
+            "source_compatibility": {
+                "type": "ordered-git-patches-v1",
+                "base_revision": revision,
+                "base_tree": base_tree,
+                "result_tree": result_tree,
+                "changed_paths": changed_paths,
+                "overlays": [
+                    {
+                        "path": "compatibility-overlays/0001.patch",
+                        "sha256": digest,
+                    }
+                ],
+            },
+        }
+        validate_source_compatibility(document, record)
+        mismatched = deepcopy(document)
+        mismatched["source_compatibility"]["overlays"][0]["sha256"] = "0" * 64
+        try:
+            validate_source_compatibility(mismatched, record)
+        except BenchmarkError as error:
+            if "hash mismatch" not in str(error):
+                raise RuntimeError("unexpected retained-overlay rejection") from error
+        else:
+            raise RuntimeError("false pass: mismatched retained overlay")
+        undeclared = deepcopy(document)
+        undeclared["source_compatibility"] = {
+            **undeclared["source_compatibility"],
+            "type": "none",
+            "overlays": [],
+        }
+        try:
+            validate_source_compatibility(undeclared, record)
+        except BenchmarkError as error:
+            if "undeclared" not in str(error):
+                raise RuntimeError("unexpected undeclared-overlay provenance rejection") from error
+        else:
+            raise RuntimeError("false pass: undeclared overlay provenance")
+
+        (checkout / "source.txt").write_text("undeclared\n", encoding="utf-8")
+        try:
+            verify_compatibility_checkout(
+                checkout,
+                revision,
+                result_tree,
+                changed_paths,
+            )
+        except BenchmarkError as error:
+            if "beyond declared overlays" not in str(error):
+                raise RuntimeError("unexpected undeclared-overlay rejection") from error
+        else:
+            raise RuntimeError("false pass: undeclared overlay source change")
+
+
 def main() -> None:
     _, profiles = read_registry(Path(__file__).parent)
     check_transcript_boundaries()
+    check_compatibility_overlays()
 
     mpi = mpi_runtime()
     validate(profiles["mpi-dense"], mpi, {})

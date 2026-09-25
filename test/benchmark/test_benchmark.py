@@ -458,6 +458,36 @@ def main(record: Path) -> None:
             "malformed source revision",
         )
 
+        undeclared_source = copy_record(
+            temporary_path,
+            record,
+            "undeclared-source-compatibility",
+        )
+        document = read_document(undeclared_source)
+        document.pop("source_compatibility")
+        write_document(undeclared_source, document)
+        reject(
+            "undeclared source compatibility",
+            undeclared_source,
+            root,
+            "lacks source compatibility provenance",
+        )
+
+        mismatched_tree = copy_record(
+            temporary_path,
+            record,
+            "mismatched-source-tree",
+        )
+        document = read_document(mismatched_tree)
+        document["capture"]["build"]["source_tree"] = "0" * 40
+        write_document(mismatched_tree, document)
+        reject(
+            "mismatched build source tree",
+            mismatched_tree,
+            root,
+            "build source identity disagrees",
+        )
+
         scientific = copy_record(temporary_path, record, "scientific-value")
         diagnostic = scientific / "repetitions" / "1" / "net_diag01"
         text = diagnostic.read_text(encoding="utf-8")

@@ -23,7 +23,9 @@ from benchmark import (
     BenchmarkError,
     RECORD_SCHEMA,
     TIMER_NAMES,
+    apply_compatibility_overlays,
     case_inputs,
+    declared_compatibility_overlays,
     input_manifest,
     inventory,
     load_regression,
@@ -38,6 +40,7 @@ from benchmark import (
     run_timed_and_compare,
     sha256,
     verify_input_manifest,
+    verify_compatibility_checkout,
     worker_topology,
     write_json,
 )
@@ -96,6 +99,19 @@ def arguments() -> argparse.Namespace:
         help="exact bundle revision; defaults to --source-revision",
     )
     parser.add_argument("--build-dir", type=Path)
+    parser.add_argument(
+        "--compatibility-overlay",
+        type=Path,
+        action="append",
+        default=[],
+        help="ordered Git patch applied to a capture-owned source clone",
+    )
+    parser.add_argument(
+        "--compatibility-overlay-sha256",
+        action="append",
+        default=[],
+        help="ordered SHA-256 declaration paired with --compatibility-overlay",
+    )
     parser.add_argument("--records", type=Path)
     parser.add_argument("--case")
     parser.add_argument("--profile", default="serial-dense")
@@ -224,6 +240,69 @@ def verify_input_bundle_revision(bundle: Path, revision: str) -> None:
         ) from error
     if actual != revision:
         raise BenchmarkError("input bundle checkout does not match its revision")
+
+
+def prepare_build_source(
+    repository: Path,
+    source_revision: str,
+    build_dir: Path,
+    record: Path,
+    declarations: list[tuple[Path, str]],
+) -> tuple[Path, dict[str, object]]:
+    """Retain declared patches and materialize an isolated overlay checkout."""
+    base_tree = subprocess.check_output(
+        ["git", "-C", str(repository), "rev-parse", "HEAD^{tree}"], text=True
+    ).strip()
+    if not declarations:
+        return repository, {
+            "type": "none",
+            "base_revision": source_revision,
+            "base_tree": base_tree,
+            "result_tree": base_tree,
+            "changed_paths": [],
+            "overlays": [],
+        }
+
+    retained_directory = record / "compatibility-overlays"
+    retained_directory.mkdir()
+    entries: list[dict[str, str]] = []
+    retained_paths: list[Path] = []
+    for number, (source, digest) in enumerate(declarations, start=1):
+        destination = retained_directory / f"{number:04d}.patch"
+        shutil.copy2(source, destination)
+        if sha256(destination) != digest:
+            raise BenchmarkError("retained compatibility overlay SHA-256 mismatch")
+        entries.append(
+            {
+                "path": destination.relative_to(record).as_posix(),
+                "sha256": digest,
+            }
+        )
+        retained_paths.append(destination)
+
+    overlay_repository = build_dir.with_name(f"{build_dir.name}-source")
+    actual_base, result_tree, changed_paths = apply_compatibility_overlays(
+        repository,
+        source_revision,
+        overlay_repository,
+        retained_paths,
+    )
+    if actual_base != base_tree:
+        raise BenchmarkError("compatibility checkout base tree mismatch")
+    verify_compatibility_checkout(
+        overlay_repository,
+        source_revision,
+        result_tree,
+        changed_paths,
+    )
+    return overlay_repository, {
+        "type": "ordered-git-patches-v1",
+        "base_revision": source_revision,
+        "base_tree": base_tree,
+        "result_tree": result_tree,
+        "changed_paths": changed_paths,
+        "overlays": entries,
+    }
 
 
 def build_xnet(
@@ -759,12 +838,14 @@ def make_record_document(
     expected: dict[str, object],
     workload_configuration: dict[str, object] | None,
     record_status: str,
+    source_compatibility: dict[str, object],
 ) -> dict[str, object]:
     """Assemble only portable values and retained-artifact identities."""
     return {
         "schema": RECORD_SCHEMA,
         "record_status": record_status,
         "source_revision": source_revision,
+        "source_compatibility": source_compatibility,
         "case": {
             "case_id": case_id,
             "network": case.network,
@@ -783,6 +864,8 @@ def make_record_document(
                 "config_sha256": sha256(record / "build-config.txt"),
                 "log_path": "build.log",
                 "log_sha256": sha256(build_log),
+                "source_kind": source_compatibility["type"],
+                "source_tree": source_compatibility["result_tree"],
             },
             "executable": {"sha256": sha256(executable), "copied": False},
             "environment": environment_identity(),
@@ -860,6 +943,10 @@ def main() -> int:
         raise BenchmarkError("--input-bundle must name a readable directory")
     input_bundle_revision = args.input_bundle_revision or args.source_revision
     build_dir = args.build_dir.resolve()
+    overlay_declarations = declared_compatibility_overlays(
+        args.compatibility_overlay,
+        args.compatibility_overlay_sha256,
+    )
     case = cases[args.case]
     identity = case.input_identity
     expected_bundle_revision = identity.get("bundle_revision")
@@ -944,15 +1031,29 @@ def main() -> int:
         raise BenchmarkError("non-accelerator profiles require --ranks-per-gpu 1")
     if profile["dimensions"]["openmp"] == "ON" and os.environ.get("OMP_NUM_THREADS") != str(args.threads):
         raise BenchmarkError("OpenMP profile requires matching OMP_NUM_THREADS")
-    run_argv = [*launcher, str((args.build_dir.resolve() / "bin/xnet"))]
-    executable, build_log, build_argv, settings = build_xnet(
+    build_repository, source_compatibility = prepare_build_source(
         repository,
+        args.source_revision,
+        build_dir,
+        record,
+        overlay_declarations,
+    )
+    run_argv = [*launcher, str((build_dir / "bin/xnet"))]
+    executable, build_log, build_argv, settings = build_xnet(
+        build_repository,
         build_dir,
         record,
         profile,
         build_options,
     )
     require_clean_repository(repository, args.source_revision)
+    if source_compatibility["type"] != "none":
+        verify_compatibility_checkout(
+            build_repository,
+            args.source_revision,
+            source_compatibility["result_tree"],
+            source_compatibility["changed_paths"],
+        )
     if controlled:
         bundle_inputs = [
             comparator,
@@ -1050,6 +1151,13 @@ def main() -> int:
     )
     verify_input_manifest(input_bundle, manifest)
     require_clean_repository(repository, args.source_revision)
+    if source_compatibility["type"] != "none":
+        verify_compatibility_checkout(
+            build_repository,
+            args.source_revision,
+            source_compatibility["result_tree"],
+            source_compatibility["changed_paths"],
+        )
     if harness_identity() != harness:
         raise BenchmarkError("benchmark harness changed during capture")
     document = make_record_document(
@@ -1074,6 +1182,7 @@ def main() -> int:
         expected,
         workload_configuration,
         record_status,
+        source_compatibility,
     )
     write_json(record / "record.json", document)
     write_json(record / "inventory.json", inventory(record))

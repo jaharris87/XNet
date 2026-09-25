@@ -18,6 +18,7 @@ from typing import Any, Callable
 from benchmark import (
     BenchmarkError,
     TIMER_NAMES,
+    apply_compatibility_overlays,
     inventory,
     load_regression,
     manifest_digest,
@@ -30,6 +31,7 @@ from benchmark import (
     parse_slurm_job,
     parse_worker_states,
     sha256,
+    verify_compatibility_checkout,
     worker_topology,
 )
 from controlled import (
@@ -717,6 +719,7 @@ def validate_capture_provenance(
     profile: dict[str, Any],
 ) -> None:
     """Check retained build, executable, and safe operational evidence."""
+    source_compatibility = validate_source_compatibility(document, record)
     capture = document.get("capture")
     if not isinstance(capture, dict):
         raise BenchmarkError("missing capture provenance")
@@ -745,6 +748,13 @@ def validate_capture_provenance(
     environment = capture.get("environment")
     if not isinstance(build, dict) or not isinstance(executable, dict):
         raise BenchmarkError("capture lacks build or executable provenance")
+    if (
+        build.get("source_kind") != source_compatibility["type"]
+        or build.get("source_tree") != source_compatibility["result_tree"]
+    ):
+        raise BenchmarkError(
+            "build source identity disagrees with compatibility provenance"
+        )
     environment_fields = {"platform", "python", "processor", "host", "uname"}
     if not isinstance(environment, dict) or not environment_fields <= set(environment):
         raise BenchmarkError("capture lacks environment provenance")
@@ -968,6 +978,74 @@ def validate_capture_provenance(
     validate_runtime_evidence(
         profile, runtime_evidence, run_argv, expected_executable, environment
     )
+
+
+def validate_source_compatibility(
+    document: dict[str, object], record: Path
+) -> dict[str, object]:
+    """Validate the immutable base and any retained ordered compatibility patches."""
+    source_revision = document.get("source_revision")
+    source = document.get("source_compatibility")
+    if not isinstance(source, dict):
+        raise BenchmarkError("record lacks source compatibility provenance")
+    required = {
+        "type",
+        "base_revision",
+        "base_tree",
+        "result_tree",
+        "changed_paths",
+        "overlays",
+    }
+    if set(source) != required or source.get("base_revision") != source_revision:
+        raise BenchmarkError("malformed source compatibility provenance")
+    if not all(
+        isinstance(source.get(name), str)
+        and re.fullmatch(r"[0-9a-f]{40}", source[name])
+        for name in ("base_tree", "result_tree")
+    ):
+        raise BenchmarkError("malformed source compatibility tree identity")
+    changed_paths = source.get("changed_paths")
+    overlays = source.get("overlays")
+    if not (
+        isinstance(changed_paths, list)
+        and all(
+            isinstance(path, str)
+            and path
+            and not Path(path).is_absolute()
+            and ".." not in Path(path).parts
+            for path in changed_paths
+        )
+        and len(changed_paths) == len(set(changed_paths))
+        and isinstance(overlays, list)
+    ):
+        raise BenchmarkError("malformed source compatibility provenance")
+    if source["type"] == "none":
+        if overlays or changed_paths or source["base_tree"] != source["result_tree"]:
+            raise BenchmarkError("undeclared source compatibility overlay")
+        return source
+    if source["type"] != "ordered-git-patches-v1" or not overlays:
+        raise BenchmarkError("unsupported source compatibility provenance")
+    if not changed_paths or source["base_tree"] == source["result_tree"]:
+        raise BenchmarkError("compatibility overlays do not change the source tree")
+    for number, entry in enumerate(overlays, start=1):
+        expected_path = f"compatibility-overlays/{number:04d}.patch"
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+            raise BenchmarkError("malformed compatibility overlay provenance")
+        digest = entry.get("sha256")
+        artifact = retained_path(
+            record,
+            entry.get("path"),
+            "malformed compatibility overlay provenance",
+        )
+        if (
+            entry.get("path") != expected_path
+            or not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or not artifact.is_file()
+            or sha256(artifact) != digest
+        ):
+            raise BenchmarkError("compatibility overlay hash mismatch")
+    return source
 
 
 def validate_comparison_binding(
@@ -1266,6 +1344,7 @@ def validate_inventory(record: Path) -> None:
 
 
 def rehydrate(
+    record: Path,
     repository: Path | None,
     input_bundle: Path | None,
     executable: Path | None,
@@ -1290,6 +1369,37 @@ def rehydrate(
         ).strip()
         if dirty:
             raise BenchmarkError("rehydration repository is not clean")
+        source = validate_source_compatibility(document, record)
+        base_tree = subprocess.check_output(
+            ["git", "-C", str(repository), "rev-parse", "HEAD^{tree}"],
+            text=True,
+        ).strip()
+        if base_tree != source["base_tree"]:
+            raise BenchmarkError("rehydration source base tree mismatch")
+        if source["type"] == "ordered-git-patches-v1":
+            overlay_paths = [record / entry["path"] for entry in source["overlays"]]
+            with tempfile.TemporaryDirectory(
+                prefix="xnet-source-rehydration-"
+            ) as temporary:
+                destination = Path(temporary) / "source"
+                actual_base, result_tree, changed_paths = apply_compatibility_overlays(
+                    repository,
+                    source_revision,
+                    destination,
+                    overlay_paths,
+                )
+                if (
+                    actual_base != source["base_tree"]
+                    or result_tree != source["result_tree"]
+                    or changed_paths != source["changed_paths"]
+                ):
+                    raise BenchmarkError("rehydration compatibility tree mismatch")
+                verify_compatibility_checkout(
+                    destination,
+                    source_revision,
+                    result_tree,
+                    changed_paths,
+                )
     if input_bundle:
         bundle = document.get("input_bundle")
         revision = bundle.get("revision") if isinstance(bundle, dict) else None
@@ -1386,6 +1496,7 @@ def main() -> int:
 
     validate_inventory(record)
     rehydrate(
+        record,
         args.repository,
         args.input_bundle,
         args.executable,

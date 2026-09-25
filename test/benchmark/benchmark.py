@@ -8,6 +8,7 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -121,6 +122,146 @@ def require_clean_repository(repository: Path, source_revision: str) -> Path:
     if dirty:
         raise BenchmarkError("source repository must be clean")
     return repository
+
+
+def declared_compatibility_overlays(
+    paths: Iterable[Path], digests: Iterable[str]
+) -> list[tuple[Path, str]]:
+    """Validate the ordered compatibility patches declared by the caller."""
+    path_list = [path.resolve() for path in paths]
+    digest_list = list(digests)
+    if len(path_list) != len(digest_list):
+        raise BenchmarkError(
+            "each --compatibility-overlay requires one ordered "
+            "--compatibility-overlay-sha256"
+        )
+    declarations: list[tuple[Path, str]] = []
+    for path, digest in zip(path_list, digest_list, strict=True):
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise BenchmarkError("compatibility overlay SHA-256 is malformed")
+        if not path.is_file():
+            raise BenchmarkError("compatibility overlay is not a readable file")
+        if sha256(path) != digest:
+            raise BenchmarkError("compatibility overlay SHA-256 mismatch")
+        declarations.append((path, digest))
+    return declarations
+
+
+def apply_compatibility_overlays(
+    repository: Path,
+    source_revision: str,
+    destination: Path,
+    overlays: Iterable[Path],
+) -> tuple[str, str, list[str]]:
+    """Create a private checkout and apply an ordered patch set to its index."""
+    if destination.exists():
+        raise BenchmarkError("capture owns a fresh compatibility source directory")
+    try:
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "--quiet",
+                "--no-hardlinks",
+                "--no-checkout",
+                str(repository),
+                str(destination),
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(destination),
+                "checkout",
+                "--quiet",
+                "--detach",
+                source_revision,
+            ],
+            check=True,
+        )
+        base_tree = subprocess.check_output(
+            ["git", "-C", str(destination), "rev-parse", "HEAD^{tree}"],
+            text=True,
+        ).strip()
+        for overlay in overlays:
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(destination),
+                    "apply",
+                    "--check",
+                    "--index",
+                    str(overlay),
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(destination), "apply", "--index", str(overlay)],
+                check=True,
+            )
+        changed_paths = subprocess.check_output(
+            ["git", "-C", str(destination), "diff", "--cached", "--name-only"],
+            text=True,
+        ).splitlines()
+        result_tree = subprocess.check_output(
+            ["git", "-C", str(destination), "write-tree"],
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        if destination.exists():
+            shutil.rmtree(destination)
+        raise BenchmarkError("could not apply declared compatibility overlays") from error
+    if not changed_paths or result_tree == base_tree:
+        shutil.rmtree(destination)
+        raise BenchmarkError("compatibility overlays do not change the source tree")
+    return base_tree, result_tree, changed_paths
+
+
+def verify_compatibility_checkout(
+    repository: Path,
+    source_revision: str,
+    result_tree: str,
+    changed_paths: Iterable[str],
+) -> None:
+    """Reject source changes beyond the staged, declared overlay result."""
+    try:
+        revision = subprocess.check_output(
+            ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True
+        ).strip()
+        actual_tree = subprocess.check_output(
+            ["git", "-C", str(repository), "write-tree"], text=True
+        ).strip()
+        actual_paths = subprocess.check_output(
+            ["git", "-C", str(repository), "diff", "--cached", "--name-only"],
+            text=True,
+        ).splitlines()
+        unstaged = subprocess.run(
+            ["git", "-C", str(repository), "diff", "--quiet"],
+        ).returncode
+        untracked = subprocess.check_output(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+            ],
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise BenchmarkError("compatibility source checkout is unreadable") from error
+    if (
+        revision != source_revision
+        or actual_tree != result_tree
+        or actual_paths != list(changed_paths)
+        or unstaged != 0
+        or untracked
+    ):
+        raise BenchmarkError("compatibility source changed beyond declared overlays")
 
 
 def tracked_files(repository: Path, relative: Path) -> list[Path]:

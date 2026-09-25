@@ -1,0 +1,94 @@
+{
+  "historical_source_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
+  "network_source_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+  "controlled_workload": {
+    "temperature_gk": 1.7,
+    "density_g_cm3": 100000000.0,
+    "electron_fraction": 0.5,
+    "mass_fractions": {"c12": 0.5, "o16": 0.5},
+    "duration_seconds": 10.0,
+    "weak_reactions": true,
+    "screening": true,
+    "primary_self_heating": false,
+    "normal_zones": 1024,
+    "partial_batch_zones": 1025,
+    "openmp_batch_size": 1,
+    "gpu_batch_sizes": [1, 4, 16, 64, 128],
+    "interpretation": "bounded early-burn workload; not equilibrium or a coupled multiphysics timestep"
+  },
+  "cases": {
+    "alpha": {
+      "kind": "controlled",
+      "network": "test/Data_alpha",
+      "species": 14,
+      "reference": "test/benchmark/references/alpha_controlled_scaling.json",
+      "network_sha256": {
+        "sunet": "cee68d91608fbe3212b177c13c0a89cf003f158044a35e78b009b4db12efb4b1",
+        "netsu": "d8db4febcd495b29075039deabd84217d962cf11b868aac68f9e43ac7e716131",
+        "netweak": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "netwinv": "679b59567a95076ba771e38b0bff999ca94c21f8b1784025748197774c93cf95"
+      }
+    },
+    "ccsn52": {
+      "kind": "controlled",
+      "network": "test/Data_CCSN52",
+      "species": 52,
+      "reference": "test/benchmark/references/ccsn52_controlled_scaling.json",
+      "network_sha256": {
+        "sunet": "0d1b53ba4a59187b2c99115aef1afc765f19a88fe82db58dca3f1d4573a2c59a",
+        "netsu": "72e688a24b156bb22d5acd96f896ce6bf5fcb39ce1ebbc4697fff61d68d3a503",
+        "netweak": "ae23bc5ab5bd9fe0d31b79986665040fddf8f5d0c0af0a47e791a9c65569ed50",
+        "netwinv": "d292f7ec1f3de0c4c79df82ce9d0c835e518a4fb1deaec87a2d424cfb3a36d87"
+      }
+    },
+    "sn160": {
+      "kind": "controlled",
+      "network": "test/Data_SN160",
+      "species": 160,
+      "reference": "test/benchmark/references/sn160_controlled_scaling.json",
+      "self_heating_reference": "test/benchmark/references/sn160_controlled_scaling-self-heating.json",
+      "network_sha256": {
+        "sunet": "d20da4d9fae2b4093e67d258530c5506cc44b50775b09b797893a1c41effdaac",
+        "netsu": "9dca0e4ae011f9ef3de4090f512ad9b6b31e70454e897e60506cdb75a9867b48",
+        "netweak": "a374458b8b9439ab6c00d71292b89216d08a98c09dd0104f4046e93f28a4ae0f",
+        "netwinv": "af69be084dc05bfd27643696ff6213fd08c085afefb6ce4032a5d04e5fe4a2b2"
+      }
+    },
+    "ccsn179": {
+      "kind": "controlled",
+      "network": "test/Data_CCSN179",
+      "species": 179,
+      "reference": "test/benchmark/references/ccsn179_controlled_scaling.json",
+      "self_heating_reference": "test/benchmark/references/ccsn179_controlled_scaling-self-heating.json",
+      "network_sha256": {
+        "sunet": "abb849246a82c32a84440310ab250390e88d172b88478fb8c924fb3b9440482d",
+        "netsu": "9d465fd7be1dcc9e604db3f55e764f6813c665536ae23555663e3e2d1c634dfc",
+        "netweak": "63ec85452b34e22817c51fbc497e240f70dad633678018692cfbaeaaba289ab0",
+        "netwinv": "03adb3b8a3ef1db0f4b16fd8b91bbbec06974dcf4570038002dc0e1c230f586d"
+      }
+    },
+    "ecsn350": {
+      "kind": "controlled",
+      "network": "test/Data_ECSN350",
+      "species": 350,
+      "reference": "test/benchmark/references/ecsn350_controlled_scaling.json",
+      "self_heating_reference": "test/benchmark/references/ecsn350_controlled_scaling-self-heating.json",
+      "network_sha256": {
+        "sunet": "75a783ac7f99f06e3e1f827832aaba2984dde10c1a32d33737aa3926631c7163",
+        "netsu": "cf77c9b7b0f295db428639194a15b60e031015c3326620b9ad1d8fc07d511ed8",
+        "netweak": "edbca4ae436711bccc1b1bc23ed95b4f83fa15073197c6e9ef3a5824dc824f68",
+        "netwinv": "edb111707242e95cb19d96293590e3b340e50e457a02987aec2847e2fb3139af"
+      }
+    },
+    "batch_alpha": {
+      "kind": "regression",
+      "factory": "batch_alpha_case",
+      "description": "historical 16-zone partial-batch comparison"
+    },
+    "heat_sn160": {
+      "kind": "regression",
+      "factory": "heat_sn160_case",
+      "description": "historical six-zone self-heating comparison"
+    }
+  }
+}

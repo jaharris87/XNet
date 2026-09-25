@@ -82,6 +82,32 @@ python3 test/benchmark/run.py \
   --ranks 1 --threads 2 --repetitions 1
 ```
 
+Frontier single-GPU smoke example (inside an approved one-GPU allocation):
+
+```bash
+python3 test/benchmark/run.py \
+  --source /path/to/xnet-86e867c2 \
+  --source-revision 86e867c2a64267a674ce4fbf6a3064af39e2f4e0 \
+  --input-root "$PWD" \
+  --case alpha --zones 4 --batch-size 4 \
+  --build-dir /path/to/xnet-pre-v9-frontier-gpu-build \
+  --output /path/to/xnet-pre-v9-frontier-gpu-record \
+  --make-option PE_ENV=CRAY --make-option CMODE=OPT \
+  --make-option MPI_MODE=OFF --make-option OPENMP_MODE=OFF \
+  --make-option GPU_MODE=ON --make-option GPU_BACKEND=HIP \
+  --make-option GPU_LAPACK_VER=ROCM --make-option OPENACC_MODE=OFF \
+  --make-option OPENMP_OL_MODE=ON --make-option MATRIX_SOLVER=dense \
+  --launcher "srun --nodes=1 --ntasks=1 --cpus-per-task=7 --gpus-per-task=1 --gpu-bind=closest" \
+  --environment OMP_TARGET_OFFLOAD=MANDATORY \
+  --ranks 1 --threads 1 --repetitions 1
+```
+
+Before this tooling is frozen, one serial CPU, one multi-thread OpenMP CPU,
+and one real GPU capture must each retain raw timing, provenance, XNet
+timers/counters, and a post-timing numerical comparison. MPI scaling,
+MPI+GPU, ranks-per-GPU, batch/network sweeps, MA48 scaling, and self-heating
+sensitivity remain later campaign work.
+
 The output directory contains `result.json`, the build log/configuration,
 compiler version, generated controlled inputs, and one directory per raw
 repetition with stdout, stderr, process status, and XNet diagnostics. The

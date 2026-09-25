@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 
@@ -43,6 +44,25 @@ def main() -> None:
 
     alpha = cases["alpha_controlled_scaling"]
     sn160 = cases["sn160_controlled_scaling"]
+    controlled_cases = [
+        case for case in cases.values() if case.case_id.endswith("_controlled_scaling")
+    ]
+    if any(case.status != "ready" for case in controlled_cases):
+        raise RuntimeError("maintainer-accepted controlled case is not ready")
+    for case in controlled_cases:
+        references = [case.input_identity["reference"]]
+        self_heating = case.input_identity.get("self_heating_reference")
+        if self_heating is not None:
+            references.append(self_heating)
+        for relative in references:
+            metadata = json.loads((benchmark_directory / relative).read_text())
+            if metadata.get("reference_policy_status") != "maintainer-accepted":
+                raise RuntimeError("controlled reference policy is not accepted")
+            if "not independently validated scientific truth" not in metadata.get(
+                "baseline_status",
+                "",
+            ):
+                raise RuntimeError("controlled reference overstates scientific status")
     require_rejection(
         lambda: validate_case_dimensions(alpha, 1024, 1, True),
         "selected larger networks",

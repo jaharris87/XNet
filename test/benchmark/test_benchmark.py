@@ -150,21 +150,25 @@ def main(record: Path) -> None:
         write_document(profile, document)
         reject("execution profile", profile, root, "execution profile does not match")
 
-        if document.get("record_status") == "qualification-only":
-            publishable = copy_record(
-                temporary_path,
-                record,
-                "candidate-marked-publishable",
-            )
-            candidate = read_document(publishable)
-            candidate["record_status"] = "publishable"
-            write_document(publishable, candidate)
-            reject(
-                "candidate marked publishable",
-                publishable,
-                root,
-                "candidate reference is not qualification-only",
-            )
+        if (
+            document.get("record_status") == "qualification-only"
+            or source_case_id.endswith("_controlled_scaling")
+        ):
+            if document.get("record_status") == "qualification-only":
+                publishable = copy_record(
+                    temporary_path,
+                    record,
+                    "candidate-marked-publishable",
+                )
+                candidate = read_document(publishable)
+                candidate["record_status"] = "publishable"
+                write_document(publishable, candidate)
+                reject(
+                    "candidate marked publishable",
+                    publishable,
+                    root,
+                    "candidate reference is not qualification-only",
+                )
 
             workload = copy_record(
                 temporary_path,

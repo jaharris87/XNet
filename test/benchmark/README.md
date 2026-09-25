@@ -66,9 +66,9 @@ state, identity composition projection, and approved 10-second early-plateau
 duration across network sizes; it is the appropriate basis for bounded scaling
 conclusions, not an equilibrium claim. The registry records that workload,
 zone counts, and separate CPU/GPU batching dimensions explicitly. Controlled
-cases are currently `reference-candidate`: capture rejects them until the
-maintainer accepts their explicit comparison policy. Execution-profile
-qualification follows that decision.
+cases are `ready` under the maintainer-accepted characterization comparison
+policy. The references are reproducibility baselines, not independently
+validated scientific truth.
 
 MPI captures require `--launcher 'mpiexec -n N'`, `--ranks N`, and the actual
 thread count. The harness runs its own probe through that exact launcher and
@@ -182,10 +182,6 @@ python3 test/benchmark/capture.py \
   --zones 1024 --batch-size 1 --repetitions 5
 ```
 
-Until the case status changes from `reference-candidate` to `ready`, the same
-command requires `--qualification-only` and produces a record explicitly
-marked as non-publishable. This permits bounded local/facility qualification
-without treating a provisional numerical policy as an accepted baseline.
 `--self-heating` selects the separate
 sensitivity workload and its separate reference, and is limited to SN160,
 CCSN179, and ECSN350. Weak reactions and screening remain on in every actual
@@ -193,7 +189,7 @@ performance capture. The primary integrator is Backward Euler; BDF remains the
 separate bounded matrix spot-check rather than silently changing the primary
 workload.
 
-Each provisional reference is a one-zone serial-dense characterization from
+Each accepted reference is a one-zone serial-dense characterization from
 the frozen source, expanded during comparison because controlled zones have
 identical inputs. Alpha, CCSN179, and ECSN350 checks at 16 zones produced
 bit-identical endpoint states and counters for batch sizes 1 and 4; all five
@@ -201,14 +197,13 @@ networks passed a 16-zone comparison against the compact reference. The
 self-heating references passed corresponding four-zone checks for SN160,
 CCSN179, and ECSN350.
 
-The proposed policy uses `5e-8` absolute tolerance for electron fraction,
-`1e-6` for selected material/anchor mass fractions, and complete-vector limits
-of `L1 <= 1e-5` and `L-infinity <= 1e-6`. Self-heating also permits `2e-6`
-absolute temperature variation. These values are explicit candidates based on
-the maintained `heat_sn160` comparison scale, not accepted scientific truth.
-Frontier and Perlmutter qualification must test them without automatically
-widening a failure. The maintainer must accept or revise this policy before
-the controlled cases become publishable benchmark records.
+The maintainer-accepted characterization policy uses `5e-8` absolute tolerance
+for electron fraction, `1e-6` for selected material/anchor mass fractions, and
+complete-vector limits of `L1 <= 1e-5` and `L-infinity <= 1e-6`. Self-heating
+also permits `2e-6` absolute temperature variation. These values are
+reproducibility limits based on the maintained `heat_sn160` comparison scale,
+not accepted scientific truth. Frontier and Perlmutter qualification must test
+them without automatically widening a failure.
 
 Primary cross-network scaling keeps self-heating off. A separate sensitivity
 slice compares self-heating off/on on SN160, CCSN179, and ECSN350 without

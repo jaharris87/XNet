@@ -1,9 +1,9 @@
 {
   "comparison_schema": "xnet-comparison-v1",
   "baseline_kind": "characterization",
-  "baseline_status": "provisional characterization-only; not independently validated scientific truth; comparison policy requires maintainer acceptance",
-  "reference_policy_status": "candidate-maintainer-approval-required",
-  "reference_policy_basis": "initial bounds follow the maintained heat_sn160 field/species scale; Frontier and Perlmutter controlled-profile qualification must test suitability without automatic widening",
+  "baseline_status": "accepted characterization baseline; not independently validated scientific truth",
+  "reference_policy_status": "maintainer-accepted",
+  "reference_policy_basis": "accepted bounds follow the maintained heat_sn160 field/species scale; Frontier and Perlmutter controlled-profile qualification must test suitability without automatic widening",
   "generated_from_source_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
   "network_bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1",
   "generated_on": "2026-09-24",

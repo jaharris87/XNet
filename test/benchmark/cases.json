@@ -126,13 +126,13 @@
   "cases": [
     {
       "case_id": "alpha_controlled_scaling",
-      "status": "reference-candidate",
+      "status": "ready",
       "network": {"id": "alpha-small", "species_count": 14, "path": "test/Data_alpha"},
       "workload": {
         "id": "controlled-scaling-alpha",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data and the accepted characterization comparison policy."
       },
       "input_identity": {
         "comparator": "test/regression/xnet_regression.py",
@@ -149,13 +149,13 @@
     },
     {
       "case_id": "ccsn52_controlled_scaling",
-      "status": "reference-candidate",
+      "status": "ready",
       "network": {"id": "CCSN52", "species_count": 52, "path": "test/Data_CCSN52"},
       "workload": {
         "id": "controlled-scaling-ccsn52",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data and the accepted characterization comparison policy."
       },
       "input_identity": {
         "comparator": "test/regression/xnet_regression.py",
@@ -172,13 +172,13 @@
     },
     {
       "case_id": "sn160_controlled_scaling",
-      "status": "reference-candidate",
+      "status": "ready",
       "network": {"id": "SN160", "species_count": 160, "path": "test/Data_SN160"},
       "workload": {
         "id": "controlled-scaling-sn160",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data and the accepted characterization comparison policy."
       },
       "input_identity": {
         "comparator": "test/regression/xnet_regression.py",
@@ -196,13 +196,13 @@
     },
     {
       "case_id": "ccsn179_controlled_scaling",
-      "status": "reference-candidate",
+      "status": "ready",
       "network": {"id": "CCSN179", "species_count": 179, "path": "test/Data_CCSN179"},
       "workload": {
         "id": "controlled-scaling-ccsn179",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data and the accepted characterization comparison policy."
       },
       "input_identity": {
         "comparator": "test/regression/xnet_regression.py",
@@ -220,13 +220,13 @@
     },
     {
       "case_id": "ecsn350_controlled_scaling",
-      "status": "reference-candidate",
+      "status": "ready",
       "network": {"id": "ECSN350", "species_count": 350, "path": "test/Data_ECSN350"},
       "workload": {
         "id": "controlled-scaling-ecsn350",
         "family": "controlled-scaling",
         "specification": "controlled-scaling",
-        "description": "Approved fixed C/O early-plateau workload using authoritative public network data; a provisional serial characterization reference awaits maintainer acceptance."
+        "description": "Approved fixed C/O early-plateau workload using authoritative public network data and the accepted characterization comparison policy."
       },
       "input_identity": {
         "comparator": "test/regression/xnet_regression.py",

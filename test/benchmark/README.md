@@ -89,8 +89,11 @@ record includes wall times, emitted timer sections, zone counters, numerical
 comparison diagnostics, source/input identities, the executable hash, exact
 commands, and relevant module/binding/device environment.
 
-Input files are hashed once at capture setup. The runner does not hash system
-tools, rehydrate records, prove scheduler fields, reconcile placement, or run
+Required input files are hashed once and copied into a verified snapshot owned
+by the result record; every repetition and the numerical comparison use that
+snapshot. The source checkout is checked before and after the build. The runner
+does not hash system tools, rehydrate records, prove scheduler fields,
+reconcile placement, or run
 dedicated OpenMP/GPU probes. Actual launcher commands, environment, XNet
 diagnostics, and raw output are retained for human inspection.
 

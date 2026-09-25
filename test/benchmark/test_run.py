@@ -55,6 +55,21 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(command[-1], "xnet")
             self.assertTrue((output / "build.log").is_file())
 
+    def test_input_snapshot_is_independent_of_original(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            original = root / "inputs" / "value"
+            original.parent.mkdir()
+            original.write_text("original\n", encoding="utf-8")
+            output = root / "record"
+            output.mkdir()
+            manifest = [{"path": "value", "sha256": run.sha256(original)}]
+            snapshot = run.copy_verified_snapshot(output, original.parent, manifest)
+            original.write_text("changed\n", encoding="utf-8")
+            retained = snapshot / "value"
+            self.assertEqual(retained.read_text(encoding="utf-8"), "original\n")
+            self.assertEqual(run.sha256(retained), manifest[0]["sha256"])
+
     def test_failed_execution_and_missing_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

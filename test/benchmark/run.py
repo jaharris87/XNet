@@ -286,6 +286,7 @@ def regression_inputs(source: Path, definition: Mapping[str, Any]) -> dict[str, 
         "kind": "regression",
         "root": source,
         "case_name": case.name,
+        "factory": definition["factory"],
         "case": case,
         "helper_module": helper,
         "helper": source / "test/regression/xnet_regression.py",
@@ -304,6 +305,41 @@ def retain_generated_inputs(output: Path, inputs: Mapping[str, Any]) -> None:
     directory.mkdir()
     for name, text in inputs["retained"].items():
         (directory / name).write_text(text, encoding="utf-8")
+
+
+def copy_verified_snapshot(output: Path, root: Path, manifest: Sequence[Mapping[str, str]]) -> Path:
+    snapshot = output / "input-snapshot"
+    snapshot.mkdir()
+    for item in manifest:
+        relative = Path(item["path"])
+        destination = snapshot / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / relative, destination)
+        if sha256(destination) != item["sha256"]:
+            raise BenchmarkError(f"input changed while snapshotting: {relative}")
+    return snapshot
+
+
+def snapshot_inputs(output: Path, inputs: dict[str, Any]) -> None:
+    source_root = Path(inputs["root"])
+    snapshot = copy_verified_snapshot(output, source_root, inputs["manifest"])
+    inputs["root"] = snapshot
+    inputs["helper"] = snapshot / Path(inputs["helper"]).relative_to(source_root)
+    if inputs["kind"] == "controlled":
+        for name in ("network", "reference", "helm"):
+            inputs[name] = snapshot / Path(inputs[name]).relative_to(source_root)
+        return
+    helper = load_regression_helper(snapshot)
+    case = getattr(helper, inputs["factory"])(snapshot)
+    inputs.update(
+        {
+            "case": case,
+            "helper_module": helper,
+            "species": tuple(case.expected_species),
+            "zones": tuple(case.expected_zones),
+            "reference": case.reference,
+        }
+    )
 
 
 def stage_work(output: Path, inputs: Mapping[str, Any]) -> None:
@@ -633,6 +669,7 @@ def main() -> int:
         raise BenchmarkError(f"invalid --launcher: {error}") from error
     output.mkdir(parents=True)
     retain_generated_inputs(output, inputs)
+    snapshot_inputs(output, inputs)
     executable = build_dir / "bin/xnet"
     run_argv = [*launcher, str(executable)]
     planned_build = ["make", "-C", str(source), f"BUILD_DIR={build_dir}", f"-j{args.jobs}"]
@@ -646,6 +683,7 @@ def main() -> int:
         "source": source_identity,
         "inputs": {
             "identity": inputs["identity"],
+            "snapshot": "input-snapshot",
             "authoritative_network_revision": (
                 registry["network_source_revision"] if definition["kind"] == "controlled" else None
             ),
@@ -674,6 +712,7 @@ def main() -> int:
         return 0
     build_argv, build_status = build_xnet(source, build_dir, output, options, args.jobs)
     record["build"].update({"argv": build_argv, "status": build_status, "log": "build.log"})
+    verify_source(source, args.source_revision)
     if build_status != 0 or not executable.is_file():
         record.update({"status": "FAIL", "reason": "fresh XNet build failed or produced no executable", "repetitions": []})
         write_json(output / "result.json", record)

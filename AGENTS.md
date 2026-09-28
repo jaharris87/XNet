@@ -200,21 +200,42 @@ progress; report the blocker when handing off incomplete work.
 
 ## Communication
 
-Use plain, direct language in issues, plans, PRs, review comments,
-documentation, and reports. Name the file, behavior, limit, test, or affected
-user directly.
+Write for an XNet collaborator who understands Fortran, reaction networks,
+numerical integration, compilers, Make, and scientific HPC, but has not read
+the agent conversation that produced the work. Use plain, direct language in
+issues, plans, PRs, review comments, documentation, and reports.
 
-Prefer terms familiar to scientific-HPC and Fortran developers. Name the
-routine, module, file, Make target, compiler option, test, or numerical
-behavior directly. Keep agent-workflow terms in workflow and review guidance
-unless they add precision to source comments or developer documentation.
+Describe the concrete facts: the file or behavior that changed, what a command
+or test ran, what result it produced, what failed, what limitation remains, or
+what decision is needed. Prefer verbs and concrete nouns to abstract process
+terms. Name the routine, module, Make target, compiler option, numerical
+result, or affected user when that is what matters.
 
-Prefer concrete phrases such as `quick test`, `initial setup`, `requirement`,
-`required check`, `reference result`, and `basic verification` when those are
-what is meant. Use specialized terms such as `idempotent`, `contract`,
-`boundary`, or `oracle` when their precise technical meaning matters, and
-explain the concrete behavior first. State exactly what will be added,
-checked, restricted, or changed.
+Use scientific-HPC and Fortran terminology when it is the natural domain
+language. Keep agent-workflow, audit, compliance, and evidence-system language
+out of normal project prose unless that terminology is itself the subject.
+Specialized words such as `contract`, `boundary`, `provenance`, `evidence`,
+`identity`, `qualification`, and `artifact` are appropriate when their precise
+meaning adds useful information. Ask whether the term adds technical precision
+or replaces the concrete thing being described. Likewise, avoid qualifiers
+such as `exact`, `explicit`, `retained`, `bounded`, `accepted`,
+`authoritative`, and `verified` when they do not distinguish one real case from
+another.
+
+For example:
+
+- Prefer "The runner records the compiler version, Make options, launcher
+  command, and relevant environment variables" to "The runner retains build
+  and execution provenance."
+- Prefer "The runner was tested with a serial CPU build, an OpenMP CPU build,
+  and a Frontier GPU build" to "The implementation gate is complete."
+- Prefer "The historical source is not modified; configurations that require
+  a source change are reported as unavailable" to "Verify the
+  immutable-source/unavailable boundary."
+
+Keep issues and PR descriptions proportional to the change. Write durable
+documentation about XNet behavior, inputs, outputs, and limits rather than the
+agent process that happened to produce it.
 
 Report evidence separately from interpretation. Include command outcomes and
 important limitations. Treat a successful compile, a zero exit status, and one

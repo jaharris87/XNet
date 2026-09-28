@@ -1,14 +1,13 @@
-# Exact pre-v9 benchmark capture
+# Pre-v9 benchmark measurements
 
-This directory implements the small benchmark contract for issue #127. It
-captures timing and numerical evidence from the unmodified historical XNet
-source at `86e867c2a64267a674ce4fbf6a3064af39e2f4e0`. It is not a general
-benchmark framework, facility abstraction, or platform-qualification system.
+This directory contains the small benchmark runner for issue #127. It records
+timings and numerical results from the historical XNet source revision
+`86e867c2a64267a674ce4fbf6a3064af39e2f4e0`. It is not a general benchmark
+framework, a facility interface, or a system for qualifying a platform.
 
-The historical source is immutable. A configuration that requires a source
-patch is `UNAVAILABLE` for the exact baseline. Later XNet fixes, including
-current-development portability fixes, must not be applied as benchmark-time
-overlays.
+Do not modify the historical source. If a compiler or runtime configuration
+requires a source patch, report that measurement as `UNAVAILABLE`. Later XNet
+portability fixes must not be applied while measuring the pre-v9 source.
 
 ## Files
 
@@ -16,11 +15,11 @@ overlays.
   network hashes, and available cases.
 - `run.py` verifies, builds, runs, times, compares, and retains one requested
   case/configuration.
-- `references/` contains the accepted characterization values and comparison
-  limits developed during the earlier issue #127 investigation. They are
-  reproducibility references, not independent claims of scientific truth.
+- `references/` contains the reference results and comparison tolerances from
+  the earlier issue #127 work. They support reproducible comparisons; they are
+  not independent claims of scientific truth.
 - `test_run.py` covers a few direct failure paths. It is deliberately not a
-  record-mutation or evidence-framework test suite.
+  general result-validation or tampering test suite.
 
 Numerical parsing and comparison reuse `test/regression/xnet_regression.py`.
 Comparison occurs after the timed XNet process exits.
@@ -42,13 +41,13 @@ Normal comparisons use 1024 zones. The deliberate partial-batch case uses
 Small zone counts are allowed for setup and smoke runs, but are not baseline
 matrix measurements.
 
-## Capture
+## Run a benchmark
 
-Use a clean checkout at the exact historical revision and fresh build/output
-paths. Make selections and launcher arguments are explicit and retained. No
-shell interprets the final application argv.
+Use a clean checkout at the historical revision and new build and output
+directories. The result records the Make selections and launcher arguments.
+No shell interprets the final application argument vector.
 
-Serial smoke example:
+Serial CPU smoke test:
 
 ```bash
 python3 test/benchmark/run.py \
@@ -64,7 +63,7 @@ python3 test/benchmark/run.py \
   --ranks 1 --threads 1 --repetitions 1
 ```
 
-OpenMP smoke example:
+OpenMP CPU smoke test:
 
 ```bash
 python3 test/benchmark/run.py \
@@ -82,7 +81,7 @@ python3 test/benchmark/run.py \
   --ranks 1 --threads 2 --repetitions 1
 ```
 
-Frontier single-GPU smoke example (inside an approved one-GPU allocation):
+Frontier GPU smoke test (inside a one-GPU Slurm allocation):
 
 ```bash
 python3 test/benchmark/run.py \
@@ -102,46 +101,47 @@ python3 test/benchmark/run.py \
   --ranks 1 --threads 1 --repetitions 1
 ```
 
-Before this tooling is frozen, one serial CPU, one multi-thread OpenMP CPU,
-and one real GPU capture must each retain raw timing, provenance, XNet
-timers/counters, and a post-timing numerical comparison. MPI scaling,
-MPI+GPU, ranks-per-GPU, batch/network sweeps, MA48 scaling, and self-heating
-sensitivity remain later campaign work.
+The runner was tested with a serial CPU build, a two-thread OpenMP CPU build,
+and a single-GPU Frontier build. Each test retained the wall time, build and
+input revisions, command, XNet timers and counters, raw output, and numerical
+comparison. MPI scaling, MPI+GPU, ranks-per-GPU, batch and network sweeps,
+MA48 scaling, and self-heating sensitivity remain to be measured for #127.
 
 The output directory contains `result.json`, the build log/configuration,
 compiler version, generated controlled inputs, and one directory per raw
 repetition with stdout, stderr, process status, and XNet diagnostics. The
 record includes wall times, emitted timer sections, zone counters, numerical
-comparison diagnostics, source/input identities, the executable hash, exact
+comparison diagnostics, source and input revisions, the executable hash,
 commands, and relevant module/binding/device environment.
 
-Required input files are hashed once and copied into a verified snapshot owned
-by the result record; every repetition and the numerical comparison use that
-snapshot. The source checkout is checked before and after the build. The runner
-does not hash system tools, rehydrate records, prove scheduler fields,
-reconcile placement, or run
-dedicated OpenMP/GPU probes. Actual launcher commands, environment, XNet
-diagnostics, and raw output are retained for human inspection.
+Required input files are hashed once and copied into the output directory.
+Every repetition and the numerical comparison use that copy. The runner checks
+the source checkout before and after the build. It does not hash system tools,
+reconstruct old runs, independently validate Slurm output, or run separate
+OpenMP or GPU probe programs. The recorded launcher command, environment, XNet
+diagnostics, and raw output are available for inspection.
 
 ## Numerical status
 
 - `PASS`: every process completed and every post-timing comparison passed the
-  accepted limits.
+  configured tolerances.
 - `FAIL`: a build, execution, required-output, parse, or numerical comparison
   failed.
 - `QUALIFIED / DIFFERENT-NUMERICAL-PATH`: execution completed but comparison
-  differs through an explicitly documented maintainer-qualified numerical
-  path. Supply `--qualification-note`; the raw failure remains in the record.
-- `UNAVAILABLE`: the exact historical source cannot supply the configuration.
-  Supply `--record-unavailable 'precise reason'`. This records the planned
-  build/run identity without patching or attempting to disguise the limit.
+  differs through a documented numerical path that the maintainer has approved
+  for interpretation. Supply `--qualification-note`; the failed comparison
+  remains in the result.
+- `UNAVAILABLE`: the historical source cannot build or run the configuration.
+  Supply `--record-unavailable 'precise reason'`. This records the requested
+  build selections and command without patching the source.
 
 Comparison limits are maintainer decisions. Do not widen them to make a new
 toolchain pass.
 
-## Finite matrix
+## Measurements to collect for issue #127
 
-The campaign is question-driven, not Cartesian:
+The planned measurements answer specific performance questions rather than
+forming a Cartesian product:
 
 1. network-size scaling across alpha, CCSN52, SN160, CCSN179, and ECSN350;
 2. CPU OpenMP scaling on selected larger networks with batch size one;
@@ -149,23 +149,23 @@ The campaign is question-driven, not Cartesian:
    licensed source is available;
 4. selected CPU versus GPU comparisons;
 5. GPU batch-size scaling at `1,4,16,64,128`;
-6. one bounded ranks-per-GPU slice where the exact source and facility allow;
+6. one ranks-per-GPU comparison where the historical source and facility
+   support it;
 7. selected self-heating off/on sensitivity points;
 8. component timings reused from those runs; and
 9. historical `batch_alpha` and `heat_sn160` comparability points.
 
-Use one setup/smoke followed by five retained repetitions unless observed
-behavior justifies a different count. Record an unavailable point and move on
-when the exact source is incompatible.
+Use one setup run followed by five retained repetitions unless the observed
+behavior justifies a different count. If the historical source is incompatible
+with a configuration, record that measurement as unavailable and continue.
 
-## Future coupled-call records
+## Future coupled XNet measurements
 
-An eventual authentic CHIMERA or Flash-X capture should record the application
-and XNet revisions, network/input identity, caller and call site, zone/batch
-shape, self-heating choice, rank/thread/device placement, call count, raw call
-times, XNet component timers, and a numerical-success disposition. This file
-defines those fields only; it does not invent a coupled workload or implement
-coupled capture.
+A future CHIMERA or Flash-X measurement should record the application and XNet
+revisions, network and input revisions, caller and call site, zone count, batch
+size, self-heating choice, rank/thread/device placement, call count, raw call
+times, XNet component timers, and numerical comparison result. This file lists
+the information to record; it does not define or implement a coupled workload.
 
 ## Focused checks
 

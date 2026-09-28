@@ -1,0 +1,183 @@
+{
+  "comparison_schema": "xnet-comparison-v1",
+  "baseline_kind": "characterization",
+  "baseline_status": "accepted characterization baseline; not independently validated scientific truth",
+  "reference_policy_status": "maintainer-accepted",
+  "reference_policy_basis": "accepted bounds follow the maintained heat_sn160 field/species scale; Frontier and Perlmutter controlled-profile qualification must test suitability without automatic widening",
+  "generated_from_source_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
+  "network_bundle_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+  "generated_on": "2026-09-24",
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "compiler": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+  "build": {
+    "CMODE": "OPT",
+    "PE_ENV": "GNU",
+    "MPI_MODE": "OFF",
+    "OPENMP_MODE": "OFF",
+    "GPU_MODE": "OFF",
+    "EOS": "STARKILLER",
+    "MATRIX_SOLVER": "dense",
+    "LAPACK_VER": "NETLIB"
+  },
+  "workload": {
+    "temperature_gk": 1.7,
+    "density_g_cm3": 100000000.0,
+    "initial_electron_fraction": 0.5,
+    "initial_mass_fractions": {
+      "c12": 0.5,
+      "o16": 0.5
+    },
+    "end_time_seconds": 10.0,
+    "weak_reactions": true,
+    "screening": true,
+    "self_heating": false,
+    "integrator": "backward-euler",
+    "zones_generated": 1
+  },
+  "case": "ccsn52_controlled_scaling",
+  "expected_zones": [
+    1
+  ],
+  "final_step": 255,
+  "solver_counters": {
+    "ts": 255,
+    "nr": 255,
+    "jacobian": 255,
+    "derivative": 256,
+    "cross_section": 256
+  },
+  "fields": {
+    "target_time": {
+      "value": 10.0,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "achieved_time": {
+      "value": 10.0,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "temperature_gk": {
+      "value": 1.7,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "density": {
+      "value": 100000000.0,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "exact": true
+    },
+    "electron_fraction": {
+      "value": 0.5,
+      "atol": 5e-08,
+      "rtol": 0.0,
+      "exact": false
+    }
+  },
+  "mass_fraction_selection": {
+    "1": [
+      "c12",
+      "o16",
+      "ne20",
+      "mg24",
+      "si28",
+      "s32",
+      "ar36",
+      "ca40",
+      "ti44",
+      "cr48",
+      "fe52",
+      "ni56"
+    ]
+  },
+  "mass_fraction_tolerances": {
+    "all_selected": {
+      "atol": 1e-06,
+      "rtol": 0.0,
+      "exact": false
+    }
+  },
+  "mass_fraction_printed_sum": {
+    "value": 0.9999999979731127,
+    "atol": 1e-06,
+    "rtol": 0.0,
+    "exact": false
+  },
+  "composition_norm_limits": {
+    "l1": 1e-05,
+    "linf": 1e-06
+  },
+  "mass_fractions": {
+    "n": 2.7870723e-10,
+    "p": 7.9146321e-10,
+    "he4": 8.3248959e-12,
+    "c12": 0.00033159523,
+    "n15": 1.6970649e-21,
+    "o16": 0.35677553,
+    "f19": 1.8478001e-27,
+    "ne20": 0.39522362,
+    "na23": 1.0583223e-09,
+    "mg24": 0.19632599,
+    "al27": 2.7350823e-08,
+    "si28": 0.050417229,
+    "p31": 3.3965922e-10,
+    "s32": 0.00092449727,
+    "cl35": 7.1748608e-12,
+    "ar36": 1.5057861e-06,
+    "k39": 4.8514188e-14,
+    "ca40": 8.5248406e-10,
+    "sc43": 3.09958e-22,
+    "ti44": 5.3490187e-15,
+    "v47": 1.8164251e-24,
+    "cr48": 1.2629818e-20,
+    "mn51": 0.0,
+    "fe52": 0.0,
+    "fe53": 0.0,
+    "fe54": 0.0,
+    "fe55": 0.0,
+    "fe56": 0.0,
+    "fe57": 0.0,
+    "fe58": 0.0,
+    "fe59": 0.0,
+    "fe60": 0.0,
+    "co54": 0.0,
+    "co55": 0.0,
+    "co56": 0.0,
+    "co57": 0.0,
+    "co58": 0.0,
+    "co59": 0.0,
+    "co60": 0.0,
+    "co61": 0.0,
+    "co62": 0.0,
+    "ni56": 0.0,
+    "ni57": 0.0,
+    "ni58": 0.0,
+    "ni59": 0.0,
+    "ni60": 0.0,
+    "ni61": 0.0,
+    "ni62": 0.0,
+    "ni63": 0.0,
+    "ni64": 2.1673387e-27,
+    "cu59": 0.0,
+    "zn60": 0.0
+  },
+  "mass_fraction_sum_atol": 1.0020268873246465e-06,
+  "generation_evidence": {
+    "source_checkout_revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0",
+    "source_checkout_clean": true,
+    "network_payload_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+    "network_manifest_path": "test/benchmark/network-bundle-a9585568.json",
+    "network_manifest_sha256": "5b9138321d0d6490e3372d38a285b5e9b23500d1a4c7020cb630f74c2288b1a2",
+    "executable_sha256": "47b691608ffe93c96b9c36748b3f3e21469af5953d798a16d49a36c24898bddc",
+    "build_config_sha256": "daa2a948e346376d5f20294b890f3ce5475dd394e02beaf176c511a8cbd761cb",
+    "control_sha256": "e73bdf97536b6194fea0ccc006201e69b7f99c29fa0178ce14e52bf485f8451b",
+    "abundance_sha256": "b1c46b472de2104fa5a0d4e73824d457f28fcfb7db6abcdbf8ed71611abb2543",
+    "trajectory_sha256": "963b7439e0e71f5ef799a3ec09d8549a8a9a4be2206be33c9476a3cbff04f2f1",
+    "diagnostic_sha256": "179561f9e6cd8b3f7105964316376beaeb5efc61c91bd9fd7250873789ec54a7",
+    "process_status": "return_code=0"
+  }
+}

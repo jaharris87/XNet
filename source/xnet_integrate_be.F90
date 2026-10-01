@@ -86,9 +86,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Do kts = 1, ktsmx
 
-      ! Attempt Backward Euler integration over desired timestep. step_be uses
-      ! the persistent module workspace directly with the current worker bounds.
-      Call step_be(kstep)
+      ! Attempt Backward Euler integration over desired timestep. Pass the
+      ! current worker section explicitly to preserve zb_lo:zb_hi association.
+      Call step_be(kstep,inr(zb_lo:zb_hi))
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot,lzstep)
@@ -231,10 +231,10 @@ Contains
     Return
   End Subroutine solve_be
 
-  Subroutine step_be(kstep)
+  Subroutine step_be(kstep,inr)
     !-----------------------------------------------------------------------------------------------
     ! This routine attempts to integrate a single Backward Euler step for the timestep tdel.
-    ! Module inr is 0 for active zones, -1 for inactive zones, and positive after convergence.
+    ! If successful, inr = 1
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, nname
     Use xnet_abundances, Only: y, ydot, yt, xext
@@ -250,6 +250,11 @@ Contains
     ! Input variables
     Integer, Intent(in) :: kstep
 
+    ! Input/Output variables
+    Integer, Intent(inout) :: inr(zb_lo:zb_hi) ! On input,  = 0 indicates active zone
+                                               !            =-1 indicates inactive zone
+                                               ! On output, > 0 indicates # NR iterations if converged
+
     ! Local variables
     Integer :: irdymx, idymx
     Integer :: i, k, kit, izb, izone
@@ -257,6 +262,9 @@ Contains
 
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
+
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(inr)
 
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
@@ -468,6 +476,9 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(inr)
 
     stop_timer = xnet_wtime()
     timer_nraph = timer_nraph + stop_timer

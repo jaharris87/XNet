@@ -115,7 +115,8 @@ The runner's complete `input-snapshot/` directory is intentionally omitted
 from this compact repository copy because it duplicates about 59 MB of
 already-tracked XNet inputs. `result.json` retains the authoritative input
 revision and SHA-256 digest for every required input. The generated inputs are
-included here. `SHA256SUMS` covers every retained file in this directory.
+included here. `SHA256SUMS` covers the other 67 retained files in this
+directory.
 
 The successful capture used benchmark runner commit
 `24c7d8a924035c3bd181c220dc68b35bfe5cdb4d`. `run.py` was unchanged. The

@@ -62,7 +62,9 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
-    ! full_net maps the caller-owned its array for the complete evolution.
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(its)
+
     ! If the zone has previously converged or failed, do not iterate
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(its,inr,lzstep,mykts)
@@ -219,6 +221,9 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(its)
 
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer

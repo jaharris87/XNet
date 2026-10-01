@@ -1,0 +1,1972 @@
+make: Entering directory '/pscratch/sd/j/jaharris/xnet_work/source-86e867c2'
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_parallel_stubs.F90:337:43: warning: missing terminating ' character
+     ! Just gotta return something that isn't m_comm.
+                                           ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_parallel_stubs.F90:346:9: warning: missing terminating ' character
+     ! We're running in serial.  Just return m_comm
+         ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_nse.F90:383:19: warning: missing terminating ' character
+     ! Now use XNet's screening to match network
+                   ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_integrate_bdf.F90:883:30: warning: missing terminating ' character
+       ! Determine which zones' Jacobians need to be rebuilt
+                              ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_integrate_bdf.F90:1479:16: warning: missing terminating ' character
+           ! Don't increase stepsize if eta < eta_thresh
+                ^
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_types.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_types.o'
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_integrate_be.F90:173:53: warning: missing terminating ' character
+     ! Mark TS convergence only for zones which haven't previously failed or converged
+                                                     ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_preprocess.F90:721:14: warning: missing terminating ' character
+         ! Don't trust the Q-values in the netsu file
+              ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/model_input_ascii.F90:302:37: warning: missing terminating ' character
+       ! If the number of species isn't divisible by 4, we need to parse the last few entries here
+                                     ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_eos_starkiller.F90:231:24: warning: missing terminating ' character
+     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
+                        ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_eos_starkiller.F90:289:24: warning: missing terminating ' character
+     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
+                        ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_eos_starkiller.F90:327:58: warning: missing terminating ' character
+     ! This routine calculates the Salpeter (1954) ratio f'/f(eta) needed for electron screening.
+                                                          ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_eos_starkiller.F90:329:8: warning: missing terminating ' character
+     ! f'/f is also defined as theta_e in DeWitt+ (1973).
+        ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_eos_starkiller.F90:369:58: warning: missing terminating ' character
+     ! This routine calculates the Salpeter (1954) ratio f'/f(eta) needed for electron screening.
+                                                          ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_eos_starkiller.F90:371:8: warning: missing terminating ' character
+     ! f'/f is also defined as theta_e in DeWitt+ (1973).
+        ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/actual_eos.F90:686:34: warning: missing terminating ' character
+            !..since dpresdd doesn't enter the maxwell relations at all, use the
+                                  ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/actual_eos.F90:955:20: warning: missing terminating ' character
+               ! Don't let the temperature/density change by more than a factor of two
+                    ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/actual_eos.F90:958:20: warning: missing terminating ' character
+               ! Don't let us freeze/evacuate
+                    ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/actual_eos.F90:977:46: warning: missing terminating ' character
+               ! Figure out which variables we're using
+                                              ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/actual_eos.F90:1038:20: warning: missing terminating ' character
+               ! Don't let the temperature or density change by more
+                    ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/eos_type.F90:154:56: warning: missing terminating ' character
+   ! avoid derived type assignment (OpenACC and CUDA can't handle that)
+                                                        ^
+/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/actual_eos.F90:1043:20: warning: missing terminating ' character
+               ! Don't let us freeze or evacuate
+                    ^
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/gpu/cudaf.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cudaf.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/gpu/cusparsef.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cusparsef.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/gpu/cublasf.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cublasf.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/gpu/cusolverf.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cusolverf.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/gpu/openaccf.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/openaccf.o'
+acc_on_device:
+     93, Generating acc routine seq
+         Generating NVIDIA GPU code
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_constants.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_constants.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_parallel_stubs.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_parallel_stubs.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_fd.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_fd.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_timers.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_timers.o'
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 32.292 ms
+ptxas info    : Function properties for openaccf_acc_on_device_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 5.384 ms
+fdm3h:
+     10, Generating acc routine seq
+         Generating NVIDIA GPU code
+fdm1h:
+    164, Generating acc routine seq
+         Generating NVIDIA GPU code
+fd0h:
+    309, Generating acc routine seq
+         Generating NVIDIA GPU code
+ptxas info    : 101 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.386 ms
+fd1h:
+    358, Generating acc routine seq
+         Generating NVIDIA GPU code
+fd2h:
+    503, Generating acc routine seq
+         Generating NVIDIA GPU code
+fd4h:
+    554, Generating acc routine seq
+         Generating NVIDIA GPU code
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.208 ms
+fd6h:
+    603, Generating acc routine seq
+         Generating NVIDIA GPU code
+fd8h:
+    652, Generating acc routine seq
+         Generating NVIDIA GPU code
+fd10h:
+    701, Generating acc routine seq
+         Generating NVIDIA GPU code
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.458 ms
+ptxas info    : Function properties for fd_fd10h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 5.655 ms
+ptxas info    : Function properties for fd_fd8h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 5.518 ms
+ptxas info    : Function properties for fd_fd6h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 5.561 ms
+ptxas info    : Function properties for fd_fd4h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 5.512 ms
+ptxas info    : Function properties for fd_fd2h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 5.600 ms
+ptxas info    : Function properties for fd_fd1h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 14.845 ms
+ptxas info    : Function properties for fd_fd0h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 5.439 ms
+ptxas info    : Function properties for fd_fdm1h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 13.509 ms
+ptxas info    : Function properties for fd_fdm3h_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 15.271 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_util.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_util.o'
+ifactorial:
+     25, Generating acc routine seq
+         Generating NVIDIA GPU code
+safe_exp_scalar:
+     42, Generating acc routine seq
+         Generating NVIDIA GPU code
+safe_exp_vector:
+     56, Generating acc routine seq
+         Generating NVIDIA GPU code
+plasma:
+    249, Generating acc routine seq
+         Generating NVIDIA GPU code
+ptxas info    : 61 bytes gmem
+ptxas info    : Function properties for __internal_accurate_pow
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 6.123 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.558 ms
+ptxas info    : Function properties for xnet_util_plasma_
+    32 bytes stack frame, 32 bytes spill stores, 32 bytes spill loads
+ptxas info    : Compile time = 10.608 ms
+ptxas info    : Function properties for xnet_util_safe_exp_vector_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 7.775 ms
+ptxas info    : Function properties for xnet_util_safe_exp_scalar_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 2.423 ms
+ptxas info    : Function properties for xnet_util_ifactorial_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 3.258 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_controls.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_controls.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/eos/eos_type.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/eos/eos_type.o'
+eos_get_small_temp:
+    185, Generating acc routine seq
+         Generating NVIDIA GPU code
+eos_get_small_dens:
+    191, Generating acc routine seq
+         Generating NVIDIA GPU code
+eos_get_max_temp:
+    197, Generating acc routine seq
+         Generating NVIDIA GPU code
+eos_get_max_dens:
+    203, Generating acc routine seq
+         Generating NVIDIA GPU code
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.353 ms
+ptxas info    : Function properties for eos_type_module_eos_get_max_dens_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 1.177 ms
+ptxas info    : Function properties for eos_type_module_eos_get_max_temp_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.832 ms
+ptxas info    : Function properties for eos_type_module_eos_get_small_dens_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.828 ms
+ptxas info    : Function properties for eos_type_module_eos_get_small_temp_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 1.055 ms
+read_controls:
+    346, Generating update device(iscrn,ymin,iheat,iconvc)
+    348, Generating enter data create(kmon(:,:),iweak(:),lzactive(:),ktot(:,:))
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/eos/actual_eos.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/eos/actual_eos.o'
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.361 ms
+NVFORTRAN-W-0155-The type of FLOAT is now double precision with -r8  (/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/eos/actual_eos.f90: 1261)
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_conditions.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_conditions.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_gpu.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_gpu.o'
+  0 inform,   1 warnings,   0 severes, 0 fatal for actual_eos_init
+t9rhofind_scalar:
+     41, Generating acc routine seq
+         Generating NVIDIA GPU code
+on_device:
+    122, Generating acc routine seq
+         Generating NVIDIA GPU code
+t9rhofind_vector:
+    114, Generating enter data copyin(rhof(:),t9f(:),tf(:),th(:,:),nf(:),nh(:),rhoh(:,:),mask(:),t9h(:,:))
+    116, Generating present(t9h(:,:),mask(:),rhoh(:,:),nh(:),th(:,:),tf(:),nf(:),t9f(:),rhof(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        118, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    118, Generating implicit firstprivate(kstep)
+    124, Generating exit data copyout(rhof(:),t9f(:))
+         Generating exit data delete(th(:,:),tf(:))
+         Generating exit data copyout(nf(:))
+         Generating exit data delete(t9h(:,:),nh(:),rhoh(:,:),mask(:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.328 ms
+ptxas info    : Function properties for xnet_gpu_on_device_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.798 ms
+actual_eos:
+    129, Generating acc routine seq
+         Generating NVIDIA GPU code
+    380, Reference argument passing prevents parallelization: xt
+    381, Reference argument passing prevents parallelization: xt
+    382, Reference argument passing prevents parallelization: xt
+    383, Reference argument passing prevents parallelization: mxt
+    384, Reference argument passing prevents parallelization: mxt
+    385, Reference argument passing prevents parallelization: mxt
+    386, Reference argument passing prevents parallelization: xd
+    387, Reference argument passing prevents parallelization: xd
+    388, Reference argument passing prevents parallelization: xd
+    389, Reference argument passing prevents parallelization: mxd
+    390, Reference argument passing prevents parallelization: mxd
+    391, Reference argument passing prevents parallelization: mxd
+    393, Reference argument passing prevents parallelization: xt
+    394, Reference argument passing prevents parallelization: xt
+    395, Reference argument passing prevents parallelization: xt
+    396, Reference argument passing prevents parallelization: mxt
+    397, Reference argument passing prevents parallelization: mxt
+    398, Reference argument passing prevents parallelization: mxt
+    399, Reference argument passing prevents parallelization: xd
+    400, Reference argument passing prevents parallelization: xd
+    401, Reference argument passing prevents parallelization: xd
+    402, Reference argument passing prevents parallelization: mxd
+    403, Reference argument passing prevents parallelization: mxd
+    404, Reference argument passing prevents parallelization: mxd
+    406, Reference argument passing prevents parallelization: xt
+    407, Reference argument passing prevents parallelization: xt
+    408, Reference argument passing prevents parallelization: xt
+    409, Reference argument passing prevents parallelization: mxt
+    410, Reference argument passing prevents parallelization: mxt
+    411, Reference argument passing prevents parallelization: mxt
+    419, Reference argument passing prevents parallelization: si2d
+         Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization: si1t
+         Reference argument passing prevents parallelization: si0t
+         Reference argument passing prevents parallelization: si2md
+         Reference argument passing prevents parallelization: si1md
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: si2mt
+         Reference argument passing prevents parallelization: si1mt
+         Reference argument passing prevents parallelization: si0mt
+         Reference argument passing prevents parallelization: si2t
+    423, Reference argument passing prevents parallelization: dsi2d
+         Reference argument passing prevents parallelization: dsi1d
+         Reference argument passing prevents parallelization: dsi0d
+         Reference argument passing prevents parallelization: dsi1md
+         Reference argument passing prevents parallelization: dsi0md
+         Reference argument passing prevents parallelization: si1t
+         Reference argument passing prevents parallelization: si0t
+         Reference argument passing prevents parallelization: dsi2md
+         Reference argument passing prevents parallelization: si2mt
+         Reference argument passing prevents parallelization: si1mt
+         Reference argument passing prevents parallelization: si0mt
+         Reference argument passing prevents parallelization: si2t
+    427, Reference argument passing prevents parallelization: si2d
+         Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization: si1md
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: dsi2t
+         Reference argument passing prevents parallelization: dsi1t
+         Reference argument passing prevents parallelization: dsi0t
+         Reference argument passing prevents parallelization: dsi2mt
+         Reference argument passing prevents parallelization: dsi1mt
+         Reference argument passing prevents parallelization: dsi0mt
+         Reference argument passing prevents parallelization: si2md
+    435, Reference argument passing prevents parallelization: si2d
+         Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization:ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_linalg.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_linalg.o'
+ si1md
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: ddsi2t
+         Reference argument passing prevents parallelization: ddsi1t
+         Reference argument passing prevents parallelization: ddsi0t
+         Reference argument passing prevents parallelization: ddsi2mt
+         Reference argument passing prevents parallelization: ddsi1mt
+         Reference argument passing prevents parallelization: ddsi0mt
+         Reference argument passing prevents parallelization: si2md
+    439, Reference argument passing prevents parallelization: dsi2d
+         Reference argument passing prevents parallelization: dsi1d
+         Reference argument passing prevents parallelization: dsi0d
+         Reference argument passing prevents parallelization: dsi1t
+         Reference argument passing prevents parallelization: dsi0t
+         Reference argument passing prevents parallelization: dsi2md
+         Reference argument passing prevents parallelization: dsi1md
+         Reference argument passing prevents parallelization: dsi0md
+         Reference argument passing prevents parallelization: dsi2mt
+         Reference argument passing prevents parallelization: dsi1mt
+         Reference argument passing prevents parallelization: dsi0mt
+         Reference argument passing prevents parallelization: dsi2t
+    445, Reference argument passing prevents parallelization: xt
+    446, Reference argument passing prevents parallelization: xt
+    447, Reference argument passing prevents parallelization: mxt
+    448, Reference argument passing prevents parallelization: mxt
+    449, Reference argument passing prevents parallelization: xd
+    450, Reference argument passing prevents parallelization: xd
+    451, Reference argument passing prevents parallelization: mxd
+    452, Reference argument passing prevents parallelization: mxd
+    454, Reference argument passing prevents parallelization: xt
+    455, Reference argument passing prevents parallelization: xt
+    456, Reference argument passing prevents parallelization: mxt
+    457, Reference argument passing prevents parallelization: mxt
+    458, Reference argument passing prevents parallelization: xd
+    459, Reference argument passing prevents parallelization: xd
+    460, Reference argument passing prevents parallelization: mxd
+    461, Reference argument passing prevents parallelization: mxd
+    480, Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization: si0t
+         Reference argument passing prevents parallelization: si1md
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: si1mt
+         Reference argument passing prevents parallelization: si0mt
+         Reference argument passing prevents parallelization: si1t
+    502, Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization: si0t
+         Reference argument passing prevents parallelization: si1md
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: si1mt
+         Reference argument passing prevents parallelization: si0mt
+         Reference argument passing prevents parallelization: si1t
+    506, Reference argument passing prevents parallelization: dsi1d
+         Reference argument passing prevents parallelization: dsi0d
+         Reference argument passing prevents parallelization: dsi0md
+         Reference argument passing prevents parallelization: si0t
+         Reference argument passing prevents parallelization: dsi1md
+         Reference argument passing prevents parallelization: si1mt
+         Reference argument passing prevents parallelization: si0mt
+         Reference argument passing prevents parallelization: si1t
+    511, Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: dsi1t
+         Reference argument passing prevents parallelization: dsi0t
+         Reference argument passing prevents parallelization: dsi1mt
+         Reference argument passing prevents parallelization: dsi0mt
+         Reference argument passing prevents parallelization: si1md
+    532, Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization: si0t
+         Reference argument passing prevents parallelization: si1md
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: si1mt
+         Reference argument passing prevents parallelization: si0mt
+         Reference argument passing prevents parallelization: si1t
+    536, Reference argument passing prevents parallelization: dsi1d
+         Reference argument passing prevents parallelization: dsi0d
+         Reference argument passing prevents parallelization: dsi0md
+         Reference argument passing prevents parallelization: si0t
+         Reference argument passing prevents parallelization: dsi1md
+         Reference argument passing prevents parallelization: si1mt
+         Reference argument passing prevents parallelization: si0mt
+         Reference argument passing prevents parallelization: si1t
+    542, Reference argument passing prevents parallelization: si1md
+         Reference argument passing prevents parallelization: si1d
+         Reference argument passing prevents parallelization: si0d
+         Reference argument passing prevents parallelization: si0md
+         Reference argument passing prevents parallelization: dsi1t
+         Reference argument passing prevents parallelization: dsi0t
+         Reference argument passing prevents parallelization: dsi1mt
+         Reference argument passing prevents parallelization: dsi0mt
+xnet_actual_eos:
+    907, Generating acc routine seq
+         Generating NVIDIA GPU code
+actual_eos_eta:
+    930, Generating acc routine seq
+         Generating NVIDIA GPU code
+actual_eos_cv:
+   1001, Generating acc routine seq
+         Generating NVIDIA GPU code
+actual_eos_init:
+   1357, Generating update device(ftt(:,:),dlo,dd2_sav(:),dd_sav(:),d(:),dd2i_sav(:),dt2_sav(:),dt_sav(:),dstpi,dt2i_sav(:),xfd(:,:),xft(:,:),xfdt(:,:),xf(:,:),ttol,efd(:,:),efdt(:,:),ef(:,:),dtol,dpdfd(:,:),dpdfdt(:,:),dpdf(:,:),do_coulomb,fddt(:,:),fdt(:,:),fdd(:,:),fddtt(:,:),ft(:,:),fd(:,:),fdtt(:,:),f(:,:),eft(:,:),mintemp,itmax,input_is_constant,dti_sav(:),tstpi,dstp,dpdft(:,:),tstp,tlo,ddi_sav(:),dhi,t(:),thi,jtmax,maxtemp,maxdens,mindens)
+psi0:
+   1372, Generating acc routine seq
+         Generating NVIDIA GPU code
+dpsi0:
+   1378, Generating acc routine seq
+         Generating NVIDIA GPU code
+ddpsi0:
+   1384, Generating acc routine seq
+         Generating NVIDIA GPU code
+psi1:
+   1391, Generating acc routine seq
+         Generating NVIDIA GPU code
+dpsi1:
+   1397, Generating acc routine seq
+         Generating NVIDIA GPU code
+ddpsi1:
+   1403, Generating acc routine seq
+         Generating NVIDIA GPU code
+psi2:
+   1410, Generating acc routine seq
+         Generating NVIDIA GPU code
+dpsi2:
+   1416, Generating acc routine seq
+         Generating NVIDIA GPU code
+ddpsi2:
+   1422, Generating acc routine seq
+         Generating NVIDIA GPU code
+h5:
+   1429, Generating acc routine seq
+         Generating NVIDIA GPU code
+xpsi0:
+   1455, Generating acc routine seq
+         Generating NVIDIA GPU code
+xdpsi0:
+   1461, Generating acc routine seq
+         Generating NVIDIA GPU code
+xpsi1:
+   1468, Generating acc routine seq
+         Generating NVIDIA GPU code
+xdpsi1:
+   1474, Generating acc routine seq
+         Generating NVIDIA GPU code
+h3:
+   1481, Generating acc routine seq
+         Generating NVIDIA GPU code
+vectornorm2_kernel:
+    502, Generating acc routine seq
+         Generating NVIDIA GPU code
+eigenvaluessymmetric3:
+    659, Generating acc routine seq
+         Generating NVIDIA GPU code
+linearsolvebatched:
+    969, Generating enter data copyin(db(:),da(:),dipiv(:))
+    973, Generating exit data delete(dipiv(:),db(:),da(:))
+ptxas info    : 333 bytes gmem
+ptxas info    : Function properties for __internal_trig_reduction_slowpathd
+    40 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 8.170 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.564 ms
+ptxas info    : Function properties for xnet_linalg_eigenvaluessymmetric3_
+    32 bytes stack frame, 32 bytes spill stores, 32 bytes spill loads
+ptxas info    : Compile time = 17.610 ms
+ptxas info    : Function properties for xnet_linalg_vectornorm2_kernel_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 16.552 ms
+ptxas info    : 61 bytes gmem
+ptxas info    : Function properties for __internal_accurate_pow
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 6.393 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.423 ms
+ptxas info    : Function properties for actual_eos_module_h3_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 2.459 ms
+ptxas info    : Function properties for actual_eos_module_xdpsi1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 1.036 ms
+ptxas info    : Function properties for actual_eos_module_xpsi1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.827 ms
+ptxas info    : Function properties for actual_eos_module_xdpsi0_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.800 ms
+ptxas info    : Function properties for actual_eos_module_xpsi0_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.821 ms
+ptxas info    : Function properties for actual_eos_module_h5_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 4.699 ms
+ptxas info    : Function properties for actual_eos_module_ddpsi2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.868 ms
+ptxas info    : Function properties for actual_eos_module_dpsi2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.882 ms
+ptxas info    : Function properties for actual_eos_module_psi2_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.870 ms
+ptxas info    : Function properties for actual_eos_module_ddpsi1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.828 ms
+ptxas info    : Function properties for actual_eos_module_dpsi1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.841 ms
+ptxas info    : Function properties for actual_eos_module_psi1_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.861 ms
+ptxas info    : Function properties for actual_eos_module_ddpsi0_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.831 ms
+ptxas info    : Function properties for actual_eos_module_dpsi0_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.838 ms
+ptxas info    : Function properties for actual_eos_module_psi0_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 0.860 ms
+ptxas info    : Function properties for actual_eos_module_actual_eos_cv_
+    176 bytes stack frame, 172 bytes spill stores, 172 bytes spill loads
+ptxas info    : Compile time = 51.663 ms
+ptxas info    : Function properties for actual_eos_module_actual_eos_eta_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 14.751 ms
+ptxas info    : Function properties for actual_eos_module_xnet_actual_eos_
+    216 bytes stack frame, 216 bytes spill stores, 216 bytes spill loads
+ptxas info    : Compile time = 59.968 ms
+ptxas info    : Function properties for actual_eos_module_actual_eos_
+    1176 bytes stack frame, 1292 bytes spill stores, 1264 bytes spill loads
+ptxas info    : Compile time = 192.227 ms
+ptxas info    : 95 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.319 ms
+ptxas info    : Compiling entry function 'xnet_conditions_t9rhofind_vector_116_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_conditions_t9rhofind_vector_116_gpu
+    432 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 71 registers, used 1 barriers, 584 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 393.331 ms
+ptxas info    : Function properties for xnet_conditions_t9rhofind_scalar_
+    440 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 379.345 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_ffn.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_ffn.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_nnu.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_nnu.o'
+nnu_match:
+     96, Generating enter data copyin(nuspec(:),irl(:))
+nnu_flux:
+    100, Generating acc routine seq
+         Generating NVIDIA GPU code
+nnu_rate:
+    181, Generating enter data create(rate(:,:,:))
+         Generating enter data copyin(time(:),mask(:))
+    186, Generating present(mask(:),rate(:,:,:))
+         Generating implicit firstprivate(nnnu,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        188, !$acc loop gang, vector(128) collapse(3) ! blockidx%x threadidx%x
+        189,   ! blockidx%x threadidx%x collapsed
+        190,   ! blockidx%x threadidx%x collapsed
+    199, Generating present(ltnu(:,:),th(:,:),fluxnu(:,:),fluxcms(:,:,:),nh(:),mask(:),tmevnu(:,:,:),time(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        201, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    201, Generating implicit firstprivate(n)
+    208, Generating present(ltnu(:,:),sigmanu(:,:),rate(:,:,:),fluxnu(:,:),mask(:),nuspec(:))
+         Generating implicit firstprivate(nnnu,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        211, !$acc loop gang collapse(2) ! blockidx%x
+        212,   ! blockidx%x collapsed
+        220, !$acc loop vector(128) ! threadidx%x
+    212, Generating implicit firstprivate(i)
+    215, Accelerator restriction: induction variable live-out from loop: i
+    216, Accelerator restriction: induction variable live-out from loop: i
+    220, Loop is parallelizable
+    253, Generatiffn_rate:
+n  g  146,  Guepndeartaet iselfn(grate(:,:,:) ,fluxnu(:,:)enter data create)(
+dlnrfdt9(:,:)  )  265, 
+G  e       nGeernaetriantgi nexit data deleteg( time(:)enter data copyin)(
+t9(:)  )       
+G  e       nGeernaetriantgi nexit data copyoutg( rate(:,:,:)enter data create)(
+rf(:,:)  ,lt1(:)       )G
+e  n       eGreanteirnagt iexit data deleten(gmask(:) )enter data copyin
+(ene(:),mask(:))
+    150, Generating present(has_logft(:),t9(:),phasei(:,:),dphaseidt9(:,:),ffn_qval(:),etae(:),mask(:))
+         Generating implicit firstprivate(nffn,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        153, !$acc loop gang, vector(128) collapse(2) ! blockidx%x threadidx%x
+        154,   ! blockidx%x threadidx%x collapsed
+    162, Generating present(lt1(:),t9(:),mask(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        164, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    174, Generating present(lt1(:),t9(:),rf(:,:),has_logft(:),dphaseidt9(:,:),phasei(:,:),ffnsum(:,:),ffn_ec(:,:),ffn_beta(:,:),ene(:),mask(:),dlnrfdt9(:,:))
+         Generating implicit firstprivate(nffn,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        180, !$acc loop gang, vector(128) collapse(2) ! blockidx%x threadidx%x
+        181,   ! blockidx%x threadidx%x collapsed
+    174, Generating implicit copy(qkffn(1:nffn,zb_lo:zb_hi)) [if not already present]
+         Generating implicit copyin(ffnenu(1:nffn,:)) [if not already present]
+    258, Generating update self(dlnrfdt9(:,:),dphaseidt9(:,:),rf(:,:),phasei(:,:))
+    271, Generating exit data copyout(dlnrfdt9(:,:))
+         Generating exit data delete(t9(:))
+         Generating exit data copyout(rf(:,:))
+         Generating exit data delete(lt1(:),ene(:),mask(:))
+effphase:
+    277, Generating acc routine seq
+         Generating NVIDIA GPU code
+ptxas info    : 261 bytes gmem
+ptxas info    : Function properties for __internal_accurate_pow
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 5.442 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.536 ms
+ptxas info    : Function properties for xnet_ffn_effphase_
+    136 bytes stack frame, 128 bytes spill stores, 128 bytes spill loads
+ptxas info    : Compile time = 12.265 ms
+ptxas info    : Compiling entry function 'xnet_ffn_ffn_rate_174_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_ffn_ffn_rate_174_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 75 registers, used 0 barriers, 648 bytes cmem[0], 112 bytes cmem[2]
+ptxas info    : Compile time = 30.266 ms
+ptxas info    : Compiling entry function 'xnet_ffn_ffn_rate_162_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_ffn_ffn_rate_162_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 0 barriers, 416 bytes cmem[0]
+ptxas info    : Compile time = 3.276 ms
+ptxas info    : Compiling entry function 'xnet_ffn_ffn_rate_150_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_ffn_ffn_rate_150_gpu
+    8 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 80 registers, used 0 barriers, 512 bytes cmem[0], 112 bytes cmem[2]
+ptxas info    : Compile time = 16.600 ms
+ptxas info    : 181 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.273 ms
+ptxas info    : Compiling entry function 'xnet_nnu_nnu_rate_208_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_nnu_nnu_rate_208_gpu
+    8 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 96 registers, used 1 barriers, 520 bytes cmem[0], 96 bytes cmem[2]
+ptxas info    : Compile time = 17.163 ms
+ptxas info    : Compiling entry function 'xnet_nnu_nnu_rate_199_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_nnu_nnu_rate_199_gpu
+    8 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 72 registers, used 1 barriers, 688 bytes cmem[0], 80 bytes cmem[2]
+ptxas info    : Compile time = 26.940 ms
+ptxas info    : Compiling entry function 'xnet_nnu_nnu_rate_186_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_nnu_nnu_rate_186_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 34 registers, used 0 barriers, 432 bytes cmem[0]
+ptxas info    : Compile time = 4.845 ms
+ptxas info    : Function properties for xnet_nnu_nnu_flux_
+    160 bytes stack frame, 152 bytes spill stores, 152 bytes spill loads
+ptxas info    : Compile time = 25.803 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_data.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_data.o'
+benuc_vector:
+    124, Generating enter data copyin(enb(:),y(:,:),mask(:),enm(:))
+    126, Generating present(enm(:),mask(:),be(:),enb(:),zz(:),y(:,:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        129, !$acc loop gang ! blockidx%x
+        135, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:ztot,btot)
+    129, Generating implicit firstprivate(mex_p,mex_n)
+    135, Loop is parallelizable
+    146, Generating exit data delete(y(:,:),mask(:))
+         Generating exit data copyout(enm(:),enb(:))
+partf:
+    173, Generating enter data copyin(t9(:),mask(:))
+    175, Generating present(gg(:,:),mask(:),t9(:),t9i(:),g(:,:),dlngdt9(:,:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        178, !$acc loop gang ! blockidx%x
+        190, !$acc loop vector(128) ! threadidx%x
+        195, !$acc loop vector(128) ! threadidx%x
+        201, !$acc loop vector(128) ! threadidx%x
+        210, !$acc loop vector(128) ! threadidx%x
+        215, !$acc loop vector(128) ! threadidx%x
+        220, !$acc loop vector(128) ! threadidx%x
+    178, Generating implicit firstprivate(ny)
+    190, Loop is parallelizable
+    195, Loop is parallelizable
+    201, Loop is parallelizable
+    210, Loop is parallelizable
+    215, Loop is parallelizable
+    220, Loop is parallelizable
+    235, Generating exit data delete(t9(:),mask(:))
+read_nuclear_data:
+    488, Generating enter data copyin(be(:),g(:,:),aa(:))
+         Generating enter data create(dlngdt9(:,:))
+         Generating enter data copyin(nn(:),in(:),zseq53(:),zseq(:),t9i(:),zzi(:),zz53(:),zz2(:),zz(:),ia(:),it9i(:))
+         Generating enter data create(gg(:,:))
+         Generating enter data copyin(mex(:),iz(:),angm(:),mm(:),zseqi(:))
+read_reaction_data:
+    900, Generating enter data create(rffn(:,:),dcsect4dt9(:,:))
+         Generating enter data copyin(rc4(:,:))
+         Generating enter data create(dcsect3dt9(:,:),dcsect2dt9(:,:),dcsect1dt9(:,:),csect4(:,:),csect3(:,:),csect2(:,:),csect1(:,:),b4(:,:),b3(:,:),b2(:,:),b1(:,:))
+         Generating enter data copyin(a4(:),ffnsum(:,:),le(:,:),sigmanu(:,:))
+         Generating enter data create(rnnu(:,:,:))
+         Generating enter data copyin(innu(:))
+         Generating enter data create(dlnrffndt9(:,:))
+         Generating enter data copyin(nreac(:),ffn_ec(:,:),dphaseidt9(:,:),ffn_beta(:,:),fluxnu(:,:),phasei(:,:),ffn_qval(:),ffnenu(:,:),iffn(:),has_logft(:),n43(:),n42(:),n41(:),n40(:),n3i(:,:),n32(:),n31(:),n30(:),n2i(:,:),n21(:),n20(:),n1i(:,:),n10(:),mu4(:),n44(:),n33(:),n22(:),n11(:),a3(:),a2(:),a1(:),mu3(:),mu2(:),mu1(:),ltnu(:,:),irev3(:),irev2(:),irev1(:),iwk3(:),iwk2(:),iwk1(:),irev4(:),rc3(:,:),rc2(:,:),rc1(:,:),qkffn(:,:),la(:,:),iwk4(:),n4i(:,:),nan(:))
+enudot:
+    941, Generating enter data copyin(mask(:),y(:,:),sqnu(:))
+    943, Generating present(iffn(:),mask(:),y(:,:),sqnu(:),qkffn(:,:))
+         Generating implicit firstprivate(nr1,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        946, !$acc loop gang ! blockidx%x
+        952, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:sqnu1)
+    943, Generating implicit copyin(n1i(1,1:nr1)) [if not already present]
+    952, Loop is parallelizable
+    959, Generating exit data delete(y(:,:))
+         Generating exit data copyout(sqnu(:))
+         Generating exit data delete(mask(:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.335 ms
+ptxas info    : Compiling entry function 'reaction_data_enudot_943_gpu' for 'sm_80'
+ptxas info    : Function properties for reaction_data_enudot_943_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 48 registers, used 1 barriers, 504 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 14.083 ms
+ptxas info    : Compiling entry function 'nuclear_data_partf_175_gpu' for 'sm_80'
+ptxas info    : Function properties for nuclear_data_partf_175_gpu
+    8 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 87 registers, used 1 barriers, 28 bytes smem, 512 bytes cmem[0], 80 bytes cmem[2]
+ptxas info    : Compile time = 47.871 ms
+ptxas info    : Compiling entry function 'nuclear_data_benuc_vector_126_gpu' for 'sm_80'
+ptxas info    : Function properties for nuclear_data_benuc_vector_126_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 64 registers, used 1 barriers, 496 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 12.447 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_abundances.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_abundances.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_match.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_match.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_preprocess.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_preprocess.o'
+y_moment_vector:
+    101, Generating enter data copyin(zbar(:),abar(:),mask(:),xext(:),aext(:),zibar(:),zext(:),ytot(:),z2bar(:),ye(:),y(:,:))
+    105, Generating present(y(:,:),ye(:),aa(:),z2bar(:),ytot(:),zext(:),zibar(:),zz(:),zzi(:),zz2(:),aext(:),xext(:),mask(:),abar(:),zbar(:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        110, !$acc loop gang ! blockidx%x
+        120, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(ptxas info    : 61 bytes gmem
++ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+:ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stoatotres, 0 bytes spill loads
+,ztotptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+,zitotptxas info    : Compile time = 1.378 ms
+,ntot,z2tot)
+    120, Loop is parallelizable
+    141, Generating update self(zibar(:),zbar(:),ytot(:),z2bar(:),ye(:),abar(:))
+    150, Generating exit data copyout(zbar(:),abar(:))
+         Generating exit data delete(mask(:),xext(:),aext(:))
+         Generating exit data copyout(zibar(:))
+         Generating exit data delete(zext(:))
+         Generating exit data copyout(ytot(:),z2bar(:),ye(:))
+         Generating exit data delete(y(:,:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Function properties for __internal_accurate_pow
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 5.894 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.568 ms
+ptxas info    : Compiling entry function 'xnet_abundances_y_moment_vector_105_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_abundances_y_moment_vector_105_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 128 registers, used 1 barriers, 568 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 31.169 ms
+ptxas info    : 153 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.356 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/eos/xnet_eos_starkiller.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/eos/xnet_eos_starkiller.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/solver/xnet_jacobian_dense.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/solver/xnet_jacobian_dense.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_flux.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_flux.o'
+flux:
+     79, Generating update self(csect4(:,:),yt(:,:),tdel(:),csect3(:,:),csect2(:,:),csect1(:,:))
+eos_initialize:
+     46, Generating enter data copyin(abar(:),zibar(:),zbar(:),ytot(:),z2bar(:),ye(:),sratio(:))
+eosx:
+     50, Generating acc routine seq
+         Generating NVIDIA GPU code
+eos_interface_vector:
+    133, Generating enter data copyin(zext(:),ye(:),t9(:),xext(:),mask(:),rho(:),etae(:),cv(:),detaedt9(:),aext(:),y(:,:))
+    141, Generating present(etae(:),rho(:),mask(:),t9(:),zbar(:),ye(:),abar(:),detaedt9(:),cv(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        143, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    149, Generating update self(cv(:),detaedt9(:),t9(:),ye(:),etae(:),rho(:))
+    157, Generating exit data delete(zext(:))
+         Generating exit data copyout(ye(:))
+         Generating exit data delete(t9(:),xext(:),mask(:),rho(:))
+         Generating exit data copyout(etae(:),cv(:),detaedt9(:))
+         Generating exit data delete(aext(:),y(:,:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.405 ms
+eos_screen_vector:
+    222, Generating enter data copyin(y(:,:),t9(:),aext(:),dztildedt9(:),xext(:),mask(:),rho(:),lambda0(:),detaedt9(:),etae(:),gammae(:),zext(:),zinter(:),ztilde(:))
+    231, Generating present(lambda0(:),sratio(:),mask(:),t9(:),dztildedt9(:),abar(:),ztilde(:),zinter(:),zibar(:),gammae(:),etae(:),detaedt9(:),y(:,:),ye(:),z2bar(:),ytot(:),zbar(:),rho(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        235, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    245, Generating update self(gammae(:),ztilde(:),zbar(:),rho(:),z2bar(:),ye(:),t9(:),lambda0(:),sratio(:))
+    255, Generating exit data delete(y(:,:),t9(:),aext(:))
+         Generating exit data copyout(dztildedt9(:))
+         Generating exit data delete(xext(:),mask(:),rho(:))
+         Generating exit data copyout(lambda0(:))
+         Generating exit data delete(detaedt9(:),etae(:))
+         Generating exit data copyout(gammae(:))
+         Generating exit data delete(zext(:))
+         Generating exit data copyout(ztilde(:),zinter(:))
+salpeter_ratio_scalar:
+    260, Generating acc routine seq
+         Generating NVIDIA GPU code
+read_jacobian_data:
+     74, Generating enter data copyin(mult1(:),jac(:,:,:),indx(:,:),dydotdy(:,:,:),pivot(:),rhs(:,:),info(:),diag0(:))
+     92, Generating enter data copyin(drhs(:),djac(:),dindx(:))
+jacobian_finalize:
+     99, Generating exit data delete(mult1(:),jac(:,:,:),diag0(:),djac(:),dindx(:),indx(:,:),dydotdy(:,:,:),rhs(:,:),pivot(:),info(:),drhs(:))
+salpeter_ratio_vector:
+    322, Generating enter data copyin(dratiodeta(:),eta(:),ratio(:),mask(:))
+    325, Generating present(ratio(:),mask(:),eta(:),dratiodeta(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        328, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    333, Generating exit data copyout(dratiodeta(:))
+         Generating exit data delete(eta(:))
+         Generating exit data copyout(ratio(:))
+         Generating exit data delete(mask(:))
+jacobian_scale:
+    141, Generating enter data copyin(mask(:),mult(:),diag(:))
+    143, Generating present(dydotdy(:,:,:),diag(:),mult(:),pivot(:),jac(:,:,:),mask(:))
+         Generating implicit firstprivate(msize,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        147, !$acc loop gang collapse(2) ! blockidx%x
+        148,   ! blockidx%x collapsed
+        153, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:rsum)
+    153, Loop is parallelizable
+    165, Generating update self(pivot(:))
+    168, Generating update self(pivot(:),jac(:,:,:))
+    191, Generating update self(diag(:),mult(:),jac(:,:,:))
+    212, Generating exit data delete(mult(:),mask(:),diag(:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.329 ms
+ptxas info    : Compiling entry function 'xnet_eos_salpeter_ratio_vector_325_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_eos_salpeter_ratio_vector_325_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 48 registers, used 1 barriers, 432 bytes cmem[0]
+ptxas info    : Compile time = 6.037 ms
+ptxas info    : Function properties for xnet_eos_salpeter_ratio_scalar_
+    88 bytes stack frame, 84 bytes spill stores, 84 bytes spill loads
+ptxas info    : Compile time = 4.633 ms
+ptxas info    : Compiling entry function 'xnet_eos_eos_screen_vector_231_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_eos_eos_screen_vector_231_gpu
+    32 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 39 registers, used 1 barriers, 568 bytes cmem[0]
+ptxas info    : Compile time = 8.333 ms
+ptxas info    : Compiling entry function 'xnet_eos_eos_interface_vector_141_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_eos_eos_interface_vector_141_gpu
+    264 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 30 registers, used 1 barriers, 488 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 5.449 ms
+ptxas info    : Function properties for xnet_eos_eosx_
+    296 bytes stack frame, 32 bytes spill stores, 32 bytes spill loads
+ptxas info    : Compile time = 3.094 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_output.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_output.o'
+jacobian_build:
+    247, Generating enter data copyin(mask(:))
+    250, Generating present(le(:,:),dcsect4dt9(:,:),yt(:,:),n44(:),b1(:,:),a4(:),b2(:,:),b3(:,:),b4(:,:),dydotdy(:,:,:),la(:,:),mask(:),mu4(:),n10(:),n11(:),n20(:),n21(:),n22(:),n30(:),n31(:),n32(:),n33(:),n40(:),n41(:),n42(:),n43(:),mex(:),mu1(:),mu2(:),mu3(:),a1(:),a2(:),a3(:),cv(:),dcsect1dt9(:,:),dcsect2dt9(:,:),dcsect3dt9(:,:))
+         Generating implicit firstprivate(msize,ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        256, !$acc loop gang collapse(2) ! blockidx%x
+        257,   ! blockidx%x collapsed
+        260, !$acc loop vector(128) ! threadidx%x
+        264, !$acc loop vector(128) ! threadidx%x
+        269, !$acc loop vector(128) ! threadidx%x
+        276, !$acc loop vector(128) ! threadidx%x
+        285, !$acc loop vector(128) ! threadidx%x
+        299, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s1)
+        305, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s2)
+        311, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s3)
+        317, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s4)
+    260, Loop is parallelizable
+    264, Loop is parallelizable
+    269, Loop is parallelizable
+    276, Loop is parallelizable
+    285, Loop is parallelizable
+    299, Loop is parallelizable
+    305, Loop is parallelizable
+    311, Loop is parallelizable
+    317, Loop is parallelizable
+    326, Generating present(dydotdy(:,:,:),cv(:),mex(:),mask(:))
+         Generating implicit firstprivate(msize,ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        329, !$acc loop gang collapse(2) ! blockidx%x
+        330,   ! blockidx%x collapsed
+        335, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:sdot)
+    335, Loop is parallelizable
+    343, Generating present(mask(:),ktot(:,:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        345, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    353, Generating update self(dydotdy(:,:,:))
+    374, Generating exit data delete(mask(:))
+ts_output:
+     57, Generating update self(edot(:),y(:,:),tdel(:),rho(:),t9(:),kmon(:,:),t(:),sqnu(:))
+jacobian_solve:
+    411, Generating enter data copyin(mask(:),yrhs(:,:),t9rhs(:))
+         Generating enter data create(dy(:,:),dt9(:))
+    414, Generating present(mask(:),yrhs(:,:),t9rhs(:),rhs(:,:))
+         Generating implicit firstprivate(msize,ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        416, !$acc loop gang ! blockidx%x
+        419, !$acc loop vector(128) ! threadidx%x
+        425, !$acc loop vector(128) ! threadidx%x
+    419, Loop is parallelizable
+    425, Loop is parallelizable
+    435, Generating present(dy(:,:),rhs(:,:),mask(:),dt9(:))
+         Generating implicit firstprivate(ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        437, !$acc loop gang ! blockidx%x
+        440, !$acc loop vector(128) ! threadidx%x
+    440, Loop is parallelizable
+    447, Generating update self(dt9(:),dy(:,:))
+    458, Generating exit data delete(mask(:),yrhs(:,:),t9rhs(:))
+         Generating exit data copyout(dy(:,:),dt9(:))
+jacobian_decomp:
+    496, Generating update self(jac(:,:,:))
+final_output:
+    132, Generating update self(t9(:),ye(:),y(:,:),t(:),rho(:))
+    147, Generating update self(ktot(:,:))
+jacobian_bksub:
+    543, Generating enter data copyin(mask(:),yrhs(:,:),t9rhs(:))
+         Generating enter data create(dy(:,:),dt9(:))
+    546, Generating present(mask(:),yrhs(:,:),t9rhs(:),rhs(:,:))
+         Generating implicit firstprivate(msize,ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        548, !$acc loop gang ! blockidx%x
+        551, !$acc loop vector(128) ! threadidx%x
+        557, !$acc loop vector(128) ! threadidx%x
+    551, Loop is parallelizable
+    557, Loop is parallelizable
+    568, Generating present(dy(:,:),rhs(:,:),mask(:),dt9(:))
+         Generating implicit firstprivate(ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        570, !$acc loop gang ! blockidx%x
+        573, !$acc loop vector(128) ! threadidx%x
+    573, Loop is parallelizable
+    580, Generating update self(dt9(:),dy(:,:))
+    591, Generating exit data delete(mask(:),yrhs(:,:),t9rhs(:))
+         Generating exit data copyout(dy(:,:),dt9(:))
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_nse.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_nse.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_screening.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_screening.o'
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.384 ms
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.339 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_bksub_568_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_bksub_568_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 32 registers, used 0 barriers, 472 bytes cmem[0]
+ptxas info    : Compile time = 7.398 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_bksub_546_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_bksub_546_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 1 barriers, 472 bytes cmem[0]
+ptxas info    : Compile time = 9.464 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_solve_435_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_solve_435_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 32 registers, used 0 barriers, 472 bytes cmem[0]
+ptxas info    : Compile time = 6.679 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_solve_414_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_solve_414_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 1 barriers, 472 bytes cmem[0]
+ptxas info    : Compile time = 9.302 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_build_343_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_build_343_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 11 registers, used 0 barriers, 416 bytes cmem[0]
+ptxas info    : Compile time = 2.375 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_build_326_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_build_326_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 66 registers, used 1 barriers, 472 bytes cmem[0]
+ptxas info    : Compile time = 21.573 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_build_250_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_build_250_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 108 registers, used 1 barriers, 992 bytes cmem[0]
+ptxas info    : Compile time = 113.633 ms
+ptxas info    : Compiling entry function 'xnet_jacobian_jacobian_scale_143_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_jacobian_jacobian_scale_143_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 56 registers, used 1 barriers, 544 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 16.849 ms
+screening_init:
+    104, Generating enter data copyin(dztildedt9(:),iz4c(:),zeta4w(:),ztilde(:),zinter(:),zeta3w(:),zeta2w(:),lambda0(:),zeta4i(:),zeta3i(:),zeta2i(:),iz44(:),iz33(:),iz22(:),iz43(:),iz42(:),iz41(:),iz3c(:),iz32(:),iz31(:),iz2c(:),iz21(:),gammae(:))
+    125, Generating enter data copyin(dh3dt9(:,:),dh2dt9(:,:),dh1dt9(:,:),h4(:,:),h3(:,:),h2(:,:),h1(:,:),dh4dt9(:,:))
+NVFORTRAN-W-0155-Size of private array is not constant, local memory not used. Results may be incorrect. - fhs (/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_screening.f90: 183)
+NVFORTRAN-W-0155-Size of private array is not constant, local memory not used. Results may be incorrect. - dfhsdt9 (/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_screening.f90: 183)
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.372 ms
+screening:
+    172, Generating enter data copyin(mask(:))
+    183, Generating present(mask(:),zinter(:),zseq(:),zseq53(:),h4(:,:),iz21(:),iz2c(:),iz31(:),iz32(:),iz3c(:),iz41(:),iz42(:),iz43(:),iz22(:),iz33(:),iz44(:),zeta2i(:),zeta3i(:),zeta4i(:),t9t(:),zeta2w(:),zeta3w(:),gammae(:),h1(:,:),h2(:,:),h3(:,:),dh1dt9(:,:),dh2dt9(:,:),dh3dt9(:,:),ztilde(:),zseqi(:),zeta4w(:),iz4c(:),dztildedt9(:),dh4dt9(:,:),lambda0(:),nreac(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        191, !$acc loop gang ! blockidx%x
+        198, !$acc loop vector(128) ! threadidx%x
+        207, !$acc loop vector(128) ! threadidx%x
+        218, !$acc loop vector(128) ! threadidx%x
+        239, !$acc loop vector(128) ! threadidx%x
+        260, !$acc loop vector(128) ! threadidx%x
+    191, Generating implicit firstprivate(izmax)
+    198, Loop is parallelizable
+    207, Loop is parallelizable
+    218, Loop is parallelizable
+    239, Loop is parallelizable
+    260, Loop is parallelizable
+    281, Generating update self(dh4dt9(:,:),dztildedt9(:),h4(:,:),lambda0(:),ztilde(:),zinter(:),dh3dt9(:,:),dh2dt9(:,:),dh1dt9(:,:),h3(:,:),h2(:,:),h1(:,:),gammae(:))
+    363, Generating exit data delete(mask(:))
+  0 inform,   2 warnings,   0 severes, 0 fatal for screening
+screen_blend:
+    369, Generating acc routine seq
+         Generating NVIDIA GPU code
+ptxas info    : 61 bytes gmem
+ptxas info    : Function properties for __internal_accurate_pow
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 6.097 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.563 ms
+ptxas info    : Function properties for xnet_screening_screen_blend_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 3.948 ms
+ptxas info    : Compiling entry function 'xnet_screening_screening_183_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_screening_screening_183_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 90 registers, used 1 barriers, 24 bytes smem, 1032 bytes cmem[0], 224 bytes cmem[2]
+ptxas info    : Compile time = 47.423 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/model_input_ascii.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/model_input_ascii.o'
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.345 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_integrate.o'
+NVFORTRAN-W-0155-Size of private array is not constant, local memory not used. Results may be incorrect. - rtau_y (/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90: 66)
+timestep:
+     48, Generating enter data create(dtherm(:),tdel_dy(:),tdel_stop(:),rtau_y(:),tdel_dt9(:),mask_init(:))
+         Generating enter data copyin(mask(:))
+     52, Generating present(mask(:),mask_init(:),tdel_old(:),tdel(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+         54, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+     62, Generating update self(mask_init(:))
+     66, Generating present(intso(:),mask(:),nh(:),tstop(:),tdelstart(:),tt(:),yo(:,:),ydot(:,:),y(:,:),t(:),t9dot(:),t9(:),ints(:),mask_init(:),t9o(:),tdel_dy(:),tdel_next(:),tdel_stop(:),tdel_old(:),tdel_dt9(:),tdel(:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+         70, !$acc loop gang ! blockidx%x
+        103, !$acc loop vector(128) ! threadidx%x
+        118, !$acc loop seq
+     70, Generating implicit firstprivate(changest,changemxt,changemx)
+    103, Loop is parallelizable
+         Generating implicit firstprivate(yacc)
+    118, Accelerator restriction: induction variable live-out from loop: i$a
+         Loop carried scalar dependence for rtau_y$vr at line 118
+    152, Generating update self(intso(:),y(:,:),tdel_stop(:),ints(:),tdel(:),tdel_dt9(:),tdel_dy(:),tdel_old(:),tdel_next(:),t(:))
+    166, Generating update device(intso(izb))
+    176, Generating present(dtherm(:),mask(:),tdel(:),t9(:),rho(:),rhot(:),tt(:),tstop(:),nh(:),nt(:),t(:),t9h(:,:),ntt(:),rhoh(:,:),t9t(:),th(:,:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        178, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    178, Generating implicit firstprivate(kstep)
+    221, Generating update self(dtherm(:),rhot(:),tdel(:),t9t(:))
+    236, Generating exit data delete(dtherm(:),tdel_stop(:),tdel_dy(:),rtau_y(:),tdel_dt9(:),mask_init(:),mask(:))
+  0 inform,   1 warnings,   0 severes, 0 fatal for timestep
+update_iweak:
+    261, Generating enter data copyin(mask(:),t9(:))
+    263, Generating present(iweak(:),t9(:),mask(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        265, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    265, Generating implicit firstprivate(t9min,iweak0)
+    276, Generating exit data delete(t9(:),mask(:))
+update_eos:
+    304, Generating enter data copyin(mask(:))
+    309, Generating exit data delete(mask(:))
+yderiv:
+    345, Generating enter data copyin(mask(:))
+    349, Generating present(le(:,:),csect4(:,:),la(:,:),n44(:),ydot(:,:),yt(:,:),a4(:),b1(:,:),b2(:,:),b3(:,:),mask(:),mu1(:),mu2(:),mu3(:),a1(:),a2(:),a3(:),b4(:,:),csect1(:,:),csect2(:,:),csect3(:,:),mu4(:),n11(:),n21(:),n22(:),n31(:),n32(:),n33(:),n41(:),n42(:),n43(:))
+         Generating implicit firstprivate(ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        354, !$acc loop gang collapse(2) ! blockidx%x
+        355,   ! blockidx%x collapsed
+        370, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s1)
+        380, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s2)
+        390, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s3)
+        400, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s4)
+    370, Loop is parallelizable
+    380, Loop is parallelizable
+    390, Loop is parallelizable
+    400, Loop is parallelizable
+    411, Generating present(cv(:),ydot(:,:),t9dot(:),mex(:),mask(:))
+         Generating implicit firstprivate(ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        414, !$acc loop gang ! blockidx%x
+        419, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:sdot)
+    419, Loop is parallelizable
+    426, Generating present(mask(:),ktot(:,:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        428, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    435, Generating update self(b3(:,:),b2(:,:),b1(:,:),b4(:,:),t9t(:),t9dot(:),yt(:,:),ydot(:,:))
+    495, Generating exit data delete(mask(:))
+cross_sect:
+    546, Generating enter data create(ene(:),dt09(:,:),t09(:,:))
+         Generating enter data copyin(mask(:))
+    565, Generating present(ene(:),dt09(:,:),rhot(:),t09(:,:),mask(:),t9t(:),yet(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        567, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    622, Generating present(mask(:),rc1(:,:),rc2(:,:),rc3(:,:),dt09(:,:),h1(:,:),h2(:,:),h3(:,:),dh1dt9(:,:),dh2dt9(:,:),dh3dt9(:,:),h4(:,:),t09(:,:),rc4(:,:),dh4dt9(:,:))
+         Generating implicit firstprivate(nr3,nr2,nr1,nr4,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        626, !$acc loop gang ! blockidx%x
+        630, !$acc loop vector(128) ! threadidx%x
+        633, !$acc loop seq
+             Generating implicit reduction(+:lambda1,dlam1dt9)
+        642, !$acc loop vector(128) ! threadidx%x
+        645, !$acc loop seq
+             Generating implicit reduction(+:lambda2,dlam2dt9)
+        654, !$acc loop vector(128) ! threadidx%x
+        657, !$acc loop seq
+             Generating implicit reduction(+:lambda3,dlam3dt9)
+        666, !$acc loop vector(128) ! threadidx%x
+        669, !$acc loop seq
+             Generating implicit reduction(+:lambda4,dlam4dt9)
+    630, Loop is parallelizable
+         Generating implicit firstprivate(j,ascrn)
+    633, Loop is parallelizable
+    642, Loop is parallelizable
+    645, Loop is parallelizable
+    654, Loop is parallelizable
+    657, Loop is parallelizable
+    666, Loop is parallelizable
+    669, Loop is parallelizable
+    680, Generating present(mask(:),n1i(:,:),n2i(:,:),n3i(:,:),iweak(:),iwk1(:),iwk2(:),iwk3(:),innu(:),irev1(:),irev2(:),irev3(:),gg(:,:),h1(:,:),h2(:,:),h3(:,:),dcsect4dt9(:,:),dh1dt9(:,:),dh2dt9(:,:),dh3dt9(:,:),csect1(:,:),csect2(:,:),csect3(:,:),csect4(:,:),dcsect1dt9(:,:),dcsect2dt9(:,:),dcsect3dt9(:,:),ktot(:,:),rffn(:,:),dlnrffndt9(:,:),ene(:),dh4dt9(:,:),irev4(:),h4(:,:),n4i(:,:),dlngdt9(:,:),iffn(:),rnnu(:,:,:),rhot(:),iwk4(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        686, !$acc loop gang ! blockidx%x
+        691, !$acc loop vector(128) ! threadidx%x
+        702, !$acc loop seq
+             Generating implicit reduction(*:rpf1)
+             Generating implicit reduction(+:dlnrpf1dt9)
+        734, !$acc loop vector(128) ! threadidx%x
+        745, !$acc loop seq
+             Generating implicit reduction(+:s2)
+             Generating implicit reduction(*:p2)
+        749, !$acc loop seq
+             Generating implicit reduction(*:rpf2)
+             Generating implicit reduction(+:dlnrpf2dt9)
+        767, !$acc loop vector(128) ! threadidx%x
+        778, !$acc loop seq
+             Generating implicit reduction(*:p3)
+             Generating implicit reduction(+:s3)
+        782, !$acc loop seq
+             Generating implicit reduction(*:rpf3)
+             Generating implicit reduction(+:dlnrpf3dt9)
+        802, !$acc loop vector(128) ! threadidx%x
+        813, !$acc loop seq
+             Generating implicit reduction(+:s4)
+             Generating implicit reduction(*:p4)
+        817, !$acc loop seq
+             Generating implicit reduction(*:rpf4)
+             Generating implicit reduction(+:dlnrpf4dt9)
+    686, Generating implicit firstprivate(nr1,nr2,nr4,nr3)
+    691, Loop is parallelizable
+         Generating implicit firstprivate(j)
+    702, Loop is parallelizable
+    734, Loop is parallelizable
+    745, Loop is parallelizable
+    749, Loop is parallelizable
+    767, Loop is parallelizable
+         Generating implicit firstprivate(rhot2)
+    778, Loop is parallelizable
+    782, Loop is parallelizable
+    802, Loop is parallelizable
+         Generating implicit firstprivate(rhot3)
+    813, Loop is parallelizable
+    817, Loop is parallelizable
+    838, Generating update self(dh3dt9(:,:),dh2dt9(:,:),dh1dt9(:,:),dcsect4dt9(:,:),h4(:,:),h3(:,:),h2(:,:),h1(:,:),dh4dt9(:,:),dcsect3dt9(:,:),dcsect2dt9(:,:),dcsect1dt9(:,:),csect4(:,:),csect3(:,:),csect2(:,:),csect1(:,:))
+    883, Generating exit data delete(ene(:),dt09(:,:),t09(:,:),mask(:))
+ptxas info    : 113 bytes gmem
+ptxas info    : Function properties for __internal_accurate_pow
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 6.064 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.541 ms
+ptxas info    : Compiling entry function 'xnet_integrate_cross_sect_680_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_cross_sect_680_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 130 registers, used 1 barriers, 1256 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 57.586 ms
+ptxas info    : Compiling entry function 'xnet_integrate_cross_sect_622_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_cross_sect_622_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 48 registers, used 0 barriers, 728 bytes cmem[0]
+ptxas info    : Compile time = 13.964 ms
+ptxas info    : Compiling entry function 'xnet_integrate_cross_sect_565_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_cross_sect_565_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 49 registers, used 0 barriers, 480 bytes cmem[0], 128 bytes cmem[2]
+ptxas info    : Compile time = 18.463 ms
+ptxas info    : Compiling entry function 'xnet_integrate_yderiv_426_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_yderiv_426_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 11 registers, used 0 barriers, 416 bytes cmem[0]
+ptxas info    : Compile time = 2.385 ms
+ptxas info    : Compiling entry function 'xnet_integrate_yderiv_411_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_yderiv_411_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 59 registers, used 1 barriers, 472 bytes cmem[0]
+ptxas info    : Compile time = 16.571 ms
+ptxas info    : Compiling entry function 'xnet_integrate_yderiv_349_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_yderiv_349_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 109 registers, used 1 barriers, 976 bytes cmem[0]
+ptxas info    : Compile time = 59.248 ms
+ptxas info    : Compiling entry function 'xnet_integrate_update_iweak_263_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_update_iweak_263_gpu
+    8 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 36 registers, used 1 barriers, 448 bytes cmem[0]
+ptxas info    : Compile time = 17.162 ms
+ptxas info    : Compiling entry function 'xnet_integrate_timestep_176_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_timestep_176_gpu
+    832 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 136 registers, used 1 barriers, 720 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 27.113 ms
+ptxas info    : Compiling entry function 'xnet_integrate_timestep_66_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_timestep_66_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 97 registers, used 1 barriers, 20 bytes smem, 768 bytes cmem[0], 24 bytes cmem[2]
+ptxas info    : Compile time = 49.442 ms
+ptxas info    : Compiling entry function 'xnet_integrate_timestep_52_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_timestep_52_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 13 registers, used 0 barriers, 440 bytes cmem[0]
+ptxas info    : Compile time = 3.118 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate_bdf.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_integrate_bdf.o'
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate_be.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_integrate_be.o'
+solve_be:
+     52, Generating enter data copyin(its(:))
+     55, Generating present(inr(:),its(:),mykts(:),lzstep(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+         57, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+     76, Generating present(inr(:),t(:),tdel(:),mykts(:),ye(:),y(:,:),yt(:,:),yet(:),tt(:),lzstep(:),its(:),kmon(:,:),ktot(:,:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+         78, !$acc loop gang ! blockidx%x
+         86, !$acc loop vector(128) ! threadidx%x
+     78, Generating implicit firstprivate(tdel_maxmult,kts,kitmx)
+     86, Loop is parallelizable
+    105, Generating update self(lzstep(:))
+    111, Generating present(t9t(:),t9(:),lzstep(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        113, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    122, Generating present(lzstep(:),tdelstart(:),tdel(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        124, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    134, Generating update self(inr(:),tt(:),tdel(:))
+    147, Generating present(inr(:),its(:),kmon(:,:),ktot(:,:),t9t(:),tdel(:),mykts(:),nt(:),nto(:),rhot(:),tdel_next(:),to(:),t(:),t9(:),t9o(:),ntt(:),rho(:),rhoo(:),y(:,:),ye(:),yeo(:),tt(:),yet(:),yt(:,:),yo(:,:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        150, !$acc loop gang ! blockidx%x
+        167, !$acc loop vector(128) ! threadidx%x
+    150, Generating implicit firstprivate(tdel_maxmult)
+    167, Loop is parallelizable
+    178, Generating update self(inr(:))
+    183, Generating update self(mykts(izb))
+    188, Generating update self(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
+    196, Generating exit data copyout(its(:))
+step_be:
+    229, Generating enter data copyin(inr(:))
+    231, Generating present(aa(:),inr(:),xext(:),mult(:),iterate(:),y(:,:),xtot_init(:),rdt(:),tdel(:),toln(:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        234, !$acc loop gang ! blockidx%x
+        242, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s1)
+    242, Loop is parallelizable
+    256, Generating update self(iterate(:))
+    272, Generating update device(rebuild(:),eval_rates(:))
+    282, Generating present(ydot(:,:),t9t(:),yrhs(:,:),yt(:,:),iterate(:),y(:,:),t9dot(:),rdt(:),t9rhs(:),t9(:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        284, !$acc loop gang ! blockidx%x
+        288, !$acc loop vector(128) ! threadidx%x
+        294, !$acc loop vector(128) ! threadidx%x
+        301, !$acc loop vector(128) ! threadidx%x
+    284, Generating implicit firstprivate(kit)
+    288, Loop is parallelizable
+    294, Loop is parallelizable
+    301, Loop is parallelizable
+    308, Generating update self(t9rhs(:),rdt(:),t9dot(:),yt(:,:),yrhs(:,:),t9t(:),ydot(:,:))
+    336, Generating present(inr(:),yt(:,:),xtot_init(:),dt9(:),iterate(:),relt9(:),aa(:),reldy(:,:),xext(:),xtot(:),toln(:),dy(:,:),testc2(:),t9t(:),testc(:),testm(:),testn(:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        340, !$acc loop gang ! blockidx%x
+        348, !$acc loop vector(128) ! threadidx%x
+             Generating reduction(+:s1,s3,s2)
+    340, Generating implicit firstprivate(tolt9,kit)
+    348, Loop is parallelizable
+    385, Generating update self(iterate(:))
+    388, Generating update self(reldy(:,:),relt9(:),inr(:),dt9(:),yt(:,:),testm(:),testc(:),t9t(:),testc2(:),dy(:,:))
+    413, Generating update self(testn(:),inr(:),xtot(:),toln(:))
+    426, Generating exit data copyout(inr(:))
+be_init:
+    486, Generating enter data copyin(reldy(:,:),relt9(:),rebuild(:),dt9(:),yrhs(:,:),xtot_init(:),lzstep(:),mykts(:),xtot(:),toln(:),testn(:),testm(:),testc2(:),testc(:),t9rhs(:),rdt(:),dy(:,:),inr(:),iterate(:),mult(:),eval_rates(:))
+solve_bdf:
+    147, Generating enter data copyin(ierr(:))
+    151, Generating present(t9dot0(:),ydot(:,:),ydot0(:,:),nit_ts(:),t9dot(:),eta_next(:),ierr(:),ierr_nr(:),nerr_ts(:),ncf_ts(:),ierr_ts(:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        154, !$acc loop gang ! blockidx%x
+        165, !$acc loop vector(128) ! threadidx%x
+    165, Loop is parallelizable
+    176, Generating update self(ierr_nr(:))
+    184, Generating update device(bdf_active(:))
+    196, Generating present(eta(:),ierr(:),ierr_nr(:),nit_nrslv(:),ktot(:,:),z(:,:,:),yt(:,:),ierr_ts(:),kmon(:,:),t9t(:),tdel(:),nit_ts(:),nt(:),nto(:),rhot(:),tdel_next(:),to(:),t(:),t9(:),t9o(:),ntt(:),rho(:),rhoo(:),y(:,:),ye(:),yeo(:),tt(:),yet(:),yo(:,:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        200, !$acc loop gang ! blockidx%x
+        206, !$acc loop vector(128) ! threadidx%x
+    200, Generating implicit firstprivate(neq)
+    206, Loop is parallelizable
+    234, Generating update self(ierr_nr(:),ierr_ts(:))
+    239, Generating update self(nit_nr(izb),nit_ts(izb))
+    244, Generating update self(nit_nr(izb),nit_ts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
+    251, Generating exit data copyout(ierr(:))
+bdf_init:
+    404, Generating enter data copyin(j_age(:),deltaq(:),acor(:,:),dy(:,:),crate(:),del(:),dcon(:),dt_scale(:),diag(:),t9dot0(:),dvec(:,:),ydot0(:,:),lvec(:,:),detect(:),etaq(:,:),bdf_active(:),ierr_ts(:),rebuild(:),q_age(:),refactor(:),rescale(:),sddat(:,:,:),tq2save(:),tq(:,:),t9rhs(:),converged(:),a_pascal(:,:),acorhat(:,:),acnrm(:),eval_rates(:),gamhat(:),gam(:),ewt(:,:),eta(:),errorq(:,:),eta_next(:),dt9(:),ldflag(:),gamratio(:),zt0(:,:,:),z0(:,:,:),z(:,:,:),yrhs(:,:),rtol(:),nit_ts(:),q(:),nscon(:),iterate(:),delp(:),p_age(:),mult(:),ncf_ts(:),ierr_nr(:),hvec(:,:),nit_nrslv(:),nerr_ts(:),nit_nr(:),restore(:),atol(:),ainv_pascal(:,:),retry_ts(:),acorp(:,:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.319 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_step_be_336_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_step_be_336_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 110 registers, used 1 barriers, 696 bytes cmem[0]
+ptxas info    : Compile time = 33.947 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_step_be_282_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_step_be_282_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 53 registers, used 0 barriers, 576 bytes cmem[0]
+ptxas info    : Compile time = 19.845 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_step_be_231_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_step_be_231_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 90 registers, used 1 barriers, 20 bytes smem, 520 bytes cmem[0]
+ptxas info    : Compile time = 20.525 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_solve_be_147_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_solve_be_147_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 30 registers, used 1 barriers, 20 bytes smem, 816 bytes cmem[0]
+ptxas info    : Compile time = 15.603 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_solve_be_122_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_solve_be_122_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 12 registers, used 0 barriers, 408 bytes cmem[0]
+ptxas info    : Compile time = 2.285 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_solve_be_111_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_solve_be_111_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 14 registers, used 0 barriers, 408 bytes cmem[0]
+ptxas info    : Compile time = 2.213 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_solve_be_76_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_solve_be_76_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 66 registers, used 0 barriers, 632 bytes cmem[0]
+ptxas info    : Compile time = 12.097 ms
+ptxas info    : Compiling entry function 'xnet_integrate_be_solve_be_55_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_be_solve_be_55_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 15 registers, used 0 barriers, 424 bytes cmem[0]
+ptxas info    : Compile time = 2.678 ms
+bdf_reset:
+    424, Generating present(ydot0(:,:),tq2save(:),t9dot0(:),sddat(:,:,:),t9t(:),acorp(:,:),q_age(:),nit_nr(:),nerr_ts(:),nit_nrslv(:),hvec(:,:),ierr_nr(:),ncf_ts(:),lvec(:,:),p_age(:),crate(:),ierr_ts(:),nscon(:),q(:),nit_ts(:),retry_ts(:),yt(:,:),z(:,:,:),zt0(:,:,:),z0(:,:,:),gamratio(:),j_age(:),deltaq(:),eta_next(:),dt_scale(:),eta(:),ewt(:,:),gam(:),gamhat(:),etaq(:,:),acnrm(:),acor(:,:),bdf_active(:),tdel(:),tq(:,:),ydot(:,:),t9dot(:))
+         Generating implicit firstprivate(neq,ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        431, !$acc loop gang ! blockidx%x
+        448, !$acc loop vector(128) collapse(2) ! threadidx%x
+        449,   ! threadidx%x collapsed
+        454, !$acc loop vector(128) collapse(2) ! threadidx%x
+        455,   ! threadidx%x collapsed
+        462, !$acc loop vector(128) ! threadidx%x
+        471, !$acc loop vector(128) ! threadidx%x
+        477, !$acc loop vector(128) ! threadidx%x
+        486, !$acc loop vector(128) ! threadidx%x
+        494, !$acc loop vector(128) ! threadidx%x
+        499, !$acc loop vector(128) ! threadidx%x
+    448, Loop is parallelizable
+    449, Loop is parallelizable
+    454, Loop is parallelizable
+    455, Loop is parallelizable
+    462, Loop is parallelizable
+    471, Loop is parallelizable
+    477, Loop is parallelizable
+    486, Loop is parallelizable
+    494, Loop is parallelizable
+    499, Loop is parallelizable
+bdf_adjust:
+    518, Generating present(ierr_ts(:),eta(:),rescale(:),tdel_old(:),tdel(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        520, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+bdf_predict:
+    548, Generating present(a_pascal(:,:),q(:),z(:,:,:),zt0(:,:,:),z0(:,:,:),bdf_active(:))
+         Generating implicit firstprivate(neq,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        551, !$acc loop gang ! blockidx%x
+        554, !$acc loop vector(128) collapse(2) ! threadidx%x
+        555,   ! threadidx%x collapsed
+        560, !$acc loop seq
+        561, !$acc loop seq
+        563, !$acc loop vector(128) ! threadidx%x
+    554, Loop is parallelizable
+    555, Loop is parallelizable
+    560, Loop is parallelizable
+    561, Loop carried dependence of zt0 prevents parallelization
+         Loop carried backward dependence of zt0 prevents vectorization
+    563, Loop is parallelizable
+    571, Generating update self(q(:),t9dot(:),tdel(:),ydot(:,:),zt0(:,:,:),z(:,:,:),yt(:,:),t9t(:))
+bdf_update:
+    619, Generating present(hvec(:,:),gamratio(:),lvec(:,:),tq(:,:),tdel(:),bdf_active(:),gam(:),gamhat(:),q(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        624, !$acc loop gang ! blockidx%x
+        630, !$acc loop seq
+        643, !$acc loop seq
+             Generating reduction(+:hsum,alpha0)
+        649, !$acc loop seq
+        660, !$acc loop seq
+    619, Generating implicit copy(z(:,:,:),rtol(:),atol(:),ewt(:,:)) [if not already present]
+    624, Generating implicit firstprivate(neq,kstep)
+    695, Generating update self(bdf_active(:),tdel(:),ewt(:,:),tt(:),tq(:,:),q(:),hvec(:,:))
+bdf_step:
+    739, Generating present(acor(:,:),t9t(:),retry_ts(:),zt0(:,:,:),yt(:,:),mult(:),nit_nr(:),p_age(:),rebuild(:),gamratio(:),bdf_active(:),refactor(:),nit_nrslv(:),iterate(:),diag(:),gam(:),converged(:),crate(:),delp(:),j_age(:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        743, !$acc loop gang ! blockidx%x
+        746, !$acc loop vector(128) ! threadidx%x
+    743, Generating implicit firstprivate(neq)
+    746, Loop is parallelizable
+    769, Generating update self(iterate(:),refactor(:),rebuild(:))
+    776, Generating present(iterate(:),nit_nr(:),nit_nrslv(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        778, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    794, Generating update device(eval_rates(:))
+    803, Generating update self(gamratio(:),nit_nr(:),gam(:),j_age(:),p_age(:),rebuild(:),refactor(:))
+    813, Generating present(rebuild(:),p_age(:),gamratio(:),crate(:),gam(:),gamhat(:),acor(:,:),lvec(:,:),iterate(:),j_age(:),ydot(:,:),t9rhs(:),t9dot(:),refactor(:),zt0(:,:,:),yrhs(:,:))
+         Generating implicit firstprivate(ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        818, !$acc loop gang ! blockidx%x
+        835, !$acc loop vector(128) ! threadidx%x
+    818, Generating implicit firstprivate(neq)
+    835, Loop is parallelizable
+    842, Generating update self(t9rhs(:),nit_nr(:),t9dot(:),yt(:,:),zt0(:,:,:),yrhs(:,:),tdel(:),ydot(:,:),t9t(:),gam(:),iterate(:),gamratio(:))
+    860, Generating present(ewt(:,:),tq(:,:),dvec(:,:),nit_nr(:),delp(:),zt0(:,:,:),yt(:,:),aa(:),dt9(:),dy(:,:),dcon(:),del(:),acor(:,:),crate(:),t9t(:),iterate(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        863, !$acc loop gang ! blockidx%x
+        866, !$acc loop vector(32) ! threadidx%x
+    863, Generating implicit firstprivate(ny,neq)
+    866, Loop is parallelizable
+    889, Generating update self(crate(:),dcon(:),yt(:,:),y(:,:),nit_nr(:),del(:),t9t(:),dt9(:),iterate(:),dy(:,:))
+    909, Generating present(gamratio(:),acor(:,:),rebuild(:),nit_nrslv(:),j_age(:),nit_nr(:),iterate(:),converged(:),acnrm(:),delp(:),dcon(:),del(:),ewt(:,:),t9t(:),refactor(:),zt0(:,:,:),yt(:,:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        912, !$acc loop gang ! blockidx%x
+        932, !$acc loop vector(32) ! threadidx%x
+    912, Generating implicit firstprivate(max_it_nrslv,ny,neq)
+    932, Loop is parallelizable
+    952, Generating update self(iterate(:),refactor(:),rebuild(:))
+    958, Generating update self(p_age(:),nit_nrslv(:),gamratio(:),converged(:),dcon(:),crate(:),nit_nr(:),j_age(:))
+bdf_check:
+    990, Generating present(acnrm(:),rescale(:),q_age(:),restore(:),nerr_ts(:),nit_nr(:),nit_nrslv(:),ktot(:,:),eta_next(:),ierr_nr(:),ncf_ts(:),deltaq(:),eta(:),nit_ts(:),tdel(:),q(:),bdf_active(:),tq(:,:),y(:,:),t(:),t9(:),z(:,:,:),ydot0(:,:),retry_ts(:),t9dot0(:),ierr_ts(:),kmon(:,:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        995, !$acc loop gang ! blockidx%x
+       1067, !$acc loop vector(128) ! threadidx%x
+    995, Generating implicit firstprivate(error,ny,neq,kitmx)
+   1067, Loop is parallelizable
+   1100, Generating update self(retry_ts(:),ierr_nr(:))
+   1105, Generating update self(q(:),nit_ts(:),acnrm(:),ncf_ts(:),tq(:,:),tdel(:),t(:),retry_ts(:),eta(:),nit_nr(:),nerr_ts(:))
+bdf_correct:
+   1158, Generating present(hvec(:,:),p_age(:),j_age(:),acor(:,:),q(:),ierr_nr(:),nscon(:),lvec(:,:),t9t(:),q_age(:),yt(:,:),zt0(:,:,:),z(:,:,:))
+         Generating implicit firstprivate(neq,ny,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+       1161, !$acc loop gang ! blockidx%x
+       1165, !$acc loop vector(128) ! threadidx%x
+       1170, !$acc loop vector(128) collapse(2) ! threadidx%x
+       1171,   ! threadidx%x collapsed
+       1176, !$acc loop seq
+   1165, Loop is parallelizable
+   1170, Loop is parallelizable
+   1171, Loop is parallelizable
+   1176, Loop carried dependence of hvec prevents parallelization
+         Loop carried backward dependence of hvec prevents vectorization
+   1187, Generating update self(q(:),t9dot(:),t9t(:),tdel(:),ierr_nr(:),ydot(:,:),yt(:,:),zt0(:,:,:),z(:,:,:),acnrm(:),lvec(:,:),acor(:,:))
+bdf_eta:
+   1222, Generating present(hvec(:,:),errorq(:,:),eta_next(:),eta(:),q_age(:),tq(:,:),tq2save(:),z(:,:,:),ewt(:,:),etaq(:,:),nscon(:),q(:),acorp(:,:),acnrm(:),acorhat(:,:),acor(:,:),deltaq(:),ierr_nr(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+       1225, !$acc loop gang ! blockidx%x
+       1229, !$acc loop vector(32) ! threadidx%x
+       1236, !$acc loop vector(32) ! threadidx%x
+       1251, !$acc loop vector(32) ! threadidx%x
+       1288, !$acc loop vector(32) ! threadidx%x
+   1225, Generating implicit firstprivate(szbatch,neq,c,izone)
+   1229, Loop is parallelizable
+   1236, Loop is parallelizable
+   1251, Loop is parallelizable
+   1288, Loop is parallelizable
+   1295, Generating update self(errorq(:,:),ierr_nr(:),q_age(:),q(:),eta_next(:),deltaq(:),eta(:),etaq(:,:))
+bdf_stab:
+   1327, Generating present(ewt(:,:),nscon(:),acnrm(:),q(:),sddat(:,:,:),tq(:,:),z(:,:,:),detect(:),ierr_nr(:),deltaq(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+       1330, !$acc loop gang ! blockidx%x
+       1334, !$acc loop vector(32) ! threadidx%x
+       1335, !$acc loop seq
+   1330, Generating implicit firstprivate(neq)
+   1334, Loop is parallelizable
+         Generating implicit firstprivate(i)
+   1335, Loop carried dependence of sddat prevents parallelization
+         Loop carried backward dependence of sddat prevents vectorization
+   1352, Generating present(deltaq(:),etaq(:,:),detect(:),eta(:),eta_next(:),nscon(:),ldflag(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+       1354, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+   1365, Generating update self(ldflag(:),eta(:),q(:))
+bdf_stab_detect:
+   1401, Generating present(kflag(:),q(:),sddat(:,:,:),mask(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+       1409, !$acc loop gang ! blockidx%x
+       1414, !$acc loop vector(32) collapse(2) ! threadidx%x
+       1415,   ! threadidx%x collapsed
+       1426, !$acc loop seq
+             Generating reduction(min:smink)
+             Generating reduction(max:smaxk)
+       1441, !$acc loop seq
+             Generating reduction(+:sumrsq,sumrat)
+       1454, !$acc loop seq
+       1463, !$acc loop vector(32) ! threadidx%x
+             Generating reduction(min:vmin)
+             Generating reduction(max:vmax)
+       1475, !$acc loop vector(32) ! threadidx%x
+             Generating reduction(+:rr)
+       1482, !$acc loop vector(32) ! threadidx%x
+             Generating reduction(max:drrmax)
+       1498, !$acc loop vector(32) ! threadidx%x
+       1500, !$acc loop seq
+       1510, !$acc loop vector(32) ! threadidx%x
+       1525, !$acc loop vector(32) ! threadidx%x
+             Generating reduction(max:sqmax)
+       1535, !$acc loop seq
+       1546, !$acc loop seq
+             Generating reduction(max:sqmax)
+       1562, !$acc loop seq
+   1401, CUDA shared memory used for qp,rat,qjk,rrc,smax,sigsq,ssdat,sqmx,qkr,rav,smin,qco,vrat,ssmax,qc
+   1409, Generating implicit firstprivate(it)
+   1414, Loop is parallelizable
+   1415, Loop is parallelizable
+   1463, Loop is parallelizable
+   1475, Loop is parallelizable
+   1482, Loop is parallelizable
+   1498, Loop is parallelizable
+   1500, Loop is parallelizable
+   1510, Loop is parallelizable
+   1525, Loop is parallelizable
+   1532, Loop carried dependence of rrc prevents parallelization
+         Loop carried backward dependence of rrc prevents vectorization
+         Loop carried scalar dependence for rr at line 1536,1538,1540
+         Scalar last value needed after loop for rr at line 1575,1576,1577,1593,1611,1615
+         Loop carried reuse of qp,qkr,sqmx prevents parallelization
+         Scalar last value needed after loop for sqmin at line 1567
+         Loop carried dependence of qjk prevents parallelization
+         Loop carried backward dependence of qjk prevents vectorization
+         Generating implicit firstprivate(kmin)
+         Loop carried backward dependence of rrc prevents vectorization
+   1535, Loop carried scalar dependence for sqmin at line 1551
+         Scalar last value needed after loop for sqmin at line 1557,1567
+   1553, Accelerator restriction: induction variable live-out from loop: kmin
+bdf_adjust_order:
+   1638, Generating update self(deltaq(:),q(:))
+   1646, Generating present(q_age(:),acor(:,:),lvec(:,:),q(:),hvec(:,:),deltaq(:),tdel(:),z(:,:,:))
+         Generating implicit firstprivate(neq,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+       1649, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+       1652, !$acc loop seq
+       1657, !$acc loop seq
+       1660, !$acc loop seq
+       1664, !$acc loop seq
+       1665, !$acc loop seq
+       1669, !$acc loop seq
+       1676, !$acc loop seq
+       1685, !$acc loop seq
+             Generating implicit reduction(+:alpha0)
+             Generating implicit reduction(*:prod)
+             Generating implicit reduction(+:alpha1)
+       1691, !$acc loop seq
+       1697, !$acc loop seq
+       1698, !$acc loop seq
+       1702, !$acc loop seq
+   1649, Generating implicit firstprivate(j,i)
+   1652, Loop is parallelizable
+   1657, Loop carried scalar dependence for hsum at line 1658
+         Complex loop carried dependence of lvec prevents parallelization
+         Loop carried dependence of lvec prevents parallelization
+         Loop carried backward dependence of lvec prevents vectorization
+   1660, Loop carried dependence of lvec prevents parallelization
+         Loop carried backward dependence of lvec prevents vectorization
+   1664, Loop is parallelizable
+   1665, Loop is parallelizable
+   1669, Loop is parallelizable
+   1676, Loop is parallelizable
+   1685, Loop carried scalar dependence for hsum at line 1686
+         Loop carried scalar dependence for xiold at line 1692
+         Complex loop carried dependence of lvec prevents parallelization
+         Loop carried dependence of lvec prevents parallelization
+         Loop carried backward dependence of lvec prevents vectorization
+   1691, Loop carried dependence of lvec prevents parallelization
+         Loop carried backward dependence of lvec prevents vectorization
+   1697, Loop is parallelizable
+   1698, Loop is parallelizable
+   1702, Loop is parallelizable
+bdf_rescale:
+   1722, Generating enter data copyin(mask(:))
+   1724, Generating present(hvec(:,:),t(:),q(:),tdel(:),dt_scale(:),eta(:),nscon(:),z(:,:,:),tt(:),mask(:))
+         Generating implicit firstprivate(neq,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+       1726, !$acc loop gang ! blockidx%x
+       1733, !$acc loop vector(128) collapse(2) ! threadidx%x
+       1734,   ! threadidx%x collapsed
+   1733, Loop is parallelizable
+   1734, Loop is parallelizable
+   1742, Generating exit data copyout(mask(:))
+bdf_restore:
+   1755, Generating enter data copyin(mask(:))
+   1757, Generating present(mask(:),z0(:,:,:),z(:,:,:))
+         Generating implicit firstprivate(neq,zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+       1759, !$acc loop gang ! blockidx%x
+       1762, !$acc loop vector(128) collapse(2) ! threadidx%x
+       1763,   ! threadidx%x collapsed
+   1762, Loop is parallelizable
+   1763, Loop is parallelizable
+   1769, Generating exit data copyout(mask(:))
+error_weights:
+   1801, Generating NVIDIA GPU code
+       1817, !$acc loop vector ! threadidx%x
+       1828, !$acc loop vector ! threadidx%x
+   1817, Loop is parallelizable
+   1828, Loop is parallelizable
+normw:
+   1834, Generating NVIDIA GPU code
+       1857, !$acc loop vector ! threadidx%x
+             Generating reduction(max:xnrm)
+             Vector barrier inserted for vector loop reduction
+       1863, !$acc loop vector ! threadidx%x
+             Generating reduction(+:xnrm)
+             Vector barrier inserted for vector loop reduction
+       1869, !$acc loop vector ! threadidx%x
+             Generating reduction(+:xnrm)
+             Vector barrier inserted for vector loop reduction
+       1876, !$acc loop vector ! threadidx%x
+             Generating reduction(+:xnrm)
+             Vector barrier inserted for vector loop reduction
+   1857, Loop is parallelizable
+   1863, Loop is parallelizable
+   1869, Loop is parallelizable
+   1876, Loop is parallelizable
+ptxas info    : 61 bytes gmem
+ptxas info    : Function properties for __internal_accurate_pow
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Compile time = 6.118 ms
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 0.560 ms
+ptxas info    : Function properties for xnet_integrate_bdf_normw_
+    72 bytes stack frame, 68 bytes spill stores, 68 bytes spill loads
+ptxas info    : Compile time = 31.807 ms
+ptxas info    : Function properties for xnet_integrate_bdf_error_weights_
+    24 bytes stack frame, 24 bytes spill stores, 24 bytes spill loads
+ptxas info    : Compile time = 7.313 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_restore_1757_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_restore_1757_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 58 registers, used 0 barriers, 448 bytes cmem[0]
+ptxas info    : Compile time = 19.204 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_rescale_1724_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_rescale_1724_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 61 registers, used 1 barriers, 24 bytes smem, 552 bytes cmem[0]
+ptxas info    : Compile time = 11.423 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_adjust_order_1646_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_adjust_order_1646_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 70 registers, used 0 barriers, 544 bytes cmem[0]
+ptxas info    : Compile time = 33.729 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_stab_detect_1401_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_stab_detect_1401_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 90 registers, used 1 barriers, 104 bytes smem, 432 bytes cmem[0], 120 bytes cmem[2]
+ptxas info    : Compile time = 92.529 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_stab_1352_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_stab_1352_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 26 registers, used 0 barriers, 480 bytes cmem[0]
+ptxas info    : Compile time = 3.714 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_stab_1327_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_stab_1327_gpu
+    8 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 138 registers, used 0 barriers, 600 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 87.714 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_eta_1222_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_eta_1222_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 144 registers, used 1 barriers, 20 bytes smem, 768 bytes cmem[0], 24 bytes cmem[2]
+ptxas info    : Compile time = 129.528 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_correct_1158_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_correct_1158_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 74 registers, used 1 barriers, 24 bytes smem, 648 bytes cmem[0]
+ptxas info    : Compile time = 35.033 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_check_990_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_check_990_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 96 registers, used 1 barriers, 24 bytes smem, 880 bytes cmem[0], 24 bytes cmem[2]
+ptxas info    : Compile time = 39.437 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_step_909_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_step_909_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 136 registers, used 1 barriers, 24 bytes smem, 712 bytes cmem[0], 16 bytes cmem[2]
+ptxas info    : Compile time = 56.683 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_step_860_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_step_860_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 122 registers, used 0 barriers, 712 bytes cmem[0], 24 bytes cmem[2]
+ptxas info    : Compile time = 60.082 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_step_813_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_step_813_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 94 registers, used 1 barriers, 20 bytes smem, 680 bytes cmem[0]
+ptxas info    : Compile time = 24.034 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_step_776_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_step_776_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 12 registers, used 0 barriers, 408 bytes cmem[0]
+ptxas info    : Compile time = 2.381 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_step_739_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_step_739_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 32 registers, used 1 barriers, 720 bytes cmem[0], 8 bytes cmem[2]
+ptxas info    : Compile time = 14.227 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_update_619_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_update_619_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 74 registers, used 0 barriers, 632 bytes cmem[0]
+ptxas info    : Compile time = 40.590 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_predict_548_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_predict_548_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 94 registers, used 1 barriers, 28 bytes smem, 520 bytes cmem[0]
+ptxas info    : Compile time = 41.760 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_adjust_518_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_adjust_518_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 42 registers, used 0 barriers, 440 bytes cmem[0]
+ptxas info    : Compile time = 4.225 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_bdf_reset_424_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_bdf_reset_424_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 146 registers, used 1 barriers, 1200 bytes cmem[0]
+ptxas info    : Compile time = 59.477 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_solve_bdf_196_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_solve_bdf_196_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 55 registers, used 1 barriers, 20 bytes smem, 888 bytes cmem[0]
+ptxas info    : Compile time = 18.380 ms
+ptxas info    : Compiling entry function 'xnet_integrate_bdf_solve_bdf_151_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_integrate_bdf_solve_bdf_151_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 32 registers, used 0 barriers, 560 bytes cmem[0]
+ptxas info    : Compile time = 14.309 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_evolve.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_evolve.o'
+full_net:
+     67, Generating enter data create(sqnu(:))
+         Generating enter data copyin(mykstep(:))
+         Generating enter data create(delta_en(:),denu(:),edot(:),enm(:),en0(:),enb(:))
+         Generating enter data copyin(its(:),lzoutput(:),lzsolve(:))
+         Generating enter data create(enold(:))
+     74, Generating present(enold(:),kmon(:,:),t9t(:),tdel_next(:),tdel(:),ktot(:,:),nt(:),nto(:),t(:),t9(:),t9o(:),ntt(:),rho(:),rhoo(:),rhot(:),tdel_old(:),to(:),y(:,:),ye(:),yeo(:),tt(:),yet(:),yo(:,:),yt(:,:),enb(:),en0(:),enm(:),edot(:),delta_en(:))
+         Generating implicit firstprivate(ny,zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+         78, !$acc loop gang ! blockidx%x
+         92, !$acc loop vector(128) ! threadidx%x
+         97, !$acc loop vector(128) ! threadidx%x
+     74, Generating implicit copyout(sqnu(zb_lo:zb_hi),denu(zb_lo:zb_hi)) [if not already present]
+     92, Loop is parallelizable
+     97, Loop is parallelizable
+    139, Generating update self(y(:,:),tdel(:),ye(:),yo(:,:),ydot(:,:),its(:),t9(:),t(:),t9dot(:),t9o(:),rho(:))
+    158, Generating present(enm(:),enold(:),mykstep(:),tstop(:),t(:),lzsolve(:),lzoutput(:),its(:))
+         Generating implicit firstprivate(zb_hi,zb_lo)
+         Generating NVIDIA GPU code
+        161, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    161, Generating implicit firstprivate(kstep)
+    182, Generating present(enold(:),en0(:),enm(:),edot(:),denu(:),delta_en(:),its(:),tdel(:),sqnu(:))
+         Generating implicit firstprivate(zb_lo,zb_hi)
+         Generating NVIDIA GPU code
+        184, !$acc loop gang, vector(128) ! blockidx%x threadidx%x
+    182, Generating implicit copyin(lzoutput(zb_lo:zb_hi)) [if not already present]
+    191, Generating update self(lzsolve(:),lzoutput(:))
+    197, Generating update self(tdel(:),t(:),mykstep(:),its(:))
+    224, Generating exit data delete(its(:),lzoutput(:),lzsolve(:),enold(:),sqnu(:),mykstep(:))
+         Generating exit data copyout(denu(:))
+         Generating exit data delete(edot(:),enm(:),en0(:),enb(:),delta_en(:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.330 ms
+ptxas info    : Compiling entry function 'xnet_evolve_full_net_182_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_evolve_full_net_182_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 26 registers, used 0 barriers, 448 bytes cmem[0]
+ptxas info    : Compile time = 4.446 ms
+ptxas info    : Compiling entry function 'xnet_evolve_full_net_158_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_evolve_full_net_158_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 22 registers, used 0 barriers, 452 bytes cmem[0]
+ptxas info    : Compile time = 3.717 ms
+ptxas info    : Compiling entry function 'xnet_evolve_full_net_74_gpu' for 'sm_80'
+ptxas info    : Function properties for xnet_evolve_full_net_74_gpu
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 47 registers, used 0 barriers, 848 bytes cmem[0]
+ptxas info    : Compile time = 16.329 ms
+ftn -g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel -r8 -i4 -module /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod -I/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/mod   -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include   -c '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/net.f90' -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/net.o'
+net:
+    169, Generating enter data copyin(cv(:),etae(:),th(:,:),ye(:),rho(:),t9dot(:),tdelstart(:),intso(:),yeo(:),rhoo(:),t9o(:),nh(:),tdel_old(:),tstart(:),to(:),ints(:),fluxcms(:,:,:),nt(:),nto(:),nstart(:),denu(:),detaedt9(:),aext(:),yeh(:,:),yestart(:),ydot(:,:),rhoh(:,:),rhostart(:),ntt(:),t9(:),t9h(:,:),t9start(:),t(:),tmevnu(:,:,:),tstop(:),rhot(:),tdel_next(:),tdel(:),t9t(:),zext(:),yt(:,:),tt(:),yo(:,:),y(:,:),ystart(:,:),yet(:),xext(:))
+    265, Generating update device(aext(:),th(:,:),ye(:),rho(:),t9(:),tdelstart(:),lzactive(:),yestart(:),yeh(:,:),rhoh(:,:),t9h(:,:),nh(:),tdel(:),tstart(:),tmevnu(:,:,:),nstart(:),xext(:),y(:,:),nt(:),t(:),rhostart(:),t9start(:),fluxcms(:,:,:),zext(:),ystart(:,:),tstop(:))
+    276, Generating update self(y(:,:))
+    304, Generating exit data delete(cv(:),etae(:),th(:,:),ye(:),rho(:),t9dot(:),tdelstart(:),intso(:),yeo(:),rhoo(:),t9o(:),nh(:),tdel_old(:),tstart(:),to(:),ints(:),fluxcms(:,:,:),nt(:),nto(:),nstart(:),denu(:),detaedt9(:),aext(:),yeh(:,:),yestart(:),ydot(:,:),rhoh(:,:),rhostart(:),ntt(:),t9(:),t9h(:,:),t9start(:),t(:),tmevnu(:,:,:),tstop(:),rhot(:),tdel_next(:),tdel(:),t9t(:),zext(:),yt(:,:),tt(:),yo(:,:),y(:,:),ystart(:,:),yet(:),xext(:))
+ptxas info    : 61 bytes gmem
+ptxas info    : Compiling entry function '_ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv' for 'sm_80'
+ptxas info    : Function properties for _ZN3cub17CUB_200802_SM_80011EmptyKernelIvEEvv
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 4 registers, used 0 barriers, 352 bytes cmem[0]
+ptxas info    : Compile time = 1.363 ms
+ftn -g -gopt -O2    -pgc++libs  -acc -gpu=ptxinfo -Minfo=accel -o '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/bin/xnet.$$.tmp' /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/model_input_ascii.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/net.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_abundances.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_conditions.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_constants.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_controls.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_data.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_evolve.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_fd.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_ffn.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_flux.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_gpu.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_integrate.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_integrate_bdf.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_integrate_be.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_linalg.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_match.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_nnu.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_nse.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_output.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_parallel_stubs.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_preprocess.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_screening.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_timers.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_types.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/source/xnet_util.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/eos/xnet_eos_starkiller.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/eos/actual_eos.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/eos/eos_type.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/solver/xnet_jacobian_dense.o   /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cublasf.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cudaf.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cusolverf.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/cusparsef.o /pscratch/sd/j/jaharris/xnet_issue152/build-59029522/obj/gpu/openaccf.o   \
+    -L/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/lib64  -L/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/lib64   -lcudart -lcuda  -lcublas -lcusparse -lcusolver && mv '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/bin/xnet.$$.tmp' '/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/bin/xnet'
+make: Leaving directory '/pscratch/sd/j/jaharris/xnet_work/source-86e867c2'

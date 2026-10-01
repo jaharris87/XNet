@@ -1,0 +1,21 @@
+
+Currently Loaded Modules:
+  1) craype-x86-milan                11) darshan/default
+  2) libfabric/2.3.1                 12) numba-cuda-580-patch
+  3) craype-network-ofi              13) conda/Miniforge3-25.11.0-1
+  4) xpmem/2.11.5-1.3_g73ade43320bc  14) python/3.12-25.3.0
+  5) perftools-base/26.03.0          15) nvidia/26.5                (g,c)
+  6) cpe/26.03                       16) craype/2.7.36              (c)
+  7) cudatoolkit/13.2                17) cray-dsmml/0.3.1
+  8) craype-accel-nvidia80           18) cray-mpich/9.1.0           (mpi)
+  9) gpu/1.0                         19) cray-libsci/26.03.0
+ 10) sqs/2.0                         20) PrgEnv-nvidia/8.7.0        (prgenv)
+
+  Where:
+   c:       Compiler
+   g:       built for GPU
+   mpi:     MPI Providers
+   prgenv:  Programming Environment Modules
+
+ 
+

@@ -1,0 +1,34 @@
+xnet_host=nid001445
+CUDA_VISIBLE_DEVICES=0
+SLURM_STEP_GPUS=0
+SLURM_LOCALID=0
+cpu_affinity=pid 2250937's current affinity list: 48-63,112-127
+GPU 0: NVIDIA A100-SXM4-40GB (UUID: GPU-0a2d1525-cd97-1237-f819-9c5fe40aa441)
+0, NVIDIA A100-SXM4-40GB, GPU-0a2d1525-cd97-1237-f819-9c5fe40aa441, 00000000:03:00.0
+           14
+Listing Nuclei
+   he4   c12   o16  ne20  mg24  si28   s32  ar36  ca40  ti44
+  cr48  fe52  ni56  zn60
+ Number of species=  14
+Reading and reformating reactions data
+Registering reactions to species
+          number of reactions of different types
+                 1                 1                 0
+                 2                 1                19
+                 3                20                22
+                 4                 1                19
+                 5                20                27
+                 6                28                27
+                 7                28                27
+                 8                 1                 3
+                 9                 4                 3
+                10                 1                 0
+                11                23                22
+          necessary dimensions
+                22                27                 3                 0
+                63                85                 6                 0
+                 0                 0
+ Matching forward and reverse reactions
+ Determining network sparsity pattern
+Could not find     n; setting i_nn to min Z/A:   he4
+Could not find     p; setting i_pp to max Z/A:   he4

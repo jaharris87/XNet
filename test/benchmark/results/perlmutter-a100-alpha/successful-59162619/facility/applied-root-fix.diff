@@ -1,0 +1,13 @@
+diff --git a/source/xnet_conditions.F90 b/source/xnet_conditions.F90
+index 7b9ce26..b13c8f3 100644
+--- a/source/xnet_conditions.F90
++++ b/source/xnet_conditions.F90
+@@ -59,7 +59,7 @@ Contains
+ 
+     ! Input variables
+     Integer, Intent(in) :: kstep, ns
+-    Real(dp), Intent(in) :: tf, ts(:), t9s(:), rhos(:)
++    Real(dp), Intent(in) :: tf, ts(ns), t9s(ns), rhos(ns)
+ 
+     ! Output variables
+     Integer, Intent(out) :: nf

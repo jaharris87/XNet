@@ -1,0 +1,4 @@
+
+nvfortran 26.5-0 64-bit target on x86-64 Linux -tp znver3 
+NVIDIA Compilers and Tools
+Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.

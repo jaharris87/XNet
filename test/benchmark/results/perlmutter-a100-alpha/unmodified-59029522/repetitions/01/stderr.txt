@@ -1,0 +1,1004 @@
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_data.f90 function=benuc_vector line=126 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_evolve.f90 function=full_net line=74 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=timestep line=52 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_abundances.f90 function=y_moment_vector line=105 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/eos/xnet_eos_starkiller.f90 function=eos_interface_vector line=141 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_abundances.f90 function=y_moment_vector line=105 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/eos/xnet_eos_starkiller.f90 function=salpeter_ratio_vector line=325 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/eos/xnet_eos_starkiller.f90 function=eos_screen_vector line=231 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_screening.f90 function=screening line=183 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=update_iweak line=263 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_data.f90 function=partf line=175 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=cross_sect line=565 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=cross_sect line=622 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=cross_sect line=680 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=yderiv line=349 device=0 threadid=1 queue=1 num_gangs=56 num_workers=1 vector_length=128 grid=56 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=yderiv line=426 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=timestep line=66 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=timestep line=176 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate_be.f90 function=solve_be line=55 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate_be.f90 function=step_be line=231 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=yderiv line=349 device=0 threadid=1 queue=1 num_gangs=56 num_workers=1 vector_length=128 grid=56 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate.f90 function=yderiv line=426 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/solver/xnet_jacobian_dense.f90 function=jacobian_build line=250 device=0 threadid=1 queue=1 num_gangs=56 num_workers=1 vector_length=128 grid=56 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/solver/xnet_jacobian_dense.f90 function=jacobian_build line=343 device=0 threadid=1 queue=1 num_gangs=1 num_workers=1 vector_length=128 grid=1 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/solver/xnet_jacobian_dense.f90 function=jacobian_scale line=143 device=0 threadid=1 queue=1 num_gangs=56 num_workers=1 vector_length=128 grid=56 block=128 shared memory=1024
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate_be.f90 function=step_be line=282 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/solver/xnet_jacobian_dense.f90 function=jacobian_bksub line=546 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+launch CUDA kernel  file=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/solver/xnet_jacobian_dense.f90 function=jacobian_bksub line=568 device=0 threadid=1 queue=1 num_gangs=4 num_workers=1 vector_length=128 grid=4 block=128
+hostptr=0x7fcf587d4238,stride=1,size=140733344322552,eltsize=4,name=inr(:),flags=0x200=present,async=1,threadid=1
+Present table dump for device[1]: NVIDIA Tesla GPU 0, compute capability 8.0, threadid=1
+Hint: specify 0x800 bit in NV_ACC_DEBUG for verbose info.
+host:0xb5d400 device:0x7fcee926f000 size:40 presentcount:0+1 line:-1 name:_xnet_constants_21
+host:0xb5f4c0 device:0x7fcee926f200 size:200 presentcount:0+1 line:-1 name:_xnet_ffn_21
+host:0xb6b4c0 device:0x7fcee926f300 size:120 presentcount:0+1 line:-1 name:_xnet_nnu_21
+host:0xb6c900 device:0x7fcee926f400 size:92 presentcount:0+1 line:-1 name:_xnet_preprocess_21
+host:0xc354d0 device:0x7fceca7dd800 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc35590 device:0x7fceca7dcc00 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc35650 device:0x7fceca7dc800 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc35710 device:0x7fceca7dd000 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc357d0 device:0x7fceca7dd400 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc35890 device:0x7fceca7ddc00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35920 device:0x7fceca7de000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc359b0 device:0x7fceca7de400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35a50 device:0x7fceca7df400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35ae0 device:0x7fceca7df800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35b70 device:0x7fceca7dfc00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35c00 device:0x7fceca7de800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35c90 device:0x7fceca7dec00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35d20 device:0x7fceca7df000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35db0 device:0x7fceca7e0400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35e40 device:0x7fceca7e1400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35ed0 device:0x7fceca7e2000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35f60 device:0x7fceca7e0000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc35ff0 device:0x7fceca7e1000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36080 device:0x7fceca7e1c00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36110 device:0x7fceca7e0800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc361a0 device:0x7fceca7e1800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36230 device:0x7fceca7e2400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc362c0 device:0x7fceca7e0c00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36350 device:0x7fceca7e2800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc363e0 device:0x7fceca7e2c00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36470 device:0x7fceca7e3000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36500 device:0x7fceca7e3400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36590 device:0x7fceca7e3800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36620 device:0x7fceca7e3c00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc366b0 device:0x7fceca7e4000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36740 device:0x7fceca7e4400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc367d0 device:0x7fceca7e6400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36860 device:0x7fceca7e5400 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc368f0 device:0x7fceca7e4800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36980 device:0x7fceca7e4c00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36a10 device:0x7fceca7e5000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36aa0 device:0x7fceca7e5800 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36b30 device:0x7fceca7e5c00 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36bc0 device:0x7fceca7e6000 size:128 presentcount:0+1 line:169 name:descriptor
+host:0xc36c50 device:0x7fceca7e6600 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc36d10 device:0x7fceca7e6800 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc36dd0 device:0x7fceca7e6a00 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc36e90 device:0x7fceca7e6c00 size:176 presentcount:0+1 line:169 name:descriptor
+host:0xc37390 device:0x7fcee953ae00 size:128 presentcount:0+1 line:348 name:descriptor
+host:0xc37420 device:0x7fcee953aa00 size:128 presentcount:0+1 line:348 name:descriptor
+host:0xc374b0 device:0x7fcee953b200 size:176 presentcount:0+1 line:348 name:descriptor
+host:0xc37570 device:0x7fcee953b600 size:176 presentcount:0+1 line:348 name:descriptor
+host:0xc37a80 device:0x7fcee926f100 size:20 presentcount:0+1 line:-1 name:_xnet_controls_16
+host:0xc37ee0 device:0x7fcee953ba00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc37f70 device:0x7fcee953be00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38000 device:0x7fcee953c200 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38090 device:0x7fcee953c600 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38120 device:0x7fcee953ca00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc381b0 device:0x7fcee953ce00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38240 device:0x7fcee953d200 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc382d0 device:0x7fcee953d600 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38360 device:0x7fcee953da00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc383f0 device:0x7fcee953de00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38480 device:0x7fcee953e200 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38510 device:0x7fcee953e600 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc385a0 device:0x7fcee953ea00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38630 device:0x7fcee953ee00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc386c0 device:0x7fcee953f200 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38750 device:0x7fcee953f600 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc387e0 device:0x7fcee953fa00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38870 device:0x7fcee9540800 size:176 presentcount:0+1 line:488 name:descriptor
+host:0xc38930 device:0x7fcee9541000 size:176 presentcount:0+1 line:488 name:descriptor
+host:0xc389f0 device:0x7fcee9540c00 size:128 presentcount:0+1 line:488 name:descriptor
+host:0xc38a80 device:0x7fcee9541400 size:176 presentcount:0+1 line:488 name:descriptor
+host:0xc38c90 device:0x7fcee9548000 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc38d50 device:0x7fcee9548600 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc38e10 device:0x7fcee9548a00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc38ed0 device:0x7fcee9548c00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc38f90 device:0x7fcee9543400 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39050 device:0x7fcee9543c00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39110 device:0x7fcee9544000 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc391d0 device:0x7fcee9544200 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39290 device:0x7fcee9551e00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39350 device:0x7fcee9552400 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39410 device:0x7fcee9552800 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc394d0 device:0x7fcee9552a00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39590 device:0x7fcee9553000 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39650 device:0x7fcee9553600 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39710 device:0x7fcee9553a00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc397d0 device:0x7fcee9553c00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc39890 device:0x7fcee9544600 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc39920 device:0x7fcee9544a00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc399b0 device:0x7fcee9544e00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc39a40 device:0x7fcee9545000 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc39d10 device:0x7fcee9545400 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc39da0 device:0x7fcee9545800 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc39e30 device:0x7fcee9545c00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc39ec0 device:0x7fcee9545e00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a190 device:0x7fcee9542800 size:128 presentcount:0+2 line:900 name:descriptor
+host:0xc3a220 device:0x7fcee9542c00 size:128 presentcount:0+2 line:900 name:descriptor
+host:0xc3a2b0 device:0x7fcee9542000 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3a370 device:0x7fcee9542400 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3a430 device:0x7fcee9546200 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a4c0 device:0x7fcee9546600 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a550 device:0x7fcee9546a00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a5e0 device:0x7fcee9546c00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a670 device:0x7fcee9549400 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a700 device:0x7fcee9549c00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a790 device:0x7fcee954a000 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a820 device:0x7fcee954a800 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a8b0 device:0x7fcee954ac00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a940 device:0x7fcee954b000 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3a9d0 device:0x7fcee954b400 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3aa60 device:0x7fcee954b600 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3aaf0 device:0x7fcee954b800 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3ab80 device:0x7fcee954ba00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3ac10 device:0x7fcee9549000 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3aca0 device:0x7fcee9549800 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3ad30 device:0x7fcee954a400 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3adc0 device:0x7fcee954b200 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3ae50 device:0x7fcee9547000 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3aee0 device:0x7fcee9547600 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3af70 device:0x7fcee9547a00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3b000 device:0x7fcee9547c00 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3b090 device:0x7fcee9550400 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b150 device:0x7fcee9551200 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b210 device:0x7fcee9551600 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b2d0 device:0x7fcee9551800 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b380 device:0x7fcee9541a00 size:16 presentcount:0+1 line:900 name:nreac(:)
+host:0xc3b3a0 device:0x7fcee9541c00 size:16 presentcount:0+1 line:900 name:nan(:)
+host:0xc3b490 device:0x7fcee954da00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b550 device:0x7fcee954e200 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b610 device:0x7fcee954c200 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b6d0 device:0x7fcee954ca00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b790 device:0x7fcee954ce00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b850 device:0x7fcee954e600 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3b8e0 device:0x7fcee954ea00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3b9a0 device:0x7fcee954ee00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3ba60 device:0x7fcee954d200 size:128 presentcount:0+1 line:900 name:descriptor
+host:0xc3baf0 device:0x7fcee9554000 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3bbb0 device:0x7fcee9554400 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc3eb90 device:0x7fceca7d9800 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3ec20 device:0x7fceca7d7600 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3ecb0 device:0x7fceca7d7a00 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3ed40 device:0x7fceca7d7e00 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3edd0 device:0x7fceca7d8e00 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3ee60 device:0x7fceca7d9200 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3eef0 device:0x7fceca7d9600 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3ef80 device:0x7fceca7d9c00 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f010 device:0x7fceca7da000 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f0a0 device:0x7fceca7da400 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f130 device:0x7fceca7da800 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f1c0 device:0x7fceca7dac00 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f250 device:0x7fceca7db000 size:176 presentcount:0+1 line:486 name:descriptor
+host:0xc3f310 device:0x7fceca7db400 size:176 presentcount:0+1 line:486 name:descriptor
+host:0xc3f3d0 device:0x7fceca7db800 size:176 presentcount:0+1 line:486 name:descriptor
+host:0xc3f490 device:0x7fceca7dbc00 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f520 device:0x7fceca7dc000 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f5b0 device:0x7fceca7dc400 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f640 device:0x7fceca7d8200 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f6d0 device:0x7fceca7d8600 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3f760 device:0x7fceca7d8a00 size:128 presentcount:0+1 line:486 name:descriptor
+host:0xc3fe10 device:0x7fceca7e6e00 size:224 presentcount:0+1 line:169 name:descriptor
+host:0xc3ff00 device:0x7fceca7e7000 size:224 presentcount:0+1 line:169 name:descriptor
+host:0xc3fff0 device:0x7fcee954f600 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc400b0 device:0x7fcee954fa00 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc40170 device:0x7fcee9541600 size:128 presentcount:0+1 line:96 name:descriptor
+host:0xc40200 device:0x7fcee9541800 size:128 presentcount:0+1 line:96 name:descriptor
+host:0xc40290 device:0x7fcee954f200 size:176 presentcount:0+1 line:900 name:descriptor
+host:0xc40350 device:0x7fcee9554800 size:224 presentcount:0+1 line:900 name:descriptor
+host:0x377cb90 device:0x7fcee955f800 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377cc50 device:0x7fcee955fe00 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377cd10 device:0x7fcee9560200 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377cdd0 device:0x7fcee9560400 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377ce90 device:0x7fcee9560a00 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377cf50 device:0x7fcee9561000 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377d010 device:0x7fcee9561400 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377d0d0 device:0x7fcee9561600 size:176 presentcount:0+1 line:125 name:descriptor
+host:0x377d6a0 device:0x7fcee955a800 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377d730 device:0x7fcee955ac00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377d7c0 device:0x7fcee955b000 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377d850 device:0x7fcee955b400 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377d8e0 device:0x7fcee955b800 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377d970 device:0x7fcee955ba00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377da00 device:0x7fcee955bc00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377da90 device:0x7fcee955be00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377db20 device:0x7fcee955c000 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377dd60 device:0x7fcee955c400 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377ddf0 device:0x7fcee955c800 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377de80 device:0x7fcee955ca00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377df10 device:0x7fcee955ce00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377dfa0 device:0x7fcee955d800 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e030 device:0x7fcee955d200 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e0c0 device:0x7fcee955dc00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e150 device:0x7fcee955d400 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e1e0 device:0x7fcee955de00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e270 device:0x7fcee955e200 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e300 device:0x7fcee955e600 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e390 device:0x7fcee955ea00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e420 device:0x7fcee955ee00 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e4b0 device:0x7fcee955f200 size:128 presentcount:0+1 line:104 name:descriptor
+host:0x377e590 device:0x7fceca7d5a00 size:128 presentcount:0+1 line:46 name:descriptor
+host:0x377e620 device:0x7fceca7d5e00 size:128 presentcount:0+1 line:46 name:descriptor
+host:0x377e6b0 device:0x7fceca7d6200 size:128 presentcount:0+1 line:46 name:descriptor
+host:0x377e740 device:0x7fceca7d6600 size:128 presentcount:0+1 line:46 name:descriptor
+host:0x377e7d0 device:0x7fceca7d6a00 size:128 presentcount:0+1 line:46 name:descriptor
+host:0x377e860 device:0x7fceca7d6e00 size:128 presentcount:0+1 line:46 name:descriptor
+host:0x377e8f0 device:0x7fceca7d7200 size:128 presentcount:0+1 line:46 name:descriptor
+host:0x377ed80 device:0x7fcee926f500 size:5920 presentcount:31+1 line:-1 name:_actual_eos_module_16
+host:0x37804c0 device:0x7fcee9270d00 size:512 presentcount:0+1 line:-1 name:_eos_type_module_16
+host:0x3780750 device:0x7fcee9556400 size:224 presentcount:0+1 line:74 name:descriptor
+host:0x3780840 device:0x7fcee9558000 size:224 presentcount:0+1 line:74 name:descriptor
+host:0x3780930 device:0x7fcee9558400 size:176 presentcount:0+1 line:74 name:descriptor
+host:0x37809f0 device:0x7fcee9558800 size:176 presentcount:0+1 line:74 name:descriptor
+host:0x3780ab0 device:0x7fcee9558c00 size:128 presentcount:0+1 line:74 name:descriptor
+host:0x3780cf0 device:0x7fcee9559c00 size:128 presentcount:0+1 line:92 name:descriptor
+host:0x3780d80 device:0x7fcee955a000 size:128 presentcount:0+1 line:92 name:descriptor
+host:0x3780e10 device:0x7fcee955a400 size:128 presentcount:0+1 line:92 name:descriptor
+host:0x3780ea0 device:0x7fcee9559000 size:128 presentcount:0+1 line:74 name:descriptor
+host:0x3780f30 device:0x7fcee9559400 size:128 presentcount:0+1 line:74 name:descriptor
+host:0x3780fc0 device:0x7fcee9559800 size:128 presentcount:0+1 line:74 name:descriptor
+host:0x3816720 device:0x7fcee9549e00 size:340 presentcount:0+1 line:900 name:n22(:)
+host:0x38168c0 device:0x7fcee9549a00 size:340 presentcount:0+1 line:900 name:n21(:)
+host:0x3d922a0 device:0x7fcee9546400 size:340 presentcount:0+1 line:900 name:mu2(:)
+host:0x41d4ea0 device:0x7fcee9542200 size:224 presentcount:0+1 line:900 name:le(:,:)
+host:0x488e660 device:0x7fcee953e800 size:264 presentcount:0+1 line:488 name:zseq(:)
+host:0x488e8e0 device:0x7fcee953c800 size:112 presentcount:0+1 line:488 name:mex(:)
+host:0x488e9c0 device:0x7fcee953b800 size:112 presentcount:1+1 line:488 name:aa(:)
+host:0x488ebb0 device:0x7fcee953cc00 size:112 presentcount:0+1 line:488 name:mm(:)
+host:0x488ec50 device:0x7fcee953c400 size:112 presentcount:0+1 line:488 name:be(:)
+host:0x4f62b20 device:0x7fcee953bc00 size:112 presentcount:0+1 line:488 name:zz(:)
+host:0x4f6e9f0 device:0x7fcee9560c00 size:864 presentcount:0+1 line:125 name:dh2dt9(:,:)
+host:0x4f94100 device:0x7fcee9561200 size:96 presentcount:0+1 line:125 name:dh3dt9(:,:)
+host:0x4fa94f0 device:0x7fcee955fa00 size:864 presentcount:0+1 line:125 name:h2(:,:)
+host:0x4fa9880 device:0x7fcee9560000 size:96 presentcount:0+1 line:125 name:h3(:,:)
+host:0x4fb3cb0 device:0x7fcee9553200 size:864 presentcount:0+1 line:900 name:dcsect2dt9(:,:)
+host:0x4ffff40 device:0x7fcee9552000 size:864 presentcount:0+1 line:900 name:csect2(:,:)
+host:0x50002d0 device:0x7fcee9553800 size:96 presentcount:0+1 line:900 name:dcsect3dt9(:,:)
+host:0x50ad450 device:0x7fcee9549600 size:340 presentcount:0+1 line:900 name:n20(:)
+host:0x50e5c90 device:0x7fcee953c000 size:112 presentcount:0+1 line:488 name:nn(:)
+host:0x50fa900 device:0x7fcee9541e00 size:224 presentcount:0+1 line:900 name:la(:,:)
+host:0x515b900 device:0x7fcee953f400 size:96 presentcount:0+1 line:488 name:it9i(:)
+host:0x517fa10 device:0x7fcee9547e00 size:440 presentcount:0+1 line:900 name:n1i(:,:)
+host:0x5181af0 device:0x7fcee954d000 size:4 presentcount:0+1 line:900 name:has_logft(:)
+host:0x5181c00 device:0x7fcee953a800 size:16 presentcount:0+1 line:348 name:lzactive(:)
+host:0x5181c40 device:0x7fcee953ac00 size:16 presentcount:0+1 line:348 name:iweak(:)
+host:0x5181d00 device:0x7fcee953b000 size:80 presentcount:0+1 line:348 name:kmon(:,:)
+host:0x5181d80 device:0x7fcee953b400 size:80 presentcount:0+1 line:348 name:ktot(:,:)
+host:0x5182050 device:0x7fcee9548800 size:72 presentcount:0+1 line:900 name:n3i(:,:)
+host:0x5185e90 device:0x7fcee9544400 size:88 presentcount:0+1 line:900 name:iwk1(:)
+host:0x5185f90 device:0x7fcee953f800 size:192 presentcount:0+1 line:488 name:t9i(:)
+host:0x5186080 device:0x7fcee9551400 size:192 presentcount:0+1 line:900 name:b3(:,:)
+host:0x5186170 device:0x7fcee953d000 size:56 presentcount:0+1 line:488 name:ia(:)
+host:0x51861d0 device:0x7fcee953d400 size:56 presentcount:0+1 line:488 name:iz(:)
+host:0x5186230 device:0x7fcee9540a00 size:120 presentcount:0+1 line:488 name:angm(:)
+host:0x51865a0 device:0x7fcee954cc00 size:32 presentcount:0+1 line:900 name:qkffn(:,:)
+host:0x51865f0 device:0x7fcee954e800 size:32 presentcount:0+1 line:900 name:phasei(:,:)
+host:0x5186640 device:0x7fcee954f400 size:128 presentcount:0+1 line:900 name:ltnu(:,:)
+host:0x51866f0 device:0x7fcee953dc00 size:112 presentcount:0+1 line:488 name:zz2(:)
+host:0x5186860 device:0x7fcee953fc00 size:2688 presentcount:0+1 line:488 name:g(:,:)
+host:0x5187310 device:0x7fcee9540e00 size:480 presentcount:0+1 line:488 name:gg(:,:)
+host:0x5187520 device:0x7fcee9541200 size:480 presentcount:0+1 line:488 name:dlngdt9(:,:)
+host:0x5187970 device:0x7fcee954ec00 size:32 presentcount:0+1 line:900 name:dphaseidt9(:,:)
+host:0x51887e0 device:0x7fcee9552600 size:96 presentcount:0+1 line:900 name:csect3(:,:)
+host:0x5188870 device:(nil) size:0 presentcount:0+1 line:900 name:iwk4(:)
+host:0x518bc70 device:0x7fcee953ec00 size:264 presentcount:0+1 line:488 name:zseq53(:)
+host:0x518bda0 device:0x7fcee953f000 size:264 presentcount:0+1 line:488 name:zseqi(:)
+host:0x518bed0 device:0x7fcee9546000 size:252 presentcount:0+1 line:900 name:mu1(:)
+host:0x518c0e0 device:(nil) size:0 presentcount:0+1 line:96 name:irl(:)
+host:0x518c130 device:0x7fcee954f800 size:128 presentcount:0+1 line:900 name:fluxnu(:,:)
+host:0x518c1e0 device:0x7fcee953e000 size:112 presentcount:0+1 line:488 name:zz53(:)
+host:0x518c280 device:0x7fcee953e400 size:112 presentcount:0+1 line:488 name:zzi(:)
+host:0x518c3c0 device:0x7fcee9545200 size:88 presentcount:0+1 line:900 name:irev1(:)
+host:0x518c770 device:0x7fcee953d800 size:56 presentcount:0+1 line:488 name:in(:)
+host:0x518c7d0 device:0x7fcee954f000 size:56 presentcount:0+1 line:900 name:sigmanu(:,:)
+host:0x518c830 device:0x7fcee9547800 size:48 presentcount:0+1 line:900 name:a3(:)
+host:0x518c9b0 device:0x7fcee9544c00 size:12 presentcount:0+1 line:900 name:iwk3(:)
+host:0x518c9f0 device:0x7fcee9545a00 size:12 presentcount:0+1 line:900 name:irev3(:)
+host:0x518ca30 device:(nil) size:0 presentcount:0+1 line:900 name:irev4(:)
+host:0x518ca60 device:(nil) size:0 presentcount:0+1 line:900 name:rc4(:,:)
+host:0x518ca90 device:0x7fcee954e400 size:8 presentcount:0+1 line:900 name:ffn_qval(:)
+host:0x518cac0 device:(nil) size:0 presentcount:0+1 line:900 name:n4i(:,:)
+host:0x5194c70 device:0x7fcee954bc00 size:1144 presentcount:0+1 line:900 name:ffnsum(:,:)
+host:0x5195110 device:0x7fcee954c400 size:1144 presentcount:0+1 line:900 name:ffnenu(:,:)
+host:0x51955b0 device:0x7fcee954d400 size:1144 presentcount:0+1 line:900 name:ffn_ec(:,:)
+host:0x5195a50 device:0x7fcee954dc00 size:1144 presentcount:0+1 line:900 name:ffn_beta(:,:)
+host:0x5195ef0 device:0x7fcee9542e00 size:1232 presentcount:0+1 line:900 name:rc1(:,:)
+host:0x51963f0 device:0x7fcee954fc00 size:2016 presentcount:0+1 line:900 name:b1(:,:)
+host:0x5196c00 device:0x7fcee9550600 size:2720 presentcount:0+1 line:900 name:b2(:,:)
+host:0x51976d0 device:0x7fcee9551a00 size:704 presentcount:0+1 line:900 name:csect1(:,:)
+host:0x51979c0 device:(nil) size:0 presentcount:0+1 line:900 name:csect4(:,:)
+host:0x51979f0 device:0x7fcee9552c00 size:704 presentcount:0+1 line:900 name:dcsect1dt9(:,:)
+host:0x5197ce0 device:(nil) size:0 presentcount:0+1 line:900 name:dcsect4dt9(:,:)
+host:0x5197d10 device:0x7fcee9553e00 size:32 presentcount:0+1 line:900 name:rffn(:,:)
+host:0x5197d60 device:0x7fcee9554200 size:32 presentcount:0+1 line:900 name:dlnrffndt9(:,:)
+host:0x5197db0 device:0x7fcee9554600 size:128 presentcount:0+1 line:900 name:rnnu(:,:,:)
+host:0x51980a0 device:0x7fcee9558e00 size:32 presentcount:0+1 line:74 name:diag0(:)
+host:0x5198390 device:0x7fcee9559200 size:32 presentcount:0+1 line:74 name:mult1(:)
+host:0x5198400 device:0x7fcee9548200 size:648 presentcount:0+1 line:900 name:n2i(:,:)
+host:0x51986b0 device:0x7fcee9544800 size:108 presentcount:0+1 line:900 name:iwk2(:)
+host:0x51987f0 device:0x7fcee9545600 size:108 presentcount:0+1 line:900 name:irev2(:)
+host:0x5198890 device:0x7fcee9543600 size:1512 presentcount:0+1 line:900 name:rc2(:,:)
+host:0x5198ea0 device:0x7fcee9543e00 size:168 presentcount:0+1 line:900 name:rc3(:,:)
+host:0x5198f70 device:0x7fcee9542600 size:88 presentcount:0+2 line:900 name:iffn(:)
+host:0x5198ff0 device:0x7fcee9542a00 size:88 presentcount:0+2 line:900 name:innu(:)
+host:0x51990f0 device:(nil) size:0 presentcount:0+1 line:96 name:nuspec(:)
+host:0x5199360 device:(nil) size:0 presentcount:0+1 line:900 name:b4(:,:)
+host:0x5199390 device:0x7fcee9559600 size:16 presentcount:0+1 line:74 name:pivot(:)
+host:0x5199900 device:0x7fcee9546e00 size:504 presentcount:0+1 line:900 name:a1(:)
+host:0x5199b20 device:0x7fcee9548e00 size:252 presentcount:0+1 line:900 name:n10(:)
+host:0x5199c50 device:0x7fcee9549200 size:252 presentcount:0+1 line:900 name:n11(:)
+host:0x5199d80 device:0x7fcee9547200 size:680 presentcount:0+1 line:900 name:a2(:)
+host:0x519a050 device:0x7fcee9546800 size:24 presentcount:0+1 line:900 name:mu3(:)
+host:0x519a090 device:0x7fcee954a200 size:24 presentcount:0+1 line:900 name:n30(:)
+host:0x519a0d0 device:0x7fcee954a600 size:24 presentcount:0+1 line:900 name:n31(:)
+host:0x519a110 device:0x7fcee954aa00 size:24 presentcount:0+1 line:900 name:n32(:)
+host:0x519a150 device:0x7fcee954ae00 size:24 presentcount:0+1 line:900 name:n33(:)
+host:0x519a190 device:(nil) size:0 presentcount:0+1 line:900 name:mu4(:)
+host:0x519a1c0 device:(nil) size:0 presentcount:0+1 line:900 name:a4(:)
+host:0x519a1f0 device:(nil) size:0 presentcount:0+1 line:900 name:n40(:)
+host:0x519a220 device:(nil) size:0 presentcount:0+1 line:900 name:n41(:)
+host:0x519a250 device:(nil) size:0 presentcount:0+1 line:900 name:n42(:)
+host:0x519a280 device:(nil) size:0 presentcount:0+1 line:900 name:n43(:)
+host:0x519a2b0 device:(nil) size:0 presentcount:0+1 line:900 name:n44(:)
+host:0x51bf5a0 device:0x7fcee9554a00 size:6272 presentcount:0+1 line:74 name:dydotdy(:,:,:)
+host:0x51c0e50 device:0x7fcee9556600 size:6272 presentcount:0+1 line:74 name:jac(:,:,:)
+host:0x51c2700 device:0x7fcee9558200 size:448 presentcount:0+1 line:74 name:rhs(:,:)
+host:0x51c28f0 device:0x7fcee9558600 size:224 presentcount:0+1 line:74 name:indx(:,:)
+host:0x51c2a00 device:0x7fcee9558a00 size:16 presentcount:0+1 line:74 name:info(:)
+host:0x51c75c0 device:0x7fcee9559a00 size:32 presentcount:0+1 line:92 name:djac(:)
+host:0x51c7610 device:0x7fcee9559e00 size:32 presentcount:0+1 line:92 name:drhs(:)
+host:0x51c7660 device:0x7fcee955a200 size:32 presentcount:0+1 line:92 name:dindx(:)
+host:0x51c8be0 device:0x7fcee955a600 size:108 presentcount:0+1 line:104 name:iz21(:)
+host:0x51c8c80 device:0x7fcee955aa00 size:108 presentcount:0+1 line:104 name:iz22(:)
+host:0x51c8d20 device:0x7fcee955c200 size:108 presentcount:0+1 line:104 name:iz2c(:)
+host:0x51c8dc0 device:0x7fcee955cc00 size:216 presentcount:0+1 line:104 name:zeta2w(:)
+host:0x51c8ec0 device:0x7fcee955d600 size:216 presentcount:0+1 line:104 name:zeta2i(:)
+host:0x51c9220 device:0x7fcee955ae00 size:12 presentcount:0+1 line:104 name:iz31(:)
+host:0x51c9260 device:0x7fcee955b200 size:12 presentcount:0+1 line:104 name:iz32(:)
+host:0x51c92a0 device:0x7fcee955b600 size:12 presentcount:0+1 line:104 name:iz33(:)
+host:0x51c92e0 device:0x7fcee955c600 size:12 presentcount:0+1 line:104 name:iz3c(:)
+host:0x51c9360 device:0x7fcee955d000 size:24 presentcount:0+1 line:104 name:zeta3w(:)
+host:0x51c93a0 device:0x7fcee955da00 size:24 presentcount:0+1 line:104 name:zeta3i(:)
+host:0x51c94b0 device:(nil) size:0 presentcount:0+1 line:104 name:iz41(:)
+host:0x51c94e0 device:(nil) size:0 presentcount:0+1 line:104 name:iz42(:)
+host:0x51c9510 device:(nil) size:0 presentcount:0+1 line:104 name:iz43(:)
+host:0x51c9540 device:(nil) size:0 presentcount:0+1 line:104 name:iz44(:)
+host:0x51c9570 device:(nil) size:0 presentcount:0+1 line:104 name:iz4c(:)
+host:0x51c95d0 device:(nil) size:0 presentcount:0+1 line:104 name:zeta4w(:)
+host:0x51c9600 device:(nil) size:0 presentcount:0+1 line:104 name:zeta4i(:)
+host:0x51c9630 device:(nil) size:0 presentcount:0+1 line:125 name:h4(:,:)
+host:0x51c9660 device:0x7fcee955e000 size:32 presentcount:0+1 line:104 name:ztilde(:)
+host:0x51c96b0 device:0x7fcee955e400 size:32 presentcount:0+1 line:104 name:zinter(:)
+host:0x51c9700 device:0x7fcee955e800 size:32 presentcount:0+1 line:104 name:lambda0(:)
+host:0x51c9750 device:0x7fcee955ec00 size:32 presentcount:0+1 line:104 name:gammae(:)
+host:0x51c97a0 device:0x7fcee955f000 size:32 presentcount:0+1 line:104 name:dztildedt9(:)
+host:0x51cab60 device:(nil) size:0 presentcount:0+1 line:125 name:dh4dt9(:,:)
+host:0x51cab90 device:0x7fcee9561800 size:4 presentcount:1+0 line:1206 name:do_coulomb
+host:0x51cabc0 device:0x7fcee9561a00 size:4 presentcount:1+0 line:1207 name:input_is_constant
+host:0x51d81c0 device:0x7fcee955f400 size:704 presentcount:0+1 line:125 name:h1(:,:)
+host:0x51d84b0 device:0x7fcee9560600 size:704 presentcount:0+1 line:125 name:dh1dt9(:,:)
+host:0x51dd270 device:0x7fcee9561c00 size:4 presentcount:1+0 line:1208 name:itmax
+host:0x51dd4e0 device:0x7fceca7dda00 size:32 presentcount:1+1 line:169 name:xext(:)
+host:0x51dd690 device:0x7fcee9561e00 size:4 presentcount:1+0 line:1209 name:jtmax
+host:0x51dec60 device:0x7fcee9562000 size:4328 presentcount:1+0 line:1210 name:d
+host:0x51e00f0 device:0x7fcee9563200 size:1608 presentcount:1+0 line:1211 name:t
+host:0x51e0ae0 device:0x7fcee9563a00 size:8 presentcount:1+0 line:1212 name:tlo
+host:0x51e0e90 device:0x7fcee9563c00 size:8 presentcount:1+0 line:1213 name:thi
+host:0x51e1240 device:0x7fcee9563e00 size:8 presentcount:1+0 line:1214 name:tstp
+host:0x51e15f0 device:0x7fcee9564000 size:8 presentcount:1+0 line:1215 name:tstpi
+host:0x51e19a0 device:0x7fcee9564200 size:8 presentcount:1+0 line:1216 name:dlo
+host:0x51e1d50 device:0x7fcee9564400 size:8 presentcount:1+0 line:1217 name:dhi
+host:0x51e2100 device:0x7fcee9564600 size:8 presentcount:1+0 line:1218 name:dstp
+host:0x51e24b0 device:0x7fcee9564800 size:8 presentcount:1+0 line:1219 name:dstpi
+host:0x51e2860 device:0x7fcee9564a00 size:8 presentcount:1+0 line:1220 name:ttol
+host:0x51e2c10 device:0x7fcee9564c00 size:8 presentcount:1+0 line:1221 name:dtol
+host:0x51e2fc0 device:0x7fceca6fa000 size:869928 presentcount:1+0 line:1222 name:f
+host:0x52b7ba0 device:0x7fceca800000 size:869928 presentcount:1+0 line:1223 name:fd
+host:0x538d380 device:0x7fceca8d4800 size:869928 presentcount:1+0 line:1224 name:ft
+host:0x54623f0 device:0x7fcecaa00000 size:869928 presentcount:1+0 line:1225 name:fdd
+host:0x5537ff0 device:0x7fcecaad4800 size:869928 presentcount:1+0 line:1226 name:ftt
+host:0x560d480 device:0x7fcecac00000 size:869928 presentcount:1+0 line:1227 name:fdt
+host:0x56e34a0 device:0x7fcecacd4800 size:869928 presentcount:1+0 line:1228 name:fddt
+host:0x57b8d50 device:0x7fcecae00000 size:869928 presentcount:1+0 line:1229 name:fdtt
+host:0x588f190 device:0x7fcecaed4800 size:869928 presentcount:1+0 line:1230 name:fddtt
+host:0x5964e60 device:0x7fcecb000000 size:869928 presentcount:1+0 line:1231 name:dpdf
+host:0x5a3b6c0 device:0x7fcecb0d4800 size:869928 presentcount:1+0 line:1232 name:dpdfd
+host:0x5b117b0 device:0x7fcecb200000 size:869928 presentcount:1+0 line:1233 name:dpdft
+host:0x5be8430 device:0x7fcecb2d4800 size:869928 presentcount:1+0 line:1234 name:dpdfdt
+host:0x5cbe940 device:0x7fcecb400000 size:869928 presentcount:1+0 line:1235 name:ef
+host:0x5d959e0 device:0x7fcecb4d4800 size:869928 presentcount:1+0 line:1236 name:efd
+host:0x5e6d120 device:0x7fcecb600000 size:869928 presentcount:1+0 line:1237 name:eft
+host:0x5f445e0 device:0x7fcecb6d4800 size:869928 presentcount:1+0 line:1238 name:efdt
+host:0x601b330 device:0x7fcecb800000 size:869928 presentcount:1+0 line:1239 name:xf
+host:0x60f2c10 device:0x7fcecb8d4800 size:869928 presentcount:1+0 line:1240 name:xfd
+host:0x61c9d80 device:0x7fcecba00000 size:869928 presentcount:1+0 line:1241 name:xft
+host:0x629ee50 device:0x7fceca7d5000 size:8 presentcount:1+0 line:1353 name:mintemp
+host:0x629ee80 device:0x7fceca7d5200 size:8 presentcount:1+0 line:1354 name:maxtemp
+host:0x62a1a80 device:0x7fcecbad4800 size:869928 presentcount:1+0 line:1242 name:xfdt
+host:0x63764c0 device:0x7fceca7ce800 size:1608 presentcount:1+0 line:1243 name:dt_sav
+host:0x6376eb0 device:0x7fceca7cf000 size:1608 presentcount:1+0 line:1244 name:dt2_sav
+host:0x63778a0 device:0x7fceca7cf800 size:1608 presentcount:1+0 line:1245 name:dti_sav
+host:0x6378290 device:0x7fceca7d0000 size:1608 presentcount:1+0 line:1246 name:dt2i_sav
+host:0x6378c80 device:0x7fceca7d0800 size:4328 presentcount:1+0 line:1247 name:dd_sav
+host:0x637a110 device:0x7fceca7d1a00 size:4328 presentcount:1+0 line:1248 name:dd2_sav
+host:0x637b5a0 device:0x7fceca7d2c00 size:4328 presentcount:1+0 line:1249 name:ddi_sav
+host:0x637ca30 device:0x7fceca7d3e00 size:4328 presentcount:1+0 line:1250 name:dd2i_sav
+host:0x637e630 device:0x7fceca7d5400 size:8 presentcount:1+0 line:1355 name:mindens
+host:0x637e9e0 device:0x7fceca7d5600 size:8 presentcount:1+0 line:1356 name:maxdens
+host:0x637ed90 device:0x7fceca7d5800 size:32 presentcount:0+1 line:46 name:ye(:)
+host:0x637ede0 device:0x7fceca7d5c00 size:32 presentcount:0+1 line:46 name:ytot(:)
+host:0x637ee30 device:0x7fceca7d6000 size:32 presentcount:0+1 line:46 name:abar(:)
+host:0x637ee80 device:0x7fceca7d6400 size:32 presentcount:0+1 line:46 name:zbar(:)
+host:0x637eed0 device:0x7fceca7d6800 size:32 presentcount:0+1 line:46 name:z2bar(:)
+host:0x637ef20 device:0x7fceca7d6c00 size:32 presentcount:0+1 line:46 name:zibar(:)
+host:0x637ef70 device:0x7fceca7d7000 size:32 presentcount:0+1 line:46 name:sratio(:)
+host:0x63820c0 device:0x7fceca7d7400 size:16 presentcount:0+2 line:486 name:inr(:)
+host:0x6382100 device:0x7fceca7d7800 size:16 presentcount:0+1 line:486 name:mykts(:)
+host:0x6382140 device:0x7fceca7d7c00 size:16 presentcount:0+1 line:486 name:lzstep(:)
+host:0x6382180 device:0x7fceca7d8c00 size:32 presentcount:0+1 line:486 name:testc(:)
+host:0x63821d0 device:0x7fceca7d9000 size:32 presentcount:0+1 line:486 name:testc2(:)
+host:0x6382220 device:0x7fceca7d9400 size:32 presentcount:0+2 line:486 name:testm(:)
+host:0x6382270 device:0x7fceca7d9a00 size:32 presentcount:0+1 line:486 name:toln(:)
+host:0x63822c0 device:0x7fceca7d9e00 size:32 presentcount:1+1 line:486 name:xtot(:)
+host:0x6382310 device:0x7fceca7da200 size:32 presentcount:1+1 line:486 name:xtot_init(:)
+host:0x6382360 device:0x7fceca7da600 size:32 presentcount:0+1 line:486 name:rdt(:)
+host:0x63823b0 device:0x7fceca7daa00 size:32 presentcount:0+1 line:486 name:mult(:)
+host:0x6382400 device:0x7fceca7dae00 size:448 presentcount:0+1 line:486 name:yrhs(:,:)
+host:0x63825f0 device:0x7fceca7db200 size:448 presentcount:1+1 line:486 name:dy(:,:)
+host:0x63827e0 device:0x7fceca7db600 size:448 presentcount:1+1 line:486 name:reldy(:,:)
+host:0x63829d0 device:0x7fceca7dba00 size:32 presentcount:0+1 line:486 name:t9rhs(:)
+host:0x6382a20 device:0x7fceca7dbe00 size:32 presentcount:1+1 line:486 name:dt9(:)
+host:0x6382a70 device:0x7fceca7dc200 size:32 presentcount:1+1 line:486 name:relt9(:)
+host:0x6382ac0 device:0x7fceca7d8000 size:16 presentcount:1+1 line:486 name:iterate(:)
+host:0x6382b00 device:0x7fceca7d8400 size:16 presentcount:0+1 line:486 name:eval_rates(:)
+host:0x6382b40 device:0x7fceca7d8800 size:16 presentcount:0+1 line:486 name:rebuild(:)
+host:0x6392b40 device:0x7fceca7e7400 size:16 presentcount:0+2 line:67 name:its(:)
+host:0x6392b70 device:0x7fceca7e7600 size:16 presentcount:0+1 line:67 name:mykstep(:)
+host:0x6392fc0 device:0x7fceca7dc600 size:448 presentcount:0+1 line:169 name:y(:,:)
+host:0x63931b0 device:0x7fceca7dca00 size:448 presentcount:0+1 line:169 name:yo(:,:)
+host:0x63933a0 device:0x7fceca7dce00 size:448 presentcount:1+1 line:169 name:yt(:,:)
+host:0x6393590 device:0x7fceca7dd200 size:448 presentcount:0+1 line:169 name:ydot(:,:)
+host:0x6393780 device:0x7fceca7dd600 size:448 presentcount:0+1 line:169 name:ystart(:,:)
+host:0x6393970 device:0x7fceca7dde00 size:32 presentcount:0+1 line:169 name:aext(:)
+host:0x63939c0 device:0x7fceca7de200 size:32 presentcount:0+1 line:169 name:zext(:)
+host:0x6393a10 device:0x7fceca7de600 size:32 presentcount:0+1 line:169 name:tdel(:)
+host:0x6393a60 device:0x7fceca7dea00 size:32 presentcount:0+1 line:169 name:tdel_next(:)
+host:0x6393ab0 device:0x7fceca7dee00 size:32 presentcount:0+1 line:169 name:tdel_old(:)
+host:0x6393b00 device:0x7fceca7df200 size:32 presentcount:0+1 line:169 name:t(:)
+host:0x6393b50 device:0x7fceca7df600 size:32 presentcount:0+1 line:169 name:tt(:)
+host:0x6393ba0 device:0x7fceca7dfa00 size:32 presentcount:0+1 line:169 name:to(:)
+host:0x6393bf0 device:0x7fceca7dfe00 size:32 presentcount:0+1 line:169 name:t9(:)
+host:0x6393c40 device:0x7fceca7e0200 size:32 presentcount:1+1 line:169 name:t9t(:)
+host:0x6393c90 device:0x7fceca7e0600 size:32 presentcount:0+1 line:169 name:t9o(:)
+host:0x6393ce0 device:0x7fceca7e0a00 size:32 presentcount:0+1 line:169 name:t9dot(:)
+host:0x6393d30 device:0x7fceca7e0e00 size:32 presentcount:0+1 line:169 name:rho(:)
+host:0x6393d80 device:0x7fceca7e1200 size:32 presentcount:0+1 line:169 name:rhot(:)
+host:0x6393dd0 device:0x7fceca7e1600 size:32 presentcount:0+1 line:169 name:rhoo(:)
+host:0x6393e20 device:0x7fceca7e1a00 size:32 presentcount:0+1 line:169 name:ye(:)
+host:0x6393e70 device:0x7fceca7e1e00 size:32 presentcount:0+1 line:169 name:yet(:)
+host:0x6393ec0 device:0x7fceca7e2200 size:32 presentcount:0+1 line:169 name:yeo(:)
+host:0x6393f10 device:0x7fceca7e2600 size:32 presentcount:0+1 line:169 name:cv(:)
+host:0x6393f60 device:0x7fceca7e2a00 size:32 presentcount:0+1 line:169 name:etae(:)
+host:0x6393fb0 device:0x7fceca7e2e00 size:32 presentcount:0+1 line:169 name:detaedt9(:)
+host:0x6394000 device:0x7fceca7e3200 size:16 presentcount:0+1 line:169 name:nt(:)
+host:0x6394040 device:0x7fceca7e3600 size:16 presentcount:0+1 line:169 name:ntt(:)
+host:0x6394080 device:0x7fceca7e3a00 size:16 presentcount:0+1 line:169 name:nto(:)
+host:0x63940c0 device:0x7fceca7e3e00 size:16 presentcount:0+1 line:169 name:ints(:)
+host:0x6394100 device:0x7fceca7e4200 size:16 presentcount:0+1 line:169 name:intso(:)
+host:0x6394140 device:0x7fceca7e5200 size:16 presentcount:0+1 line:169 name:nstart(:)
+host:0x6394180 device:0x7fceca7e4600 size:32 presentcount:0+1 line:169 name:tstart(:)
+host:0x63941d0 device:0x7fceca7e4a00 size:32 presentcount:0+1 line:169 name:tstop(:)
+host:0x6394220 device:0x7fceca7e4e00 size:32 presentcount:0+1 line:169 name:tdelstart(:)
+host:0x6394270 device:0x7fceca7e5600 size:32 presentcount:0+1 line:169 name:t9start(:)
+host:0x63942c0 device:0x7fceca7e5a00 size:32 presentcount:0+1 line:169 name:rhostart(:)
+host:0x6394310 device:0x7fceca7e5e00 size:32 presentcount:0+1 line:169 name:yestart(:)
+host:0x6394360 device:0x7fceca7e6200 size:16 presentcount:0+1 line:169 name:nh(:)
+host:0x6396ef0 device:0x7fcecbc00000 size:1600000 presentcount:0+1 line:169 name:th(:,:)
+host:0x6520680 device:0x7fcecbe00000 size:1600000 presentcount:0+1 line:169 name:t9h(:,:)
+host:0x66aa020 device:0x7fcedc000000 size:1600000 presentcount:0+1 line:169 name:rhoh(:,:)
+host:0x6833bd0 device:0x7fcedc200000 size:1600000 presentcount:0+1 line:169 name:yeh(:,:)
+host:0x69ba8e0 device:0x7fceca7e7200 size:32 presentcount:0+2 line:169 name:denu(:)
+host:0x69d2380 device:0x7fceca7e7c00 size:32 presentcount:0+1 line:67 name:enm(:)
+host:0x69d23c0 device:0x7fceca7e7800 size:16 presentcount:0+1 line:67 name:lzsolve(:)
+host:0x69d6050 device:0x7fceca7e7e00 size:32 presentcount:0+1 line:67 name:enb(:)
+host:0x69d6090 device:0x7fceca7e8000 size:32 presentcount:0+1 line:67 name:enold(:)
+host:0x69d60d0 device:0x7fceca7e8200 size:32 presentcount:0+1 line:67 name:en0(:)
+host:0x69d6110 device:0x7fceca7e8400 size:32 presentcount:0+1 line:67 name:delta_en(:)
+host:0x69d6150 device:0x7fceca7e8600 size:32 presentcount:0+1 line:67 name:edot(:)
+host:0x69d6190 device:0x7fceca7e8800 size:32 presentcount:0+1 line:67 name:sqnu(:)
+host:0x69d6270 device:0x7fceca7e7a00 size:16 presentcount:0+1 line:67 name:lzoutput(:)
+host:0x7fced20195c0 device:0x7fcedcc00000 size:6400000 presentcount:0+1 line:169 name:fluxcms(:,:,:)
+host:0x7fced26373b0 device:0x7fcedc400000 size:6400000 presentcount:0+1 line:169 name:tmevnu(:,:,:)
+allocated block device:0x7fceca6fa000 size:870400 thread:1
+allocated block device:0x7fceca7ce800 size:2048 thread:1
+allocated block device:0x7fceca7cf000 size:2048 thread:1
+allocated block device:0x7fceca7cf800 size:2048 thread:1
+allocated block device:0x7fceca7d0000 size:2048 thread:1
+allocated block device:0x7fceca7d0800 size:4608 thread:1
+allocated block device:0x7fceca7d1a00 size:4608 thread:1
+allocated block device:0x7fceca7d2c00 size:4608 thread:1
+allocated block device:0x7fceca7d3e00 size:4608 thread:1
+allocated block device:0x7fceca7d5000 size:512 thread:1
+allocated block device:0x7fceca7d5200 size:512 thread:1
+allocated block device:0x7fceca7d5400 size:512 thread:1
+allocated block device:0x7fceca7d5600 size:512 thread:1
+allocated block device:0x7fceca7d5800 size:512 thread:1
+allocated block device:0x7fceca7d5a00 size:512 thread:1
+allocated block device:0x7fceca7d5c00 size:512 thread:1
+allocated block device:0x7fceca7d5e00 size:512 thread:1
+allocated block device:0x7fceca7d6000 size:512 thread:1
+allocated block device:0x7fceca7d6200 size:512 thread:1
+allocated block device:0x7fceca7d6400 size:512 thread:1
+allocated block device:0x7fceca7d6600 size:512 thread:1
+allocated block device:0x7fceca7d6800 size:512 thread:1
+allocated block device:0x7fceca7d6a00 size:512 thread:1
+allocated block device:0x7fceca7d6c00 size:512 thread:1
+allocated block device:0x7fceca7d6e00 size:512 thread:1
+allocated block device:0x7fceca7d7000 size:512 thread:1
+allocated block device:0x7fceca7d7200 size:512 thread:1
+allocated block device:0x7fceca7d7400 size:512 thread:1
+allocated block device:0x7fceca7d7600 size:512 thread:1
+allocated block device:0x7fceca7d7800 size:512 thread:1
+allocated block device:0x7fceca7d7a00 size:512 thread:1
+allocated block device:0x7fceca7d7c00 size:512 thread:1
+allocated block device:0x7fceca7d7e00 size:512 thread:1
+allocated block device:0x7fceca7d8000 size:512 thread:1
+allocated block device:0x7fceca7d8200 size:512 thread:1
+allocated block device:0x7fceca7d8400 size:512 thread:1
+allocated block device:0x7fceca7d8600 size:512 thread:1
+allocated block device:0x7fceca7d8800 size:512 thread:1
+allocated block device:0x7fceca7d8a00 size:512 thread:1
+allocated block device:0x7fceca7d8c00 size:512 thread:1
+allocated block device:0x7fceca7d8e00 size:512 thread:1
+allocated block device:0x7fceca7d9000 size:512 thread:1
+allocated block device:0x7fceca7d9200 size:512 thread:1
+allocated block device:0x7fceca7d9400 size:512 thread:1
+allocated block device:0x7fceca7d9600 size:512 thread:1
+allocated block device:0x7fceca7d9800 size:512 thread:1
+allocated block device:0x7fceca7d9a00 size:512 thread:1
+allocated block device:0x7fceca7d9c00 size:512 thread:1
+allocated block device:0x7fceca7d9e00 size:512 thread:1
+allocated block device:0x7fceca7da000 size:512 thread:1
+allocated block device:0x7fceca7da200 size:512 thread:1
+allocated block device:0x7fceca7da400 size:512 thread:1
+allocated block device:0x7fceca7da600 size:512 thread:1
+allocated block device:0x7fceca7da800 size:512 thread:1
+allocated block device:0x7fceca7daa00 size:512 thread:1
+allocated block device:0x7fceca7dac00 size:512 thread:1
+allocated block device:0x7fceca7dae00 size:512 thread:1
+allocated block device:0x7fceca7db000 size:512 thread:1
+allocated block device:0x7fceca7db200 size:512 thread:1
+allocated block device:0x7fceca7db400 size:512 thread:1
+allocated block device:0x7fceca7db600 size:512 thread:1
+allocated block device:0x7fceca7db800 size:512 thread:1
+allocated block device:0x7fceca7dba00 size:512 thread:1
+allocated block device:0x7fceca7dbc00 size:512 thread:1
+allocated block device:0x7fceca7dbe00 size:512 thread:1
+allocated block device:0x7fceca7dc000 size:512 thread:1
+allocated block device:0x7fceca7dc200 size:512 thread:1
+allocated block device:0x7fceca7dc400 size:512 thread:1
+allocated block device:0x7fceca7dc600 size:512 thread:1
+allocated block device:0x7fceca7dc800 size:512 thread:1
+allocated block device:0x7fceca7dca00 size:512 thread:1
+allocated block device:0x7fceca7dcc00 size:512 thread:1
+allocated block device:0x7fceca7dce00 size:512 thread:1
+allocated block device:0x7fceca7dd000 size:512 thread:1
+allocated block device:0x7fceca7dd200 size:512 thread:1
+allocated block device:0x7fceca7dd400 size:512 thread:1
+allocated block device:0x7fceca7dd600 size:512 thread:1
+allocated block device:0x7fceca7dd800 size:512 thread:1
+allocated block device:0x7fceca7dda00 size:512 thread:1
+allocated block device:0x7fceca7ddc00 size:512 thread:1
+allocated block device:0x7fceca7dde00 size:512 thread:1
+allocated block device:0x7fceca7de000 size:512 thread:1
+allocated block device:0x7fceca7de200 size:512 thread:1
+allocated block device:0x7fceca7de400 size:512 thread:1
+allocated block device:0x7fceca7de600 size:512 thread:1
+allocated block device:0x7fceca7de800 size:512 thread:1
+allocated block device:0x7fceca7dea00 size:512 thread:1
+allocated block device:0x7fceca7dec00 size:512 thread:1
+allocated block device:0x7fceca7dee00 size:512 thread:1
+allocated block device:0x7fceca7df000 size:512 thread:1
+allocated block device:0x7fceca7df200 size:512 thread:1
+allocated block device:0x7fceca7df400 size:512 thread:1
+allocated block device:0x7fceca7df600 size:512 thread:1
+allocated block device:0x7fceca7df800 size:512 thread:1
+allocated block device:0x7fceca7dfa00 size:512 thread:1
+allocated block device:0x7fceca7dfc00 size:512 thread:1
+allocated block device:0x7fceca7dfe00 size:512 thread:1
+allocated block device:0x7fceca7e0000 size:512 thread:1
+allocated block device:0x7fceca7e0200 size:512 thread:1
+allocated block device:0x7fceca7e0400 size:512 thread:1
+allocated block device:0x7fceca7e0600 size:512 thread:1
+allocated block device:0x7fceca7e0800 size:512 thread:1
+allocated block device:0x7fceca7e0a00 size:512 thread:1
+allocated block device:0x7fceca7e0c00 size:512 thread:1
+allocated block device:0x7fceca7e0e00 size:512 thread:1
+allocated block device:0x7fceca7e1000 size:512 thread:1
+allocated block device:0x7fceca7e1200 size:512 thread:1
+allocated block device:0x7fceca7e1400 size:512 thread:1
+allocated block device:0x7fceca7e1600 size:512 thread:1
+allocated block device:0x7fceca7e1800 size:512 thread:1
+allocated block device:0x7fceca7e1a00 size:512 thread:1
+allocated block device:0x7fceca7e1c00 size:512 thread:1
+allocated block device:0x7fceca7e1e00 size:512 thread:1
+allocated block device:0x7fceca7e2000 size:512 thread:1
+allocated block device:0x7fceca7e2200 size:512 thread:1
+allocated block device:0x7fceca7e2400 size:512 thread:1
+allocated block device:0x7fceca7e2600 size:512 thread:1
+allocated block device:0x7fceca7e2800 size:512 thread:1
+allocated block device:0x7fceca7e2a00 size:512 thread:1
+allocated block device:0x7fceca7e2c00 size:512 thread:1
+allocated block device:0x7fceca7e2e00 size:512 thread:1
+allocated block device:0x7fceca7e3000 size:512 thread:1
+allocated block device:0x7fceca7e3200 size:512 thread:1
+allocated block device:0x7fceca7e3400 size:512 thread:1
+allocated block device:0x7fceca7e3600 size:512 thread:1
+allocated block device:0x7fceca7e3800 size:512 thread:1
+allocated block device:0x7fceca7e3a00 size:512 thread:1
+allocated block device:0x7fceca7e3c00 size:512 thread:1
+allocated block device:0x7fceca7e3e00 size:512 thread:1
+allocated block device:0x7fceca7e4000 size:512 thread:1
+allocated block device:0x7fceca7e4200 size:512 thread:1
+allocated block device:0x7fceca7e4400 size:512 thread:1
+allocated block device:0x7fceca7e4600 size:512 thread:1
+allocated block device:0x7fceca7e4800 size:512 thread:1
+allocated block device:0x7fceca7e4a00 size:512 thread:1
+allocated block device:0x7fceca7e4c00 size:512 thread:1
+allocated block device:0x7fceca7e4e00 size:512 thread:1
+allocated block device:0x7fceca7e5000 size:512 thread:1
+allocated block device:0x7fceca7e5200 size:512 thread:1
+allocated block device:0x7fceca7e5400 size:512 thread:1
+allocated block device:0x7fceca7e5600 size:512 thread:1
+allocated block device:0x7fceca7e5800 size:512 thread:1
+allocated block device:0x7fceca7e5a00 size:512 thread:1
+allocated block device:0x7fceca7e5c00 size:512 thread:1
+allocated block device:0x7fceca7e5e00 size:512 thread:1
+allocated block device:0x7fceca7e6000 size:512 thread:1
+allocated block device:0x7fceca7e6200 size:512 thread:1
+allocated block device:0x7fceca7e6400 size:512 thread:1
+allocated block device:0x7fceca7e6600 size:512 thread:1
+allocated block device:0x7fceca7e6800 size:512 thread:1
+allocated block device:0x7fceca7e6a00 size:512 thread:1
+allocated block device:0x7fceca7e6c00 size:512 thread:1
+allocated block device:0x7fceca7e6e00 size:512 thread:1
+allocated block device:0x7fceca7e7000 size:512 thread:1
+allocated block device:0x7fceca7e7200 size:512 thread:1
+allocated block device:0x7fceca7e7400 size:512 thread:1
+allocated block device:0x7fceca7e7600 size:512 thread:1
+allocated block device:0x7fceca7e7800 size:512 thread:1
+allocated block device:0x7fceca7e7a00 size:512 thread:1
+allocated block device:0x7fceca7e7c00 size:512 thread:1
+allocated block device:0x7fceca7e7e00 size:512 thread:1
+allocated block device:0x7fceca7e8000 size:512 thread:1
+allocated block device:0x7fceca7e8200 size:512 thread:1
+allocated block device:0x7fceca7e8400 size:512 thread:1
+allocated block device:0x7fceca7e8600 size:512 thread:1
+allocated block device:0x7fceca7e8800 size:512 thread:1
+allocated block device:0x7fceca800000 size:870400 thread:1
+allocated block device:0x7fceca8d4800 size:870400 thread:1
+allocated block device:0x7fcecaa00000 size:870400 thread:1
+allocated block device:0x7fcecaad4800 size:870400 thread:1
+allocated block device:0x7fcecac00000 size:870400 thread:1
+allocated block device:0x7fcecacd4800 size:870400 thread:1
+allocated block device:0x7fcecae00000 size:870400 thread:1
+allocated block device:0x7fcecaed4800 size:870400 thread:1
+allocated block device:0x7fcecb000000 size:870400 thread:1
+allocated block device:0x7fcecb0d4800 size:870400 thread:1
+allocated block device:0x7fcecb200000 size:870400 thread:1
+allocated block device:0x7fcecb2d4800 size:870400 thread:1
+allocated block device:0x7fcecb400000 size:870400 thread:1
+allocated block device:0x7fcecb4d4800 size:870400 thread:1
+allocated block device:0x7fcecb600000 size:870400 thread:1
+allocated block device:0x7fcecb6d4800 size:870400 thread:1
+allocated block device:0x7fcecb800000 size:870400 thread:1
+allocated block device:0x7fcecb8d4800 size:870400 thread:1
+allocated block device:0x7fcecba00000 size:870400 thread:1
+allocated block device:0x7fcecbad4800 size:870400 thread:1
+allocated block device:0x7fcecbc00000 size:1600000 thread:1
+allocated block device:0x7fcecbe00000 size:1600000 thread:1
+allocated block device:0x7fcedc000000 size:1600000 thread:1
+allocated block device:0x7fcedc200000 size:1600000 thread:1
+allocated block device:0x7fcedc400000 size:6400000 thread:1
+allocated block device:0x7fcedcc00000 size:6400000 thread:1
+allocated block device:0x7fcee953a800 size:512 thread:1
+allocated block device:0x7fcee953aa00 size:512 thread:1
+allocated block device:0x7fcee953ac00 size:512 thread:1
+allocated block device:0x7fcee953ae00 size:512 thread:1
+allocated block device:0x7fcee953b000 size:512 thread:1
+allocated block device:0x7fcee953b200 size:512 thread:1
+allocated block device:0x7fcee953b400 size:512 thread:1
+allocated block device:0x7fcee953b600 size:512 thread:1
+allocated block device:0x7fcee953b800 size:512 thread:1
+allocated block device:0x7fcee953ba00 size:512 thread:1
+allocated block device:0x7fcee953bc00 size:512 thread:1
+allocated block device:0x7fcee953be00 size:512 thread:1
+allocated block device:0x7fcee953c000 size:512 thread:1
+allocated block device:0x7fcee953c200 size:512 thread:1
+allocated block device:0x7fcee953c400 size:512 thread:1
+allocated block device:0x7fcee953c600 size:512 thread:1
+allocated block device:0x7fcee953c800 size:512 thread:1
+allocated block device:0x7fcee953ca00 size:512 thread:1
+allocated block device:0x7fcee953cc00 size:512 thread:1
+allocated block device:0x7fcee953ce00 size:512 thread:1
+allocated block device:0x7fcee953d000 size:512 thread:1
+allocated block device:0x7fcee953d200 size:512 thread:1
+allocated block device:0x7fcee953d400 size:512 thread:1
+allocated block device:0x7fcee953d600 size:512 thread:1
+allocated block device:0x7fcee953d800 size:512 thread:1
+allocated block device:0x7fcee953da00 size:512 thread:1
+allocated block device:0x7fcee953dc00 size:512 thread:1
+allocated block device:0x7fcee953de00 size:512 thread:1
+allocated block device:0x7fcee953e000 size:512 thread:1
+allocated block device:0x7fcee953e200 size:512 thread:1
+allocated block device:0x7fcee953e400 size:512 thread:1
+allocated block device:0x7fcee953e600 size:512 thread:1
+allocated block device:0x7fcee953e800 size:512 thread:1
+allocated block device:0x7fcee953ea00 size:512 thread:1
+allocated block device:0x7fcee953ec00 size:512 thread:1
+allocated block device:0x7fcee953ee00 size:512 thread:1
+allocated block device:0x7fcee953f000 size:512 thread:1
+allocated block device:0x7fcee953f200 size:512 thread:1
+allocated block device:0x7fcee953f400 size:512 thread:1
+allocated block device:0x7fcee953f600 size:512 thread:1
+allocated block device:0x7fcee953f800 size:512 thread:1
+allocated block device:0x7fcee953fa00 size:512 thread:1
+allocated block device:0x7fcee953fc00 size:3072 thread:1
+allocated block device:0x7fcee9540800 size:512 thread:1
+allocated block device:0x7fcee9540a00 size:512 thread:1
+allocated block device:0x7fcee9540c00 size:512 thread:1
+allocated block device:0x7fcee9540e00 size:512 thread:1
+allocated block device:0x7fcee9541000 size:512 thread:1
+allocated block device:0x7fcee9541200 size:512 thread:1
+allocated block device:0x7fcee9541400 size:512 thread:1
+allocated block device:0x7fcee9541600 size:512 thread:1
+allocated block device:0x7fcee9541800 size:512 thread:1
+allocated block device:0x7fcee9541a00 size:512 thread:1
+allocated block device:0x7fcee9541c00 size:512 thread:1
+allocated block device:0x7fcee9541e00 size:512 thread:1
+allocated block device:0x7fcee9542000 size:512 thread:1
+allocated block device:0x7fcee9542200 size:512 thread:1
+allocated block device:0x7fcee9542400 size:512 thread:1
+allocated block device:0x7fcee9542600 size:512 thread:1
+allocated block device:0x7fcee9542800 size:512 thread:1
+allocated block device:0x7fcee9542a00 size:512 thread:1
+allocated block device:0x7fcee9542c00 size:512 thread:1
+allocated block device:0x7fcee9542e00 size:1536 thread:1
+allocated block device:0x7fcee9543400 size:512 thread:1
+allocated block device:0x7fcee9543600 size:1536 thread:1
+allocated block device:0x7fcee9543c00 size:512 thread:1
+allocated block device:0x7fcee9543e00 size:512 thread:1
+allocated block device:0x7fcee9544000 size:512 thread:1
+allocated block device:0x7fcee9544200 size:512 thread:1
+allocated block device:0x7fcee9544400 size:512 thread:1
+allocated block device:0x7fcee9544600 size:512 thread:1
+allocated block device:0x7fcee9544800 size:512 thread:1
+allocated block device:0x7fcee9544a00 size:512 thread:1
+allocated block device:0x7fcee9544c00 size:512 thread:1
+allocated block device:0x7fcee9544e00 size:512 thread:1
+allocated block device:0x7fcee9545000 size:512 thread:1
+allocated block device:0x7fcee9545200 size:512 thread:1
+allocated block device:0x7fcee9545400 size:512 thread:1
+allocated block device:0x7fcee9545600 size:512 thread:1
+allocated block device:0x7fcee9545800 size:512 thread:1
+allocated block device:0x7fcee9545a00 size:512 thread:1
+allocated block device:0x7fcee9545c00 size:512 thread:1
+allocated block device:0x7fcee9545e00 size:512 thread:1
+allocated block device:0x7fcee9546000 size:512 thread:1
+allocated block device:0x7fcee9546200 size:512 thread:1
+allocated block device:0x7fcee9546400 size:512 thread:1
+allocated block device:0x7fcee9546600 size:512 thread:1
+allocated block device:0x7fcee9546800 size:512 thread:1
+allocated block device:0x7fcee9546a00 size:512 thread:1
+allocated block device:0x7fcee9546c00 size:512 thread:1
+allocated block device:0x7fcee9546e00 size:512 thread:1
+allocated block device:0x7fcee9547000 size:512 thread:1
+allocated block device:0x7fcee9547200 size:1024 thread:1
+allocated block device:0x7fcee9547600 size:512 thread:1
+allocated block device:0x7fcee9547800 size:512 thread:1
+allocated block device:0x7fcee9547a00 size:512 thread:1
+allocated block device:0x7fcee9547c00 size:512 thread:1
+allocated block device:0x7fcee9547e00 size:512 thread:1
+allocated block device:0x7fcee9548000 size:512 thread:1
+allocated block device:0x7fcee9548200 size:1024 thread:1
+allocated block device:0x7fcee9548600 size:512 thread:1
+allocated block device:0x7fcee9548800 size:512 thread:1
+allocated block device:0x7fcee9548a00 size:512 thread:1
+allocated block device:0x7fcee9548c00 size:512 thread:1
+allocated block device:0x7fcee9548e00 size:512 thread:1
+allocated block device:0x7fcee9549000 size:512 thread:1
+allocated block device:0x7fcee9549200 size:512 thread:1
+allocated block device:0x7fcee9549400 size:512 thread:1
+allocated block device:0x7fcee9549600 size:512 thread:1
+allocated block device:0x7fcee9549800 size:512 thread:1
+allocated block device:0x7fcee9549a00 size:512 thread:1
+allocated block device:0x7fcee9549c00 size:512 thread:1
+allocated block device:0x7fcee9549e00 size:512 thread:1
+allocated block device:0x7fcee954a000 size:512 thread:1
+allocated block device:0x7fcee954a200 size:512 thread:1
+allocated block device:0x7fcee954a400 size:512 thread:1
+allocated block device:0x7fcee954a600 size:512 thread:1
+allocated block device:0x7fcee954a800 size:512 thread:1
+allocated block device:0x7fcee954aa00 size:512 thread:1
+allocated block device:0x7fcee954ac00 size:512 thread:1
+allocated block device:0x7fcee954ae00 size:512 thread:1
+allocated block device:0x7fcee954b000 size:512 thread:1
+allocated block device:0x7fcee954b200 size:512 thread:1
+allocated block device:0x7fcee954b400 size:512 thread:1
+allocated block device:0x7fcee954b600 size:512 thread:1
+allocated block device:0x7fcee954b800 size:512 thread:1
+allocated block device:0x7fcee954ba00 size:512 thread:1
+allocated block device:0x7fcee954bc00 size:1536 thread:1
+allocated block device:0x7fcee954c200 size:512 thread:1
+allocated block device:0x7fcee954c400 size:1536 thread:1
+allocated block device:0x7fcee954ca00 size:512 thread:1
+allocated block device:0x7fcee954cc00 size:512 thread:1
+allocated block device:0x7fcee954ce00 size:512 thread:1
+allocated block device:0x7fcee954d000 size:512 thread:1
+allocated block device:0x7fcee954d200 size:512 thread:1
+allocated block device:0x7fcee954d400 size:1536 thread:1
+allocated block device:0x7fcee954da00 size:512 thread:1
+allocated block device:0x7fcee954dc00 size:1536 thread:1
+allocated block device:0x7fcee954e200 size:512 thread:1
+allocated block device:0x7fcee954e400 size:512 thread:1
+allocated block device:0x7fcee954e600 size:512 thread:1
+allocated block device:0x7fcee954e800 size:512 thread:1
+allocated block device:0x7fcee954ea00 size:512 thread:1
+allocated block device:0x7fcee954ec00 size:512 thread:1
+allocated block device:0x7fcee954ee00 size:512 thread:1
+allocated block device:0x7fcee954f000 size:512 thread:1
+allocated block device:0x7fcee954f200 size:512 thread:1
+allocated block device:0x7fcee954f400 size:512 thread:1
+allocated block device:0x7fcee954f600 size:512 thread:1
+allocated block device:0x7fcee954f800 size:512 thread:1
+allocated block device:0x7fcee954fa00 size:512 thread:1
+allocated block device:0x7fcee954fc00 size:2048 thread:1
+allocated block device:0x7fcee9550400 size:512 thread:1
+allocated block device:0x7fcee9550600 size:3072 thread:1
+allocated block device:0x7fcee9551200 size:512 thread:1
+allocated block device:0x7fcee9551400 size:512 thread:1
+allocated block device:0x7fcee9551600 size:512 thread:1
+allocated block device:0x7fcee9551800 size:512 thread:1
+allocated block device:0x7fcee9551a00 size:1024 thread:1
+allocated block device:0x7fcee9551e00 size:512 thread:1
+allocated block device:0x7fcee9552000 size:1024 thread:1
+allocated block device:0x7fcee9552400 size:512 thread:1
+allocated block device:0x7fcee9552600 size:512 thread:1
+allocated block device:0x7fcee9552800 size:512 thread:1
+allocated block device:0x7fcee9552a00 size:512 thread:1
+allocated block device:0x7fcee9552c00 size:1024 thread:1
+allocated block device:0x7fcee9553000 size:512 thread:1
+allocated block device:0x7fcee9553200 size:1024 thread:1
+allocated block device:0x7fcee9553600 size:512 thread:1
+allocated block device:0x7fcee9553800 size:512 thread:1
+allocated block device:0x7fcee9553a00 size:512 thread:1
+allocated block device:0x7fcee9553c00 size:512 thread:1
+allocated block device:0x7fcee9553e00 size:512 thread:1
+allocated block device:0x7fcee9554000 size:512 thread:1
+allocated block device:0x7fcee9554200 size:512 thread:1
+allocated block device:0x7fcee9554400 size:512 thread:1
+allocated block device:0x7fcee9554600 size:512 thread:1
+allocated block device:0x7fcee9554800 size:512 thread:1
+allocated block device:0x7fcee9554a00 size:6656 thread:1
+allocated block device:0x7fcee9556400 size:512 thread:1
+allocated block device:0x7fcee9556600 size:6656 thread:1
+allocated block device:0x7fcee9558000 size:512 thread:1
+allocated block device:0x7fcee9558200 size:512 thread:1
+allocated block device:0x7fcee9558400 size:512 thread:1
+allocated block device:0x7fcee9558600 size:512 thread:1
+allocated block device:0x7fcee9558800 size:512 thread:1
+allocated block device:0x7fcee9558a00 size:512 thread:1
+allocated block device:0x7fcee9558c00 size:512 thread:1
+allocated block device:0x7fcee9558e00 size:512 thread:1
+allocated block device:0x7fcee9559000 size:512 thread:1
+allocated block device:0x7fcee9559200 size:512 thread:1
+allocated block device:0x7fcee9559400 size:512 thread:1
+allocated block device:0x7fcee9559600 size:512 thread:1
+allocated block device:0x7fcee9559800 size:512 thread:1
+allocated block device:0x7fcee9559a00 size:512 thread:1
+allocated block device:0x7fcee9559c00 size:512 thread:1
+allocated block device:0x7fcee9559e00 size:512 thread:1
+allocated block device:0x7fcee955a000 size:512 thread:1
+allocated block device:0x7fcee955a200 size:512 thread:1
+allocated block device:0x7fcee955a400 size:512 thread:1
+allocated block device:0x7fcee955a600 size:512 thread:1
+allocated block device:0x7fcee955a800 size:512 thread:1
+allocated block device:0x7fcee955aa00 size:512 thread:1
+allocated block device:0x7fcee955ac00 size:512 thread:1
+allocated block device:0x7fcee955ae00 size:512 thread:1
+allocated block device:0x7fcee955b000 size:512 thread:1
+allocated block device:0x7fcee955b200 size:512 thread:1
+allocated block device:0x7fcee955b400 size:512 thread:1
+allocated block device:0x7fcee955b600 size:512 thread:1
+allocated block device:0x7fcee955b800 size:512 thread:1
+allocated block device:0x7fcee955ba00 size:512 thread:1
+allocated block device:0x7fcee955bc00 size:512 thread:1
+allocated block device:0x7fcee955be00 size:512 thread:1
+allocated block device:0x7fcee955c000 size:512 thread:1
+allocated block device:0x7fcee955c200 size:512 thread:1
+allocated block device:0x7fcee955c400 size:512 thread:1
+allocated block device:0x7fcee955c600 size:512 thread:1
+allocated block device:0x7fcee955c800 size:512 thread:1
+allocated block device:0x7fcee955ca00 size:512 thread:1
+allocated block device:0x7fcee955cc00 size:512 thread:1
+allocated block device:0x7fcee955ce00 size:512 thread:1
+allocated block device:0x7fcee955d000 size:512 thread:1
+allocated block device:0x7fcee955d200 size:512 thread:1
+allocated block device:0x7fcee955d400 size:512 thread:1
+allocated block device:0x7fcee955d600 size:512 thread:1
+allocated block device:0x7fcee955d800 size:512 thread:1
+allocated block device:0x7fcee955da00 size:512 thread:1
+allocated block device:0x7fcee955dc00 size:512 thread:1
+allocated block device:0x7fcee955de00 size:512 thread:1
+allocated block device:0x7fcee955e000 size:512 thread:1
+allocated block device:0x7fcee955e200 size:512 thread:1
+allocated block device:0x7fcee955e400 size:512 thread:1
+allocated block device:0x7fcee955e600 size:512 thread:1
+allocated block device:0x7fcee955e800 size:512 thread:1
+allocated block device:0x7fcee955ea00 size:512 thread:1
+allocated block device:0x7fcee955ec00 size:512 thread:1
+allocated block device:0x7fcee955ee00 size:512 thread:1
+allocated block device:0x7fcee955f000 size:512 thread:1
+allocated block device:0x7fcee955f200 size:512 thread:1
+allocated block device:0x7fcee955f400 size:1024 thread:1
+allocated block device:0x7fcee955f800 size:512 thread:1
+allocated block device:0x7fcee955fa00 size:1024 thread:1
+allocated block device:0x7fcee955fe00 size:512 thread:1
+allocated block device:0x7fcee9560000 size:512 thread:1
+allocated block device:0x7fcee9560200 size:512 thread:1
+allocated block device:0x7fcee9560400 size:512 thread:1
+allocated block device:0x7fcee9560600 size:1024 thread:1
+allocated block device:0x7fcee9560a00 size:512 thread:1
+allocated block device:0x7fcee9560c00 size:1024 thread:1
+allocated block device:0x7fcee9561000 size:512 thread:1
+allocated block device:0x7fcee9561200 size:512 thread:1
+allocated block device:0x7fcee9561400 size:512 thread:1
+allocated block device:0x7fcee9561600 size:512 thread:1
+allocated block device:0x7fcee9561800 size:512 thread:1
+allocated block device:0x7fcee9561a00 size:512 thread:1
+allocated block device:0x7fcee9561c00 size:512 thread:1
+allocated block device:0x7fcee9561e00 size:512 thread:1
+allocated block device:0x7fcee9562000 size:4608 thread:1
+allocated block device:0x7fcee9563200 size:2048 thread:1
+allocated block device:0x7fcee9563a00 size:512 thread:1
+allocated block device:0x7fcee9563c00 size:512 thread:1
+allocated block device:0x7fcee9563e00 size:512 thread:1
+allocated block device:0x7fcee9564000 size:512 thread:1
+allocated block device:0x7fcee9564200 size:512 thread:1
+allocated block device:0x7fcee9564400 size:512 thread:1
+allocated block device:0x7fcee9564600 size:512 thread:1
+allocated block device:0x7fcee9564800 size:512 thread:1
+allocated block device:0x7fcee9564a00 size:512 thread:1
+allocated block device:0x7fcee9564c00 size:512 thread:1
+deleted block   device:0x7fceca7eac00 size:512 threadid=1 
+deleted block   device:0x7fceca7ea800 size:512 threadid=1 
+deleted block   device:0x7fceca7e9a00 size:512 threadid=1 
+deleted block   device:0x7fceca7e9800 size:512 threadid=1 
+deleted block   device:0x7fceca7e9600 size:512 threadid=1 
+deleted block   device:0x7fceca7eaa00 size:512 threadid=1 
+deleted block   device:0x7fceca7e8a00 size:512 threadid=1 
+deleted block   device:0x7fceca7e8c00 size:512 threadid=1 
+deleted block   device:0x7fceca7e8e00 size:512 threadid=1 
+deleted block   device:0x7fceca7e9000 size:512 threadid=1 
+deleted block   device:0x7fceca7e9200 size:512 threadid=1 
+deleted block   device:0x7fceca7e9400 size:512 threadid=1 
+deleted block   device:0x7fceca7e9c00 size:1536 threadid=1 
+deleted block   device:0x7fceca7ea200 size:1536 threadid=1 
+FATAL ERROR: data in PRESENT clause was not found on device 1: name=inr(:) host:0x7fcf587d4238
+ file:/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/pp/source/xnet_integrate_be.f90 step_be line:336
+
+srun: error: nid001709: task 0: Segmentation fault
+srun: Terminating StepId=59029522.0

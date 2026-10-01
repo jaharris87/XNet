@@ -1,0 +1,7 @@
+
+nvfortran 26.5-0 64-bit target on x86-64 Linux -tp zen3-64 
+NVIDIA Compilers and Tools
+Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+/usr/bin/ld: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/compilers/lib/f90main.o: in function `main':
+nvc2p0vbIfDwVdVz.ll:(.text+0x2d): undefined reference to `MAIN_'
+pgacclnk: child process exit status 1: /usr/bin/ld

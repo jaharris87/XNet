@@ -1,0 +1,212 @@
+{
+  "build": {
+    "argv": [
+      "make",
+      "-C",
+      "/pscratch/sd/j/jaharris/xnet_work/source-86e867c2",
+      "BUILD_DIR=/pscratch/sd/j/jaharris/xnet_issue152/build-59029522",
+      "-j8",
+      "PE_ENV=NVIDIA",
+      "CMODE=OPT",
+      "MACHINE=perlmutter",
+      "MPI_MODE=OFF",
+      "OPENMP_MODE=OFF",
+      "GPU_MODE=ON",
+      "GPU_BACKEND=CUDA",
+      "GPU_LAPACK_VER=CUBLAS",
+      "OPENACC_MODE=ON",
+      "OPENMP_OL_MODE=OFF",
+      "MATRIX_SOLVER=dense",
+      "LAPACK_VER=LIBSCI",
+      "xnet"
+    ],
+    "compiler": {
+      "argv": [
+        "/opt/cray/pe/craype/2.7.36/bin/ftn",
+        "--version"
+      ],
+      "output": "compiler-version.txt",
+      "status": 2
+    },
+    "config": "build-config.txt",
+    "executable_sha256": "a4753f71fae55cfd81b3ed3cdb7e5e487902fd09095f7359bd01e2b3ed720baf",
+    "log": "build.log",
+    "resolved": {
+      "CMODE": "OPT",
+      "CPP": "cpp",
+      "CPPFLAGS": "-P -C -nostdinc -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/ -I/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/ -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include    -DXNET_GPU -DXNET_CUDA -DXNET_LA_CUBLAS -DXNET_OACC",
+      "CUDA_DIR": "/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2",
+      "EOS": "STARKILLER",
+      "EOS_SOURCES": "/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/actual_eos.F90 /pscratch/sd/j/jaharris/xnet_work/source-86e867c2/tools/starkiller-helmholtz/eos_type.F90 /pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_eos_starkiller.F90",
+      "F77FLAGS": "-Mpreprocess -r8 -i4 -Mfixed",
+      "F90FLAGS": "-r8 -i4",
+      "FC": "ftn",
+      "FFLAGS": "-g -gopt -O2 -acc -gpu=ptxinfo -Minfo=accel",
+      "GPU_BACKEND": "CUDA",
+      "GPU_LAPACK_VER": "CUBLAS",
+      "GPU_MODE": "ON",
+      "GPU_MODULE_FLAGS": "",
+      "GPU_SOURCES": " /pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/cudaf.F90 /pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/cublasf.F90 /pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/cusparsef.F90 /pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/cusolverf.F90 /pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/openaccf.F90",
+      "HELMHOLTZ_PATH": "",
+      "HIPFORT_DIR": "",
+      "JACOBIAN_SOURCE": "/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_jacobian_dense.F90",
+      "LAPACK_INC": "  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include  -I/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/include",
+      "LAPACK_LIBDIR": "  -L/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/lib64  -L/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/lib64",
+      "LAPACK_LIBS": "  -lcudart -lcuda  -lcublas -lcusparse -lcusolver",
+      "LAPACK_SOURCES": "",
+      "LAPACK_VER": "LIBSCI",
+      "LDFLAGS": "-g -gopt -O2    -pgc++libs  -acc -gpu=ptxinfo -Minfo=accel",
+      "LDR": "ftn",
+      "MA41_DIR": "",
+      "MA48_DIR": "",
+      "MACHINE": "perlmutter",
+      "MAGMA_DIR": "",
+      "MATRIX_SOLVER": "dense",
+      "MKLROOT": "",
+      "MPI_MODE": "OFF",
+      "NETLIB_DIR": "",
+      "OPENACC_MODE": "ON",
+      "OPENMP_MODE": "OFF",
+      "OPENMP_OL_MODE": "OFF",
+      "PARALLEL_SOURCE": "/pscratch/sd/j/jaharris/xnet_work/source-86e867c2/source/xnet_parallel_stubs.F90",
+      "PE_ENV": "NVIDIA",
+      "ROCM_DIR": "",
+      "SOLVER_INC": "",
+      "SOLVER_LIBDIR": "",
+      "SOLVER_LIBS": "",
+      "SOLVER_SOURCES": "",
+      "SOURCE_ROOT": "/pscratch/sd/j/jaharris/xnet_work/source-86e867c2",
+      "XNET_CONFIG_SCHEMA": "1"
+    },
+    "selectors": {
+      "CMODE": "OPT",
+      "GPU_BACKEND": "CUDA",
+      "GPU_LAPACK_VER": "CUBLAS",
+      "GPU_MODE": "ON",
+      "LAPACK_VER": "LIBSCI",
+      "MACHINE": "perlmutter",
+      "MATRIX_SOLVER": "dense",
+      "MPI_MODE": "OFF",
+      "OPENACC_MODE": "ON",
+      "OPENMP_MODE": "OFF",
+      "OPENMP_OL_MODE": "OFF",
+      "PE_ENV": "NVIDIA"
+    },
+    "status": 0
+  },
+  "captured_utc": "2026-09-28T18:49:08.746752+00:00",
+  "case": "alpha",
+  "environment": {
+    "CRAY_ACCEL_TARGET": "nvidia80",
+    "CUDA_VISIBLE_DEVICES": "0",
+    "LOADEDMODULES": "craype-x86-milan:libfabric/2.3.1:craype-network-ofi:xpmem/2.11.5-1.3_g73ade43320bc:perftools-base/26.03.0:cpe/26.03:cudatoolkit/13.2:craype-accel-nvidia80:gpu/1.0:sqs/2.0:darshan/default:numba-cuda-580-patch:conda/Miniforge3-25.11.0-1:python/3.12-25.3.0:nvidia/26.5:craype/2.7.36:cray-dsmml/0.3.1:cray-mpich/9.1.0:cray-libsci/26.03.0:PrgEnv-nvidia/8.7.0",
+    "SLURM_CLUSTER_NAME": "perlmutter",
+    "SLURM_CPUS_PER_TASK": "32",
+    "SLURM_JOB_GPUS": "3",
+    "SLURM_JOB_ID": "59029522",
+    "SLURM_NODELIST": "nid001709",
+    "SLURM_NTASKS": "1",
+    "capture_affinity": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79",
+    "host": "nid001709",
+    "platform": "Linux-6.4.0-150600.23.125_15.0.29-cray_shasta_c-x86_64-with-glibc2.38"
+  },
+  "execution": {
+    "argv": [
+      "srun",
+      "--nodes=1",
+      "--ntasks=1",
+      "--cpus-per-task=32",
+      "--gpus-per-task=1",
+      "--cpu-bind=cores",
+      "--gpu-bind=per_task:1",
+      "/pscratch/sd/j/jaharris/xnet_issue152/xnet-152-device-wrapper.sh",
+      "/pscratch/sd/j/jaharris/xnet_issue152/build-59029522/bin/xnet"
+    ],
+    "batch_size": 4,
+    "ranks": 1,
+    "self_heating": false,
+    "threads": 1,
+    "zones": 4
+  },
+  "format": "xnet-pre-v9-benchmark-v1",
+  "inputs": {
+    "authoritative_network_revision": "a958556833eaddcf956e8e17c27219818035fae1",
+    "files": [
+      {
+        "path": "test/benchmark/references/alpha_controlled_scaling.json",
+        "sha256": "74bd20175b8343e65accc9f892ae4bc9fd4de6ac13669f9e1a4b1cb523f39f52"
+      },
+      {
+        "path": "tools/starkiller-helmholtz/helm_table.dat",
+        "sha256": "c9a57c26c6fd2b2b378b9d5295ca1214022f6fec6289d038b47bf8c8938881a1"
+      },
+      {
+        "path": "test/regression/xnet_regression.py",
+        "sha256": "f47d4d89a8592238f6ab76ca9bbd21c8287e80d6c80d970dd7afdaec079c96d9"
+      },
+      {
+        "path": "test/Data_alpha/sunet",
+        "sha256": "cee68d91608fbe3212b177c13c0a89cf003f158044a35e78b009b4db12efb4b1"
+      },
+      {
+        "path": "test/Data_alpha/netsu",
+        "sha256": "d8db4febcd495b29075039deabd84217d962cf11b868aac68f9e43ac7e716131"
+      },
+      {
+        "path": "test/Data_alpha/netweak",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "test/Data_alpha/netwinv",
+        "sha256": "679b59567a95076ba771e38b0bff999ca94c21f8b1784025748197774c93cf95"
+      }
+    ],
+    "identity": {
+      "repository": "/pscratch/sd/j/jaharris/xnet_issue152/runner",
+      "revision": "92b9bca1b75bf9c8ee41500068a9ad251d079820"
+    },
+    "snapshot": "input-snapshot"
+  },
+  "repetitions": [
+    {
+      "diagnostic": "XNet process status 139",
+      "execution": "FAIL",
+      "number": 1,
+      "numerical": "NOT-RUN",
+      "process_status": 139,
+      "stderr": "repetitions/01/stderr.txt",
+      "stdout": "repetitions/01/stdout.txt",
+      "wall_seconds": 2.7111720239627175
+    }
+  ],
+  "source": {
+    "repository": "/pscratch/sd/j/jaharris/xnet_work/source-86e867c2",
+    "revision": "86e867c2a64267a674ce4fbf6a3064af39e2f4e0"
+  },
+  "status": "FAIL",
+  "workload": {
+    "density_g_cm3": 100000000.0,
+    "duration_seconds": 10.0,
+    "electron_fraction": 0.5,
+    "gpu_batch_sizes": [
+      1,
+      4,
+      16,
+      64,
+      128
+    ],
+    "interpretation": "bounded early-burn workload; not equilibrium or a coupled multiphysics timestep",
+    "mass_fractions": {
+      "c12": 0.5,
+      "o16": 0.5
+    },
+    "normal_zones": 1024,
+    "openmp_batch_size": 1,
+    "partial_batch_zones": 1025,
+    "primary_self_heating": false,
+    "screening": true,
+    "self_heating": false,
+    "temperature_gk": 1.7,
+    "weak_reactions": true
+  }
+}

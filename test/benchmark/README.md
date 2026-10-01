@@ -20,6 +20,9 @@ portability fixes must not be applied while measuring the pre-v9 source.
   not independent claims of scientific truth.
 - `test_run.py` covers a few direct failure paths. It is deliberately not a
   general result-validation or tampering test suite.
+- `results/perlmutter-a100-alpha/` retains the issue #152 single-A100 smoke
+  runs: the unmodified-source failure and the separately labeled successful
+  run using the one-line portability correction merged in PR #155.
 
 Numerical parsing and comparison reuse `test/regression/xnet_regression.py`.
 Comparison occurs after the timed XNet process exits.

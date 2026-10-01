@@ -59,7 +59,7 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep, ns
-    Real(dp), Intent(in) :: tf, ts(:), t9s(:), rhos(:)
+    Real(dp), Intent(in) :: tf, ts(ns), t9s(ns), rhos(ns)
 
     ! Output variables
     Integer, Intent(out) :: nf

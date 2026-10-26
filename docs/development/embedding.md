@@ -32,6 +32,7 @@ Call xnet_initialize(controls,network,ierr,message)
 ! Check ierr before using network or burning.
 Call xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
   & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z)
+! Check ierr. A numerical failure requires the host's fatal/MPI shutdown, not another burn.
 Call xnet_finalize(ierr,message)
 ```
 
@@ -70,8 +71,9 @@ or reorder composition or compute application nuclear-energy release.
 Applications retain those operations and their EOS/energy policy.
 
 `zone_id(:,lane)` has three or four integer components for diagnostics.
-Existing XNet failure filenames use the first three components. The planned
-error return will let each host report its own identifiers.
+On numerical failure, `message` identifies the submitted one-based lane and
+all of its supplied ID components. Standalone failure filenames still use
+the first three components; embedded numerical failures do not write those files.
 Short batches and inactive holes are supported. Inactive lanes preserve
 temperature, Ye, composition and restart hint, and return zero loss/counters.
 Scientific values in inactive lanes are not read. An all-inactive batch
@@ -101,18 +103,33 @@ their own totals.
 
 `xnet_success=0`, `xnet_invalid=1`, `xnet_lifecycle_error=2`, and
 `xnet_unsupported=3` describe the checked public paths. Validate configuration,
-dimensions, finite active inputs and lifecycle order before a burn. Rejected
-burn calls preserve in/out physical state and return zero loss/counters.
+dimensions, finite active inputs and lifecycle order before a burn. Calls
+rejected by validation preserve in/out physical state and return zero loss/counters.
 No automatic renormalization or repair is performed.
 
-Status does not make deep failures recoverable. Existing malformed-network
-readers, EOS/provider failures, allocation failures, and solver exhaustion can
-still terminate execution. `full_net` can write failure inputs before
-termination. A required follow-up will report exhausted-burn errors to the
-host for its own fatal shutdown, without changing standalone termination.
-Application retry, rollback and successful-lane continuation are not supported
-or required for this interface. Future fallback to another integration method
-is separate work, not a promise that a failed library instance can be reused.
+Numerical failure is fatal to the simulation, but returns to the embedded
+caller for host-controlled shutdown. `xnet_integrator_failure=4` reports a
+BE/BDF convergence or timestep failure after the integrator's internal retry
+logic. BDF's existing failure flag does not retain its detailed reason; this
+status does not assert that every failure used the maximum number of attempts.
+`xnet_step_limit=5` reports an active lane still short of the requested stop
+time after `kstmx` integration steps. `message` reports the first affected
+active lane and its caller-supplied IDs. Use a sufficiently long message
+buffer (512 characters accommodates the current message).
+
+After numerical failure, only `ierr`, `message`, attempted `counters` and
+per-call `timing` are diagnostic results. No physical result is valid for the
+batch. The host must log its context and terminate; do not retry, continue
+successful lanes, or reuse the failed library instance. XNet keeps its
+internal adaptive retries unchanged. The reporting path closes the elapsed
+timer and skips successful final output and standalone failure-file writes.
+Standalone calls keep their existing termination and failure-output behavior.
+
+This is not general error recovery. Malformed-network readers, EOS/provider
+failures, allocation failures, singular linear solves and arbitrary nonfinite
+arithmetic are not covered by these numerical status values and may still
+terminate execution. Future fallback to another integration method is
+separate work, not a promise that a failed library instance can be reused.
 
 Finalization releases CPU allocations owned by XNet and its selected
 standalone EOS provider. It never initializes/finalizes MPI or a GPU runtime.

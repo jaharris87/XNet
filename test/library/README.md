@@ -4,7 +4,7 @@ Build the production archive and network preprocessor, then compile and run
 the callers through the build's exported compiler/link settings:
 
 ```sh
-make BUILD_NAME=library-test -j libxnet net_setup
+make BUILD_NAME=library-test -j libxnet net_setup xnet
 make -C test/library XNET_CONFIG=../../build/library-test/xnet-config.mk test
 ```
 
@@ -68,6 +68,30 @@ all A/Z and energy values are compared with the legacy nuclear-data arrays.
 Validation checks cover invalid controls, duplicate initialization, unsupported
 time-series output/preprocessing, invalid extents, incomplete auxiliary
 arguments, NaN/Inf input, negative fractions/restart hints, invalid Ye, and an
-auxiliary reservoir with invalid A. Recoverable validation is distinct from
-existing fatal reader/EOS/solver paths; these tests do not claim recoverable
-convergence failures, concurrent instances, MPI, OpenMP, GPU, or performance.
+auxiliary reservoir with invalid A.
+
+`failure_consumer.F90` also imports only the public API. Four alpha cases
+exercise BE/BDF integrator-reported failure and the outer `kstmx` limit. The
+integrator cases use valid but deliberately stringent test controls: BE has
+one Newton iteration with `iconvc=1`, `tolc=1e-30`; BDF uses `tolc=1e-100` and
+absolute tolerance `yacc=1e-100`. Normal tests and production defaults are not
+changed. The step-limit cases use `kstmx=1`. These use the real integrators,
+not injected failure flags or replacement solvers.
+
+Each failure call uses a short batch with inactive holes, checks the returned
+reason and original three/four-component IDs for active lane two, and requires
+attempted counters and finite completed timing. The process ends after the
+host receives the fatal error, without inspecting physical results or making
+another library call. The runner requires no successful final output or
+standalone failure files from the API. Separate standalone processes exercise
+the same failure-control choices, must exit nonzero on the evolution-failure
+path (not initialization/input failure), and must retain the existing
+`ab_fail_001_001_001` / `th_fail_001_001_001` filenames. Logs record direct exit
+status. The integrator-failure cases must show failed internal retries, while
+the step-limit cases must not report integrator failure.
+
+Checked validation and host-reported fatal burns do not provide application
+retry, rollback, failed-instance reuse, or successful-lane continuation.
+Reader/provider/allocation failures, singular solves, arbitrary nonfinite
+arithmetic, concurrent instances, MPI, OpenMP, GPU and performance remain
+outside these tests' claims.

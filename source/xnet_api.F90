@@ -9,6 +9,7 @@ Module xnet_api
 
   Integer, Parameter, Public :: xnet_success = 0, xnet_invalid = 1
   Integer, Parameter, Public :: xnet_lifecycle_error = 2, xnet_unsupported = 3
+  Integer, Parameter, Public :: xnet_integrator_failure = 4, xnet_step_limit = 5
   Public :: dp, xnet_controls_t, set_xnet_controls_defaults
   Public :: xnet_initialize, xnet_burn_batch, xnet_finalize
 
@@ -148,7 +149,7 @@ Contains
       & tstart, tstop, tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
     Use xnet_controls, Only: nzbatchmx, nzevolve, szbatch, nzbatch, lzactive, iheat, &
       & zone_work=>zone_id, iaux, ktot
-    Use xnet_evolve, Only: full_net
+    Use xnet_evolve, Only: full_net, evolve_integrator_failure, evolve_step_limit
 #endif
     Implicit None
     Real(dp), Intent(in) :: dt_s, density(:)
@@ -162,10 +163,14 @@ Contains
     Character(*), Intent(out) :: message
     Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
 #ifdef XNET_EMBEDDING_CPU
-    Integer :: n, lane, kstep
+    Integer :: n, lane, kstep, evolve_status, failed_lane, id
     Real(dp), Allocatable :: loss_work(:)
     Real(dp) :: total_mass
     Type(xnet_timing_t) :: before
+    Character(128) :: failure_ids
+    Character(32) :: id_component
+    Character(512) :: failure_message
+    Character(80) :: failure_reason
 
     timing = xnet_timing_t()
     neutrino_loss = 0.0_dp
@@ -298,15 +303,17 @@ Contains
     ye_work = yestart
     y = ystart
     Allocate (loss_work(nzevolve))
-    Call full_net(kstep,loss_work)
+    Call full_net(kstep,loss_work,evolve_status,failed_lane)
     Do lane = 1, n
       If ( .not. active(lane) ) Cycle
+      counters(:,lane) = ktot(:,lane)
+      ! Numerical failure requires host shutdown; no physical result or subsequent burn is supported.
+      If ( evolve_status /= 0 ) Cycle
       mass_fraction(:,lane) = y(:,lane)*aa
       If ( iheat > 0 ) temperature(lane) = t9(lane)*1.0e9_dp
       ye(lane) = ye_work(lane)
       restart_dt_s(lane) = tdel_old(lane)
       neutrino_loss(lane) = loss_work(lane)
-      counters(:,lane) = ktot(:,lane)
     EndDo
     Deallocate (loss_work)
     timing = current_timing()
@@ -316,6 +323,24 @@ Contains
     timing%derivative = timing%derivative - before%derivative
     timing%rates = timing%rates - before%rates
     timing%screening = timing%screening - before%screening
+    Select Case (evolve_status)
+    Case (evolve_integrator_failure)
+      ierr = xnet_integrator_failure
+      failure_reason = 'integrator-reported convergence/timestep failure; host must terminate'
+    Case (evolve_step_limit)
+      ierr = xnet_step_limit
+      failure_reason = 'maximum integration steps reached; host must terminate'
+    End Select
+    If ( evolve_status /= 0 ) Then
+      Write(failure_ids,'(i0)') zone_id(1,failed_lane)
+      Do id = 2, Size(zone_id,1)
+        Write(id_component,'(i0)') zone_id(id,failed_lane)
+        failure_ids = Trim(failure_ids)//' '//Trim(id_component)
+      EndDo
+      Write(failure_message,'(a,i0,4a)') 'Lane ',failed_lane,', zone IDs [', &
+        & Trim(failure_ids),']: ',Trim(failure_reason)
+      message = failure_message
+    EndIf
 #else
     timing = xnet_timing_t()
     neutrino_loss = 0.0_dp

@@ -66,9 +66,10 @@ The exact order and conditional calls live in `source/net.F90`.
 `xnet_controls_t` is the validated configuration value shared with programmatic
 callers. The current executable uses `apply_standalone_controls` to enforce its
 file-input requirements and copy the value into the existing module execution
-state. The constant-condition `xnet_api` lifecycle provides initialization,
-batched burns, and CPU cleanup for the dense serial configuration. It shares
-control application and abundance/condition allocation with the standalone
+state. The `xnet_api` lifecycle provides initialization, constant-condition
+batched burns, scalar NSE composition queries, and CPU cleanup for the dense
+serial configuration. It shares control application and abundance/condition
+allocation with the standalone
 driver; the driver retains its general histories and file-output policy. See
 [embedding.md](embedding.md) for status and ownership limits.
 

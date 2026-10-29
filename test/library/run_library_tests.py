@@ -150,6 +150,24 @@ def compare(api: dict, reference: dict, label: str) -> None:
                 )
 
 
+def check_nse(public_output: str, legacy_output: str, species: int, enabled: bool) -> None:
+    public_rows = [line.split()[1:] for line in public_output.splitlines() if line.startswith("NSE ")]
+    legacy_rows = [line.split()[1:] for line in legacy_output.splitlines() if line.startswith("NSE ")]
+    expected = ["first", "second", "third", "first_copy", "repeat", "reinitialize"] if enabled else []
+    if [row[0] for row in public_rows] != expected:
+        raise RuntimeError("missing or out-of-order public NSE query results")
+    if [row[0] for row in legacy_rows] != [label for label in expected if label not in ("first_copy", "reinitialize")]:
+        raise RuntimeError("missing or out-of-order direct NSE results")
+    public = {row[0]: list(map(float, row[1:])) for row in public_rows}
+    legacy = {row[0]: list(map(float, row[1:])) for row in legacy_rows}
+    for label, composition in public.items():
+        if len(composition) != species or not all(math.isfinite(value) and value >= 0 for value in composition):
+            raise RuntimeError(f"invalid public NSE composition: {label}")
+        reference = legacy["first" if label in ("first_copy", "reinitialize") else label]
+        if composition != reference:
+            raise RuntimeError(f"{label}: public NSE species differ from direct A*ynse")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", type=Path, required=True)
@@ -212,6 +230,7 @@ def main() -> None:
         for state in ("first", "repeat", "short", "inactive", "no_aux"):
             compare(public_states, legacy_states, state)
         compare(public_states, {"reinitialize": public_states["first"]}, "reinitialize")
+        check_nse(public_output, legacy_output, len(public_metadata), network == "SN160")
         first = public_states["first"][0]
         repeated = public_states["repeat"][0]
         if first[9:] == repeated[9:]:
@@ -220,7 +239,9 @@ def main() -> None:
             raise RuntimeError(f"{label}: self-heating did not increase temperature")
         if network == "SN160" and not first[3] > 0:
             raise RuntimeError(f"{label}: weak-reaction neutrino loss not exercised")
-        print(f"PASS {label}: five burn calls equal direct full_net; lifecycle/validation/metadata pass", flush=True)
+        nse_result = "; NSE/copy/reinitialize pass" if network == "SN160" else ""
+        print(f"PASS {label}: five burn calls equal direct full_net; lifecycle/validation/metadata pass{nse_result}",
+              flush=True)
     check_fatal_burns(failure_exe, xnet_exe, networks["alpha"], table, work)
     print("Real serial CPU library consumer checks passed", flush=True)
 

@@ -70,6 +70,18 @@ time-series output/preprocessing, invalid extents, incomplete auxiliary
 arguments, NaN/Inf input, negative fractions/restart hints, invalid Ye, and an
 auxiliary reservoir with invalid A.
 
+The SN160 callers also interleave scalar NSE queries with the burns. The
+public caller supplies temperature in K; the direct caller uses the existing
+solver's GK input. Conditions are `(rho,T9,Ye) = (1e6,8,.45), (1e7,9,.49),
+(1e8,11,.55)`, following the maintained standalone NSE input. Every species
+in the returned `A*ynse` vector must agree exactly with the direct call;
+normalization and scientific reference results are not part of this check.
+Repeated queries and reinitialization reproduce the first composition, its
+saved copy remains unchanged, and subsequent burns still match the direct
+path. Invalid scalar inputs, result extents and lifecycle order return the
+specified status and zero the submitted output vector. NSE solver failures
+retain their existing fatal behavior; this change adds no recovery claim.
+
 `failure_consumer.F90` also imports only the public API. Four alpha cases
 exercise BE/BDF integrator-reported failure and the outer `kstmx` limit. The
 integrator cases use valid but deliberately stringent test controls: BE has

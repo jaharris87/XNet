@@ -18,6 +18,43 @@ OpenMP, and GPU modes off. Other builds retain their standalone programs;
 the embedding procedures return `xnet_unsupported`. This does not qualify
 CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
 
+## Application-owned EOS
+
+Applications that already initialize their own EOS may supply the `xnet_eos`
+module when building the library:
+
+```sh
+make BUILD_NAME=application-eos -j libxnet \
+  EOS=EXTERNAL EOS_SOURCE=/path/to/XNet_API/xnet_eos_chimera.F90 \
+  EOS_MODULE_DIR=/path/to/host/modules
+```
+
+Build the host EOS modules first, using the same compiler and compatible
+precision options. `EOS_SOURCE` names one free-form Fortran source containing
+the application adapter. `EOS_MODULE_DIR` is optional if the adapter needs no
+additional module directory. XNet's current module directory is searched
+before the host directory, so older XNet modules in an application build do
+not replace the current ones.
+
+The adapter supplies the same `xnet_eos` procedures used by the current core:
+`eos_initialize`, `eos_finalize`, and the scalar/vector `eos_interface` and
+`eos_screen` calls. Follow the existing provider interfaces for arguments,
+kinds, masks and units. Keep application-specific thermodynamics in the
+adapter; do not change screening or composition calculations merely to
+connect the host EOS.
+
+The host initializes its EOS before `xnet_initialize`. The adapter's
+initialization/finalization routines allocate and release only XNet-owned
+scratch; they must not reinitialize or destroy host tables, MPI, or accelerator
+state. The application links its own EOS objects and dependencies alongside
+`libxnet.a`. These dependencies are not bundled into the XNet archive or
+discovered automatically. Module includes are recorded in `xnet-config.mk`.
+
+`EOS=EXTERNAL` builds `libxnet` and the EOS-independent `net_setup` utility,
+not standalone `xnet` or `xnse`. The initial embedding support remains dense
+serial CPU only. Supplying an EOS module does not by itself validate a full
+CHIMERA/Flash-X adapter or enable threaded/accelerator embedding.
+
 ## Three procedures
 
 ```fortran
@@ -136,8 +173,10 @@ arithmetic are not covered by these numerical status values and may still
 terminate execution. Future fallback to another integration method is
 separate work, not a promise that a failed library instance can be reused.
 
-Finalization releases CPU allocations owned by XNet and its selected
-standalone EOS provider. It never initializes/finalizes MPI or a GPU runtime.
+Finalization releases CPU allocations owned by XNet and calls the selected
+EOS adapter's finalizer. Built-in standalone providers release their own EOS
+storage; an application-supplied adapter must leave host-owned EOS state intact.
+The API never initializes/finalizes MPI or a GPU runtime.
 A future application EOS provider must release only its XNet scratch storage,
 leaving the host EOS initialized. MPI, OpenMP, and caller-owned GPU embedding
 remain unqualified.

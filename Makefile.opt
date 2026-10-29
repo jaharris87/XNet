@@ -19,8 +19,13 @@ GPU_LAPACK_VER ?= CUBLAS
 OPENACC_MODE ?= OFF
 OPENMP_OL_MODE ?= OFF
 
-# STARKILLER, BAHCALL, or HELMHOLTZ.
+# STARKILLER, BAHCALL, HELMHOLTZ, or EXTERNAL (libxnet only).
 EOS ?= STARKILLER
+# EXTERNAL uses a supplied free-form module xnet_eos. The host builds its EOS
+# modules first and supplies their directory when needed. The host also owns
+# EOS initialization, cleanup, and linking its EOS dependencies.
+# EOS_SOURCE = /path/to/xnet_eos.F90
+# EOS_MODULE_DIR = /path/to/host/modules
 # dense, MA41, MA48, or the oneMKL implementation PARDISO_MKL.
 MATRIX_SOLVER ?= dense
 

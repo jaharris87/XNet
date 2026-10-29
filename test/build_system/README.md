@@ -14,3 +14,9 @@ rebuilds, configuration-reuse protection,
 configuration-specific cleaning, solver selection, CUDA path selection, and
 early rejection of incompatible options. The CUDA checks exercise Make
 selection only; they do not qualify NVIDIA hardware or a CUDA toolchain.
+
+The external-EOS check compiles a copy of the Bahcall module under an
+application filename, with an additional compile-time host-module import.
+It checks parallel library construction, module include order, recorded
+settings, and rejection of standalone targets or incompatible directory reuse.
+It does not validate an application's EOS or burn results.

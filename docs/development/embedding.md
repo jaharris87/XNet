@@ -107,6 +107,11 @@ dimensions, finite active inputs and lifecycle order before a burn. Calls
 rejected by validation preserve in/out physical state and return zero loss/counters.
 No automatic renormalization or repair is performed.
 
+`xnet_lifecycle_error` means that XNet is already initialized when initialization
+is requested, or that a burn is requested before initialization or after
+finalization. It describes call order, not a numerical failure. Calling
+`xnet_finalize` again after finalization is allowed and returns success.
+
 Numerical failure is fatal to the simulation, but returns to the embedded
 caller for host-controlled shutdown. `xnet_integrator_failure=4` reports a
 BE/BDF convergence or timestep failure after the integrator's internal retry

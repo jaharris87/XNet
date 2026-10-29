@@ -206,6 +206,9 @@ results are read immediately after the API returns without another stream
 wait. Timings must be finite and nonnegative; they are not compared across
 calls.
 
+Each lifetime also requires mapped quiet-NaN and positive-infinity densities
+to return the finite-input diagnostic with zero counters, accepted steps, and timing.
+
 Two additional borrowed-resource calls queue four 256-by-256 GEMMs followed
 by a GEMM that replaces poisoned device density with the fixture density.
 The first call synchronizes the stream before entering the API; the second

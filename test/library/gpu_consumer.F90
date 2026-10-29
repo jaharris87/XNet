@@ -9,9 +9,9 @@
 
 Program gpu_consumer
   Use, Intrinsic :: iso_c_binding, Only: C_PTR, C_NULL_PTR, C_INT, C_LONG_LONG, C_LOC, C_Associated
-  Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
+  Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite, ieee_value, ieee_quiet_nan, ieee_positive_inf
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, xnet_gpu_resources_t, &
-    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success
+    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success, xnet_invalid
   Use consumer_fixture, Only: fixture_state, write_state, check
 #if defined(XNET_CUDA)
   Use cudaf, Only: cudaGetDeviceCount, cudaGetDevice, cudaSetDevice, cudaStreamCreateWithFlags, &
@@ -179,6 +179,7 @@ Program gpu_consumer
       Call producer_burn(.true.)
       Call producer_burn(.false.)
     EndIf
+    Call invalid_device_density()
     Call xnet_finalize(ierr,message)
     Call api_ok(Trim(prefix)//' finalize')
     Call selected_device_unchanged()
@@ -335,6 +336,46 @@ Contains
     Call check(mirrors_poisoned,Trim(label)//' unchanged scientific device mirrors')
     Return
   End Subroutine check_host_device_poison
+
+  Subroutine invalid_device_density()
+    ! Reject nonfinite resident input before integration; inspect only host diagnostics.
+    Implicit None
+    Real(dp) :: invalid_density(2)
+    Integer :: invalid_case
+
+    invalid_density = [ieee_value(0.0_dp,ieee_quiet_nan),ieee_value(0.0_dp,ieee_positive_inf)]
+    Do invalid_case = 1, Size(invalid_density)
+      Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
+      density(1) = invalid_density(invalid_case)
+      active = .true.
+      loss = -1.0_dp
+      counters = -1
+      steps = -1
+      timing = xnet_timing_t(seconds=-1.0_dp,solve=-1.0_dp,jacobian=-1.0_dp, &
+        & derivative=-1.0_dp,rates=-1.0_dp,screening=-1.0_dp)
+      !XDIR XENTER_DATA XCOPYIN(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
+      ! Keep the host mirror finite so the required rejection must read device data.
+      density(1) = density(2)
+      Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters, &
+        & timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken=steps,data_on_device=.true.)
+      ! Release the mappings without copying or inspecting rejected scientific results.
+      !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
+      If ( invalid_case == 1 ) Then
+        label = Trim(prefix)//'_device_nan'
+      Else
+        label = Trim(prefix)//'_device_inf'
+      EndIf
+      If ( ierr /= xnet_invalid ) Write(*,'(a,i0,2a)') 'Unexpected status ',ierr,': ',Trim(message)
+      Call check(ierr == xnet_invalid,Trim(label)//' invalid status')
+      Call check(Trim(message) == 'Active-zone inputs must be finite',Trim(label)//' finite-input diagnostic')
+      Call check(All(counters == 0) .and. steps == 0,Trim(label)//' zero counters and accepted steps')
+      times = [timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
+      Call check(All(times == 0.0_dp),Trim(label)//' zero timing')
+      Call selected_device_unchanged()
+      Write(*,'(a,1x,a)') 'INVALID_DEVICE_INPUT_REJECTED',Trim(label)
+    EndDo
+    Return
+  End Subroutine invalid_device_density
 
   Subroutine producer_burn(synchronize)
     ! Keep the queued GEMM inputs mapped through the subsequent resident burn.

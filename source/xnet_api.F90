@@ -539,7 +539,6 @@ Contains
   Subroutine burn_device_arrays(dt_s,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
     & kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
     ! Validate, prepare and extract scientific arrays on the device; status and counters return on host.
-    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: ny, aa
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
     Use xnet_conditions, Only: t, t9, rho, ye_work=>ye, tdel, tdel_old, nt, nstart, &
@@ -588,13 +587,15 @@ Contains
       validation(lane) = 0
       mass_sum(lane) = 0.0_dp
       If ( .not. lzactive(lane) ) Cycle
-      finite_state = ieee_is_finite(density(lane)) .and. ieee_is_finite(temperature(lane)) .and. &
-        & ieee_is_finite(ye(lane)) .and. ieee_is_finite(restart_dt_s(lane))
+      ! NVHPC 26.5 cannot link IEEE_IS_FINITE in this OpenACC loop.
+      ! Ordered comparisons also reject NaN and infinity without a device helper.
+      finite_state = Abs(density(lane)) <= Huge(1.0_dp) .and. Abs(temperature(lane)) <= Huge(1.0_dp) .and. &
+        & Abs(ye(lane)) <= Huge(1.0_dp) .and. Abs(restart_dt_s(lane)) <= Huge(1.0_dp)
       negative_mass = .false.
       total_mass = 0.0_dp
       !XDIR XLOOP_SERIAL(1)
       Do k = 1, ny
-        finite_state = finite_state .and. ieee_is_finite(mass_fraction(k,lane))
+        finite_state = finite_state .and. Abs(mass_fraction(k,lane)) <= Huge(1.0_dp)
         negative_mass = negative_mass .or. mass_fraction(k,lane) < 0.0_dp
         total_mass = total_mass + mass_fraction(k,lane)
       EndDo
@@ -608,11 +609,13 @@ Contains
     EndDo
     If ( Present(aux_x) ) Then
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(lzactive,validation,mass_sum,aux_x,aux_a,aux_z)
+      !XDIR XPRESENT(lzactive,validation,mass_sum,aux_x,aux_a,aux_z) &
+      !XDIR XPRIVATE(finite_state)
       Do lane = 1, n
         If ( .not. lzactive(lane) .or. validation(lane) /= 0 ) Cycle
-        If ( .not. ieee_is_finite(aux_x(lane)) .or. .not. ieee_is_finite(aux_a(lane)) .or. &
-          & .not. ieee_is_finite(aux_z(lane)) ) Then
+        finite_state = Abs(aux_x(lane)) <= Huge(1.0_dp) .and. Abs(aux_a(lane)) <= Huge(1.0_dp) .and. &
+          & Abs(aux_z(lane)) <= Huge(1.0_dp)
+        If ( .not. finite_state ) Then
           validation(lane) = 3
         ElseIf ( aux_x(lane) < 0.0_dp .or. aux_x(lane) > 1.0_dp .or. aux_a(lane) < 0.0_dp .or. &
           & aux_z(lane) < 0.0_dp .or. aux_z(lane) > aux_a(lane) ) Then

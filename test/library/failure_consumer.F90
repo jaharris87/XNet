@@ -10,7 +10,7 @@ Program failure_consumer
   Type(xnet_controls_t) :: controls
   Type(xnet_network_t) :: network
   Type(xnet_timing_t) :: timing
-  Integer :: ierr, solver, nids, expected, ids(4,lanes), counters(5,lanes)
+  Integer :: ierr, solver, nids, expected, ids(4,lanes), counters(5,lanes), max_steps_taken
   Character(80) :: data_dir, argument, mode
   Character(512) :: message
   Logical :: active(lanes)
@@ -61,10 +61,12 @@ Program failure_consumer
   active = [.false.,.true.,.false.]
   ids = 0
   ids(:,2) = [101,-7,9001,42]
+  max_steps_taken = -1
   Call xnet_burn_batch(0.1_dp,active,ids(:nids,:),density,temperature,ye,x,restart, &
-    & loss,counters,timing,ierr,message,aux_x,aux_a,aux_z)
+    & loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken)
   Write(*,'(a,i0,2a)') 'BURN_STATUS ',ierr,' ',Trim(message)
   Call check(ierr == expected,'expected numerical failure returned to host')
+  Call check(max_steps_taken == 0,'numerical failure clears accepted step count')
   Call check(Index(message,'Zone 2, zone IDs [101 -7 9001') == 1,'submitted active zone and original IDs')
   If ( nids == 4 ) Call check(Index(message,'9001 42]') > 0,'fourth original ID')
   Call check(Index(message,'host must terminate') > 0,'fatal host policy')

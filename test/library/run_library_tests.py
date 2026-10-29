@@ -227,6 +227,14 @@ def main() -> None:
             raise RuntimeError(f"invalid per-call timings; see {case / 'api.log'}")
         if set(public_states) != {"first", "repeat", "short", "inactive", "no_aux", "reinitialize"}:
             raise RuntimeError(f"missing public burn calls; see {case / 'api.log'}")
+        public_steps = [line.split()[1:] for line in public_output.splitlines() if line.startswith("STEPS ")]
+        legacy_steps = [line.split()[1:] for line in legacy_output.splitlines() if line.startswith("STEPS ")]
+        step_labels = ["first", "repeat", "short", "inactive", "no_aux"]
+        if ([row[0] for row in legacy_steps] != step_labels or
+                any(len(row) != 2 for row in public_steps + legacy_steps)):
+            raise RuntimeError(f"missing/malformed accepted step counts: {label}")
+        if public_steps != legacy_steps:
+            raise RuntimeError(f"public accepted step counts differ from direct full_net: {label}")
         for state in ("first", "repeat", "short", "inactive", "no_aux"):
             compare(public_states, legacy_states, state)
         compare(public_states, {"reinitialize": public_states["first"]}, "reinitialize")

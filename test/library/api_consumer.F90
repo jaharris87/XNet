@@ -11,7 +11,7 @@ Program api_consumer
   Type(xnet_controls_t) :: controls, bad_controls
   Type(xnet_network_t) :: network, rejected_network
   Type(xnet_timing_t) :: timing
-  Integer :: ierr, isolv, iheat, i
+  Integer :: ierr, isolv, iheat, i, max_steps_taken
   Integer :: ids(3,lanes), ids4(4,lanes), counters(5,lanes)
   Character(80) :: data_dir, arg
   Character(512) :: message
@@ -23,13 +23,18 @@ Program api_consumer
   Real(dp) :: nan_value, inf_value
 
   Call get_command_argument(1,data_dir)
+  If ( Trim(data_dir) == '--unsupported' ) Then
+    Call probe_uninitialized(xnet_unsupported)
+    Write(*,'(a)') 'UNSUPPORTED_CHECKS_PASSED'
+    Stop
+  EndIf
   Call get_command_argument(2,arg)
   Read(arg,*) isolv
   Call get_command_argument(3,arg)
   Read(arg,*) iheat
   Call check(Len_Trim(data_dir) > 0,'data directory argument')
   test_nse = Trim(data_dir) == 'Data_SN160'
-  Call probe_uninitialized()
+  Call probe_uninitialized(xnet_lifecycle_error)
   Call xnet_finalize(ierr,message)
   Call expect(xnet_success,'finalize before initialization')
 
@@ -122,7 +127,7 @@ Program api_consumer
   Call expect(xnet_success,'finalize')
   Call xnet_finalize(ierr,message)
   Call expect(xnet_success,'repeated finalize')
-  Call probe_uninitialized()
+  Call probe_uninitialized(xnet_lifecycle_error)
 
   ! Reinitialize after real burns, then compare a fresh state with the first result.
   Call xnet_initialize(controls,network,ierr,message)
@@ -152,8 +157,9 @@ Contains
     Return
   End Subroutine expect
 
-  Subroutine probe_uninitialized()
+  Subroutine probe_uninitialized(expected_status)
     Implicit None
+    Integer, Intent(in) :: expected_status
     Real(dp) :: d(1), temp(1), ey(1), frac(1,1), hint(1), nu(1)
     Integer :: zone(3,1), count(5,1)
     Logical :: mask(1)
@@ -165,11 +171,14 @@ Contains
     hint = 0.0_dp
     mask = .True.
     zone = 1
-    Call xnet_burn_batch(0.1_dp,mask,zone,d,temp,ey,frac,hint,nu,count,timing,ierr,message)
-    Call expect(xnet_lifecycle_error,'burn outside initialized lifetime')
+    max_steps_taken = -1
+    Call xnet_burn_batch(0.1_dp,mask,zone,d,temp,ey,frac,hint,nu,count,timing,ierr,message, &
+      & max_steps_taken=max_steps_taken)
+    Call expect(expected_status,'burn unavailable')
+    Call check(max_steps_taken == 0,'unavailable burn clears accepted step count')
     Call xnet_nse_composition(d(1),temp(1),ey(1),frac(:,1),ierr,message)
-    Call expect(xnet_lifecycle_error,'NSE query outside initialized lifetime')
-    Call check(All(frac == 0.0_dp),'NSE lifecycle error clears output')
+    Call expect(expected_status,'NSE query unavailable')
+    Call check(All(frac == 0.0_dp),'unavailable NSE query clears output')
     Return
   End Subroutine probe_uninitialized
 
@@ -213,8 +222,11 @@ Contains
     nan_value = ieee_value(0.0_dp,ieee_quiet_nan)
     inf_value = ieee_value(0.0_dp,ieee_positive_inf)
     Call remember_state()
-    Call xnet_burn_batch(-0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+    max_steps_taken = -1
+    Call xnet_burn_batch(-0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
+      & max_steps_taken=max_steps_taken)
     Call expect(xnet_invalid,'negative burn interval')
+    Call check(max_steps_taken == 0,'invalid burn interval clears accepted step count')
     Call unchanged_state('negative burn interval')
     Call xnet_burn_batch(nan_value,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
     Call expect(xnet_invalid,'nonfinite burn interval')
@@ -258,9 +270,11 @@ Contains
     Call expect(xnet_invalid,'negative restart interval')
     restart = saved_restart
     aux_a(1) = 0.0_dp
+    max_steps_taken = -1
     Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
-      & aux_x,aux_a,aux_z)
+      & aux_x,aux_a,aux_z,max_steps_taken)
     Call expect(xnet_invalid,'auxiliary mass number')
+    Call check(max_steps_taken == 0,'invalid auxiliary input clears accepted step count')
     aux_a(1) = 56.0_dp
     Call unchanged_state('invalid calls')
     Return
@@ -313,14 +327,27 @@ Contains
     Call remember_state()
     loss = -1.0_dp
     counters = -1
-    If ( label == 'no_aux' ) Then
-      Call xnet_burn_batch(0.1_dp,active(:n),ids4(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
-        & restart(:n),loss(:n),counters(:,:n),timing,ierr,message)
-    Else
+    max_steps_taken = -1
+    If ( label == 'reinitialize' ) Then
+      ! Exercise the existing successful source call without the new optional output.
       Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
         & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,aux_x(:n),aux_a(:n),aux_z(:n))
+    ElseIf ( label == 'no_aux' ) Then
+      Call xnet_burn_batch(0.1_dp,active(:n),ids4(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
+        & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,max_steps_taken=max_steps_taken)
+    Else
+      Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
+        & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,aux_x(:n),aux_a(:n),aux_z(:n),max_steps_taken)
     EndIf
     Call expect(xnet_success,label//' burn')
+    If ( label /= 'reinitialize' ) Then
+      If ( Any(active(:n)) ) Then
+        Call check(max_steps_taken > 0,label//' accepted step count')
+      Else
+        Call check(max_steps_taken == 0,label//' empty accepted step count')
+      EndIf
+      Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),max_steps_taken
+    EndIf
     times = (/ timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening /)
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),label//' timing')
     Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times

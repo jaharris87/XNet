@@ -124,7 +124,7 @@ controls%idiag = -2
 Call xnet_initialize(controls,network,ierr,message)
 ! Check ierr before using network or burning.
 Call xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
-  & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z)
+  & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken)
 ! Check ierr. A numerical failure requires the host's fatal/MPI shutdown, not another burn.
 Call xnet_finalize(ierr,message)
 ```
@@ -191,6 +191,13 @@ corrections. `counters(5,lane)` returns the existing TS, NR, Jacobian,
 derivative, and rate counters. `timing` returns per-batch elapsed, solve,
 Jacobian, derivative, rate, and screening seconds; applications accumulate
 their own totals.
+
+Optional integer `max_steps_taken` returns the existing `full_net` `kstep`:
+the maximum accepted outer integration steps taken by an active lane in the
+batch. It is zero for an all-inactive batch or any non-success return. This
+differs from `counters(1,:)`, which includes internal timestep retries. Flash-X
+uses the accepted step count for `MTSB_VAR` and `Grid_setWork` work estimates.
+Existing calls may omit this final argument.
 
 ## Status and remaining limits
 

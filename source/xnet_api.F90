@@ -139,7 +139,7 @@ Contains
   End Subroutine xnet_initialize
 
   Subroutine xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
-    & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z)
+    & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken)
     ! Constant density, with constant temperature unless self-heating is selected.
 #ifdef XNET_EMBEDDING_CPU
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
@@ -162,6 +162,7 @@ Contains
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
     Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
+    Integer, Optional, Intent(out) :: max_steps_taken
 #ifdef XNET_EMBEDDING_CPU
     Integer :: n, lane, kstep, evolve_status, failed_zone, id
     Real(dp), Allocatable :: loss_work(:)
@@ -172,6 +173,7 @@ Contains
     Character(512) :: failure_message
     Character(80) :: failure_reason
 
+    If ( Present(max_steps_taken) ) max_steps_taken = 0
     timing = xnet_timing_t()
     neutrino_loss = 0.0_dp
     counters = 0
@@ -304,6 +306,7 @@ Contains
     y = ystart
     Allocate (loss_work(nzevolve))
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
+    If ( evolve_status == 0 .and. Present(max_steps_taken) ) max_steps_taken = kstep
     Do lane = 1, n
       If ( .not. active(lane) ) Cycle
       counters(:,lane) = ktot(:,lane)
@@ -342,6 +345,7 @@ Contains
       message = failure_message
     EndIf
 #else
+    If ( Present(max_steps_taken) ) max_steps_taken = 0
     timing = xnet_timing_t()
     neutrino_loss = 0.0_dp
     counters = 0

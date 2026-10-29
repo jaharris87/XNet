@@ -211,6 +211,7 @@ Contains
     lzactive(:ncall) = active
     loss = 0.0_dp
     counters = 0
+    kstep = 0
     If ( Any(active) ) Then
       ! Initialize every storage lane: several legacy setup operations also visit inactive lanes.
       Do j = 1, lanes
@@ -254,6 +255,7 @@ Contains
         EndIf
       EndDo
     EndIf
+    Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),kstep
     Call write_state(label,temperature(:ncall),electron_fraction(:ncall),mass_fraction(:,:ncall), &
       & restart(:ncall),loss(:ncall),counters(:,:ncall))
     Return

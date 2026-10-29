@@ -4,12 +4,13 @@
 Module xnet_api
   Use xnet_types, Only: dp
   Use xnet_controls, Only: xnet_controls_t, set_xnet_controls_defaults
+  Use xnet_evolve, Only: xnet_success, xnet_integrator_failure, xnet_step_limit
   Implicit None
   Private
 
-  Integer, Parameter, Public :: xnet_success = 0, xnet_invalid = 1
+  Integer, Parameter, Public :: xnet_invalid = 1
   Integer, Parameter, Public :: xnet_lifecycle_error = 2, xnet_unsupported = 3
-  Integer, Parameter, Public :: xnet_integrator_failure = 4, xnet_step_limit = 5
+  Public :: xnet_success, xnet_integrator_failure, xnet_step_limit
   Public :: dp, xnet_controls_t, set_xnet_controls_defaults
   Public :: xnet_initialize, xnet_burn_batch, xnet_finalize
 
@@ -149,7 +150,7 @@ Contains
       & tstart, tstop, tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
     Use xnet_controls, Only: nzbatchmx, nzevolve, szbatch, nzbatch, lzactive, iheat, &
       & zone_work=>zone_id, iaux, ktot
-    Use xnet_evolve, Only: full_net, evolve_integrator_failure, evolve_step_limit
+    Use xnet_evolve, Only: full_net
 #endif
     Implicit None
     Real(dp), Intent(in) :: dt_s, density(:)
@@ -304,11 +305,12 @@ Contains
     y = ystart
     Allocate (loss_work(nzevolve))
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
+    ierr = evolve_status
     Do lane = 1, n
       If ( .not. active(lane) ) Cycle
       counters(:,lane) = ktot(:,lane)
       ! Numerical failure requires host shutdown; no physical result or subsequent burn is supported.
-      If ( evolve_status /= 0 ) Cycle
+      If ( evolve_status /= xnet_success ) Cycle
       mass_fraction(:,lane) = y(:,lane)*aa
       If ( iheat > 0 ) temperature(lane) = t9(lane)*1.0e9_dp
       ye(lane) = ye_work(lane)
@@ -324,14 +326,12 @@ Contains
     timing%rates = timing%rates - before%rates
     timing%screening = timing%screening - before%screening
     Select Case (evolve_status)
-    Case (evolve_integrator_failure)
-      ierr = xnet_integrator_failure
+    Case (xnet_integrator_failure)
       failure_reason = 'integrator-reported convergence/timestep failure; host must terminate'
-    Case (evolve_step_limit)
-      ierr = xnet_step_limit
+    Case (xnet_step_limit)
       failure_reason = 'maximum integration steps reached; host must terminate'
     End Select
-    If ( evolve_status /= 0 ) Then
+    If ( evolve_status /= xnet_success ) Then
       Write(failure_ids,'(i0)') zone_id(1,failed_zone)
       Do id = 2, Size(zone_id,1)
         Write(id_component,'(i0)') zone_id(id,failed_zone)

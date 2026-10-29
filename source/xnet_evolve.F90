@@ -14,9 +14,9 @@ Module xnet_evolve
   !-------------------------------------------------------------------------------------------------
   Implicit None
 
-  Integer, Parameter :: evolve_success = 0             ! All active zones reached the requested stop time.
-  Integer, Parameter :: evolve_integrator_failure = 1  ! The integrator reported a convergence or timestep failure.
-  Integer, Parameter :: evolve_step_limit = 2          ! An active zone exhausted the integration-step limit.
+  Integer, Parameter :: xnet_success = 0             ! All active zones reached the requested stop time.
+  Integer, Parameter :: xnet_integrator_failure = 4  ! The integrator reported a convergence or timestep failure.
+  Integer, Parameter :: xnet_step_limit = 5          ! An active zone exhausted the integration-step limit.
 
 Contains
 
@@ -67,9 +67,9 @@ Contains
 
     ! Initialize timestep loop flags
     kstep = 0
-    failure_status = evolve_success
+    failure_status = xnet_success
     failure_zone = 0
-    If ( Present(ierr_out) ) ierr_out = evolve_success
+    If ( Present(ierr_out) ) ierr_out = xnet_success
     If ( Present(failed_zone) ) failed_zone = 0
     mykstep = 0
     lzsolve = lzactive(zb_lo:zb_hi)
@@ -170,12 +170,12 @@ Contains
         !XDIR XHOST(its)
         Do izb = zb_lo, zb_hi
           If ( lzactive(izb) .and. its(izb) > 0 ) Then
-            failure_status = evolve_integrator_failure
+            failure_status = xnet_integrator_failure
             failure_zone = izb
             Exit
           EndIf
         EndDo
-        If ( failure_status /= evolve_success ) Exit
+        If ( failure_status /= xnet_success ) Exit
       EndIf
 
       ! If convergence is successful, output timestep results
@@ -255,8 +255,8 @@ Contains
       If ( lzactive(izb) ) Then
         If ( t(izb) < tstop(izb) .or. its(izb) > 0 ) Then
           If ( Present(ierr_out) ) Then
-            If ( failure_status == evolve_success ) Then
-              failure_status = evolve_step_limit
+            If ( failure_status == xnet_success ) Then
+              failure_status = xnet_step_limit
               failure_zone = izb
             EndIf
             Exit
@@ -298,7 +298,7 @@ Contains
     timer_xnet = timer_xnet + stop_timer
 
     ! Output final state
-    If ( failure_status == evolve_success ) Call final_output(kstep)
+    If ( failure_status == xnet_success ) Call final_output(kstep)
 
     Return
   End Subroutine full_net

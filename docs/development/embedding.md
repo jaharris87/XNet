@@ -23,7 +23,7 @@ CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
 Applications that already initialize their own EOS may supply a small
 `xnet_thermo` module when building the library. XNet keeps its composition
 moments, screening, scalar/vector masks, scratch, and internal-unit
-conversions:
+conversions in `source/xnet_eos.F90`:
 
 ```sh
 make BUILD_NAME=application-eos -j libxnet \
@@ -81,7 +81,7 @@ Return `cv` in erg/g/K, dimensionless electron degeneracy `eta`, and
 conversion to MeV/nucleon/GK and GK^-1, and calls thermodynamics only when
 heating or screening needs it. The adapter imports no mutable XNet working
 arrays and exposes no host derived types. The bundled adapter in
-`source/xnet_thermo_starkiller.F90` demonstrates the procedure signatures;
+`source/xnet_eos_starkiller.F90` demonstrates the procedure signatures;
 an application supplies its own calls and ownership hooks.
 
 The host initializes its EOS before `xnet_initialize`. The application's

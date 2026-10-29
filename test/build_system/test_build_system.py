@@ -84,13 +84,13 @@ end module
     assert (external / "lib" / "libxnet.a").is_file()
     assert (external / "mod" / "xnet_api.mod").is_file()
     assert (external / "obj" / "eos" / "application_eos.o").is_file()
-    assert (external / "obj" / "eos" / "xnet_eos_starkiller.o").is_file()
-    for unused in ("xnet_thermo_starkiller", "actual_eos", "eos_type"):
+    assert (external / "obj" / "eos" / "xnet_eos.o").is_file()
+    for unused in ("xnet_eos_starkiller", "actual_eos", "eos_type"):
         assert not (external / "obj" / "eos" / f"{unused}.o").exists()
     exported = (external / "xnet-config.mk").read_text(encoding="utf-8")
     assert f"XNET_MODFLAGS := -I{external / 'mod'} -I{host_modules}\n" in exported
     external_config = (external / "config.txt").read_text(encoding="utf-8")
-    assert f"EOS_SOURCES={SOURCE / 'xnet_eos_starkiller.F90'} {supplied_eos}\n" in external_config
+    assert f"EOS_SOURCES={SOURCE / 'xnet_eos.F90'} {supplied_eos}\n" in external_config
     assert f"-I{host_modules}" in external_config
 
     # Recompile a changed host interface at the same path. The configuration

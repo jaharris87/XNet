@@ -62,10 +62,10 @@ These papers describe methods and physics directly implemented in XNet.
 
 - **Salpeter (1954)**, Aust. J. Phys. 7, 353 — Electron screening ratio.
   Referenced in `xnet_screening.F90`, `xnet_eos_helm.F90`,
-  `xnet_eos_starkiller.F90`, `xnet_eos_bahcall.F90`.
+  `xnet_eos.F90`, `xnet_eos_bahcall.F90`.
 - **DeWitt, Graboske & Cooper (1973)**, ApJ 181, 439 — Intermediate screening
   factors. Referenced in `xnet_screening.F90`, `xnet_eos_helm.F90`,
-  `xnet_eos_starkiller.F90`.
+  `xnet_eos.F90`.
 - **Graboske, DeWitt, Grossman & Cooper (1973)**, ApJ 181, 457 — Intermediate
   screening factors (Table 4). Referenced in `xnet_screening.F90`,
   `xnet_constants.F90`.
@@ -79,7 +79,7 @@ These papers describe methods and physics directly implemented in XNet.
   matter. Referenced in `xnet_screening.F90`.
 - **Fukushima (2015)**, Appl. Math. Comput. 259, 708 — Rational function
   expansions for Fermi-Dirac integrals. Referenced extensively in `xnet_fd.F90`,
-  `xnet_eos_helm.F90`, `xnet_eos_starkiller.F90`, `xnet_eos_bahcall.F90`.
+  `xnet_eos_helm.F90`, `xnet_eos.F90`, `xnet_eos_bahcall.F90`.
 
 ## Physical Constants
 

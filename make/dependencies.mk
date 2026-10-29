@@ -38,7 +38,7 @@ else ifeq ($(EOS),EXTERNAL)
 $(call eos_obj,$(EOS_THERMO_SRC)): $(call SOBJ,xnet_types) $(if $(strip $(EOS_MODULE_DIR)),$(wildcard $(abspath $(EOS_MODULE_DIR))/*.mod))
 endif
 ifneq ($(filter STARKILLER EXTERNAL,$(EOS)),)
-$(call eos_obj,$(SOURCE_DIR)/xnet_eos_starkiller.F90): $(call eos_obj,$(EOS_THERMO_SRC)) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call SOBJ,xnet_abundances)
+$(call eos_obj,$(SOURCE_DIR)/xnet_eos.F90): $(call eos_obj,$(EOS_THERMO_SRC)) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call SOBJ,xnet_abundances)
 endif
 $(call solver_obj,$(JAC_SRC)): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_linalg) $(if $(filter MA48 PARDISO_MKL,$(MATRIX_SOLVER)),$(call source_obj,$(MPI_SRC))) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types)
 ifneq ($(SPARSE_SRC),)

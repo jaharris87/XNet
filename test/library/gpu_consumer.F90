@@ -292,6 +292,10 @@ Contains
     If ( n < lanes ) Call check(All(x(:,n+1:) == before_x(:,n+1:)) .and. &
       & All(temperature(n+1:) == before_temperature(n+1:)),Trim(label)//' beyond short batch')
     If ( .not. Any(active(:n)) ) Call check(All(times == 0.0_dp),Trim(label)//' empty timing')
+    ! Print valid results before comparison so a failed comparison can be diagnosed.
+    Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),steps
+    Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times
+    Call write_state(label,temperature(:n),ye(:n),x(:,:n),restart(:n),loss(:n),counters(:,:n))
     If ( ownership == 1 .and. .not. resident ) Then
       expected(phase)%x = x
       expected(phase)%temperature = temperature
@@ -309,9 +313,6 @@ Contains
         & Trim(label)//' diagnostic equality')
     EndIf
     If ( phase == 2 ) Call check(Any(x(:,1) /= expected(1)%x(:,1)),Trim(label)//' repeated evolution')
-    Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),steps
-    Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times
-    Call write_state(label,temperature(:n),ye(:n),x(:,:n),restart(:n),loss(:n),counters(:,:n))
     Return
   End Subroutine burn_and_check
 

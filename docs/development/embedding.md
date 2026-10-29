@@ -71,7 +71,7 @@ or reorder composition or compute application nuclear-energy release.
 Applications retain those operations and their EOS/energy policy.
 
 `zone_id(:,lane)` has three or four integer components for diagnostics.
-On numerical failure, `message` identifies the submitted one-based lane and
+On numerical failure, `message` identifies the submitted one-based zone and
 all of its supplied ID components. Standalone failure filenames still use
 the first three components; embedded numerical failures do not write those files.
 Short batches and inactive holes are supported. Inactive lanes preserve
@@ -112,9 +112,9 @@ caller for host-controlled shutdown. `xnet_integrator_failure=4` reports a
 BE/BDF convergence or timestep failure after the integrator's internal retry
 logic. BDF's existing failure flag does not retain its detailed reason; this
 status does not assert that every failure used the maximum number of attempts.
-`xnet_step_limit=5` reports an active lane still short of the requested stop
+`xnet_step_limit=5` reports an active zone still short of the requested stop
 time after `kstmx` integration steps. `message` reports the first affected
-active lane and its caller-supplied IDs. Use a sufficiently long message
+active zone and its caller-supplied IDs. Use a sufficiently long message
 buffer (512 characters accommodates the current message).
 
 After numerical failure, only `ierr`, `message`, attempted `counters` and

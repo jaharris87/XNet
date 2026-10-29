@@ -14,11 +14,13 @@ Module xnet_evolve
   !-------------------------------------------------------------------------------------------------
   Implicit None
 
-  Integer, Parameter :: evolve_success = 0, evolve_integrator_failure = 1, evolve_step_limit = 2
+  Integer, Parameter :: evolve_success = 0             ! All active zones reached the requested stop time.
+  Integer, Parameter :: evolve_integrator_failure = 1  ! The integrator reported a convergence or timestep failure.
+  Integer, Parameter :: evolve_step_limit = 2          ! An active zone exhausted the integration-step limit.
 
 Contains
 
-  Subroutine full_net(kstep,denu,ierr_out,failed_lane)
+  Subroutine full_net(kstep,denu,ierr_out,failed_zone)
     !-----------------------------------------------------------------------------------------------
     ! The abundance evolution is performed over a series of timesteps, with the duration of the
     ! timestep determined by the integration scheme and the changing thermodynamic conditions.
@@ -44,7 +46,7 @@ Contains
     Integer, Intent(out) :: kstep
     Real(dp), Intent(out) :: denu(zb_lo:zb_hi)
     ! Reporting callers own fatal shutdown. Without ierr_out, retain standalone termination/output.
-    Integer, Optional, Intent(out) :: ierr_out, failed_lane
+    Integer, Optional, Intent(out) :: ierr_out, failed_zone
 
     ! Local variables
     !Integer, Parameter :: kstep_output = 10
@@ -55,7 +57,7 @@ Contains
     Real(dp) :: yout(ny+1)
     Integer :: k, izb, izone, nstep_est, idiag0
     Integer :: its(zb_lo:zb_hi), mykstep(zb_lo:zb_hi)
-    Integer :: ierr, failure_status, failure_lane
+    Integer :: ierr, failure_status, failure_zone
     Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
     Character(5) :: nname_out(ny+1)
     Character(128) :: ab_fname, th_fname
@@ -66,9 +68,9 @@ Contains
     ! Initialize timestep loop flags
     kstep = 0
     failure_status = evolve_success
-    failure_lane = 0
+    failure_zone = 0
     If ( Present(ierr_out) ) ierr_out = evolve_success
-    If ( Present(failed_lane) ) failed_lane = 0
+    If ( Present(failed_zone) ) failed_zone = 0
     mykstep = 0
     lzsolve = lzactive(zb_lo:zb_hi)
     lzoutput = lzsolve
@@ -161,7 +163,7 @@ Contains
         Call solve_be(kstep,its)
       End Select
 
-      ! A reported integrator failure is fatal to the host call; do not advance other lanes further.
+      ! A reported integrator failure is fatal to the host call; do not advance other zones further.
       ! Keep all internal BE/BDF retries and the omitted-argument standalone path unchanged.
       If ( Present(ierr_out) ) Then
         !XDIR XUPDATE XWAIT(tid) &
@@ -169,7 +171,7 @@ Contains
         Do izb = zb_lo, zb_hi
           If ( lzactive(izb) .and. its(izb) > 0 ) Then
             failure_status = evolve_integrator_failure
-            failure_lane = izb
+            failure_zone = izb
             Exit
           EndIf
         EndDo
@@ -255,7 +257,7 @@ Contains
           If ( Present(ierr_out) ) Then
             If ( failure_status == evolve_success ) Then
               failure_status = evolve_step_limit
-              failure_lane = izb
+              failure_zone = izb
             EndIf
             Exit
           EndIf
@@ -282,7 +284,7 @@ Contains
       EndIf
     EndDo
     If ( Present(ierr_out) ) ierr_out = failure_status
-    If ( Present(failed_lane) ) failed_lane = failure_lane
+    If ( Present(failed_zone) ) failed_zone = failure_zone
     kstep = max(1, maxval(mykstep))
 
     !XDIR XEXIT_DATA XASYNC(tid) &

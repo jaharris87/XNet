@@ -79,7 +79,7 @@ changed. The step-limit cases use `kstmx=1`. These use the real integrators,
 not injected failure flags or replacement solvers.
 
 Each failure call uses a short batch with inactive holes, checks the returned
-reason and original three/four-component IDs for active lane two, and requires
+reason and original three/four-component IDs for active zone two, and requires
 attempted counters and finite completed timing. The process ends after the
 host receives the fatal error, without inspecting physical results or making
 another library call. The runner requires no successful final output or

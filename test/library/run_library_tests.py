@@ -80,7 +80,7 @@ def check_fatal_burns(failure_exe: Path, xnet_exe: Path, data: Path, table: Path
             integrator_failed = f"{solver_name} TS Fail" in diagnostic
             if integrator_failed != (mode == "integrator"):
                 raise RuntimeError(f"standalone reached the wrong numerical failure path in {standalone}")
-            print(f"PASS {solver_name} {mode}: API reports lane/IDs/attempts; standalone terminates/files unchanged",
+            print(f"PASS {solver_name} {mode}: API reports zone/IDs/attempts; standalone terminates/files unchanged",
                   flush=True)
 
 

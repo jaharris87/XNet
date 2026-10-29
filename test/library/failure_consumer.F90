@@ -65,7 +65,7 @@ Program failure_consumer
     & loss,counters,timing,ierr,message,aux_x,aux_a,aux_z)
   Write(*,'(a,i0,2a)') 'BURN_STATUS ',ierr,' ',Trim(message)
   Call check(ierr == expected,'expected numerical failure returned to host')
-  Call check(Index(message,'Lane 2, zone IDs [101 -7 9001') == 1,'submitted active lane and original IDs')
+  Call check(Index(message,'Zone 2, zone IDs [101 -7 9001') == 1,'submitted active zone and original IDs')
   If ( nids == 4 ) Call check(Index(message,'9001 42]') > 0,'fourth original ID')
   Call check(Index(message,'host must terminate') > 0,'fatal host policy')
   Call check(All(counters(:,2) > 0),'attempted active counters')

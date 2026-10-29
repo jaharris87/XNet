@@ -163,7 +163,7 @@ Contains
     Character(*), Intent(out) :: message
     Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
 #ifdef XNET_EMBEDDING_CPU
-    Integer :: n, lane, kstep, evolve_status, failed_lane, id
+    Integer :: n, lane, kstep, evolve_status, failed_zone, id
     Real(dp), Allocatable :: loss_work(:)
     Real(dp) :: total_mass
     Type(xnet_timing_t) :: before
@@ -303,7 +303,7 @@ Contains
     ye_work = yestart
     y = ystart
     Allocate (loss_work(nzevolve))
-    Call full_net(kstep,loss_work,evolve_status,failed_lane)
+    Call full_net(kstep,loss_work,evolve_status,failed_zone)
     Do lane = 1, n
       If ( .not. active(lane) ) Cycle
       counters(:,lane) = ktot(:,lane)
@@ -332,12 +332,12 @@ Contains
       failure_reason = 'maximum integration steps reached; host must terminate'
     End Select
     If ( evolve_status /= 0 ) Then
-      Write(failure_ids,'(i0)') zone_id(1,failed_lane)
+      Write(failure_ids,'(i0)') zone_id(1,failed_zone)
       Do id = 2, Size(zone_id,1)
-        Write(id_component,'(i0)') zone_id(id,failed_lane)
+        Write(id_component,'(i0)') zone_id(id,failed_zone)
         failure_ids = Trim(failure_ids)//' '//Trim(id_component)
       EndDo
-      Write(failure_message,'(a,i0,4a)') 'Lane ',failed_lane,', zone IDs [', &
+      Write(failure_message,'(a,i0,4a)') 'Zone ',failed_zone,', zone IDs [', &
         & Trim(failure_ids),']: ',Trim(failure_reason)
       message = failure_message
     EndIf

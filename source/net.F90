@@ -29,7 +29,7 @@ Program net
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
-    & lun_diag, lun_ev, lun_stdout, lun_ts, tid, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
+    & lun_diag, lun_ev, lun_stdout, lun_ts, tid, gpu_queue, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
     & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls, iaux
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
@@ -177,7 +177,7 @@ Program net
   Allocate ( denu(nzevolve) )
   denu = 0.0
 
-  !XDIR XENTER_DATA XASYNC(tid) &
+  !XDIR XENTER_DATA XASYNC(gpu_queue) &
   !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext) &
   !XDIR XCOPYIN(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XCOPYIN(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
@@ -185,7 +185,7 @@ Program net
   !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
   !XDIR XCOPYIN(denu)
 
-  !XDIR XWAIT(tid)
+  !XDIR XWAIT(gpu_queue)
 
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
@@ -297,7 +297,7 @@ Program net
       EndDo
     EndIf
 
-    !XDIR XUPDATE XASYNC(tid) &
+    !XDIR XUPDATE XASYNC(gpu_queue) &
     !XDIR XDEVICE(xext,aext,zext) &
     !XDIR XDEVICE(lzactive,tdel,t,t9,rho,ye,y,nt) &
     !XDIR XDEVICE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
@@ -311,7 +311,7 @@ Program net
 
     ! Test how well sums of fluxes match abundances changes
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(y)
       Do izb = zb_lo, zb_hi
         If ( lzactive(izb) ) Then
@@ -342,7 +342,7 @@ Program net
   If ( idiag >= 0 ) Close(lun_diag)
   !$omp end parallel
 
-  !XDIR XEXIT_DATA XASYNC(tid) &
+  !XDIR XEXIT_DATA XASYNC(gpu_queue) &
   !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
   !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
@@ -350,7 +350,7 @@ Program net
   !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
   !XDIR XDELETE(denu)
 
-  !XDIR XWAIT(tid)
+  !XDIR XWAIT(gpu_queue)
 
   Call gpu_finalize()
 

@@ -9,19 +9,30 @@ make BUILD_NAME=embedding -j libxnet
 The archive is `build/embedding/lib/libxnet.a`; modules are in
 `build/embedding/mod`. The generated `build/embedding/xnet-config.mk`
 records the compiler, module path, compile/link flags, archive, and required
-external libraries. Use the same compiler and compatible precision/runtime
-options for the application. The external example under `test/library/`
+external libraries. `XNET_CPPFLAGS` supplies the XNet header directory and the
+selected build definitions for callers that preprocess `xnet_macros.fh`.
+Use the same compiler and compatible precision/runtime options for the
+application. The external example under `test/library/`
 links through these outputs without compiling XNet sources.
 
-The supported initial configuration is a dense serial CPU build with MPI,
-OpenMP, and GPU modes off. Other builds retain their standalone programs;
-the embedding procedures return `xnet_unsupported`. This does not qualify
-CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
+Embedding requires `MATRIX_SOLVER=dense`, `MPI_MODE=OFF`, and
+`OPENMP_MODE=OFF`. The CPU configuration has `GPU_MODE=OFF`. GPU builds may
+select CUDA/cuBLAS or HIP/ROCm with exactly one of OpenACC and OpenMP target
+offload enabled. Other library configurations return `xnet_unsupported`;
+standalone build selections are unchanged. Calls use one host thread and one
+non-reentrant library instance. When host OpenMP is enabled by the offload
+compiler, `omp_get_max_threads()` must be one; set `OMP_NUM_THREADS=1` before
+starting the application.
+
+The serial CPU library tests exercise the public API. GPU embedding is
+implemented but has not yet been executed on GPU hardware. Prior standalone
+GPU results do not qualify this API, an application EOS, or a complete
+CHIMERA/Flash-X integration.
 
 ## Application thermodynamics adapters
 
 Applications with their own EOS may supply a small
-`xnet_eos_adapter` module when building the library. XNet keeps its composition
+`xnet_eos_interface` module when building the library. XNet keeps its composition
 moments, screening, scalar/vector masks, scratch, and internal-unit
 conversions in `source/xnet_eos.F90`:
 
@@ -35,7 +46,7 @@ Build the host EOS modules first, using the same compiler and compatible
 precision options. `EOS_SOURCE` names one free-form Fortran source containing
 the application thermodynamics adapter. Its filename must not use the stem
 `xnet_eos`, which is reserved for XNet's common EOS module; use a name such as
-`xnet_eos_chimera.F90` or `xnet_eos_adapter.F90`. `EOS_MODULE_DIR` is optional
+`xnet_eos_chimera.F90` or `xnet_eos_interface.F90`. `EOS_MODULE_DIR` is optional
 if the adapter needs no additional module directory. Keep host modules in a separate
 directory from this XNet build's modules. XNet's current module directory is
 searched before the host directory, so older XNet modules in an application
@@ -46,19 +57,19 @@ path recompiles the adapter.
 The module supplies three procedures, using `dp` from `xnet_types`:
 
 ```fortran
-Subroutine eos_adapter_initialize(nspecies,names,a,z)
+Subroutine xnet_eos_interface_initialize(nspecies,names,a,z)
   Integer, Intent(in) :: nspecies
   Character(*), Intent(in) :: names(nspecies)
   Real(dp), Intent(in) :: a(nspecies), z(nspecies)
 End Subroutine
 
-Subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+Subroutine xnet_eos_interface_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
   Integer, Intent(in) :: nspecies
   Real(dp), Intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
   Real(dp), Intent(out) :: cv, eta, detadt
 End Subroutine
 
-Subroutine eos_adapter_finalize
+Subroutine xnet_eos_interface_finalize
 End Subroutine
 ```
 
@@ -90,7 +101,7 @@ arrays and exposes no host derived types. The bundled adapter in
 an application supplies its own calls and ownership hooks.
 
 The host must prepare its EOS data before the adapter first uses them. If
-`eos_adapter_initialize` reads host EOS data, those data must be ready before
+`xnet_eos_interface_initialize` reads host EOS data, those data must be ready before
 `xnet_initialize`. If the hook only prepares species mapping or other
 table-independent storage, the host may load its tables afterward, but before
 the first burn or NSE query. This permits CHIMERA's existing order: load
@@ -104,12 +115,13 @@ application links its own EOS objects and dependencies alongside
 discovered automatically. Module includes are recorded in `xnet-config.mk`.
 
 `EOS=EXTERNAL` builds `libxnet` and the EOS-independent `net_setup` utility,
-not standalone `xnet` or `xnse`. The initial embedding support remains dense
-serial CPU only. Supplying a thermodynamics module does not by itself validate
-a full CHIMERA/Flash-X adapter or enable threaded/accelerator embedding. The
-default adapter retains XNet's device-routine directives. Application adapters
-need their own device implementation and tests before accelerator embedding
-can be claimed.
+not standalone `xnet` or `xnse`. GPU burns require
+`xnet_eos_interface_evaluate` and every routine it calls to be callable on the
+selected device. The bundled interface retains XNet's device-routine
+directives; an application interface must provide its own device procedures
+and prepare any device tables before their first use. Its scalar host
+procedures must also remain available for NSE queries. Supplying this module
+does not by itself validate the application integration.
 
 ## Initialize, burn and finalize
 
@@ -123,6 +135,7 @@ controls%nzbatchmx = 16
 controls%idiag = -2
 Call xnet_initialize(controls,network,ierr,message)
 ! Check ierr before using network or burning.
+! Host scientific arrays are current; data_on_device may be omitted or false.
 Call xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
   & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken)
 ! Check ierr. A numerical failure requires the host's fatal/MPI shutdown, not another burn.
@@ -148,6 +161,78 @@ binding energies, and mass excesses from the selected network. Both energy
 arrays use the MeV values in `nuclear_data`. The caller owns this metadata;
 it remains usable after finalization. Failed initialization does not produce
 usable metadata.
+
+## GPU resources and array location
+
+The application selects its device in both the vendor runtime and the
+directive runtime before initialization. XNet checks that those selections
+agree and leaves the selected device unchanged. Keep that device selected
+through finalization.
+
+The optional final `gpu_resources` argument to `xnet_initialize` has type
+`xnet_gpu_resources_t`, exported by `xnet_api`. Its `device` and `queue`
+fields are integers; `stream` and `blas_handle` are `C_PTR` vendor resources.
+For example, after the application creates and associates its stream and
+cuBLAS or hipBLAS handle:
+
+```fortran
+Use xnet_api, Only: xnet_gpu_resources_t
+Type(xnet_gpu_resources_t) :: gpu_resources
+
+gpu_resources%device = host_device
+gpu_resources%stream = host_stream
+gpu_resources%blas_handle = host_blas_handle
+gpu_resources%queue = host_queue
+Call xnet_initialize(controls,network,ierr,message,gpu_resources=gpu_resources)
+```
+
+Its device must match the current application device and its BLAS handle
+must already use the supplied stream. For OpenACC, `queue` must already
+identify that same stream.
+XNet borrows these resources, preserves their associations, and does not
+replace or destroy them. It does not create or change the application's
+OpenACC queue association.
+
+When `gpu_resources` is omitted in a GPU build, XNet creates its own BLAS
+handle on the current device. OpenACC uses the runtime's stream for queue
+one; OpenMP offload uses a stream created by XNet. Finalization destroys only
+the resources XNet created. Supplying GPU resources to a CPU build returns
+`xnet_unsupported`.
+
+The optional final logical `data_on_device` argument to `xnet_burn_batch`
+selects the location of the scientific arrays. Omitted or false means their
+host values are current. This mode retains host array-section support and
+returns host results, including when caller device mappings contain older
+values. It neither reads nor refreshes those caller device mirrors.
+
+True means density, temperature, Ye, mass fractions, restart hints, optional
+auxiliary arrays, and neutrino loss are ordinary contiguous arrays already
+mapped on the selected device. XNet checks their mappings, validates active
+values on the device, and prepares and extracts scientific values there.
+The host copies may be stale. Raw device pointers and noncontiguous device
+sections are not accepted. Existing caller mappings survive the call.
+
+```fortran
+! The application has mapped these scientific arrays and made their device values current.
+Call xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
+  & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z, &
+  & max_steps_taken,data_on_device=.true.)
+! Scientific results are ready on the device; counters, status and timing are ready on the host.
+```
+
+`active`, `zone_id`, `counters`, `ierr`, `message`, `timing`, and
+`max_steps_taken` always remain host arguments; `dt_s` is a host scalar.
+Both modes complete their work before returning. Device mode does not copy
+scientific results through host arrays; requested diagnostics may copy
+internal state for printing. The application orders its preceding work on
+the supplied stream or completes it before calling XNet. CPU builds reject
+`data_on_device=.true.`.
+
+Call `xnet_finalize` before destroying the application's GPU resources or
+EOS data. It releases XNet's device mappings before their CPU allocations
+and restores the resource slots used by the library. It does not initialize
+or finalize application MPI, reset the selected device, or finalize the GPU
+runtime.
 
 ## Batch arguments
 
@@ -197,14 +282,20 @@ the maximum accepted outer integration steps taken by an active lane in the
 batch. It is zero for an all-inactive batch or any non-success return. This
 differs from `counters(1,:)`, which includes internal timestep retries. Flash-X
 uses the accepted step count for `MTSB_VAR` and `Grid_setWork` work estimates.
-Existing calls may omit this final argument.
+Existing calls may omit `max_steps_taken` and `data_on_device`.
 
 ## Status and remaining limits
 
 `xnet_success=0`, `xnet_invalid=1`, `xnet_lifecycle_error=2`, and
 `xnet_unsupported=3` describe the checked public paths. Validate configuration,
 dimensions, finite active inputs and lifecycle order before a burn. Calls
-rejected by validation preserve in/out physical state and return zero loss/counters.
+rejected by host-input validation preserve in/out physical state and return
+zero loss/counters. Device-input validation does the same in device memory
+when the required contiguous mappings are present. A missing mapping,
+noncontiguous device descriptor, or changed device can prevent scientific
+output initialization; use only the returned host status and diagnostics for
+those rejected requests.
+
 No automatic renormalization or repair is performed.
 
 `xnet_lifecycle_error` means that XNet is already initialized when initialization
@@ -236,11 +327,13 @@ arithmetic are not covered by these numerical status values and may still
 terminate execution. Future fallback to another integration method is
 separate work, not a promise that a failed library instance can be reused.
 
-Finalization releases CPU allocations owned by XNet and calls the selected
-thermodynamics adapter's finalizer. Built-in standalone providers release their
-own EOS storage; an application-supplied adapter leaves host-owned EOS state intact.
-The API never initializes/finalizes MPI or a GPU runtime.
-MPI, OpenMP, and caller-owned GPU embedding remain unqualified.
+Finalization releases allocations and mappings owned by XNet and calls the
+selected thermodynamics interface's finalizer. Built-in standalone providers
+release their own EOS storage; an application interface leaves host-owned EOS
+state intact.
+The API never initializes/finalizes application MPI or a GPU runtime.
+MPI and host-threaded library builds remain unsupported. GPU execution,
+application MPI integration, and performance require separate validation.
 
 ## NSE composition
 
@@ -255,8 +348,10 @@ Call xnet_nse_composition(density,temperature,ye,nse_fraction,ierr,message)
 Density is a scalar in g/cm^3, temperature is in K, and Ye is dimensionless.
 Density and temperature must be finite and positive; Ye must be finite and
 between zero and one. The initialized network and its existing screening
-settings apply. Calls share the same single-instance, non-reentrant CPU
-lifetime as burns; no additional initialization or EOS table loading occurs.
+settings apply. These scalar host calls share the same single-instance,
+non-reentrant lifetime as burns, including in a GPU library build. Their
+arguments and copied results are host values; they have no device-residency
+flag. No additional initialization or EOS table loading occurs.
 
 The result is a copied vector `A*ynse` in XNet species order, matching the
 mass-number-weighted abundances used by CHIMERA's existing NSE wrapper. It is

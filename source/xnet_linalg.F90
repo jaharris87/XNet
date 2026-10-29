@@ -12,7 +12,7 @@ Module xnet_linalg
   Use, Intrinsic :: iso_c_binding
   Use xnet_types, Only: dp
   Use xnet_constants, Only: pi
-  Use xnet_controls, Only: tid
+  Use xnet_controls, Only: tid, gpu_queue
   Use xnet_util, Only: xnet_terminate
   Use xnet_gpu, Only: &
     mydevice, &
@@ -1715,7 +1715,7 @@ Contains
         db(i) = dev_ptr( pb(1,osb) )
         dipiv(i) = dev_ptr( pipiv(osa) )
       End Do
-      !XDIR XENTER_DATA XASYNC(tid) &
+      !XDIR XENTER_DATA XASYNC(gpu_queue) &
       !XDIR XCOPYIN(da,db,dipiv)
 #endif
 
@@ -1726,7 +1726,7 @@ Contains
 #endif
 
 #if defined(XNET_LA_CUBLAS) || defined(XNET_LA_MAGMA)
-      !XDIR XEXIT_DATA XASYNC(tid) &
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(da,db,dipiv)
 #endif
 

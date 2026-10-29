@@ -9,7 +9,7 @@ module cublasf
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
 
-  type(c_ptr) :: cublas_handle
+  type(c_ptr) :: cublas_handle = c_null_ptr
   !$omp threadprivate(cublas_handle)
 
   enum, bind(c) !:: cublasStatus_t

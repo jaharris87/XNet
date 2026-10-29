@@ -146,8 +146,9 @@ Module xnet_controls
 
   ! Execution and runtime bookkeeping
   Integer :: myid, nproc, tid, nthread ! Task and thread identifiers and counts
+  Integer :: gpu_queue = 1             ! Directive queue; a host may supply its existing OpenACC queue
   Character(Len=1) :: sweep            ! Current hydrodynamic sweep: x, y, or z
-  !$omp threadprivate(tid,sweep)
+  !$omp threadprivate(tid,sweep,gpu_queue)
 
   ! Accelerator kernels use these controls on the device.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
@@ -952,9 +953,9 @@ Contains
     zb_hi = zb_offset+nzbatchmx
     !$omp end parallel
 
-    !XDIR XUPDATE XASYNC(tid) &
+    !XDIR XUPDATE XASYNC(gpu_queue) &
     !XDIR XDEVICE(iheat,iscrn,iconvc,ymin)
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(lzactive,iweak,kmon,ktot)
     Return
   End Subroutine apply_xnet_controls
@@ -1162,8 +1163,13 @@ Contains
     Return
   End Subroutine broadcast_xnet_controls
   Subroutine controls_finalize
-    ! Release XNet-owned CPU allocations.
+    ! Release XNet-owned device mappings before their CPU allocations.
     Implicit None
+    If ( Allocated(lzactive) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(lzactive,iweak,kmon,ktot)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
     If ( Allocated(zone_id) ) Deallocate (zone_id)
     If ( Allocated(iweak) ) Deallocate (iweak)
     If ( Allocated(lzactive) ) Deallocate (lzactive)

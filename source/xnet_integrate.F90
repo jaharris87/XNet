@@ -26,7 +26,7 @@ Contains
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
       & rhot, t9dot, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
-      & ymin, szbatch, zb_lo, zb_hi, lzactive, tid
+      & ymin, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -55,12 +55,12 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
     !XDIR XCOPYIN(mask)
 
     ! Retain old values of timestep and thermo and calculate remaining time
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,mask_init,tdel,tdel_old)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -70,12 +70,12 @@ Contains
         mask_init(izb) = .false.
       EndIf
     EndDo
-    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(mask_init)
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,mask_init,t,tt,tstop,y,yo,ydot,t9,t9o,t9dot,ints,intso,nh) &
     !XDIR XPRESENT(tdel,tdel_next,tdel_old,tdelstart,tdel_stop,tdel_dy,tdel_dt9) &
     !XDIR XPRIVATE(tdel_init,rtau_y,rtau_t9,changey,changet9)
@@ -171,7 +171,7 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(tdel,tdel_old,tdel_stop,tdel_next,tdel_dy,tdel_dt9) &
       !XDIR XHOST(ints,intso,y,t)
       Do izb = zb_lo, zb_hi
@@ -186,7 +186,7 @@ Contains
           If ( ints(izb) /= intso(izb) ) Then
             Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
             intso(izb) = ints(izb)
-            !XDIR XUPDATE XASYNC(tid) &
+            !XDIR XUPDATE XASYNC(gpu_queue) &
             !XDIR XDEVICE(intso(izb))
           EndIf
         EndIf
@@ -198,7 +198,7 @@ Contains
 
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) .and. nh(izb) > 1 ) Then
@@ -244,7 +244,7 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 2 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(dtherm,tdel,t9t,rhot)
         Do izb = zb_lo, zb_hi
           If ( mask(izb) .and. nh(izb) > 1 ) Then
@@ -260,7 +260,7 @@ Contains
       EndIf
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
     !XDIR XDELETE(mask)
 
@@ -271,7 +271,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the value of the iweak flag to control the treatment of strong reactions.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Implicit None
 
@@ -292,10 +292,10 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask,t9)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,iweak)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -310,7 +310,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask,t9)
 
     Return
@@ -322,7 +322,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_conditions, Only: t9t, rhot, yet, cv, etae, detaedt9
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_eos, Only: eos_interface
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_eos
     Use xnet_types, Only: dp
@@ -345,14 +345,14 @@ Contains
     start_timer = xnet_wtime()
     timer_eos = timer_eos - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
     Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
       & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
@@ -373,7 +373,7 @@ Contains
     Use xnet_abundances, Only: yt, ydot
     Use xnet_conditions, Only: cv, t9t, t9dot
     Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
-      & lzactive, tid
+      & lzactive, tid, gpu_queue
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_deriv
     Use xnet_types, Only: dp
     Implicit None
@@ -396,12 +396,12 @@ Contains
     start_timer = xnet_wtime()
     timer_deriv = timer_deriv - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
-    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(2) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,la,le,ydot,yt,b1,b2,b3,b4,mu1,mu2,mu3,mu4) &
     !XDIR XPRESENT(a1,a2,a3,a4,csect1,csect2,csect3,csect4) &
     !XDIR XPRESENT(n11,n21,n22,n31,n32,n33,n41,n42,n43,n44) &
@@ -470,7 +470,7 @@ Contains
 
     If ( iheat > 0 ) Then
 
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,ydot,t9dot,cv,mex) &
       !XDIR XPRIVATE(sdot)
       Do izb = zb_lo, zb_hi
@@ -486,7 +486,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -496,7 +496,7 @@ Contains
 
     ! Separate loop for diagnostics so compiler can properly vectorize
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(yt,t9t,ydot,t9dot,b1,b2,b3,b4)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -557,7 +557,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
@@ -575,7 +575,7 @@ Contains
     Use xnet_conditions, Only: tt, rhot, t9t, yet
     Use xnet_constants, Only: third, two3rd, four3rd, five3rd
     Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, &
-      & zb_lo, zb_hi, lzactive, tid
+      & zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_ffn, Only: ffn_rate, rffn, dlnrffndt9
     Use xnet_linalg, Only: MatrixMatrixMultiply, MatrixVectorMultiply
     Use xnet_nnu, Only: nnu_rate, nnuspec, rnnu
@@ -616,7 +616,7 @@ Contains
     nr3 = nreac(3)
     nr4 = nreac(4)
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(t09,dt09,ene) &
     !XDIR XCOPYIN(mask)
 
@@ -641,7 +641,7 @@ Contains
     Call partf(t9t(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate necessary thermodynamic moments
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,ene,t09,dt09,t9t,rhot,yet)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -704,7 +704,7 @@ Contains
         EndDo
       EndIf
     Else
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(rc1,rc2,rc3,rc4) &
       !XDIR XPRESENT(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !XDIR XPRESENT(mask,t09,dt09)
@@ -763,7 +763,7 @@ Contains
     EndIf
 
     ! Calculate cross sections
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(n1i,n2i,n3i,n4i,iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XPRESENT(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
     !XDIR XPRESENT(csect1,csect2,csect3,csect4) &
@@ -927,7 +927,7 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(csect1,csect2,csect3,csect4) &
       !XDIR XHOST(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
       !XDIR XHOST(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
@@ -973,7 +973,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(t09,dt09,ene) &
     !XDIR XDELETE(mask)
 

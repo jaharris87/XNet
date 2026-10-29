@@ -9,7 +9,7 @@ module cudaf
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
 
-  type(c_ptr), target :: stream
+  type(c_ptr), target :: stream = c_null_ptr
   !$omp threadprivate(stream)
 
   enum, bind(c) !:: cudaMemcpyKind
@@ -261,6 +261,13 @@ module cudaf
       use, intrinsic :: iso_c_binding
       integer(c_int) :: deviceCount
     end function cudaGetDeviceCount
+
+    integer(c_int) function &
+        & cudaGetDevice(device) &
+        & bind(c, name="cudaGetDevice")
+      use, intrinsic :: iso_c_binding
+      integer(c_int) :: device
+    end function cudaGetDevice
 
     !integer(c_int) function &
     !    & cudaGetDeviceProperties(prop, device) &

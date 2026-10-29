@@ -17,13 +17,14 @@ module hipf
     rocsolverCheck
   use hipfort, only: &
     hipGetDeviceCount, &
+    hipGetDevice, &
     hipSetDevice, &
     hipStreamCreate, &
     hipStreamDestroy, &
     hipStreamSynchronize, &
     hipDeviceSynchronize
 
-  type(c_ptr), target :: stream
+  type(c_ptr), target :: stream = c_null_ptr
   !$omp threadprivate(stream)
 
 end module hipf

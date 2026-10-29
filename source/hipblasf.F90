@@ -34,7 +34,7 @@ module hipblasf
     hipblasDgeam, &
     hipblasDdgmm
 
-  type(c_ptr) :: hipblas_handle
+  type(c_ptr) :: hipblas_handle = c_null_ptr
   !$omp threadprivate(hipblas_handle)
 
 end module hipblasf

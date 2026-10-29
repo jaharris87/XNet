@@ -51,17 +51,17 @@ def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> No
     ))
     supplied_eos = work / "application_eos.F90"
     supplied_eos.write_text(
-        """module xnet_eos_adapter
+        """module xnet_eos_interface
   use xnet_types, only: dp
   use host_eos_marker, only: marker
   implicit none
 contains
-  subroutine eos_adapter_initialize(nspecies,names,a,z)
+  subroutine xnet_eos_interface_initialize(nspecies,names,a,z)
     integer, intent(in) :: nspecies
     character(*), intent(in) :: names(nspecies)
     real(dp), intent(in) :: a(nspecies), z(nspecies)
   end subroutine
-  subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+  subroutine xnet_eos_interface_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
     integer, intent(in) :: nspecies
     real(dp), intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
     real(dp), intent(out) :: cv, eta, detadt
@@ -69,7 +69,7 @@ contains
     eta = 0.0_dp
     detadt = 0.0_dp
   end subroutine
-  subroutine eos_adapter_finalize
+  subroutine xnet_eos_interface_finalize
   end subroutine
 end module
 """,
@@ -89,6 +89,7 @@ end module
         assert not (external / "obj" / "eos" / f"{unused}.o").exists()
     exported = (external / "xnet-config.mk").read_text(encoding="utf-8")
     assert f"XNET_MODFLAGS := -I{external / 'mod'} -I{host_modules}\n" in exported
+    assert f"XNET_CPPFLAGS := -I{SOURCE} " in exported
     external_config = (external / "config.txt").read_text(encoding="utf-8")
     assert f"EOS_SOURCES={SOURCE / 'xnet_eos.F90'} {supplied_eos}\n" in external_config
     assert f"-I{host_modules}" in external_config

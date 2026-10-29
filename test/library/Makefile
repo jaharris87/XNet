@@ -5,9 +5,11 @@ include $(XNET_CONFIG)
 
 BUILD_DIR ?= build
 PROGRAMS := $(BUILD_DIR)/api_consumer $(BUILD_DIR)/legacy_reference $(BUILD_DIR)/failure_consumer
+XNET_CPP ?= cpp
 
-.PHONY: all test
+.PHONY: all test gpu_consumer
 all: $(PROGRAMS)
+gpu_consumer: $(BUILD_DIR)/gpu_consumer
 
 $(BUILD_DIR):
 	mkdir -p '$@'
@@ -24,6 +26,13 @@ $(BUILD_DIR)/legacy_reference.o: legacy_reference.F90 $(BUILD_DIR)/consumer_fixt
 $(BUILD_DIR)/failure_consumer.o: failure_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
 	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
 
+$(BUILD_DIR)/gpu_consumer.f90: gpu_consumer.F90 ../../source/xnet_macros.fh $(XNET_CONFIG) | $(BUILD_DIR)
+	@case '$(XNET_CPPFLAGS)' in *-DXNET_GPU*) ;; *) echo 'gpu_consumer requires a GPU-enabled libxnet' >&2; exit 2 ;; esac
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu_consumer.o: $(BUILD_DIR)/gpu_consumer.f90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+
 $(BUILD_DIR)/api_consumer: $(BUILD_DIR)/api_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
@@ -31,6 +40,9 @@ $(BUILD_DIR)/legacy_reference: $(BUILD_DIR)/legacy_reference.o $(BUILD_DIR)/cons
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 $(BUILD_DIR)/failure_consumer: $(BUILD_DIR)/failure_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+$(BUILD_DIR)/gpu_consumer: $(BUILD_DIR)/gpu_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 test: all

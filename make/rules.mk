@@ -63,6 +63,7 @@ $(XNET_CONFIG_MK): $(CONFIG) $(BUILD_LOGIC_INPUTS)
 	  'XNET_FC := $(call escape_config_mk,$(XNET_FC))' \
 	  'XNET_MOD_DIR := $(call escape_config_mk,$(XNET_MOD_DIR))' \
 	  'XNET_MODFLAGS := $(call escape_config_mk,$(XNET_MODFLAGS))' \
+	  'XNET_CPPFLAGS := $(call escape_config_mk,$(XNET_CPPFLAGS))' \
 	  'XNET_ARCHIVE := $(call escape_config_mk,$(XNET_ARCHIVE))' \
 	  'XNET_FFLAGS := $(call escape_config_mk,$(XNET_FFLAGS))' \
 	  'XNET_LDR := $(call escape_config_mk,$(XNET_LDR))' \

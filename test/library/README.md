@@ -1,4 +1,6 @@
-# External serial CPU library tests
+# External library tests
+
+## Serial CPU checks
 
 Build the production archive and network preprocessor, then compile and run
 the callers through the build's exported compiler/link settings:
@@ -113,3 +115,99 @@ retry, rollback, failed-instance reuse, or successful-lane continuation.
 Reader/provider/allocation failures, singular solves, arbitrary nonfinite
 arithmetic, concurrent instances, MPI, OpenMP, GPU and performance remain
 outside these tests' claims.
+
+## GPU consumer
+
+`gpu_consumer.F90` is an opt-in hardware caller for the CUDA/cuBLAS and
+HIP/ROCm dense archives. GPU execution of this consumer is pending; successful
+CPU tests and preprocessing or compiler checks do not establish a GPU result.
+The normal `test` target above remains the serial CPU suite. The
+`gpu_consumer` target compiles and links the GPU caller without running it.
+
+For example, with an installed NVHPC/CUDA environment, build from the
+repository root:
+
+```sh
+make BUILD_NAME=library-gpu PE_ENV=NVHPC EOS=STARKILLER LAPACK_VER=NETLIB \
+  MATRIX_SOLVER=dense MPI_MODE=OFF OPENMP_MODE=OFF GPU_MODE=ON \
+  GPU_BACKEND=CUDA GPU_LAPACK_VER=CUBLAS OPENACC_MODE=ON OPENMP_OL_MODE=OFF \
+  -j libxnet net_setup
+make -C test/library XNET_CONFIG=../../build/library-gpu/xnet-config.mk \
+  BUILD_DIR=build-gpu gpu_consumer
+```
+
+Supply `CUDA_DIR` when the build cannot locate the installed toolkit. For a
+HIP/ROCm OpenMP target build, use the facility compiler and numerical
+libraries, `GPU_BACKEND=HIP`, `GPU_LAPACK_VER=ROCM`, `OPENACC_MODE=OFF`, and
+`OPENMP_OL_MODE=ON`, with the installed `HIPFORT_DIR` and `ROCM_DIR`. These
+are build selections, not a claim that every compiler/library combination
+works. Consult the current facility instructions for modules and placement.
+
+The exported `XNET_CPPFLAGS` supplies `xnet_macros.fh`'s include directory and
+the archive's actual accelerator definitions. The caller Makefile uses those
+flags directly; no separate `GPU_DEFINES` setting is needed. The caller uses
+the same compiler, modules and external libraries as the archive.
+
+The input directories must contain the prepared `sunet`, `netwinv`, `nets3`,
+`nets4`, and `match_data` files. The serial runner's `Data_alpha` and
+`Data_SN160` copies can be reused on the same platform. Alternatively, prepare
+fresh copies of those public fixtures with the selected build's `net_setup`:
+
+```sh
+xnet_root=$PWD
+gpu_run=$(mktemp -d "${TMPDIR:-/tmp}/xnet-library-gpu.XXXXXX")
+cp -R test/Data_alpha "$gpu_run/Data_alpha"
+cp -R test/Data_SN160 "$gpu_run/Data_SN160"
+for network in Data_alpha Data_SN160; do
+  (
+    cd "$gpu_run/$network"
+    printf '%s\n' 'Public GPU embedding-library tests' | \
+      "$xnet_root/build/library-gpu/bin/net_setup" > "$gpu_run/net_setup_$network.log" 2>&1
+  )
+done
+ln -s "$xnet_root/tools/starkiller-helmholtz/helm_table.dat" "$gpu_run/helm_table.dat"
+```
+
+On a managed facility, run inside an approved compute allocation using its
+launcher and GPU placement. The following are the executable arguments for
+the five existing network/integrator/heating combinations; they do not
+submit a job. The final integer chooses the application device, defaulting
+to zero when omitted:
+
+```sh
+(
+  set -e
+  cd "$gpu_run"
+  export OMP_NUM_THREADS=1
+  export OMP_TARGET_OFFLOAD=MANDATORY
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_alpha 1 0 0 > alpha-be-heat0.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_alpha 1 1 0 > alpha-be-heat1.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_alpha 3 0 0 > alpha-bdf-heat0.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_SN160 1 1 0 > SN160-be-heat1.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_SN160 3 1 0 > SN160-bdf-heat1.log 2>&1
+)
+```
+
+Each process requires a real device region and checks that XNet preserves
+the application's selected device. It initializes once with XNet-owned
+resources, then again with an application-owned stream and BLAS handle.
+After borrowed-resource finalization, a vendor GEMM checks that the handle
+and stream still work. The OpenACC case also checks the caller's queue
+association.
+
+For each resource lifetime, the caller runs host-array and mapped-device
+burns through first, repeated, short, inactive-hole, and all-inactive batches.
+It deliberately makes the unused host or device mirrors disagree, compares
+scientific results, counters and accepted step counts across the four paths
+using the same archive, and checks inactive state preservation. Device
+results are read immediately after the API returns without another stream
+wait. Timings must be finite and nonnegative; they are not compared across
+calls.
+
+Logs contain raw metadata, states, counters, accepted step counts and timings,
+plus `GPU_CONSUMER_CHECKS_COMPLETED` on completion. Keep these files outside
+the checkout with the command, source revision, compiler/runtime versions,
+and direct process status. The checks compare API paths on one backend;
+they do not supply an independent scientific reference, CPU/GPU tolerance
+policy, performance result, or validation of GPU numerical-failure reporting.
+Existing CPU comparisons and failure policy are unchanged.

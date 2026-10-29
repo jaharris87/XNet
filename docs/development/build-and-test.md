@@ -193,9 +193,9 @@ recipe, not a support claim.
 
 `make -j libxnet` builds `lib/libxnet.a`, module files, and `xnet-config.mk`
 under the selected build directory. The archive excludes the standalone and
-utility main programs. The initial public API supports dense serial CPU
-calls; see [embedding.md](embedding.md) for data conventions, external linking,
-and the remaining fatal error paths.
+utility main programs. See [embedding.md](embedding.md) for the public API,
+tested configurations, data conventions, external linking, and the remaining
+fatal error paths.
 
 ## Focused component and executable tests
 

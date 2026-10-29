@@ -49,6 +49,7 @@ Module xnet_controls
   Integer :: nzevolve = 0
   Integer :: szbatch = 1
   Integer :: tid = 1
+  Integer :: gpu_queue = 1
   Integer :: zb_hi = 1
   Integer :: zb_lo = 1
   Integer, Allocatable :: kmon(:,:), ktot(:,:)

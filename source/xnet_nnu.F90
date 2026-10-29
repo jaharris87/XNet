@@ -77,7 +77,7 @@ Contains
     ! From this, the neutrino species involved is determined.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
-    Use xnet_controls, Only: idiag, lun_diag, tid
+    Use xnet_controls, Only: idiag, lun_diag, tid, gpu_queue
     Implicit None
 
     ! Input variables
@@ -115,7 +115,7 @@ Contains
       Write(lun_diag,"(3i6)") (i,irl(i),nuspec(i),i=1,nnnu)
     EndIf
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(irl,nuspec)
 
     Return
@@ -186,7 +186,7 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch, tid
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch, tid, gpu_queue
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -216,13 +216,13 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(rate) &
     !XDIR XCOPYIN(mask,time)
 
     ! Only interpolate if neutrino reactions are on
     If ( ineutrino == 0 ) Then
-      !XDIR XLOOP(3) XASYNC(tid) &
+      !XDIR XLOOP(3) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,rate)
       Do izb = zb_lo, zb_hi
         Do j = 1, nnuspec
@@ -236,7 +236,7 @@ Contains
     Else
 
       ! Interpolate flux and neutrino temperature from time history
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,time,ltnu,fluxnu,th,nh,tmevnu,fluxcms)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -246,7 +246,7 @@ Contains
       EndDo
 
       ! Compute neutrino cross sections
-      !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(2) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,sigmanu,ltnu,fluxnu,nuspec,rate) &
       !XDIR XPRIVATE(it)
       Do izb = zb_lo, zb_hi
@@ -296,7 +296,7 @@ Contains
     EndIf
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(fluxnu,rate)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -309,7 +309,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(rate) &
     !XDIR XDELETE(mask,time)
 
@@ -317,8 +317,18 @@ Contains
   End Subroutine nnu_rate
 
   Subroutine nnu_finalize
-    ! Release XNet-owned CPU allocations.
+    ! Release mappings established by nnu_match and read_reaction_data.
+    Use xnet_controls, Only: gpu_queue
     Implicit None
+    If ( Allocated(irl) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(irl,nuspec)
+    EndIf
+    If ( Allocated(sigmanu) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(sigmanu,ltnu,fluxnu,rnnu)
+    EndIf
+    !XDIR XWAIT(gpu_queue)
     If ( Allocated(tmevnu) ) Deallocate (tmevnu)
     If ( Allocated(fluxcms) ) Deallocate (fluxcms)
     If ( Allocated(ltnu) ) Deallocate (ltnu)

@@ -1,4 +1,4 @@
-! Supported single-instance constant-condition CPU embedding procedures.
+! Supported single-instance CPU embedding procedures.
 #include "xnet_macros.fh"
 
 Module xnet_api
@@ -11,7 +11,7 @@ Module xnet_api
   Integer, Parameter, Public :: xnet_lifecycle_error = 2, xnet_unsupported = 3
   Integer, Parameter, Public :: xnet_integrator_failure = 4, xnet_step_limit = 5
   Public :: dp, xnet_controls_t, set_xnet_controls_defaults
-  Public :: xnet_initialize, xnet_burn_batch, xnet_finalize
+  Public :: xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize
 
   Type, Public :: xnet_network_t
     Character(5), Allocatable :: names(:)
@@ -350,6 +350,53 @@ Contains
 #endif
     Return
   End Subroutine xnet_burn_batch
+
+  Subroutine xnet_nse_composition(density,temperature,ye,mass_fraction,ierr,message)
+    ! Return a copy of A*ynse in network order for density in g/cm^3 and temperature in K.
+    ! Existing NSE solver failures may still terminate the host application.
+#ifdef XNET_EMBEDDING_CPU
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
+    Use nuclear_data, Only: ny, aa
+    Use xnet_nse, Only: nse_solve, ynse
+#endif
+    Implicit None
+    Real(dp), Intent(in) :: density, temperature, ye
+    Real(dp), Intent(out) :: mass_fraction(:)
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
+
+    mass_fraction = 0.0_dp
+    message = ' '
+#ifdef XNET_EMBEDDING_CPU
+    ierr = xnet_lifecycle_error
+    If ( .not. api_initialized ) Then
+      message = 'Initialize XNet before requesting NSE composition'
+      Return
+    EndIf
+    ierr = xnet_invalid
+    If ( Size(mass_fraction) /= ny ) Then
+      message = 'NSE composition extent must match the initialized network'
+      Return
+    EndIf
+    If ( .not. ieee_is_finite(density) .or. .not. ieee_is_finite(temperature) .or. &
+      & .not. ieee_is_finite(ye) ) Then
+      message = 'NSE density, temperature and Ye must be finite'
+      Return
+    EndIf
+    If ( density <= 0.0_dp .or. temperature <= 0.0_dp .or. ye < 0.0_dp .or. ye > 1.0_dp ) Then
+      message = 'NSE density and temperature must be positive and Ye must be in [0,1]'
+      Return
+    EndIf
+    Call nse_solve(density,temperature*1.0e-9_dp,ye)
+    ! Match the existing CHIMERA A*ynse convention without normalization or reordering.
+    mass_fraction = aa*ynse
+    ierr = xnet_success
+#else
+    ierr = xnet_unsupported
+    message = 'Embedding currently supports dense serial CPU builds only'
+#endif
+    Return
+  End Subroutine xnet_nse_composition
 
   Subroutine xnet_finalize(ierr,message)
     ! CPU cleanup never finalizes caller MPI or accelerator state.

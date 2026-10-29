@@ -2,7 +2,7 @@ Program api_consumer
   ! This external caller imports no XNet implementation module.
   Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite, ieee_value, ieee_quiet_nan, ieee_positive_inf
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, &
-    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, &
+    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize, &
     & xnet_success, xnet_invalid, xnet_lifecycle_error, xnet_unsupported
   Use consumer_fixture, Only: fixture_state, write_state, check
   Implicit None
@@ -15,10 +15,10 @@ Program api_consumer
   Integer :: ids(3,lanes), ids4(4,lanes), counters(5,lanes)
   Character(80) :: data_dir, arg
   Character(512) :: message
-  Logical :: active(lanes)
+  Logical :: active(lanes), test_nse
   Real(dp) :: density(lanes),temperature(lanes),ye(lanes),restart(lanes),loss(lanes)
   Real(dp) :: aux_x(lanes),aux_a(lanes),aux_z(lanes)
-  Real(dp), Allocatable :: x(:,:), saved_x(:,:)
+  Real(dp), Allocatable :: x(:,:), saved_x(:,:), nse_first(:), nse_current(:)
   Real(dp) :: saved_temperature(lanes),saved_ye(lanes),saved_restart(lanes)
   Real(dp) :: nan_value, inf_value
 
@@ -28,6 +28,7 @@ Program api_consumer
   Call get_command_argument(3,arg)
   Read(arg,*) iheat
   Call check(Len_Trim(data_dir) > 0,'data directory argument')
+  test_nse = Trim(data_dir) == 'Data_SN160'
   Call probe_uninitialized()
   Call xnet_finalize(ierr,message)
   Call expect(xnet_success,'finalize before initialization')
@@ -82,6 +83,7 @@ Program api_consumer
       & network%binding_energy_mev(i),network%mass_excess_mev(i)
   EndDo
   Allocate(x(Size(network%names),lanes),saved_x(Size(network%names),lanes))
+  Allocate(nse_first(Size(network%names)),nse_current(Size(network%names)))
   Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
   Do i = 1, lanes
     ids(:,i) = (/ i,7,11 /)
@@ -92,10 +94,22 @@ Program api_consumer
   Call xnet_initialize(controls,rejected_network,ierr,message)
   Call expect(xnet_lifecycle_error,'duplicate initialization')
   Call invalid_requests()
+  Call invalid_nse_requests()
   Call burn_and_check('first',lanes)
+  If ( test_nse ) Call query_nse('first',1.0e6_dp,8.0e9_dp,0.45_dp,nse_first)
   Call burn_and_check('repeat',lanes)
+  If ( test_nse ) Then
+    Call invalid_nse_requests()
+    Call query_nse('second',1.0e7_dp,9.0e9_dp,0.49_dp,nse_current)
+  EndIf
   active = .True.
   Call burn_and_check('short',lanes-1)
+  If ( test_nse ) Then
+    Call query_nse('third',1.0e8_dp,1.1e10_dp,0.55_dp,nse_current)
+    Write(*,'(a,1x,a,*(1x,es26.17e3))') 'NSE','first_copy',nse_first
+    Call query_nse('repeat',1.0e6_dp,8.0e9_dp,0.45_dp,nse_current)
+    Call check(All(nse_current == nse_first),'copied NSE composition survived subsequent queries')
+  EndIf
   active = .False.
   Call burn_and_check('inactive',lanes)
   Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
@@ -116,9 +130,13 @@ Program api_consumer
   Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
   active = (/ .True.,.False.,.True.,.True. /)
   Call burn_and_check('reinitialize',lanes)
+  If ( test_nse ) Then
+    Call query_nse('reinitialize',1.0e6_dp,8.0e9_dp,0.45_dp,nse_current)
+    Call check(All(nse_current == nse_first),'NSE composition after reinitialization')
+  EndIf
   Call xnet_finalize(ierr,message)
   Call expect(xnet_success,'final finalize')
-  Deallocate(x,saved_x)
+  Deallocate(x,saved_x,nse_first,nse_current)
   Write(*,'(a)') 'API_CHECKS_PASSED'
 
 Contains
@@ -149,8 +167,26 @@ Contains
     zone = 1
     Call xnet_burn_batch(0.1_dp,mask,zone,d,temp,ey,frac,hint,nu,count,timing,ierr,message)
     Call expect(xnet_lifecycle_error,'burn outside initialized lifetime')
+    Call xnet_nse_composition(d(1),temp(1),ey(1),frac(:,1),ierr,message)
+    Call expect(xnet_lifecycle_error,'NSE query outside initialized lifetime')
+    Call check(All(frac == 0.0_dp),'NSE lifecycle error clears output')
     Return
   End Subroutine probe_uninitialized
+
+  Subroutine query_nse(label,density_in,temperature_in,ye_in,composition)
+    Implicit None
+    Character(*), Intent(in) :: label
+    Real(dp), Intent(in) :: density_in, temperature_in, ye_in
+    Real(dp), Intent(out) :: composition(:)
+
+    Call remember_state()
+    Call xnet_nse_composition(density_in,temperature_in,ye_in,composition,ierr,message)
+    Call expect(xnet_success,label//' NSE query')
+    Call check(All(ieee_is_finite(composition)) .and. All(composition >= 0.0_dp),label//' NSE composition')
+    Call unchanged_state(label//' NSE query')
+    Write(*,'(a,1x,a,*(1x,es26.17e3))') 'NSE',Trim(label),composition
+    Return
+  End Subroutine query_nse
 
   Subroutine remember_state()
     Implicit None
@@ -229,6 +265,43 @@ Contains
     Call unchanged_state('invalid calls')
     Return
   End Subroutine invalid_requests
+
+  Subroutine invalid_nse_requests()
+    Implicit None
+    Real(dp) :: oversized(Size(network%names)+1)
+    Real(dp) :: invalid_density(4), invalid_temperature(4), invalid_ye(4)
+    Integer :: j
+
+    Call remember_state()
+    nse_current = -1.0_dp
+    Call xnet_nse_composition(1.0e7_dp,9.0e9_dp,0.49_dp,nse_current(:Size(nse_current)-1),ierr,message)
+    Call expect(xnet_invalid,'short NSE composition extent')
+    Call check(All(nse_current(:Size(nse_current)-1) == 0.0_dp),'short NSE output cleared')
+    Call check(nse_current(Size(nse_current)) == -1.0_dp,'short NSE output does not overrun')
+    oversized = -1.0_dp
+    Call xnet_nse_composition(1.0e7_dp,9.0e9_dp,0.49_dp,oversized,ierr,message)
+    Call expect(xnet_invalid,'long NSE composition extent')
+    Call check(All(oversized == 0.0_dp),'long NSE output cleared')
+    invalid_density = [0.0_dp,-1.0_dp,nan_value,inf_value]
+    invalid_temperature = [0.0_dp,-1.0_dp,nan_value,inf_value]
+    invalid_ye = [-0.1_dp,1.1_dp,nan_value,inf_value]
+    Do j = 1, Size(invalid_density)
+      nse_current = -1.0_dp
+      Call xnet_nse_composition(invalid_density(j),9.0e9_dp,0.49_dp,nse_current,ierr,message)
+      Call expect(xnet_invalid,'invalid NSE density')
+      Call check(All(nse_current == 0.0_dp),'invalid NSE density clears output')
+      nse_current = -1.0_dp
+      Call xnet_nse_composition(1.0e7_dp,invalid_temperature(j),0.49_dp,nse_current,ierr,message)
+      Call expect(xnet_invalid,'invalid NSE temperature')
+      Call check(All(nse_current == 0.0_dp),'invalid NSE temperature clears output')
+      nse_current = -1.0_dp
+      Call xnet_nse_composition(1.0e7_dp,9.0e9_dp,invalid_ye(j),nse_current,ierr,message)
+      Call expect(xnet_invalid,'invalid NSE Ye')
+      Call check(All(nse_current == 0.0_dp),'invalid NSE Ye clears output')
+    EndDo
+    Call unchanged_state('invalid NSE calls')
+    Return
+  End Subroutine invalid_nse_requests
 
   Subroutine burn_and_check(label,n)
     Implicit None

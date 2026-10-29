@@ -127,7 +127,7 @@ name:
 - `xnet_eos.F90`, `xnet_eos_helm.F90`, or
   `xnet_eos_bahcall.F90` supplies `xnet_eos`. STARKILLER and EXTERNAL use
   `xnet_eos.F90` for XNet's composition moments, screening, scratch,
-  masks, and unit conversions. The build selects a small `xnet_thermo` module
+  masks, and unit conversions. The build selects a small `xnet_eos_interface` module
   for the underlying thermodynamics: the bundled `xnet_eos_starkiller.F90`
   adapter or an application source supplied with `EOS=EXTERNAL`. An
   application adapter leaves host-owned EOS initialization and cleanup to the host.

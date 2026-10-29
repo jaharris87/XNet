@@ -97,7 +97,7 @@ ifeq ($(EOS),EXTERNAL)
     $(error EOS=EXTERNAL supports libxnet and net_setup only; the host application owns EOS initialization and linking)
   endif
   ifeq ($(strip $(EOS_SOURCE)),)
-    $(error EOS_SOURCE must name a free-form module xnet_thermo for EOS=EXTERNAL)
+    $(error EOS_SOURCE must name a free-form module xnet_eos_interface for EOS=EXTERNAL)
   endif
   ifneq ($(words $(EOS_SOURCE)),1)
     $(error EOS_SOURCE must be one path without whitespace)

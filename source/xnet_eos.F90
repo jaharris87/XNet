@@ -35,10 +35,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzevolve, tid
     Use nuclear_data, Only: ny, nname, aa, zz
-    Use xnet_thermo, Only: thermo_initialize
+    Use xnet_eos_interface, Only: xnet_eos_initialize
     Implicit None
 
-    Call thermo_initialize(ny,nname(1:ny),aa,zz)
+    Call xnet_eos_initialize(ny,nname(1:ny),aa,zz)
 
     Allocate (ye(nzevolve))
     Allocate (ytot(nzevolve))
@@ -67,7 +67,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: amu
     Use xnet_controls, Only: iheat, iscrn
-    Use xnet_thermo, Only: thermo_evaluate
+    Use xnet_eos_interface, Only: xnet_eos_evaluate
     Use xnet_types, Only: dp
     Implicit None
     !XDIR XROUTINE_SEQ
@@ -89,7 +89,7 @@ Contains
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
       ! Thermodynamics uses K and CGS; Y and the auxiliary reservoir stay raw.
-      Call thermo_evaluate(nspecies,t9*1e9,rho,ye,abar,zbar,y,xext,aext,zext,cv_cgs,etae,detadt)
+      Call xnet_eos_evaluate(nspecies,t9*1e9,rho,ye,abar,zbar,y,xext,aext,zext,cv_cgs,etae,detadt)
 
       ! Convert units from ergs/g to MeV/nucleon and K to GK
       cv = cv_cgs * amu * 1e9
@@ -415,9 +415,9 @@ Contains
 
   Subroutine eos_finalize
     ! Release XNet-owned CPU allocations.
-    Use xnet_thermo, Only: thermo_finalize
+    Use xnet_eos_interface, Only: xnet_eos_finalize
     Implicit None
-    Call thermo_finalize
+    Call xnet_eos_finalize
     If ( Allocated(ye) ) Deallocate (ye)
     If ( Allocated(ytot) ) Deallocate (ytot)
     If ( Allocated(abar) ) Deallocate (abar)

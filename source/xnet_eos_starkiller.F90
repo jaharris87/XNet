@@ -1,15 +1,15 @@
 ! Thermodynamics adapter for the bundled Starkiller Helmholtz EOS.
 #include "xnet_macros.fh"
 
-Module xnet_thermo
+Module xnet_eos_interface
   Use xnet_types, Only: dp
   Implicit None
   Private
-  Public :: thermo_initialize, thermo_evaluate, thermo_finalize
+  Public :: xnet_eos_initialize, xnet_eos_evaluate, xnet_eos_finalize
 
 Contains
 
-  Subroutine thermo_initialize(nspecies,names,a,z)
+  Subroutine xnet_eos_initialize(nspecies,names,a,z)
     ! The standalone provider owns its EOS tables. Composition metadata is
     ! supplied once for adapters that map individual network species.
     Use actual_eos_module, Only: actual_eos_init
@@ -21,9 +21,9 @@ Contains
 
     Call actual_eos_init()
     Return
-  End Subroutine thermo_initialize
+  End Subroutine xnet_eos_initialize
 
-  Subroutine thermo_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+  Subroutine xnet_eos_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
     ! Native outputs are cv [erg/g/K], eta [dimensionless], and detadt [1/K].
     ! XNet supplies raw Y=X/A and an auxiliary mass reservoir; this EOS uses
     ! their moments (Ye, Abar, Zbar), already calculated by XNet.
@@ -49,14 +49,14 @@ Contains
     eta = eos_state%eta
     detadt = eos_state%detadt
     Return
-  End Subroutine thermo_evaluate
+  End Subroutine xnet_eos_evaluate
 
-  Subroutine thermo_finalize
+  Subroutine xnet_eos_finalize
     Use actual_eos_module, Only: actual_eos_finalize
     Implicit None
 
     Call actual_eos_finalize
     Return
-  End Subroutine thermo_finalize
+  End Subroutine xnet_eos_finalize
 
-End Module xnet_thermo
+End Module xnet_eos_interface

@@ -21,13 +21,13 @@ CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
 ## Application thermodynamics adapters
 
 Applications that already initialize their own EOS may supply a small
-`xnet_thermo` module when building the library. XNet keeps its composition
+`xnet_eos_interface` module when building the library. XNet keeps its composition
 moments, screening, scalar/vector masks, scratch, and internal-unit
 conversions in `source/xnet_eos.F90`:
 
 ```sh
 make BUILD_NAME=application-eos -j libxnet \
-  EOS=EXTERNAL EOS_SOURCE=/path/to/XNet_API/xnet_thermo_chimera.F90 \
+  EOS=EXTERNAL EOS_SOURCE=/path/to/XNet_API/xnet_eos_chimera.F90 \
   EOS_MODULE_DIR=/path/to/host/modules
 ```
 
@@ -44,19 +44,19 @@ path recompiles the adapter.
 The module supplies three procedures, using `dp` from `xnet_types`:
 
 ```fortran
-Subroutine thermo_initialize(nspecies,names,a,z)
+Subroutine xnet_eos_initialize(nspecies,names,a,z)
   Integer, Intent(in) :: nspecies
   Character(*), Intent(in) :: names(nspecies)
   Real(dp), Intent(in) :: a(nspecies), z(nspecies)
 End Subroutine
 
-Subroutine thermo_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+Subroutine xnet_eos_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
   Integer, Intent(in) :: nspecies
   Real(dp), Intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
   Real(dp), Intent(out) :: cv, eta, detadt
 End Subroutine
 
-Subroutine thermo_finalize
+Subroutine xnet_eos_finalize
 End Subroutine
 ```
 

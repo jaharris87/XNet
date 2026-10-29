@@ -51,17 +51,17 @@ def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> No
     ))
     supplied_eos = work / "application_eos.F90"
     supplied_eos.write_text(
-        """module xnet_eos_interface
+        """module xnet_eos_adapter
   use xnet_types, only: dp
   use host_eos_marker, only: marker
   implicit none
 contains
-  subroutine xnet_eos_initialize(nspecies,names,a,z)
+  subroutine eos_adapter_initialize(nspecies,names,a,z)
     integer, intent(in) :: nspecies
     character(*), intent(in) :: names(nspecies)
     real(dp), intent(in) :: a(nspecies), z(nspecies)
   end subroutine
-  subroutine xnet_eos_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+  subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
     integer, intent(in) :: nspecies
     real(dp), intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
     real(dp), intent(out) :: cv, eta, detadt
@@ -69,7 +69,7 @@ contains
     eta = 0.0_dp
     detadt = 0.0_dp
   end subroutine
-  subroutine xnet_eos_finalize
+  subroutine eos_adapter_finalize
   end subroutine
 end module
 """,

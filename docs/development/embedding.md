@@ -21,7 +21,7 @@ CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
 ## Application thermodynamics adapters
 
 Applications that already initialize their own EOS may supply a small
-`xnet_eos_interface` module when building the library. XNet keeps its composition
+`xnet_eos_adapter` module when building the library. XNet keeps its composition
 moments, screening, scalar/vector masks, scratch, and internal-unit
 conversions in `source/xnet_eos.F90`:
 
@@ -44,19 +44,19 @@ path recompiles the adapter.
 The module supplies three procedures, using `dp` from `xnet_types`:
 
 ```fortran
-Subroutine xnet_eos_initialize(nspecies,names,a,z)
+Subroutine eos_adapter_initialize(nspecies,names,a,z)
   Integer, Intent(in) :: nspecies
   Character(*), Intent(in) :: names(nspecies)
   Real(dp), Intent(in) :: a(nspecies), z(nspecies)
 End Subroutine
 
-Subroutine xnet_eos_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+Subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
   Integer, Intent(in) :: nspecies
   Real(dp), Intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
   Real(dp), Intent(out) :: cv, eta, detadt
 End Subroutine
 
-Subroutine xnet_eos_finalize
+Subroutine eos_adapter_finalize
 End Subroutine
 ```
 

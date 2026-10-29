@@ -91,17 +91,20 @@ else
 endif
 
 EOS_MODULE_FLAGS :=
+EOS_THERMO_SRC :=
 ifeq ($(EOS),STARKILLER)
   STARKILLER_HELMHOLTZ_PATH ?= $(ROOT_DIR)/tools/starkiller-helmholtz
+  EOS_THERMO_SRC := $(SOURCE_DIR)/xnet_thermo_starkiller.F90
   EOS_SRC := $(abspath $(STARKILLER_HELMHOLTZ_PATH))/actual_eos.F90 \
              $(abspath $(STARKILLER_HELMHOLTZ_PATH))/eos_type.F90 \
-             $(SOURCE_DIR)/xnet_eos_starkiller.F90
+             $(SOURCE_DIR)/xnet_eos_starkiller.F90 $(EOS_THERMO_SRC)
 else ifeq ($(EOS),BAHCALL)
   EOS_SRC := $(SOURCE_DIR)/xnet_eos_bahcall.F90
 else ifeq ($(EOS),HELMHOLTZ)
   EOS_SRC := $(SOURCE_DIR)/xnet_eos_helm.F90 $(abspath $(HELMHOLTZ_PATH))/helmholtz.F90
 else ifeq ($(EOS),EXTERNAL)
-  EOS_SRC := $(abspath $(EOS_SOURCE))
+  EOS_THERMO_SRC := $(abspath $(EOS_SOURCE))
+  EOS_SRC := $(SOURCE_DIR)/xnet_eos_starkiller.F90 $(EOS_THERMO_SRC)
   ifneq ($(strip $(EOS_MODULE_DIR)),)
     EOS_MODULE_FLAGS := -I$(abspath $(EOS_MODULE_DIR))
   endif

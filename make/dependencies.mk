@@ -29,13 +29,16 @@ $(call SOBJ,xnet_screening): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_condi
 ifeq ($(EOS),STARKILLER)
 $(call EOBJ,eos_type): $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
 $(call EOBJ,actual_eos): $(call EOBJ,eos_type) $(call SOBJ,xnet_util) $(call source_obj,$(MPI_SRC))
-$(call eos_obj,$(SOURCE_DIR)/xnet_eos_starkiller.F90): $(call EOBJ,actual_eos) $(call EOBJ,eos_type) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call SOBJ,xnet_abundances)
+$(call eos_obj,$(EOS_THERMO_SRC)): $(call EOBJ,actual_eos) $(call EOBJ,eos_type) $(call SOBJ,xnet_types)
 else ifeq ($(EOS),BAHCALL)
 $(call eos_obj,$(SOURCE_DIR)/xnet_eos_bahcall.F90): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
 else ifeq ($(EOS),HELMHOLTZ)
 $(call eos_obj,$(SOURCE_DIR)/xnet_eos_helm.F90): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
 else ifeq ($(EOS),EXTERNAL)
-$(EOS_OBJ): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
+$(call eos_obj,$(EOS_THERMO_SRC)): $(call SOBJ,xnet_types) $(if $(strip $(EOS_MODULE_DIR)),$(wildcard $(abspath $(EOS_MODULE_DIR))/*.mod))
+endif
+ifneq ($(filter STARKILLER EXTERNAL,$(EOS)),)
+$(call eos_obj,$(SOURCE_DIR)/xnet_eos_starkiller.F90): $(call eos_obj,$(EOS_THERMO_SRC)) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call SOBJ,xnet_abundances)
 endif
 $(call solver_obj,$(JAC_SRC)): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_linalg) $(if $(filter MA48 PARDISO_MKL,$(MATRIX_SOLVER)),$(call source_obj,$(MPI_SRC))) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types)
 ifneq ($(SPARSE_SRC),)

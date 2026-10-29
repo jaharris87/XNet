@@ -124,9 +124,12 @@ name:
 - `xnet_parallel.F90` or `xnet_parallel_stubs.F90` supplies
   `xnet_parallel`.
 - `xnet_eos_starkiller.F90`, `xnet_eos_helm.F90`, or
-  `xnet_eos_bahcall.F90` supplies `xnet_eos`. For an application library,
-  `EOS=EXTERNAL` instead compiles the application's supplied `xnet_eos` module;
-  its adapter leaves host-owned EOS initialization and cleanup to the host.
+  `xnet_eos_bahcall.F90` supplies `xnet_eos`. STARKILLER and EXTERNAL use
+  `xnet_eos_starkiller.F90` for XNet's composition moments, screening, scratch,
+  masks, and unit conversions. The build selects a small `xnet_thermo` module
+  for the underlying thermodynamics: the bundled Starkiller adapter or an
+  application source supplied with `EOS=EXTERNAL`. An application adapter
+  leaves host-owned EOS initialization and cleanup to the host.
 - one `xnet_jacobian_*.F90` file supplies `xnet_jacobian`.
 
 Source inspection and tests must follow the configuration named by the task.

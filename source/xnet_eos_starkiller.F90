@@ -1,6 +1,6 @@
 !***************************************************************************************************
 ! eos_starkiller.f90 10/18/17
-! Interface to starkiller
+! XNet composition and screening with build-selected thermodynamics
 ! This file contains routines which calculate EoS quantites needed to calculate screening
 ! corrections for reaction rates.
 !***************************************************************************************************
@@ -31,14 +31,14 @@ Contains
 
   Subroutine eos_initialize
     !-----------------------------------------------------------------------------------------------
-    ! This routine initializes starkiller
+    ! Initialize thermodynamics and allocate XNet-owned scratch.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzevolve, tid
-
-    Use actual_eos_module, Only: actual_eos_init
+    Use nuclear_data, Only: ny, nname, aa, zz
+    Use xnet_thermo, Only: thermo_initialize
     Implicit None
 
-    Call actual_eos_init()
+    Call thermo_initialize(ny,nname(1:ny),aa,zz)
 
     Allocate (ye(nzevolve))
     Allocate (ytot(nzevolve))
@@ -61,47 +61,39 @@ Contains
     Return
   End Subroutine eos_initialize
 
-  Subroutine eosx(t9,rho,ye,abar,zbar,cv,etae,detaedt9)
+  Subroutine eosx(t9,rho,ye,abar,zbar,y,xext,aext,zext,cv,etae,detaedt9)
     !-----------------------------------------------------------------------------------------------
     ! This routine interfaces with and calls the underlying EoS.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: amu
     Use xnet_controls, Only: iheat, iscrn
+    Use nuclear_data, Only: ny
+    Use xnet_thermo, Only: thermo_evaluate
     Use xnet_types, Only: dp
-
-    Use actual_eos_module, Only: xnet_actual_eos
-    Use eos_type_module, Only: eos_input_rt, eos_t
     Implicit None
     !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: t9, rho, ye, abar, zbar
+    Real(dp), Intent(in) :: y(ny), xext, aext, zext
 
     ! Ouput variables
     Real(dp), Intent(out) :: cv, etae, detaedt9
 
     ! Local variables
-    Type(eos_t) :: eos_state
+    Real(dp) :: cv_cgs, detadt
 
     cv = 0.0
     etae = 0.0
     detaedt9 = 0.0
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
-      ! Load input variables for the eos
-      eos_state%rho = rho
-      eos_state%T = t9*1e9
-      eos_state%y_e = ye
-      eos_state%abar = abar
-      eos_state%zbar = zbar
-
-      ! Call the eos
-      Call xnet_actual_eos(eos_input_rt,eos_state)
+      ! Thermodynamics uses K and CGS; Y and the auxiliary reservoir stay raw.
+      Call thermo_evaluate(ny,t9*1e9,rho,ye,abar,zbar,y,xext,aext,zext,cv_cgs,etae,detadt)
 
       ! Convert units from ergs/g to MeV/nucleon and K to GK
-      cv = eos_state%cv * amu * 1e9
-      etae = eos_state%eta
-      detaedt9 = eos_state%detadt * 1e9
+      cv = cv_cgs * amu * 1e9
+      detaedt9 = detadt * 1e9
     EndIf
 
   End Subroutine eosx
@@ -129,7 +121,7 @@ Contains
     Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,xext,aext,zext)
 
     ! Call the eos
-    Call eosx(t9,rho,ye,abar,zbar,cv,etae,detaedt9)
+    Call eosx(t9,rho,ye,abar,zbar,y,xext,aext,zext,cv,etae,detaedt9)
 
     If ( idiag >= 3 ) Write(lun_diag,"(a,6es23.15)") 'EOS',t9,rho,ye,cv,etae,detaedt9
 
@@ -179,10 +171,11 @@ Contains
 
     ! Call the eos
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
-    !XDIR XPRESENT(mask,t9,rho,ye,abar,zbar,cv,etae,detaedt9)
+    !XDIR XPRESENT(mask,t9,rho,y,xext,aext,zext,ye,abar,zbar,cv,etae,detaedt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        Call eosx(t9(izb),rho(izb),ye(izb),abar(izb),zbar(izb),cv(izb),etae(izb),detaedt9(izb))
+        Call eosx(t9(izb),rho(izb),ye(izb),abar(izb),zbar(izb),y(:,izb), &
+          & xext(izb),aext(izb),zext(izb),cv(izb),etae(izb),detaedt9(izb))
       EndIf
     EndDo
 
@@ -419,9 +412,9 @@ Contains
 
   Subroutine eos_finalize
     ! Release XNet-owned CPU allocations.
-    Use actual_eos_module, Only: actual_eos_finalize
+    Use xnet_thermo, Only: thermo_finalize
     Implicit None
-    Call actual_eos_finalize
+    Call thermo_finalize
     If ( Allocated(ye) ) Deallocate (ye)
     If ( Allocated(ytot) ) Deallocate (ytot)
     If ( Allocated(abar) ) Deallocate (abar)

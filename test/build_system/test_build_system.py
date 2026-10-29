@@ -34,6 +34,109 @@ def require_failure(result: subprocess.CompletedProcess[str], message: str) -> N
     assert message in result.stdout + result.stderr, result.stdout + result.stderr
 
 
+def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> None:
+    # A supplied thermodynamics adapter with a compile-time host module
+    # dependency. XNet still supplies xnet_eos. This checks Make, not physics.
+    host_modules = work / "host-modules"
+    host_modules.mkdir()
+    host_source = work / "host_eos_marker.f90"
+    host_source.write_text(
+        "module host_eos_marker\ninteger, parameter :: marker = 1\nend module\n",
+        encoding="utf-8",
+    )
+    require_success(subprocess.run(
+        ["gfortran", f"-J{host_modules}", "-c", str(host_source),
+         "-o", str(work / "host_eos_marker.o")],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    ))
+    supplied_eos = work / "application_eos.F90"
+    supplied_eos.write_text(
+        """module xnet_eos_adapter
+  use xnet_types, only: dp
+  use host_eos_marker, only: marker
+  implicit none
+contains
+  subroutine eos_adapter_initialize(nspecies,names,a,z)
+    integer, intent(in) :: nspecies
+    character(*), intent(in) :: names(nspecies)
+    real(dp), intent(in) :: a(nspecies), z(nspecies)
+  end subroutine
+  subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+    integer, intent(in) :: nspecies
+    real(dp), intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
+    real(dp), intent(out) :: cv, eta, detadt
+    cv = real(marker,dp)
+    eta = 0.0_dp
+    detadt = 0.0_dp
+  end subroutine
+  subroutine eos_adapter_finalize
+  end subroutine
+end module
+""",
+        encoding="utf-8",
+    )
+    external = work / "external-eos"
+    external_options = (
+        f"BUILD_DIR={external}", "PE_ENV=GNU", "MACHINE=generic", "EOS=EXTERNAL",
+        f"EOS_SOURCE={supplied_eos}", f"EOS_MODULE_DIR={host_modules}",
+    )
+    require_success(make(*external_options, "-j4", "libxnet", "net_setup", environment=environment))
+    assert (external / "lib" / "libxnet.a").is_file()
+    assert (external / "mod" / "xnet_api.mod").is_file()
+    assert (external / "obj" / "eos" / "application_eos.o").is_file()
+    assert (external / "obj" / "eos" / "xnet_eos.o").is_file()
+    for unused in ("xnet_eos_starkiller", "actual_eos", "eos_type"):
+        assert not (external / "obj" / "eos" / f"{unused}.o").exists()
+    exported = (external / "xnet-config.mk").read_text(encoding="utf-8")
+    assert f"XNET_MODFLAGS := -I{external / 'mod'} -I{host_modules}\n" in exported
+    external_config = (external / "config.txt").read_text(encoding="utf-8")
+    assert f"EOS_SOURCES={SOURCE / 'xnet_eos.F90'} {supplied_eos}\n" in external_config
+    assert f"-I{host_modules}" in external_config
+
+    # Recompile a changed host interface at the same path. The configuration
+    # is unchanged, but the adapter and archive must use the new module.
+    adapter_object = external / "obj" / "eos" / "application_eos.o"
+    archive = external / "lib" / "libxnet.a"
+    before = (adapter_object.stat().st_mtime_ns, archive.stat().st_mtime_ns)
+    time.sleep(0.01)
+    host_source.write_text(
+        "module host_eos_marker\ninteger, parameter :: marker = 2\nend module\n",
+        encoding="utf-8",
+    )
+    require_success(subprocess.run(
+        ["gfortran", f"-J{host_modules}", "-c", str(host_source),
+         "-o", str(work / "host_eos_marker.o")],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    ))
+    assert (host_modules / "host_eos_marker.mod").stat().st_mtime_ns > max(before)
+    require_success(make(*external_options, "-j4", "libxnet", environment=environment))
+    after = (adapter_object.stat().st_mtime_ns, archive.stat().st_mtime_ns)
+    assert all(new > old for old, new in zip(before, after)), (
+        "changed host module did not rebuild the external EOS adapter and archive",
+        before, after,
+    )
+
+    for target in ((), ("xnet",), ("xnse",), ("all",)):
+        require_failure(make(*external_options, *target, environment=environment),
+                        "EOS=EXTERNAL supports libxnet and net_setup only")
+    require_failure(
+        make(f"BUILD_DIR={work / 'external-missing-source'}", "EOS=EXTERNAL", "libxnet"),
+        "EOS_SOURCE must name",
+    )
+    reserved_eos = work / "xnet_eos.F90"
+    reserved_eos.write_text(supplied_eos.read_text(encoding="utf-8"), encoding="utf-8")
+    require_failure(
+        make(*external_options, f"BUILD_DIR={work / 'external-reserved-name'}",
+             f"EOS_SOURCE={reserved_eos}", "libxnet", environment=environment),
+        "EOS_SOURCE stem xnet_eos is reserved",
+    )
+    require_failure(
+        make(*external_options, f"EOS_MODULE_DIR={work / 'different-host-modules'}",
+             "libxnet", environment=environment),
+        "incompatible BUILD_DIR configuration",
+    )
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="xnet-build-system-") as temporary:
         work = pathlib.Path(temporary)
@@ -292,6 +395,8 @@ def main() -> int:
         require_success(products)
         for executable in ("xnet", "xnse", "net_setup"):
             assert (optimized / "bin" / executable).is_file()
+
+        check_external_eos(work, generic_environment)
 
         config = (optimized / "config.txt").read_text(encoding="utf-8")
         assert config.startswith("XNET_CONFIG_SCHEMA=1\n")

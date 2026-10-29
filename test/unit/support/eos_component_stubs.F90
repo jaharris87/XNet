@@ -18,6 +18,7 @@ Module nuclear_data
   Implicit None
 
   Integer :: ny = 0
+  Character(5), Allocatable :: nname(:)
   Real(dp), Allocatable :: aa(:)
   Real(dp), Allocatable :: zz(:)
   Real(dp), Allocatable :: zz2(:)

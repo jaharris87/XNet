@@ -59,7 +59,7 @@ endif
 
 CPP_INCLUDE_FLAGS := -I$(SOURCE_DIR) $(sort $(addprefix -I,$(dir $(SOURCE_FREE_SRC) \
   $(EOS_FREE_SRC) $(SOLVER_FREE_SRC) $(GPU_FREE_SRC)))) \
-  $(filter -I%,$(FFLAGS) $(F90FLAGS) $(LAPACK_INC) $(SOLVER_INC)) $(MPI_INCLUDE_FLAGS)
+  $(filter -I%,$(FFLAGS) $(F90FLAGS) $(LAPACK_INC) $(SOLVER_INC)) $(MPI_INCLUDE_FLAGS)$(if $(EOS_MODULE_FLAGS), $(EOS_MODULE_FLAGS))
 CPP_DEFINITION_FLAGS := $(filter -D% -U%,$(FFLAGS) $(F90FLAGS)) $(GPU_DEFINES)
 # The first embedding API supports the serial CPU dense-solver build.
 ifeq ($(MATRIX_SOLVER):$(MPI_MODE):$(OPENMP_MODE):$(GPU_MODE),dense:OFF:OFF:OFF)
@@ -128,7 +128,7 @@ XNET_CONFIG_MK := $(BUILD_DIR)/xnet-config.mk
 # options as this build. Module files are compiler-specific.
 XNET_FC := $(COMPILE_FC)
 XNET_MOD_DIR := $(MOD_DIR)
-XNET_MODFLAGS := -I$(MOD_DIR)
+XNET_MODFLAGS := $(strip -I$(MOD_DIR) $(EOS_MODULE_FLAGS))
 XNET_FFLAGS := $(strip $(COMPILE_FFLAGS) $(COMPILE_F90FLAGS) $(LAPACK_INC) $(SOLVER_INC) $(GPU_MODULE_FLAGS))
 XNET_LDR := $(LDR)
 XNET_LDFLAGS := $(strip $(LDFLAGS) $(SOLVER_LIBDIR) $(LAPACK_LIBDIR))

@@ -18,6 +18,99 @@ OpenMP, and GPU modes off. Other builds retain their standalone programs;
 the embedding procedures return `xnet_unsupported`. This does not qualify
 CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
 
+## Application thermodynamics adapters
+
+Applications with their own EOS may supply a small
+`xnet_eos_adapter` module when building the library. XNet keeps its composition
+moments, screening, scalar/vector masks, scratch, and internal-unit
+conversions in `source/xnet_eos.F90`:
+
+```sh
+make BUILD_NAME=application-eos -j libxnet \
+  EOS=EXTERNAL EOS_SOURCE=/path/to/XNet_API/xnet_eos_chimera.F90 \
+  EOS_MODULE_DIR=/path/to/host/modules
+```
+
+Build the host EOS modules first, using the same compiler and compatible
+precision options. `EOS_SOURCE` names one free-form Fortran source containing
+the application thermodynamics adapter. Its filename must not use the stem
+`xnet_eos`, which is reserved for XNet's common EOS module; use a name such as
+`xnet_eos_chimera.F90` or `xnet_eos_adapter.F90`. `EOS_MODULE_DIR` is optional
+if the adapter needs no additional module directory. Keep host modules in a separate
+directory from this XNet build's modules. XNet's current module directory is
+searched before the host directory, so older XNet modules in an application
+build do not replace the current ones. Host `*.mod` files in that directory
+are ordinary adapter prerequisites; rebuilding a host interface at the same
+path recompiles the adapter.
+
+The module supplies three procedures, using `dp` from `xnet_types`:
+
+```fortran
+Subroutine eos_adapter_initialize(nspecies,names,a,z)
+  Integer, Intent(in) :: nspecies
+  Character(*), Intent(in) :: names(nspecies)
+  Real(dp), Intent(in) :: a(nspecies), z(nspecies)
+End Subroutine
+
+Subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+  Integer, Intent(in) :: nspecies
+  Real(dp), Intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
+  Real(dp), Intent(out) :: cv, eta, detadt
+End Subroutine
+
+Subroutine eos_adapter_finalize
+End Subroutine
+```
+
+Initialization receives the species names and mass/charge numbers once, in
+network order. The adapter may copy the metadata it needs for application
+species mapping; it keeps no association with XNet arrays. Thermodynamics
+receives temperature in K, density in g/cm^3, dimensionless Ye and number
+averages Abar/Zbar, and raw molar abundances `Y=X/A` in network order. XNet
+does not normalize this composition. An adapter such as Flash-X must map the
+full species composition and form its mass fractions from `X=A*Y`, rather
+than substituting only the moments.
+
+`xext`, `aext`, and `zext` describe the auxiliary mass reservoir as for the
+batch API. The supplied moments already include it. An EOS that uses moments
+can use those values directly; an adapter that requires individual species
+must handle the reservoir deliberately or report it as unsupported. The
+current Flash-X composition mapping has no auxiliary species; this interface
+does not silently add one.
+
+Return `cv` in erg/g/K and `eta = mu_kinetic / (k_B T)`, where the electron
+chemical potential excludes electron rest mass. This is the existing
+[Helmholtz convention](https://cococubed.com/code_pages/chemical_potential.shtml).
+Return `detadt = d(eta)/dT` in K^-1 at fixed density and composition, using
+that same rest-mass-excluded convention. XNet retains its current
+conversion to MeV/nucleon/GK and GK^-1, and calls thermodynamics only when
+heating or screening needs it. The adapter imports no mutable XNet working
+arrays and exposes no host derived types. The bundled adapter in
+`source/xnet_eos_starkiller.F90` demonstrates the procedure signatures;
+an application supplies its own calls and ownership hooks.
+
+The host must prepare its EOS data before the adapter first uses them. If
+`eos_adapter_initialize` reads host EOS data, those data must be ready before
+`xnet_initialize`. If the hook only prepares species mapping or other
+table-independent storage, the host may load its tables afterward, but before
+the first burn or NSE query. This permits CHIMERA's existing order: load
+network metadata, initialize the host EOS, then evaluate NSE and burn.
+
+The adapter's initialization and finalization hooks manage only adapter-owned
+mapping or storage; neither reinitializes or destroys host tables, MPI, or
+accelerator state. XNet allocates and releases its own EOS scratch. The
+application links its own EOS objects and dependencies alongside
+`libxnet.a`. These dependencies are not bundled into the XNet archive or
+discovered automatically. Module includes are recorded in `xnet-config.mk`.
+
+`EOS=EXTERNAL` builds `libxnet` and the EOS-independent `net_setup` utility,
+not standalone `xnet` or `xnse`. The initial embedding support remains dense
+serial CPU only. Supplying a thermodynamics module does not by itself validate
+a full CHIMERA/Flash-X adapter or enable threaded/accelerator embedding. The
+default adapter retains XNet's device-routine directives. Application adapters
+need their own device implementation and tests before accelerator embedding
+can be claimed.
+
 ## Initialize, burn and finalize
 
 ```fortran
@@ -136,11 +229,11 @@ arithmetic are not covered by these numerical status values and may still
 terminate execution. Future fallback to another integration method is
 separate work, not a promise that a failed library instance can be reused.
 
-Finalization releases CPU allocations owned by XNet and its selected
-standalone EOS provider. It never initializes/finalizes MPI or a GPU runtime.
-A future application EOS provider must release only its XNet scratch storage,
-leaving the host EOS initialized. MPI, OpenMP, and caller-owned GPU embedding
-remain unqualified.
+Finalization releases CPU allocations owned by XNet and calls the selected
+thermodynamics adapter's finalizer. Built-in standalone providers release their
+own EOS storage; an application-supplied adapter leaves host-owned EOS state intact.
+The API never initializes/finalizes MPI or a GPU runtime.
+MPI, OpenMP, and caller-owned GPU embedding remain unqualified.
 
 ## NSE composition
 

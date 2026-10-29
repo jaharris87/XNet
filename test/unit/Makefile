@@ -738,7 +738,13 @@ $(EOS_BUILD_DIR)/starkiller/actual_eos.o: $(STARKILLER_DIR)/actual_eos.F90 \
 	$(FC) $(FFLAGS) $(F90FLAGS) -J$(EOS_BUILD_DIR)/starkiller -I$(EOS_BUILD_DIR)/starkiller \
 	  -I$(XNET_DIR) -c $< -o $@
 
-$(eval $(call eos_provider_rules,starkiller,$(XNET_DIR)/xnet_eos_starkiller.F90,TEST_STARKILLER,$(EOS_BUILD_DIR)/starkiller/eos_type.o $(EOS_BUILD_DIR)/starkiller/actual_eos.o))
+$(EOS_BUILD_DIR)/starkiller/xnet_eos_starkiller.o: $(XNET_DIR)/xnet_eos_starkiller.F90 \
+    $(EOS_BUILD_DIR)/starkiller/actual_eos.o $(EOS_BUILD_DIR)/starkiller/eos_type.o \
+    $(EOS_BUILD_DIR)/starkiller/xnet_types.o | $(EOS_BUILD_DIR)/starkiller
+	$(FC) $(FFLAGS) $(F90FLAGS) -J$(EOS_BUILD_DIR)/starkiller -I$(EOS_BUILD_DIR)/starkiller \
+	  -I$(XNET_DIR) -c $< -o $@
+
+$(eval $(call eos_provider_rules,starkiller,$(XNET_DIR)/xnet_eos.F90,TEST_STARKILLER,$(EOS_BUILD_DIR)/starkiller/eos_type.o $(EOS_BUILD_DIR)/starkiller/actual_eos.o $(EOS_BUILD_DIR)/starkiller/xnet_eos_starkiller.o))
 $(eval $(call eos_provider_rules,bahcall,$(XNET_DIR)/xnet_eos_bahcall.F90,TEST_BAHCALL,))
 
 $(PREPROCESS_BUILD_DIR)/verify_build_net_readers.o: support/verify_build_net_readers.F90 \

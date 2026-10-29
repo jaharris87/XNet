@@ -7,7 +7,7 @@
 #   GPU_BACKEND: CUDA, HIP
 #   GPU_LAPACK_VER: CUBLAS, MAGMA, ROCM
 #   OPENACC_MODE, OPENMP_OL_MODE: ON, OFF
-#   EOS: STARKILLER, BAHCALL, HELMHOLTZ
+#   EOS: STARKILLER, BAHCALL, HELMHOLTZ, EXTERNAL
 #   MATRIX_SOLVER: dense, MA41, MA48, PARDISO_MKL
 #   LAPACK_VER: NETLIB, MKL, LIBSCI, ATLAS, ACCEL, PGIBLAS, ESSL
 
@@ -16,7 +16,7 @@
 XNET_CPP ?= cpp
 
 VALID_PE := GNU INTEL PGI NVIDIA NVHPC LLVM CCE CRAY XL
-VALID_EOS := STARKILLER BAHCALL HELMHOLTZ
+VALID_EOS := STARKILLER BAHCALL HELMHOLTZ EXTERNAL
 VALID_SOLVER := dense MA41 MA48 PARDISO_MKL
 VALID_LAPACK := NETLIB MKL LIBSCI ATLAS ACCEL PGIBLAS ESSL
 
@@ -90,6 +90,25 @@ endif
 ifeq ($(EOS),HELMHOLTZ)
   ifndef HELMHOLTZ_PATH
     $(error HELMHOLTZ_PATH must be set for EOS=HELMHOLTZ)
+  endif
+endif
+ifeq ($(EOS),EXTERNAL)
+  ifneq ($(filter xnet xnse all $(BIN_DIR)/xnet $(BIN_DIR)/xnse,$(REQUESTED_GOALS)),)
+    $(error EOS=EXTERNAL supports libxnet and net_setup only; the host application owns EOS initialization and linking)
+  endif
+  ifeq ($(strip $(EOS_SOURCE)),)
+    $(error EOS_SOURCE must name a free-form module xnet_eos_adapter for EOS=EXTERNAL)
+  endif
+  ifneq ($(words $(EOS_SOURCE)),1)
+    $(error EOS_SOURCE must be one path without whitespace)
+  endif
+  ifeq ($(basename $(notdir $(EOS_SOURCE))),xnet_eos)
+    $(error EOS_SOURCE stem xnet_eos is reserved for XNet's common EOS module; use a filename such as xnet_eos_adapter.F90)
+  endif
+  ifneq ($(strip $(EOS_MODULE_DIR)),)
+    ifneq ($(words $(EOS_MODULE_DIR)),1)
+      $(error EOS_MODULE_DIR must be one directory without whitespace)
+    endif
   endif
 endif
 

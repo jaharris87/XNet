@@ -154,8 +154,9 @@ is an interoperability smoke test, not a stored scientific endpoint.
 
 ## EOS checks
 
-The STARKILLER and Bahcall implementations are compiled separately against the
-same component tests. The checks cover initialization, finite thermodynamic
+The STARKILLER (including its thermodynamics adapter) and Bahcall
+implementations are compiled separately against the same component tests.
+The checks cover initialization, finite thermodynamic
 outputs, and expected failure for a missing Helmholtz table. The STARKILLER
 fixtures include values from the retained Timmes reference driver; the fixture
 README records how they were generated. These checks do not change the EOS

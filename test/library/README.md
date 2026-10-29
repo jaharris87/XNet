@@ -190,7 +190,7 @@ to zero when omitted:
 
 Each process requires a real device region and checks that XNet preserves
 the application's selected device. It initializes once with XNet-owned
-resources, then again with an application-owned stream and BLAS handle.
+resources, then again with an application-owned nonblocking stream and BLAS handle.
 After borrowed-resource finalization, a vendor GEMM checks that the handle
 and stream still work. The OpenACC case also checks the caller's queue
 association.
@@ -199,10 +199,21 @@ For each resource lifetime, the caller runs host-array and mapped-device
 burns through first, repeated, short, inactive-hole, and all-inactive batches.
 It deliberately makes the unused host or device mirrors disagree, compares
 scientific results, counters and accepted step counts across the four paths
-using the same archive, and checks inactive state preservation. Device
+using the same archive, and checks inactive state preservation. After each
+host-array call, a device region checks that all scientific device mirrors
+still contain the original poison, returning only a logical result. Device
 results are read immediately after the API returns without another stream
 wait. Timings must be finite and nonnegative; they are not compared across
 calls.
+
+Two additional borrowed-resource calls queue four 256-by-256 GEMMs followed
+by a GEMM that replaces poisoned device density with the fixture density.
+The first call synchronizes the stream before entering the API; the second
+enters with the producer work queued and keeps all producer mappings alive
+through the burn. Both compare with the normal first burn. Submission is
+asynchronous, but overlap with API entry depends on device scheduling. A
+successful run alone does not demonstrate that removing the entry wait is
+detected; record a missing-wait comparison separately when hardware permits it.
 
 Logs contain raw metadata, states, counters, accepted step counts and timings,
 plus `GPU_CONSUMER_CHECKS_COMPLETED` on completion. Keep these files outside

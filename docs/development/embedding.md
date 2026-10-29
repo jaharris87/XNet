@@ -228,6 +228,11 @@ internal state for printing. The application orders its preceding work on
 the supplied stream or completes it before calling XNet. CPU builds reject
 `data_on_device=.true.`.
 
+OpenACC uses the supplied queue's stream ordering. Before a device-array burn,
+the OpenMP path waits for the supplied vendor stream, since OpenMP target work
+does not use that stream. A synchronization failure returns `xnet_invalid`
+with the runtime status in `message`, before reading scientific inputs.
+
 Call `xnet_finalize` before destroying the application's GPU resources or
 EOS data. It releases XNet's device mappings before their CPU allocations
 and restores the resource slots used by the library. It does not initialize

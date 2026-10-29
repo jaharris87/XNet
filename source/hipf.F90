@@ -20,6 +20,8 @@ module hipf
     hipGetDevice, &
     hipSetDevice, &
     hipStreamCreate, &
+    hipStreamCreateWithFlags, &
+    hipStreamNonBlocking, &
     hipStreamDestroy, &
     hipStreamSynchronize, &
     hipDeviceSynchronize

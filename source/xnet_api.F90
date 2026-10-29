@@ -196,6 +196,9 @@ Contains
     Use xnet_evolve, Only: full_net, evolve_integrator_failure, evolve_step_limit
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_check_embedded_device
+#ifdef XNET_OMP_OL
+    Use xnet_gpu, Only: stream, stream_sync
+#endif
 #endif
 #endif
     Implicit None
@@ -222,6 +225,9 @@ Contains
     Character(512) :: failure_message
     Character(80) :: failure_reason
     Logical :: on_device
+#ifdef XNET_OMP_OL
+    Integer :: stream_status
+#endif
 
     on_device = .false.
     If ( Present(data_on_device) ) on_device = data_on_device
@@ -239,6 +245,15 @@ Contains
     Call gpu_check_embedded_device(ierr,message)
     If ( ierr /= 0 ) Return
     If ( on_device ) Then
+#ifdef XNET_OMP_OL
+      ! OpenMP target work is not ordered on the application's vendor stream.
+      Call stream_sync(stream,stream_status)
+      If ( stream_status /= 0 ) Then
+        ierr = xnet_invalid
+        Write(message,'(a,i0)') 'Cannot synchronize the application GPU stream, status ',stream_status
+        Return
+      EndIf
+#endif
       Call check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
         & ierr,message,aux_x,aux_a,aux_z)
       If ( ierr /= 0 ) Return

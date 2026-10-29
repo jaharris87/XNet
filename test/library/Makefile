@@ -15,7 +15,7 @@ $(BUILD_DIR):
 	mkdir -p '$@'
 
 $(BUILD_DIR)/consumer_fixture.o: consumer_fixture.F90 $(XNET_CONFIG) | $(BUILD_DIR)
-	$(XNET_FC) $(XNET_FFLAGS) -J$(BUILD_DIR) -I$(BUILD_DIR) -c '$<' -o '$@'
+	cd '$(BUILD_DIR)' && $(XNET_FC) $(XNET_FFLAGS) -c '$(abspath $<)' -o '$(notdir $@)'
 
 $(BUILD_DIR)/api_consumer.o: api_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
 	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'

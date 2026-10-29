@@ -604,14 +604,18 @@ Contains
   End Function on_device
 
 
-  Subroutine stream_sync( stream )
+  Subroutine stream_sync( stream, ierr_out )
     Type(C_PTR), Intent(in) :: stream
+    Integer, Optional, Intent(out) :: ierr_out
     Integer :: ierr
+    ierr = 0
 #if defined(XNET_CUDA)
     ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_HIP)
-    Call hipCheck( hipStreamSynchronize( stream ) )
+    ierr = hipStreamSynchronize( stream )
+    If ( .not. Present(ierr_out) ) Call hipCheck( ierr )
 #endif
+    If ( Present(ierr_out) ) ierr_out = ierr
     Return
   End Subroutine stream_sync
 

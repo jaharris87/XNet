@@ -14,13 +14,13 @@ Program gpu_consumer
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success
   Use consumer_fixture, Only: fixture_state, write_state, check
 #if defined(XNET_CUDA)
-  Use cudaf, Only: cudaGetDeviceCount, cudaGetDevice, cudaSetDevice, cudaStreamCreate, &
-    & cudaStreamDestroy, cudaStreamSynchronize
+  Use cudaf, Only: cudaGetDeviceCount, cudaGetDevice, cudaSetDevice, cudaStreamCreateWithFlags, &
+    & cudaStreamNonBlocking, cudaStreamDestroy, cudaStreamSynchronize
   Use cublasf, Only: cublasCreate_v2, cublasDestroy_v2, cublasGetStream_v2, cublasSetStream_v2, &
     & cublasDgemm_v2, CUBLAS_OP_N
 #elif defined(XNET_HIP)
-  Use hipf, Only: hipGetDeviceCount, hipGetDevice, hipSetDevice, hipStreamCreate, &
-    & hipStreamDestroy, hipStreamSynchronize
+  Use hipf, Only: hipGetDeviceCount, hipGetDevice, hipSetDevice, hipStreamCreateWithFlags, &
+    & hipStreamNonBlocking, hipStreamDestroy, hipStreamSynchronize
   Use hipblasf, Only: hipblasCreate, hipblasDestroy, hipblasGetStream, hipblasSetStream, &
     & hipblasDgemm, HIPBLAS_OP_N
 #endif
@@ -175,6 +175,10 @@ Program gpu_consumer
       EndDo
       !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
     EndDo
+    If ( ownership == 2 ) Then
+      Call producer_burn(.true.)
+      Call producer_burn(.false.)
+    EndIf
     Call xnet_finalize(ierr,message)
     Call api_ok(Trim(prefix)//' finalize')
     Call selected_device_unchanged()
@@ -262,6 +266,7 @@ Contains
         & max_steps_taken=steps,data_on_device=.false.)
     EndIf
     Call api_ok(Trim(label)//' burn')
+    If ( .not. resident ) Call check_host_device_poison()
     Call selected_device_unchanged()
     times = [timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),Trim(label)//' timing')
@@ -309,16 +314,121 @@ Contains
     Return
   End Subroutine burn_and_check
 
+  Subroutine check_host_device_poison()
+    ! Return only the assertion result; preserve the scientific host outputs.
+    Implicit None
+    Logical :: mirrors_poisoned
+
+#if defined(XNET_OACC)
+    !$acc serial present(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z) copyout(mirrors_poisoned)
+#elif defined(XNET_OMP_OL)
+    !$omp target map(alloc:density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z) map(from:mirrors_poisoned)
+#endif
+    mirrors_poisoned = All(density == -1.0_dp) .and. All(temperature == -1.0_dp) .and. &
+      & All(ye == -1.0_dp) .and. All(x == -1.0_dp) .and. All(restart == -1.0_dp) .and. &
+      & All(loss == -1.0_dp) .and. All(aux_x == -1.0_dp) .and. All(aux_a == -1.0_dp) .and. All(aux_z == -1.0_dp)
+#if defined(XNET_OACC)
+    !$acc end serial
+#elif defined(XNET_OMP_OL)
+    !$omp end target
+#endif
+    Call check(mirrors_poisoned,Trim(label)//' unchanged scientific device mirrors')
+    Return
+  End Subroutine check_host_device_poison
+
+  Subroutine producer_burn(synchronize)
+    ! Keep the queued GEMM inputs mapped through the subsequent resident burn.
+    Implicit None
+    Logical, Intent(in) :: synchronize
+    Integer, Parameter :: order = 256, queued_gemms = 4
+    Real(dp), Target :: a(order,order), b(order,order), c(order,order), source_density(lanes), unit_matrix(1)
+    Real(dp) :: one, zero
+    Type(C_PTR) :: da, db, dc, dsource, dunit, ddensity
+    Integer :: queued
+
+    Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
+    source_density = density
+    density = -1.0_dp
+    loss = -1.0_dp
+    a = 1.0_dp
+    b = 1.0_dp
+    c = 0.0_dp
+    unit_matrix = 1.0_dp
+    one = 1.0_dp
+    zero = 0.0_dp
+    ! All mappings and pointer queries precede submission to the nonblocking stream.
+    !XDIR XENTER_DATA XCOPYIN(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
+    !XDIR XENTER_DATA XCOPYIN(a,b,c,source_density,unit_matrix)
+    density = source_density
+    da = mapped_pointer(C_LOC(a(1,1)))
+    db = mapped_pointer(C_LOC(b(1,1)))
+    dc = mapped_pointer(C_LOC(c(1,1)))
+    dsource = mapped_pointer(C_LOC(source_density(1)))
+    dunit = mapped_pointer(C_LOC(unit_matrix(1)))
+    ddensity = mapped_pointer(C_LOC(density(1)))
+    Do queued = 1, queued_gemms
+#if defined(XNET_CUDA)
+      status = cublasDgemm_v2(host_handle,CUBLAS_OP_N,CUBLAS_OP_N,order,order,order,one,da,order, &
+        & db,order,zero,dc,order)
+#elif defined(XNET_HIP)
+      status = hipblasDgemm(host_handle,HIPBLAS_OP_N,HIPBLAS_OP_N,order,order,order,one,da,order, &
+        & db,order,zero,dc,order)
+#endif
+      Call runtime_ok('queued host GEMM')
+    EndDo
+#if defined(XNET_CUDA)
+    status = cublasDgemm_v2(host_handle,CUBLAS_OP_N,CUBLAS_OP_N,lanes,1,1,one,dsource,lanes,dunit,1,zero,ddensity,lanes)
+#elif defined(XNET_HIP)
+    status = hipblasDgemm(host_handle,HIPBLAS_OP_N,HIPBLAS_OP_N,lanes,1,1,one,dsource,lanes,dunit,1,zero,ddensity,lanes)
+#endif
+    Call runtime_ok('queued density producer')
+    If ( synchronize ) Then
+#if defined(XNET_CUDA)
+      status = cudaStreamSynchronize(host_stream)
+#elif defined(XNET_HIP)
+      status = hipStreamSynchronize(host_stream)
+#endif
+      Call runtime_ok('explicit producer synchronization')
+      label = 'borrowed_producer_sync'
+    Else
+      label = 'borrowed_producer_queued'
+    EndIf
+    resident = .true.
+    phase = 1
+    n = lanes
+    active = .true.
+    ! The queued case has no host stream wait or additional mapping before API entry.
+    Call burn_and_check()
+    Call check(All(density == source_density),Trim(label)//' produced density')
+    !XDIR XEXIT_DATA XDELETE(a,b,c,source_density,unit_matrix)
+    !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
+    Return
+  End Subroutine producer_burn
+
+  Function mapped_pointer(hostptr) Result(deviceptr)
+    Implicit None
+    Type(C_PTR), Intent(in) :: hostptr
+    Type(C_PTR) :: deviceptr
+
+#if defined(XNET_OACC)
+    deviceptr = acc_deviceptr(hostptr)
+#elif defined(XNET_OMP_OL)
+    deviceptr = omp_get_mapped_ptr(hostptr,device)
+#endif
+    Call check(C_Associated(deviceptr),'producer device mapping')
+    Return
+  End Function mapped_pointer
+
   Subroutine create_host_resources()
     Implicit None
 #if defined(XNET_CUDA)
-    status = cudaStreamCreate(host_stream)
+    status = cudaStreamCreateWithFlags(host_stream,cudaStreamNonBlocking)
     Call runtime_ok('host stream creation')
     status = cublasCreate_v2(host_handle)
     Call runtime_ok('host BLAS creation')
     status = cublasSetStream_v2(host_handle,host_stream)
 #elif defined(XNET_HIP)
-    status = hipStreamCreate(host_stream)
+    status = hipStreamCreateWithFlags(host_stream,hipStreamNonBlocking)
     Call runtime_ok('host stream creation')
     status = hipblasCreate(host_handle)
     Call runtime_ok('host BLAS creation')

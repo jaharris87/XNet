@@ -123,6 +123,13 @@ end module
         make(f"BUILD_DIR={work / 'external-missing-source'}", "EOS=EXTERNAL", "libxnet"),
         "EOS_SOURCE must name",
     )
+    reserved_eos = work / "xnet_eos.F90"
+    reserved_eos.write_text(supplied_eos.read_text(encoding="utf-8"), encoding="utf-8")
+    require_failure(
+        make(*external_options, f"BUILD_DIR={work / 'external-reserved-name'}",
+             f"EOS_SOURCE={reserved_eos}", "libxnet", environment=environment),
+        "EOS_SOURCE stem xnet_eos is reserved",
+    )
     require_failure(
         make(*external_options, f"EOS_MODULE_DIR={work / 'different-host-modules'}",
              "libxnet", environment=environment),

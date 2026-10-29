@@ -33,8 +33,10 @@ make BUILD_NAME=application-eos -j libxnet \
 
 Build the host EOS modules first, using the same compiler and compatible
 precision options. `EOS_SOURCE` names one free-form Fortran source containing
-the application thermodynamics adapter. `EOS_MODULE_DIR` is optional if the
-adapter needs no additional module directory. Keep host modules in a separate
+the application thermodynamics adapter. Its filename must not use the stem
+`xnet_eos`, which is reserved for XNet's common EOS module; use a name such as
+`xnet_eos_chimera.F90` or `xnet_eos_adapter.F90`. `EOS_MODULE_DIR` is optional
+if the adapter needs no additional module directory. Keep host modules in a separate
 directory from this XNet build's modules. XNet's current module directory is
 searched before the host directory, so older XNet modules in an application
 build do not replace the current ones. Host `*.mod` files in that directory
@@ -76,8 +78,11 @@ must handle the reservoir deliberately or report it as unsupported. The
 current Flash-X composition mapping has no auxiliary species; this interface
 does not silently add one.
 
-Return `cv` in erg/g/K, dimensionless electron degeneracy `eta`, and
-`detadt` in K^-1 at fixed density and composition. XNet retains its current
+Return `cv` in erg/g/K and `eta = mu_kinetic / (k_B T)`, where the electron
+chemical potential excludes electron rest mass. This is the existing
+[Helmholtz convention](https://cococubed.com/code_pages/chemical_potential.shtml).
+Return `detadt = d(eta)/dT` in K^-1 at fixed density and composition, using
+that same rest-mass-excluded convention. XNet retains its current
 conversion to MeV/nucleon/GK and GK^-1, and calls thermodynamics only when
 heating or screening needs it. The adapter imports no mutable XNet working
 arrays and exposes no host derived types. The bundled adapter in

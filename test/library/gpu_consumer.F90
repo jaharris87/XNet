@@ -33,11 +33,11 @@ Program gpu_consumer
   Implicit None
 
   Integer, Parameter :: lanes = 4, phases = 5, host_queue = 7
+  Real(dp), Parameter :: gpu_rtol = 1.0e-7_dp, mass_fraction_atol = 1.0e-12_dp
   Character(8), Parameter :: phase_names(phases) = [Character(8) :: 'first','repeat','short','hole','inactive']
   Type :: result_t
     Real(dp), Allocatable :: x(:,:)
     Real(dp) :: temperature(lanes), ye(lanes), restart(lanes), loss(lanes)
-    Integer :: counters(5,lanes), steps
   End Type result_t
   Type(result_t) :: expected(phases)
   Type(xnet_controls_t) :: controls
@@ -290,7 +290,8 @@ Contains
       EndIf
     EndDo
     If ( n < lanes ) Call check(All(x(:,n+1:) == before_x(:,n+1:)) .and. &
-      & All(temperature(n+1:) == before_temperature(n+1:)),Trim(label)//' beyond short batch')
+      & All(temperature(n+1:) == before_temperature(n+1:)) .and. All(ye(n+1:) == before_ye(n+1:)) .and. &
+      & All(restart(n+1:) == before_restart(n+1:)),Trim(label)//' beyond short batch')
     If ( .not. Any(active(:n)) ) Call check(All(times == 0.0_dp),Trim(label)//' empty timing')
     ! Print valid results before comparison so a failed comparison can be diagnosed.
     Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),steps
@@ -302,15 +303,20 @@ Contains
       expected(phase)%ye = ye
       expected(phase)%restart = restart
       expected(phase)%loss = loss
-      expected(phase)%counters = counters
-      expected(phase)%steps = steps
     Else
-      ! The same archive/backend executes the same arithmetic, as in run_library_tests.py.
-      Call check(All(x == expected(phase)%x) .and. All(temperature == expected(phase)%temperature) .and. &
-        & All(ye == expected(phase)%ye) .and. All(restart == expected(phase)%restart),Trim(label)//' state equality')
-      Call check(All(loss(:n) == expected(phase)%loss(:n)) .and. &
-        & All(counters(:,:n) == expected(phase)%counters(:,:n)) .and. steps == expected(phase)%steps, &
-        & Trim(label)//' diagnostic equality')
+      ! GPU atomic updates and reductions may change floating-point ordering between calls.
+      Call check(All(Abs(x(:,:n)-expected(phase)%x(:,:n)) <= &
+        & mass_fraction_atol + gpu_rtol*Max(Abs(x(:,:n)),Abs(expected(phase)%x(:,:n)))), &
+        & Trim(label)//' mass-fraction comparison')
+      Call check(All(Abs(temperature(:n)-expected(phase)%temperature(:n)) <= &
+        & gpu_rtol*Max(Abs(temperature(:n)),Abs(expected(phase)%temperature(:n)))), &
+        & Trim(label)//' temperature comparison')
+      Call check(All(Abs(ye(:n)-expected(phase)%ye(:n)) <= &
+        & gpu_rtol*Max(Abs(ye(:n)),Abs(expected(phase)%ye(:n)))),Trim(label)//' Ye comparison')
+      Call check(All(Abs(restart(:n)-expected(phase)%restart(:n)) <= &
+        & gpu_rtol*Max(Abs(restart(:n)),Abs(expected(phase)%restart(:n)))),Trim(label)//' restart comparison')
+      Call check(All(Abs(loss(:n)-expected(phase)%loss(:n)) <= &
+        & gpu_rtol*Max(Abs(loss(:n)),Abs(expected(phase)%loss(:n)))),Trim(label)//' neutrino-loss comparison')
     EndIf
     If ( phase == 2 ) Call check(Any(x(:,1) /= expected(1)%x(:,1)),Trim(label)//' repeated evolution')
     Return

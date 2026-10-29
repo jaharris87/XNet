@@ -198,13 +198,25 @@ association.
 For each resource lifetime, the caller runs host-array and mapped-device
 burns through first, repeated, short, inactive-hole, and all-inactive batches.
 It deliberately makes the unused host or device mirrors disagree, compares
-scientific results, counters and accepted step counts across the four paths
-using the same archive, and checks inactive state preservation. After each
+physical results across the four paths using the same archive, and checks
+per-call counters, accepted step counts and inactive state preservation. After each
 host-array call, a device region checks that all scientific device mirrors
 still contain the original poison, returning only a logical result. Device
 results are read immediately after the API returns without another stream
 wait. Timings must be finite and nonnegative; they are not compared across
 calls.
+
+GPU physical-output comparisons allow for floating-point ordering differences
+from atomic updates and reductions. Temperature, Ye, restart timestep and
+integrated neutrino loss use `rtol=1e-7` and
+`abs(a-b) <= rtol*max(abs(a),abs(b))`; mass fractions use
+`abs(a-b) <= 1e-12 + rtol*max(abs(a),abs(b))`. Counters and accepted steps are
+checked and reported per call without requiring identical adaptive work across
+burns. Inactive state, short-batch tails, required zeros, status and resource
+ownership assertions remain exact. These limits compare GPU API paths, not
+an independent scientific reference. The CPU suite retains its bitwise
+comparisons; production controls, existing references and other tolerances
+are unchanged.
 
 Each lifetime also requires mapped quiet-NaN and positive-infinity densities
 to return the finite-input diagnostic with zero counters, accepted steps, and timing.

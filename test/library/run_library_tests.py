@@ -11,15 +11,77 @@ import tempfile
 from pathlib import Path
 
 
-def run(command: list[str], cwd: Path, log: Path, stdin: str | None = None) -> str:
+def run(command: list[str], cwd: Path, log: Path, stdin: str | None = None,
+        expect_failure: bool = False) -> str:
     result = subprocess.run(
         command, cwd=cwd, input=stdin, text=True, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, timeout=180, check=False,
     )
-    log.write_text(result.stdout)
-    if result.returncode:
+    log.write_text(result.stdout + f"\nPROCESS_EXIT_STATUS {result.returncode}\n")
+    if expect_failure:
+        if result.returncode == 0:
+            raise RuntimeError(f"{command[0]} unexpectedly returned success; see {log}")
+    elif result.returncode:
         raise RuntimeError(f"{command[0]} exited {result.returncode}; see {log}")
     return result.stdout
+
+
+def check_fatal_burns(failure_exe: Path, xnet_exe: Path, data: Path, table: Path, work: Path) -> None:
+    """Use real controls/networks to reach integrator-reported and outer step-limit failure."""
+    for solver, solver_name in ((1, "BE"), (3, "BDF")):
+        for mode in ("step_limit", "integrator"):
+            case = work / f"fatal-{solver_name.lower()}-{mode}"
+            case.mkdir()
+            (case / data.name).symlink_to(data, target_is_directory=True)
+            (case / table.name).symlink_to(table)
+            nids = 3 if mode == "step_limit" else 4
+            public_output = run([str(failure_exe), data.name, str(solver), mode, str(nids)],
+                                case, case / "api.log")
+            if "HOST_RECEIVED_FATAL_BURN" not in public_output:
+                raise RuntimeError(f"API did not return the intended failure; see {case / 'api.log'}")
+            if any(line.startswith("End") for line in public_output.splitlines()):
+                raise RuntimeError(f"API wrote a successful final state; see {case / 'api.log'}")
+            if list(case.glob("ab_fail_*")) or list(case.glob("th_fail_*")):
+                raise RuntimeError(f"API wrote standalone failure files in {case}")
+
+            # Run the standalone executable with the same failure-control choices and public C/O input.
+            standalone = case / "standalone"
+            standalone.mkdir()
+            (standalone / data.name).symlink_to(data, target_is_directory=True)
+            (standalone / table.name).symlink_to(table)
+            (standalone / "thermo").write_text(
+                "Constant-condition fatal-burn check\n0.0\n0.1\n0.0\n"
+                "0.0 1.75 1.0e7 0.5\n0.1 1.75 1.0e7 0.5\n"
+            )
+            controls = ["&xnet_controls", f"isolv={solver},", "idiag=0, t9nse=11.0,",
+                        f"data_dir='{data.name}',", f"inab_files(1)='{data.name}/ab_co',",
+                        "thermo_files(1)='thermo',"]
+            if solver == 3:
+                controls += ["kitmx=10, iconvc=3, ymin=1.0e-99,"]
+            if mode == "step_limit":
+                controls += ["kstmx=1,"]
+            else:
+                if solver == 1:
+                    controls += ["tolc=1.0e-30, kitmx=1, iconvc=1,"]
+                else:
+                    controls += ["tolc=1.0e-100, yacc=1.0e-100,"]
+            (standalone / "controls.nml").write_text("\n".join([*controls, "/", ""]))
+            standalone_output = run([str(xnet_exe)], standalone, standalone / "xnet.log",
+                                    expect_failure=True)
+            if "[XNet] Evolution failed to converge" not in standalone_output:
+                raise RuntimeError(f"standalone stopped on an earlier path; see {standalone / 'xnet.log'}")
+            expected_files = {"ab_fail_001_001_001", "th_fail_001_001_001"}
+            observed_files = {p.name for p in standalone.glob("*_fail_*")}
+            if observed_files != expected_files:
+                raise RuntimeError(f"standalone failure filenames changed in {standalone}: {observed_files}")
+            diagnostic = "\n".join(p.read_text() for p in standalone.glob("net_diag*"))
+            if any(line.startswith("End") for line in diagnostic.splitlines()):
+                raise RuntimeError(f"standalone wrote successful final output in {standalone}")
+            integrator_failed = f"{solver_name} TS Fail" in diagnostic
+            if integrator_failed != (mode == "integrator"):
+                raise RuntimeError(f"standalone reached the wrong numerical failure path in {standalone}")
+            print(f"PASS {solver_name} {mode}: API reports zone/IDs/attempts; standalone terminates/files unchanged",
+                  flush=True)
 
 
 def states(output: str) -> dict[str, list[list[float | int]]]:
@@ -92,11 +154,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
+    parser.add_argument("--failure", type=Path, required=True)
+    parser.add_argument("--xnet", type=Path, required=True)
     parser.add_argument("--net-setup", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path, default=Path("build/runs"))
     args = parser.parse_args()
-    executables = [p.resolve(strict=True) for p in (args.api, args.reference, args.net_setup)]
-    api_exe, reference_exe, setup_exe = executables
+    executables = [p.resolve(strict=True) for p in (args.api, args.reference, args.net_setup, args.failure, args.xnet)]
+    api_exe, reference_exe, setup_exe, failure_exe, xnet_exe = executables
     root = Path(__file__).resolve().parents[2]
     table = root / "tools/starkiller-helmholtz/helm_table.dat"
     if not table.is_file():
@@ -157,6 +221,7 @@ def main() -> None:
         if network == "SN160" and not first[3] > 0:
             raise RuntimeError(f"{label}: weak-reaction neutrino loss not exercised")
         print(f"PASS {label}: five burn calls equal direct full_net; lifecycle/validation/metadata pass", flush=True)
+    check_fatal_burns(failure_exe, xnet_exe, networks["alpha"], table, work)
     print("Real serial CPU library consumer checks passed", flush=True)
 
 

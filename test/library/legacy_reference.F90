@@ -23,7 +23,7 @@ Program legacy_reference
   Use xnet_jacobian, Only: read_jacobian_data
   Use xnet_match, Only: read_match_data
   Use xnet_nnu, Only: nnuspec, tmevnu, fluxcms
-  Use xnet_nse, Only: nse_initialize
+  Use xnet_nse, Only: nse_initialize, nse_solve, ynse
   Use xnet_parallel, Only: parallel_initialize, parallel_myproc, parallel_nprocs
   Use xnet_screening, Only: screening_init
   Use xnet_types, Only: dp
@@ -38,9 +38,11 @@ Program legacy_reference
   Real(dp) :: auxiliary_x(lanes), auxiliary_a(lanes), auxiliary_z(lanes), loss(lanes), denu(lanes)
   Real(dp), Allocatable :: mass_fraction(:,:)
   Integer :: counters(5,lanes)
+  Logical :: test_nse
 
   Call check(Command_Argument_Count() == 3,'expected data_dir, isolv, and iheat arguments')
   Call Get_Command_Argument(1,data_dir)
+  test_nse = Trim(data_dir) == 'Data_SN160'
   Call Get_Command_Argument(2,argument)
   Read(argument,*,iostat=ierr) isolv
   Call check(ierr == 0,'invalid integrator argument')
@@ -164,8 +166,14 @@ Program legacy_reference
   Call fixture_state(nname(1:ny),density,temperature,electron_fraction,mass_fraction,restart, &
     & auxiliary_x,auxiliary_a,auxiliary_z)
   Call reference_burn('first',lanes,[.true.,.false.,.true.,.true.])
+  If ( test_nse ) Call reference_nse('first',1.0e6_dp,8.0_dp,0.45_dp)
   Call reference_burn('repeat',lanes,[.true.,.false.,.true.,.true.])
+  If ( test_nse ) Call reference_nse('second',1.0e7_dp,9.0_dp,0.49_dp)
   Call reference_burn('short',lanes-1,[.true.,.true.,.true.])
+  If ( test_nse ) Then
+    Call reference_nse('third',1.0e8_dp,11.0_dp,0.55_dp)
+    Call reference_nse('repeat',1.0e6_dp,8.0_dp,0.45_dp)
+  EndIf
   Call reference_burn('inactive',lanes,[.false.,.false.,.false.,.false.])
   Call fixture_state(nname(1:ny),density,temperature,electron_fraction,mass_fraction,restart, &
     & auxiliary_x,auxiliary_a,auxiliary_z)
@@ -178,6 +186,17 @@ Program legacy_reference
   Deallocate(mass_fraction)
 
 Contains
+
+  Subroutine reference_nse(label,density_in,t9_in,ye_in)
+    ! Use the legacy solver's GK input and A*ynse conversion independently of the public query.
+    Implicit None
+    Character(*), Intent(in) :: label
+    Real(dp), Intent(in) :: density_in, t9_in, ye_in
+
+    Call nse_solve(density_in,t9_in,ye_in)
+    Write(*,'(a,1x,a,*(1x,es26.17e3))') 'NSE',Trim(label),aa*ynse
+    Return
+  End Subroutine reference_nse
 
   Subroutine reference_burn(label,ncall,active)
     ! Reproduce the application-to-legacy-state conversion independently of the public burn routine.

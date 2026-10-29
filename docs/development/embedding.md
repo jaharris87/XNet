@@ -1,4 +1,4 @@
-# Constant-condition Fortran embedding
+# Fortran embedding
 
 Build the archive and compiler-specific module files with:
 
@@ -18,7 +18,7 @@ OpenMP, and GPU modes off. Other builds retain their standalone programs;
 the embedding procedures return `xnet_unsupported`. This does not qualify
 CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
 
-## Application-owned EOS
+## Application thermodynamics adapters
 
 Applications that already initialize their own EOS may supply a small
 `xnet_thermo` module when building the library. XNet keeps its composition
@@ -96,10 +96,11 @@ discovered automatically. Module includes are recorded in `xnet-config.mk`.
 not standalone `xnet` or `xnse`. The initial embedding support remains dense
 serial CPU only. Supplying a thermodynamics module does not by itself validate
 a full CHIMERA/Flash-X adapter or enable threaded/accelerator embedding. The
-default adapter retains XNet's device-routine directives; application adapters
-and this source split require separate accelerator validation.
+default adapter retains XNet's device-routine directives. Application adapters
+need their own device implementation and tests before accelerator embedding
+can be claimed.
 
-## Three procedures
+## Initialize, burn and finalize
 
 ```fortran
 Use xnet_api, Only: dp, xnet_controls_t, set_xnet_controls_defaults, &
@@ -189,11 +190,11 @@ rejected by validation preserve in/out physical state and return zero loss/count
 No automatic renormalization or repair is performed.
 
 `xnet_lifecycle_error` means that XNet is already initialized when initialization
-is requested, or that a burn is requested before initialization or after
-finalization. It describes call order, not a numerical failure. Calling
+is requested, or that a burn or NSE query is requested before initialization
+or after finalization. It describes call order, not a numerical failure. Calling
 `xnet_finalize` again after finalization is allowed and returns success.
 
-Numerical failure is fatal to the simulation, but returns to the embedded
+Numerical burn failure is fatal to the simulation, but returns to the embedded
 caller for host-controlled shutdown. `xnet_integrator_failure=4` reports a
 BE/BDF convergence or timestep failure after the integrator's internal retry
 logic. BDF's existing failure flag does not retain its detailed reason; this
@@ -222,3 +223,33 @@ thermodynamics adapter's finalizer. Built-in standalone providers release their
 own EOS storage; an application-supplied adapter leaves host-owned EOS state intact.
 The API never initializes/finalizes MPI or a GPU runtime.
 MPI, OpenMP, and caller-owned GPU embedding remain unqualified.
+
+## NSE composition
+
+After initialization, applications may also calculate one NSE composition:
+
+```fortran
+Use xnet_api, Only: xnet_nse_composition
+! Allocate nse_fraction with one entry per species in network%names.
+Call xnet_nse_composition(density,temperature,ye,nse_fraction,ierr,message)
+```
+
+Density is a scalar in g/cm^3, temperature is in K, and Ye is dimensionless.
+Density and temperature must be finite and positive; Ye must be finite and
+between zero and one. The initialized network and its existing screening
+settings apply. Calls share the same single-instance, non-reentrant CPU
+lifetime as burns; no additional initialization or EOS table loading occurs.
+
+The result is a copied vector `A*ynse` in XNet species order, matching the
+mass-number-weighted abundances used by CHIMERA's existing NSE wrapper. It is
+not the solver's nuclear-mass-weighted `xnse`. XNet does not normalize or
+reorder this vector, add an auxiliary reservoir, or compute application energy
+changes. Those operations remain with the application. A later query does
+not change an earlier copied result or the caller's burn arrays.
+
+Invalid inputs or a result vector of the wrong length return `xnet_invalid`;
+calls outside the initialized lifetime return `xnet_lifecycle_error`.
+Rejected calls zero the result vector. The existing `nse_solve` algorithm,
+screening choices and convergence tolerances are unchanged. A solver failure
+still terminates through its existing fatal path; unlike the reported burn
+failures above, it does not return an NSE-failure status or permit retry.

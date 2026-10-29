@@ -20,7 +20,7 @@ CHIMERA/Flash-X adapters, host EOS providers, or caller-owned GPU resources.
 
 ## Application thermodynamics adapters
 
-Applications that already initialize their own EOS may supply a small
+Applications with their own EOS may supply a small
 `xnet_eos_adapter` module when building the library. XNet keeps its composition
 moments, screening, scalar/vector masks, scratch, and internal-unit
 conversions in `source/xnet_eos.F90`:
@@ -84,11 +84,17 @@ arrays and exposes no host derived types. The bundled adapter in
 `source/xnet_eos_starkiller.F90` demonstrates the procedure signatures;
 an application supplies its own calls and ownership hooks.
 
-The host initializes its EOS before `xnet_initialize`. The application's
-initialization hook may prepare species mapping and its finalization hook
-releases only adapter-owned storage; neither reinitializes or destroys host
-tables, MPI, or accelerator state. XNet allocates and releases its own EOS
-scratch. The application links its own EOS objects and dependencies alongside
+The host must prepare its EOS data before the adapter first uses them. If
+`eos_adapter_initialize` reads host EOS data, those data must be ready before
+`xnet_initialize`. If the hook only prepares species mapping or other
+table-independent storage, the host may load its tables afterward, but before
+the first burn or NSE query. This permits CHIMERA's existing order: load
+network metadata, initialize the host EOS, then evaluate NSE and burn.
+
+The adapter's initialization and finalization hooks manage only adapter-owned
+mapping or storage; neither reinitializes or destroys host tables, MPI, or
+accelerator state. XNet allocates and releases its own EOS scratch. The
+application links its own EOS objects and dependencies alongside
 `libxnet.a`. These dependencies are not bundled into the XNet archive or
 discovered automatically. Module includes are recorded in `xnet-config.mk`.
 

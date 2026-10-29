@@ -164,7 +164,7 @@ Program gpu_consumer
         n = lanes
         active = .true.
         If ( phase == 3 ) n = lanes - 1
-        If ( phase == 4 ) active = [.true.,.false.,.true.,.true.]
+        If ( phase == 4 ) active(2) = .false.
         If ( phase == 5 ) active = .false.
         If ( resident ) Then
           label = Trim(prefix)//'_device_'//Trim(phase_names(phase))
@@ -241,7 +241,11 @@ Contains
   Subroutine burn_and_check()
     Implicit None
     Integer :: j
+    Logical :: submitted_active(lanes)
 
+    submitted_active = active
+    If ( phase == 4 ) Call check(active(1) .and. .not. active(2) .and. active(3) .and. active(4) .and. &
+      & Count(active) == 3,Trim(label)//' submitted hole mask')
     before_x = x
     before_temperature = temperature
     before_ye = ye
@@ -268,6 +272,7 @@ Contains
     EndIf
     Call api_ok(Trim(label)//' burn')
     If ( .not. resident ) Call check_host_device_poison()
+    Call check(All(active .eqv. submitted_active),Trim(label)//' unchanged active mask')
     Call selected_device_unchanged()
     times = [timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),Trim(label)//' timing')

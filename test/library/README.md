@@ -70,8 +70,8 @@ the five solver counters. The optional `max_steps_taken` result must equal
 the direct `full_net` `kstep`, including zero for an all-inactive batch.
 Selected rejected calls and all four numerical-failure cases must clear a
 nonzero step-count sentinel. The reinitialized burn omits the new optional
-argument to exercise an existing successful source call. A caller linked to
-the unsupported API branch can use `--unsupported` to check its zero result.
+argument to exercise an existing successful source call. Unsupported library
+configurations are rejected by Make rather than compiling API stubs.
 The same serial archive and equivalent arithmetic
 are expected to produce identical binary64 values; text output has enough
 decimal digits for those values to round-trip. This compares wrapper

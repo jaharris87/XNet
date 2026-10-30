@@ -23,11 +23,6 @@ Program api_consumer
   Real(dp) :: nan_value, inf_value
 
   Call get_command_argument(1,data_dir)
-  If ( Trim(data_dir) == '--unsupported' ) Then
-    Call probe_uninitialized(xnet_unsupported)
-    Write(*,'(a)') 'UNSUPPORTED_CHECKS_PASSED'
-    Stop
-  EndIf
   Call get_command_argument(2,arg)
   Read(arg,*) isolv
   Call get_command_argument(3,arg)

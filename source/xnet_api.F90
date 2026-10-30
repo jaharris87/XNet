@@ -1,4 +1,4 @@
-! Supported single-instance embedding procedures.
+! Single-instance library API.
 #include "xnet_macros.fh"
 
 Module xnet_api
@@ -34,7 +34,6 @@ Contains
   Subroutine xnet_initialize(controls,network,ierr,message,gpu_resources)
     ! Load a preprocessed network once. Reader, EOS and solver failures may still terminate.
     !$ Use omp_lib, Only: omp_get_max_threads
-#ifdef XNET_EMBEDDING
     Use nuclear_data, Only: ny, nname, ia, iz, be, mex, read_nuclear_data
     Use reaction_data, Only: read_reaction_data
     Use xnet_abundances, Only: abundances_initialize, y, yo, yt, ydot, ystart, xext, aext, zext
@@ -55,14 +54,12 @@ Contains
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_init, gpu_finalize
 #endif
-#endif
     Implicit None
     Type(xnet_controls_t), Intent(in) :: controls
     Type(xnet_network_t), Intent(out) :: network
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
     Type(xnet_gpu_t), Optional, Intent(in) :: gpu_resources
-#ifdef XNET_EMBEDDING
     Character(80) :: data_description
     Character(10), Parameter :: required_files(5) = &
       & [Character(10) :: 'sunet', 'netwinv', 'nets3', 'nets4', 'match_data']
@@ -84,7 +81,7 @@ Contains
     EndIf
     !$ If ( omp_get_max_threads() /= 1 ) Then
     !$   ierr = xnet_unsupported
-    !$   message = 'Embedded calls require one host OpenMP thread'
+    !$   message = 'Library calls require one host OpenMP thread'
     !$   Return
     !$ EndIf
 #ifndef XNET_GPU
@@ -103,7 +100,7 @@ Contains
     EndIf
     If ( controls%iprocess /= 0 .or. controls%ineutrino /= 0 .or. controls%itsout > 0 ) Then
       ierr = xnet_unsupported
-      message = 'Embedded calls require preprocessed data, no neutrino capture histories, and no time-series files'
+      message = 'Library calls require preprocessed data, no neutrino capture histories, and no time-series files'
       Return
     EndIf
     ! Check file access before installing state. File contents still use the existing fatal readers.
@@ -181,17 +178,12 @@ Contains
     network%mass_excess_mev = mex
     api_state = api_ready
     ierr = xnet_success
-#else
-    ierr = xnet_unsupported
-    message = 'Embedding requires a dense single-thread serial CPU or supported GPU build'
-#endif
     Return
   End Subroutine xnet_initialize
 
   Subroutine xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
     & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken,data_on_device)
     ! Constant density, with constant temperature unless self-heating is selected.
-#ifdef XNET_EMBEDDING
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: ny, aa
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
@@ -204,7 +196,6 @@ Contains
     Use xnet_gpu, Only: gpu_check_device
 #ifdef XNET_OMP_OL
     Use xnet_gpu, Only: stream, stream_sync
-#endif
 #endif
 #endif
     Implicit None
@@ -221,7 +212,6 @@ Contains
     Real(dp), Optional, Target, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
     Integer, Optional, Intent(out) :: max_steps_taken
     Logical, Optional, Intent(in) :: data_on_device
-#ifdef XNET_EMBEDDING
     Integer :: n, lane, kstep, evolve_status, failed_zone, id
     Real(dp), Allocatable :: loss_work(:)
     Real(dp) :: total_mass
@@ -471,18 +461,10 @@ Contains
         & Trim(failure_ids),']: ',Trim(failure_reason)
       message = failure_message
     EndIf
-#else
-    If ( Present(max_steps_taken) ) max_steps_taken = 0
-    timing = xnet_timing_t()
-    neutrino_loss = 0.0_dp
-    counters = 0
-    ierr = xnet_unsupported
-    message = 'Embedding requires a dense single-thread serial CPU or supported GPU build'
-#endif
     Return
   End Subroutine xnet_burn_batch
 
-#if defined(XNET_EMBEDDING) && defined(XNET_GPU)
+#ifdef XNET_GPU
   Subroutine check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
     & ierr,message,aux_x,aux_a,aux_z)
     ! Ordinary array descriptors identify mappings on the device already selected by the host.
@@ -763,13 +745,11 @@ Contains
   Subroutine xnet_nse_composition(density,temperature,ye,mass_fraction,ierr,message)
     ! Return a copy of A*ynse in network order for density in g/cm^3 and temperature in K.
     ! Existing NSE solver failures may still terminate the host application.
-#ifdef XNET_EMBEDDING
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: ny, aa
     Use xnet_nse, Only: nse_solve, ynse
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_check_device
-#endif
 #endif
     Implicit None
     Real(dp), Intent(in) :: density, temperature, ye
@@ -779,7 +759,6 @@ Contains
 
     mass_fraction = 0.0_dp
     message = ' '
-#ifdef XNET_EMBEDDING
     ierr = xnet_lifecycle_error
     If ( api_state /= api_ready ) Then
       message = 'Initialize XNet before requesting NSE composition'
@@ -808,16 +787,11 @@ Contains
     ! Match the existing CHIMERA A*ynse convention without normalization or reordering.
     mass_fraction = aa*ynse
     ierr = xnet_success
-#else
-    ierr = xnet_unsupported
-    message = 'Embedding requires a dense single-thread serial CPU or supported GPU build'
-#endif
     Return
   End Subroutine xnet_nse_composition
 
   Subroutine xnet_finalize(ierr,message)
     ! Release XNet workspaces and owned resources without destroying host state.
-#ifdef XNET_EMBEDDING
     Use nuclear_data, Only: nuclear_data_finalize
     Use reaction_data, Only: reaction_data_finalize
     Use xnet_abundances, Only: abundances_finalize, y, yo, yt, ydot, ystart, xext, aext, zext
@@ -838,13 +812,11 @@ Contains
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
 #endif
-#endif
     Implicit None
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
     ierr = xnet_success
     message = ' '
-#ifdef XNET_EMBEDDING
     If ( api_state == api_uninitialized ) Return
     If ( api_state == api_ready ) Then
 #ifdef XNET_GPU
@@ -882,14 +854,9 @@ Contains
     If ( ierr /= xnet_success ) Return
 #endif
     api_state = api_uninitialized
-#else
-    ierr = xnet_unsupported
-    message = 'Embedding requires a dense single-thread serial CPU or supported GPU build'
-#endif
     Return
   End Subroutine xnet_finalize
 
-#ifdef XNET_EMBEDDING
   Function current_timing() Result(timing)
     Use xnet_timers, Only: timer_xnet, timer_solve, timer_jacob, timer_deriv, timer_csect, timer_scrn
     Implicit None
@@ -902,6 +869,5 @@ Contains
     timing%screening = timer_scrn
     Return
   End Function current_timing
-#endif
 
 End Module xnet_api

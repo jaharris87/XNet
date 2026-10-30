@@ -1,4 +1,4 @@
-# Fortran embedding
+# Fortran library API
 
 Build the archive and compiler-specific module files with:
 
@@ -15,11 +15,12 @@ Use the same compiler and compatible precision/runtime options for the
 application. The external example under `test/library/`
 links through these outputs without compiling XNet sources.
 
-Embedding requires `MATRIX_SOLVER=dense`, `MPI_MODE=OFF`, and
+The library requires `MATRIX_SOLVER=dense`, `MPI_MODE=OFF`, and
 `OPENMP_MODE=OFF`. The CPU configuration has `GPU_MODE=OFF`. GPU builds may
 select CUDA/cuBLAS or HIP/ROCm with exactly one of OpenACC and OpenMP target
-offload enabled. Other library configurations return `xnet_unsupported`;
-standalone build selections are unchanged. Calls use one host thread and one
+offload enabled. Make rejects other library configurations when building
+`libxnet`. The API source is compiled only for the library; standalone build
+selections are unchanged. Calls use one host thread and one
 non-reentrant library instance. When host OpenMP is enabled by the offload
 compiler, `omp_get_max_threads()` must be one; set `OMP_NUM_THREADS=1` before
 starting the application.

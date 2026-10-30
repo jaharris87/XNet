@@ -1,5 +1,5 @@
 # Production source lists, object paths, and BUILD_DIR configuration checking.
-CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_api.F90 xnet_controls.F90 xnet_data.F90 xnet_output.F90 \
+CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_controls.F90 xnet_data.F90 xnet_output.F90 \
   xnet_abundances.F90 xnet_conditions.F90 xnet_constants.F90 xnet_evolve.F90 xnet_fd.F90 \
   xnet_ffn.F90 xnet_flux.F90 xnet_gpu.F90 xnet_integrate.F90 xnet_integrate_bdf.F90 \
   xnet_integrate_be.F90 xnet_linalg.F90 xnet_match.F90 xnet_nnu.F90 xnet_nse.F90 \
@@ -13,9 +13,20 @@ SETUP_CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_conditions.F90 xnet_controls.F
   net_setup.F90 xnet_constants.F90 xnet_fd.F90 xnet_ffn.F90 xnet_nnu.F90 \
   xnet_preprocess.F90 xnet_util.F90 xnet_types.F90)
 
+# The library API uses one dense-solver instance and one host thread.
+# Standalone builds do not compile the API or its unsupported configurations.
+LIBXNET_API_SRC :=
+ifeq ($(MATRIX_SOLVER):$(MPI_MODE):$(OPENMP_MODE),dense:OFF:OFF)
+  ifeq ($(GPU_MODE),OFF)
+    LIBXNET_API_SRC := $(SOURCE_DIR)/xnet_api.F90
+  else ifneq ($(filter CUDA:CUBLAS HIP:ROCM,$(GPU_BACKEND):$(GPU_LAPACK_VER)),)
+    LIBXNET_API_SRC := $(SOURCE_DIR)/xnet_api.F90
+  endif
+endif
+
 # XNet, EOS, Jacobian, and accelerator bindings are free-form Fortran. The
 # optional MA41/MA48 and bundled NETLIB sources are fixed-form Fortran.
-SOURCE_FREE_SRC := $(sort $(CORE_SRC) $(DRIVER_SRC) $(XNSE_CORE_SRC) \
+SOURCE_FREE_SRC := $(sort $(CORE_SRC) $(LIBXNET_API_SRC) $(DRIVER_SRC) $(XNSE_CORE_SRC) \
                    $(SETUP_CORE_SRC) $(XNSE_MAIN_SRC) $(MPI_SRC) $(SPARSE_SRC))
 EOS_FREE_SRC := $(sort $(EOS_SRC))
 SOLVER_FREE_SRC := $(JAC_SRC)
@@ -61,14 +72,6 @@ CPP_INCLUDE_FLAGS := -I$(SOURCE_DIR) $(sort $(addprefix -I,$(dir $(SOURCE_FREE_S
   $(EOS_FREE_SRC) $(SOLVER_FREE_SRC) $(GPU_FREE_SRC)))) \
   $(filter -I%,$(FFLAGS) $(F90FLAGS) $(LAPACK_INC) $(SOLVER_INC)) $(MPI_INCLUDE_FLAGS)$(if $(EOS_MODULE_FLAGS), $(EOS_MODULE_FLAGS))
 CPP_DEFINITION_FLAGS := $(filter -D% -U%,$(FFLAGS) $(F90FLAGS)) $(GPU_DEFINES)
-# Embedded calls use one dense-solver instance and one host thread.
-ifeq ($(MATRIX_SOLVER):$(MPI_MODE):$(OPENMP_MODE),dense:OFF:OFF)
-  ifeq ($(GPU_MODE),OFF)
-    CPP_DEFINITION_FLAGS += -DXNET_EMBEDDING
-  else ifneq ($(filter CUDA:CUBLAS HIP:ROCM,$(GPU_BACKEND):$(GPU_LAPACK_VER)),)
-    CPP_DEFINITION_FLAGS += -DXNET_EMBEDDING
-  endif
-endif
 CPP_EFFECTIVE_FLAGS := -P -C -nostdinc $(CPP_INCLUDE_FLAGS) $(CPP_DEFINITION_FLAGS)
 ifneq ($(filter CCE CRAY,$(PE_ENV)),)
   ifeq ($(OPENMP_OL_MODE),ON)
@@ -115,7 +118,7 @@ LAPACK_OBJ := $(foreach source,$(LAPACK_FIXED_SRC),$(call lapack_obj,$(source)))
 SOLVER_OBJ := $(SOLVER_FREE_OBJ) $(SOLVER_FIXED_OBJ)
 
 XNET_SOURCE_OBJ := $(foreach source,$(sort $(CORE_SRC) $(DRIVER_SRC) $(MPI_SRC) $(SPARSE_SRC)),$(call source_obj,$(source)))
-LIBXNET_SOURCE_OBJ := $(foreach source,$(sort $(CORE_SRC) $(MPI_SRC) $(SPARSE_SRC)),$(call source_obj,$(source)))
+LIBXNET_SOURCE_OBJ := $(foreach source,$(sort $(CORE_SRC) $(LIBXNET_API_SRC) $(MPI_SRC) $(SPARSE_SRC)),$(call source_obj,$(source)))
 XNSE_SOURCE_OBJ := $(foreach source,$(sort $(XNSE_CORE_SRC) $(XNSE_MAIN_SRC) $(MPI_SRC)),$(call source_obj,$(source)))
 SETUP_SOURCE_OBJ := $(foreach source,$(sort $(SETUP_CORE_SRC) $(MPI_SRC)),$(call source_obj,$(source)))
 XNET_OBJ := $(XNET_SOURCE_OBJ) $(EOS_OBJ) $(SOLVER_OBJ) $(LAPACK_OBJ) $(GPU_OBJ)

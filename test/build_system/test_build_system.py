@@ -138,6 +138,39 @@ end module
     )
 
 
+def check_library_selection(
+    work: pathlib.Path, environment: Mapping[str, str], ma48_dir: pathlib.Path
+) -> None:
+    # The API belongs to the library, including when both products share a
+    # build directory. Standalone configurations must not compile API stubs.
+    unsupported = (
+        ("MPI_MODE=ON",),
+        ("OPENMP_MODE=ON",),
+        ("MATRIX_SOLVER=MA48", f"MA48_DIR={ma48_dir}"),
+        ("GPU_MODE=ON", "GPU_BACKEND=CUDA", "GPU_LAPACK_VER=MAGMA",
+         "OPENACC_MODE=ON"),
+    )
+    for index, options in enumerate(((), *unsupported)):
+        build = work / f"api-selection-{index}"
+        common = (f"BUILD_DIR={build}", "PE_ENV=GNU", "MACHINE=generic", *options)
+        standalone = make(*common, "-n", "xnet", environment=environment)
+        require_success(standalone)
+        assert "xnet_api" not in standalone.stdout, standalone.stdout
+        if options:
+            # Reject an unsupported library even if an old archive exists.
+            archive = build / "lib" / "libxnet.a"
+            archive.parent.mkdir(parents=True)
+            archive.write_bytes(b"old unsupported archive\n")
+            for target in ("libxnet", str(archive)):
+                require_failure(make(*common, target, environment=environment),
+                                "libxnet requires a dense solver")
+            assert not (build / "obj" / "source" / "xnet_api.o").exists()
+        else:
+            library = make(*common, "-n", "libxnet", environment=environment)
+            require_success(library)
+            assert "xnet_api.F90" in library.stdout, library.stdout
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="xnet-build-system-") as temporary:
         work = pathlib.Path(temporary)
@@ -203,6 +236,8 @@ def main() -> int:
         )
         require_success(automatic_ma48)
         assert "BUILD_NAME = GNU-OPT-MA48" in automatic_ma48.stdout
+
+        check_library_selection(work, generic_environment, ma48_dir)
 
         explicit_name = make(
             f"BUILD_BASE={work / 'named-builds'}",

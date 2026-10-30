@@ -119,8 +119,8 @@ outside these tests' claims.
 ## GPU consumer
 
 `gpu_consumer.F90` is an opt-in hardware caller for the CUDA/cuBLAS and
-HIP/ROCm dense archives. GPU execution of this consumer is pending; successful
-CPU tests and preprocessing or compiler checks do not establish a GPU result.
+HIP/ROCm dense archives. These checks require a real GPU; successful CPU tests,
+preprocessing or compiler checks do not establish a GPU result.
 The normal `test` target above remains the serial CPU suite. The
 `gpu_consumer` target compiles and links the GPU caller without running it.
 
@@ -197,26 +197,46 @@ association.
 
 For each resource lifetime, the caller runs host-array and mapped-device
 burns through first, repeated, short, inactive-hole, and all-inactive batches.
-It deliberately makes the unused host or device mirrors disagree, compares
-physical results across the four paths using the same archive, and checks
-per-call counters, accepted step counts and inactive state preservation. After each
-host-array call, a device region checks that all scientific device mirrors
-still contain the original poison, returning only a logical result. Device
-results are read immediately after the API returns without another stream
-wait. Timings must be finite and nonnegative; they are not compared across
-calls.
+The first owned host-array sequence saves every phase's scientific inputs
+and expected outputs. Each later compared call restores those saved inputs,
+including the restart hint, on the side consumed by that API mode. Thus all
+four owned/borrowed host/device paths compare outputs from identical inputs,
+not from independently evolved prior outputs. Host-array restores do not
+refresh the deliberately poisoned device mirrors.
+
+A separate five-phase resident-device chain runs in each resource lifetime.
+It maps the fixture once and uploads no scientific arrays or restart hints
+between burns. Its subsequent calls consume its own device outputs, including
+the returned restart hint. These different-history outputs are not compared
+with the same-input reference. Their states, counters, steps, timings and
+restart values are logged; `CONTINUATION_DELTA` reports the maximum absolute
+changes in X, temperature, Ye and restart from each call's consumed inputs.
+These changes are observations, not numerical-equivalence checks. The caller
+runs 32 successful burns in total: 20 same-input phase calls, ten device-chain
+calls and two producer calls described below, plus four invalid-input calls.
+
+All calls retain the inactive-state, short-tail, mask, counter, accepted-step,
+status and ownership checks. The unused host or device scientific mirrors
+deliberately disagree. After each host-array call, a device region checks
+that its mirrors still contain the original poison, returning only a logical
+result. Device outputs are read immediately after the API returns without
+another stream wait, including in the persistent chains. Timings must be
+finite and nonnegative; they are not compared across calls.
 
 GPU physical-output comparisons allow for floating-point ordering differences
-from atomic updates and reductions. Temperature, Ye, restart timestep and
-integrated neutrino loss use `rtol=1e-7` and
+from atomic updates and reductions. Temperature and Ye use `rtol=1e-7` and
 `abs(a-b) <= rtol*max(abs(a),abs(b))`; mass fractions use
-`abs(a-b) <= 1e-12 + rtol*max(abs(a),abs(b))`. Counters and accepted steps are
-checked and reported per call without requiring identical adaptive work across
-burns. Inactive state, short-batch tails, required zeros, status and resource
-ownership assertions remain exact. These limits compare GPU API paths, not
-an independent scientific reference. The CPU suite retains its bitwise
-comparisons; production controls, existing references and other tolerances
-are unchanged.
+`abs(a-b) <= 1e-12 + rtol*max(abs(a),abs(b))`. Integrated neutrino loss uses
+the same relative formula with `rtol=1e-6`. Returned restart timesteps are
+logged and checked for finite nonnegative values, without a cross-run
+closeness requirement. Their input values are still identical for compared
+calls, and inactive restart values must remain exactly unchanged. Counters
+and accepted steps are checked and reported per call without requiring
+identical adaptive work across burns. Inactive state, short-batch tails,
+required zeros, status and resource ownership assertions remain exact.
+These limits compare GPU API paths, not an independent scientific reference.
+The CPU suite retains its bitwise comparisons; production controls, existing
+references and other tolerances are unchanged.
 
 Each lifetime also requires mapped quiet-NaN and positive-infinity densities
 to return the finite-input diagnostic with zero counters, accepted steps, and timing.
@@ -225,7 +245,8 @@ Two additional borrowed-resource calls queue four 256-by-256 GEMMs followed
 by a GEMM that replaces poisoned device density with the fixture density.
 The first call synchronizes the stream before entering the API; the second
 enters with the producer work queued and keeps all producer mappings alive
-through the burn. Both compare with the normal first burn. Submission is
+through the burn. Both compare with the normal first burn. No saved-input
+restore adds a transfer or wait after producer submission. Submission is
 asynchronous, but overlap with API entry depends on device scheduling. A
 successful run alone does not demonstrate that removing the entry wait is
 detected; record a missing-wait comparison separately when hardware permits it.

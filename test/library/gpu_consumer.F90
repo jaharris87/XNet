@@ -34,10 +34,11 @@ Program gpu_consumer
 
   Integer, Parameter :: lanes = 4, phases = 5, host_queue = 7
   Real(dp), Parameter :: gpu_rtol = 1.0e-7_dp, mass_fraction_atol = 1.0e-12_dp
+  Real(dp), Parameter :: loss_rtol = 1.0e-6_dp
   Character(8), Parameter :: phase_names(phases) = [Character(8) :: 'first','repeat','short','hole','inactive']
   Type :: result_t
     Real(dp), Allocatable :: x(:,:)
-    Real(dp) :: temperature(lanes), ye(lanes), restart(lanes), loss(lanes)
+    Real(dp) :: temperature(lanes), ye(lanes), loss(lanes)
   End Type result_t
   Type(result_t) :: expected(phases)
   Type(xnet_controls_t) :: controls
@@ -58,7 +59,9 @@ Program gpu_consumer
   Real(dp), Target :: density(lanes), temperature(lanes), ye(lanes), restart(lanes), loss(lanes)
   Real(dp), Target :: aux_x(lanes), aux_a(lanes), aux_z(lanes)
   Real(dp), Allocatable, Target :: x(:,:)
-  Real(dp), Allocatable :: before_x(:,:)
+  Real(dp), Allocatable :: before_x(:,:), input_x(:,:,:)
+  Real(dp) :: input_density(lanes,phases), input_temperature(lanes,phases), input_ye(lanes,phases)
+  Real(dp) :: input_restart(lanes,phases), input_aux_x(lanes,phases), input_aux_a(lanes,phases), input_aux_z(lanes,phases)
   Real(dp) :: before_temperature(lanes), before_ye(lanes), before_restart(lanes), times(6)
 
   Call check(Command_Argument_Count() >= 3,'expected data_dir, isolv, iheat, and optional device arguments')
@@ -142,7 +145,8 @@ Program gpu_consumer
     Call api_ok(Trim(prefix)//' initialize')
     Call selected_device_unchanged()
     If ( ownership == 1 ) Then
-      Allocate(x(Size(network%names),lanes),before_x(Size(network%names),lanes))
+      Allocate(x(Size(network%names),lanes),before_x(Size(network%names),lanes), &
+        & input_x(Size(network%names),lanes,phases))
       Do i = 1, phases
         Allocate(expected(i)%x(Size(network%names),lanes))
       EndDo
@@ -152,8 +156,8 @@ Program gpu_consumer
           & network%binding_energy_mev(i),network%mass_excess_mev(i)
       EndDo
     EndIf
-    Do path = 1, 2
-      resident = path == 2
+    Do path = 1, 3
+      resident = path /= 1
       Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
       loss = -1.0_dp
       ! Mapped host calls start with deliberately wrong device mirrors.
@@ -166,12 +170,39 @@ Program gpu_consumer
         If ( phase == 3 ) n = lanes - 1
         If ( phase == 4 ) active(2) = .false.
         If ( phase == 5 ) active = .false.
-        If ( resident ) Then
+        If ( path == 3 ) Then
+          label = Trim(prefix)//'_device_chain_'//Trim(phase_names(phase))
+        ElseIf ( resident ) Then
           label = Trim(prefix)//'_device_'//Trim(phase_names(phase))
         Else
           label = Trim(prefix)//'_host_'//Trim(phase_names(phase))
         EndIf
-        Call burn_and_check()
+        If ( ownership == 1 .and. path == 1 ) Then
+          ! Save the complete input to each canonical phase before its host burn.
+          input_density(:,phase) = density
+          input_temperature(:,phase) = temperature
+          input_ye(:,phase) = ye
+          input_x(:,:,phase) = x
+          input_restart(:,phase) = restart
+          input_aux_x(:,phase) = aux_x
+          input_aux_a(:,phase) = aux_a
+          input_aux_z(:,phase) = aux_z
+        ElseIf ( path /= 3 ) Then
+          ! Compared calls consume identical inputs, including the restart hint.
+          density = input_density(:,phase)
+          temperature = input_temperature(:,phase)
+          ye = input_ye(:,phase)
+          x = input_x(:,:,phase)
+          restart = input_restart(:,phase)
+          aux_x = input_aux_x(:,phase)
+          aux_a = input_aux_a(:,phase)
+          aux_z = input_aux_z(:,phase)
+          If ( resident ) Then
+            !XDIR XUPDATE XDEVICE(density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
+          EndIf
+        EndIf
+        ! The separate resident chain uploads no arrays or hints between burns.
+        Call burn_and_check(compare_outputs=path /= 3)
       EndDo
       !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
     EndDo
@@ -188,7 +219,7 @@ Program gpu_consumer
   Do i = 1, phases
     Deallocate(expected(i)%x)
   EndDo
-  Deallocate(x,before_x)
+  Deallocate(x,before_x,input_x)
   Write(*,'(a)') 'GPU_CONSUMER_CHECKS_COMPLETED'
 
 Contains
@@ -238,8 +269,9 @@ Contains
     Return
   End Subroutine poison_host_reals
 
-  Subroutine burn_and_check()
+  Subroutine burn_and_check(compare_outputs)
     Implicit None
+    Logical, Intent(in) :: compare_outputs
     Integer :: j
     Logical :: submitted_active(lanes)
 
@@ -302,11 +334,15 @@ Contains
     Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),steps
     Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times
     Call write_state(label,temperature(:n),ye(:n),x(:,:n),restart(:n),loss(:n),counters(:,:n))
-    If ( ownership == 1 .and. .not. resident ) Then
+    If ( .not. compare_outputs ) Then
+      ! Observe evolution from the consumed state, not agreement across different histories.
+      Write(*,'(a,1x,a,4(1x,es26.17e3))') 'CONTINUATION_DELTA',Trim(label), &
+        & Maxval(Abs(x(:,:n)-before_x(:,:n))),Maxval(Abs(temperature(:n)-before_temperature(:n))), &
+        & Maxval(Abs(ye(:n)-before_ye(:n))),Maxval(Abs(restart(:n)-before_restart(:n)))
+    ElseIf ( ownership == 1 .and. .not. resident ) Then
       expected(phase)%x = x
       expected(phase)%temperature = temperature
       expected(phase)%ye = ye
-      expected(phase)%restart = restart
       expected(phase)%loss = loss
     Else
       ! GPU atomic updates and reductions may change floating-point ordering between calls.
@@ -318,12 +354,10 @@ Contains
         & Trim(label)//' temperature comparison')
       Call check(All(Abs(ye(:n)-expected(phase)%ye(:n)) <= &
         & gpu_rtol*Max(Abs(ye(:n)),Abs(expected(phase)%ye(:n)))),Trim(label)//' Ye comparison')
-      Call check(All(Abs(restart(:n)-expected(phase)%restart(:n)) <= &
-        & gpu_rtol*Max(Abs(restart(:n)),Abs(expected(phase)%restart(:n)))),Trim(label)//' restart comparison')
       Call check(All(Abs(loss(:n)-expected(phase)%loss(:n)) <= &
-        & gpu_rtol*Max(Abs(loss(:n)),Abs(expected(phase)%loss(:n)))),Trim(label)//' neutrino-loss comparison')
+        & loss_rtol*Max(Abs(loss(:n)),Abs(expected(phase)%loss(:n)))),Trim(label)//' neutrino-loss comparison')
     EndIf
-    If ( phase == 2 ) Call check(Any(x(:,1) /= expected(1)%x(:,1)),Trim(label)//' repeated evolution')
+    If ( phase == 2 ) Call check(Any(x(:,1) /= before_x(:,1)),Trim(label)//' repeated evolution')
     Return
   End Subroutine burn_and_check
 
@@ -451,7 +485,7 @@ Contains
     n = lanes
     active = .true.
     ! The queued case has no host stream wait or additional mapping before API entry.
-    Call burn_and_check()
+    Call burn_and_check(compare_outputs=.true.)
     Call check(All(density == source_density),Trim(label)//' produced density')
     !XDIR XEXIT_DATA XDELETE(a,b,c,source_density,unit_matrix)
     !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)

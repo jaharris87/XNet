@@ -141,7 +141,7 @@ Contains
     ! This routine calculates the reaction rates for FFN weak rates
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: ln_2, ln_10, bok, m_e
-    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_conditions, Only: etae
     Use xnet_types, Only: dp
     Use xnet_controls, Only: lun_diag, idiag
@@ -176,12 +176,12 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(rf,dlnrfdt9,lt1) &
     !XDIR XCOPYIN(mask,t9,ene)
 
     ! Pre-calculate phase space integrals and derivatives
-    !XDIR XLOOP(2) XASYNC(tid) &
+    !XDIR XLOOP(2) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,etae,has_logft,ffn_qval,phasei,dphaseidt9) &
     !XDIR XPRIVATE(cheme)
     Do izb = zb_lo, zb_hi
@@ -194,7 +194,7 @@ Contains
       EndDo
     EndDo
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,lt1)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -208,7 +208,7 @@ Contains
       End If
     End Do
 
-    !XDIR XLOOP(2) XASYNC(tid) &
+    !XDIR XLOOP(2) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,lt1,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
     !XDIR XPRESENT(phasei,dphaseidt9) &
     !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
@@ -301,7 +301,7 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(rf,dlnrfdt9,phasei,dphaseidt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -315,7 +315,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(rf,dlnrfdt9) &
     !XDIR XDELETE(lt1) &
     !XDIR XDELETE(mask,t9,ene)
@@ -421,8 +421,14 @@ Contains
   End Subroutine effphase
 
   Subroutine ffn_finalize
-    ! Release XNet-owned CPU allocations.
+    ! Release mappings established by read_reaction_data before CPU allocations.
+    Use xnet_controls, Only: gpu_queue
     Implicit None
+    If ( Allocated(ffnsum) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(ffnsum,ffnenu,qkffn,has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9,rffn,dlnrffndt9)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
     If ( Allocated(ffn_ec) ) Deallocate (ffn_ec)
     If ( Allocated(ffn_beta) ) Deallocate (ffn_beta)
     If ( Allocated(ffnsum) ) Deallocate (ffnsum)

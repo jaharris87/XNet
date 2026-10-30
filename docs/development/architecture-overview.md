@@ -67,10 +67,12 @@ The exact order and conditional calls live in `source/net.F90`.
 callers. The current executable uses `apply_standalone_controls` to enforce its
 file-input requirements and copy the value into the existing module execution
 state. The `xnet_api` lifecycle provides initialization, constant-condition
-batched burns, scalar NSE composition queries, and CPU cleanup for the dense
-serial configuration. It shares control application and abundance/condition
-allocation with the standalone
-driver; the driver retains its general histories and file-output policy. See
+batched burns, scalar NSE composition queries, and cleanup for a dense
+instance whose host work is serial. CPU and GPU paths share control application,
+network preprocessing and abundance/condition allocation with the standalone
+driver. API burns can write separate per-call timestep histories through the
+existing output routines; the driver retains its general input histories and
+standalone filename policy. See
 [embedding.md](embedding.md) for status and ownership limits.
 
 ## Per-timestep flow
@@ -127,7 +129,7 @@ name:
 - `xnet_eos.F90`, `xnet_eos_helm.F90`, or
   `xnet_eos_bahcall.F90` supplies `xnet_eos`. STARKILLER and EXTERNAL use
   `xnet_eos.F90` for XNet's composition moments, screening, scratch,
-  masks, and unit conversions. The build selects a small `xnet_eos_adapter` module
+  masks, and unit conversions. The build selects a small `xnet_eos_interface` module
   for the underlying thermodynamics: the bundled `xnet_eos_starkiller.F90`
   adapter or an application source supplied with `EOS=EXTERNAL`. An
   application adapter leaves host-owned EOS initialization and cleanup to the host.

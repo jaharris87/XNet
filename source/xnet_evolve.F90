@@ -32,7 +32,7 @@ Contains
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
-      & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id, tid
+      & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id, tid, gpu_queue
     Use xnet_integrate, Only: timestep
     Use xnet_integrate_be, Only: solve_be
     Use xnet_integrate_bdf, Only: solve_bdf
@@ -85,7 +85,7 @@ Contains
     ! Set reaction controls not read in from control
     idiag0 = idiag
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(its,mykstep,lzsolve,lzoutput) &
     !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
 
@@ -94,7 +94,7 @@ Contains
     Call benuc(y(:,zb_lo:zb_hi),enb,enm)
 
     ! Initialize trial time step abundances and conditions
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
     !XDIR XPRESENT(enm,enb,enold,en0,delta_en,edot)
@@ -133,6 +133,9 @@ Contains
     ! Output initial abundances and conditions
     Call ts_output(0,delta_en,edot,sqnu)
     If ( idiag >= 0 ) Then
+      ! Embedded device-array burns prepare these values on the accelerator.
+      !XDIR XUPDATE XWAIT(gpu_queue) &
+      !XDIR XHOST(tstart,t9start,rhostart,yestart,ystart)
       Do izb = zb_lo, zb_hi
         If ( lzactive(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -166,7 +169,7 @@ Contains
       ! A reported integrator failure is fatal to the host call; do not advance other zones further.
       ! Keep all internal BE/BDF retries and the omitted-argument standalone path unchanged.
       If ( Present(ierr_out) ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(its)
         Do izb = zb_lo, zb_hi
           If ( lzactive(izb) .and. its(izb) > 0 ) Then
@@ -180,7 +183,7 @@ Contains
 
       ! If convergence is successful, output timestep results
       If ( idiag >= 1 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
@@ -200,7 +203,7 @@ Contains
         EndDo
       EndIf
 
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(enm,enold) &
       !XDIR XPRESENT(its,t,tstop,mykstep,lzsolve,lzoutput)
       Do izb = zb_lo, zb_hi
@@ -229,7 +232,7 @@ Contains
       Call benuc(yt(:,zb_lo:zb_hi),enb,enm,mask_in = lzoutput)
       Call enudot(yt(:,zb_lo:zb_hi),sqnu,mask_in = lzoutput)
 
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(its,enm,enold,en0,delta_en,edot,denu,sqnu,tdel)
       Do izb = zb_lo, zb_hi
         If ( lzoutput(izb) ) Then
@@ -239,7 +242,7 @@ Contains
         EndIf
       EndDo
 
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(lzoutput,lzsolve)
       Call ts_output(kstep,delta_en,edot,sqnu,mask_in = lzoutput)
 
@@ -247,7 +250,7 @@ Contains
       If ( .not. any( lzsolve ) ) Exit
     EndDo
 
-    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(its,mykstep,t,tdel)
 
     ! Test that the stop time is reached
@@ -287,12 +290,12 @@ Contains
     If ( Present(failed_zone) ) failed_zone = failure_zone
     kstep = max(1, maxval(mykstep))
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(denu) &
     !XDIR XDELETE(enm,enb,enold,en0,delta_en,edot,sqnu) &
     !XDIR XDELETE(its,mykstep,lzsolve,lzoutput)
 
-    !XDIR XWAIT(tid)
+    !XDIR XWAIT(gpu_queue)
 
     stop_timer = xnet_wtime()
     timer_xnet = timer_xnet + stop_timer

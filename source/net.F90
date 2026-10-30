@@ -18,7 +18,9 @@ Program net
   ! This is the driver for running XNet
   !-------------------------------------------------------------------------------------------------
   Use nuclear_data, Only: ny, aa, zz, nname, index_from_name, read_nuclear_data
+#ifdef XNET_HOST_OPENMP
 !$ Use omp_lib
+#endif
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, parallel_nprocs, &
     & parallel_IOProcessor
   Use reaction_data, Only: read_reaction_data
@@ -29,7 +31,7 @@ Program net
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
-    & lun_diag, lun_ev, lun_stdout, lun_ts, tid, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
+    & lun_diag, lun_ev, lun_stdout, lun_ts, tid, gpu_queue, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
     & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls, iaux
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
@@ -76,14 +78,26 @@ Program net
   nproc = parallel_nprocs()
 
   ! Identify threads
+#ifdef XNET_HOST_OPENMP
   !$omp parallel default(shared)
+#endif
   tid = 1
+#ifdef XNET_HOST_OPENMP
   !$ tid = omp_get_thread_num() + 1
+#endif
+#ifdef XNET_HOST_OPENMP
   !$omp single
+#endif
   nthread = 1
+#ifdef XNET_HOST_OPENMP
   !$ nthread = omp_get_num_threads()
+#endif
+#ifdef XNET_HOST_OPENMP
   !$omp end single
+#endif
+#ifdef XNET_HOST_OPENMP
   !$omp end parallel
+#endif
 
   Call gpu_init()
 
@@ -105,25 +119,35 @@ Program net
   ! Open diagnostic output file, per thread if OMP. Keep this long-lived stream on a positive
   ! logical unit; some compiler runtimes can alias negative NEWUNIT values after many short-lived
   ! per-zone files are opened and closed.
+#ifdef XNET_HOST_OPENMP
   !$omp parallel default(shared) private(diag_file,diag_ierr)
+#endif
   If ( idiag >= 0 ) Then
     diag_file = trim(diag_file_base)
     Call name_ordered(diag_file,myid,nproc)
     Call name_ordered(diag_file,tid,nthread)
     diag_ierr = 0
+#ifdef XNET_HOST_OPENMP
     !$omp critical(diag_open)
+#endif
     lun_diag = getNewUnit()
     If ( lun_diag > 0 ) Open(unit=lun_diag, file=diag_file, action='write', iostat=diag_ierr)
+#ifdef XNET_HOST_OPENMP
     !$omp end critical(diag_open)
+#endif
     If ( lun_diag == 0 ) Call xnet_terminate('No free logical unit for diagnostic output')
     If ( diag_ierr /= 0 ) Call xnet_terminate('Failed to open diagnostic output: '//trim(diag_file),diag_ierr)
     Write(lun_diag,"(a5,2i5)") 'MyId',myid,nproc
+#ifdef XNET_HOST_OPENMP
     !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',tid,' of ',nthread
+#endif
   Else
     lun_diag = lun_stdout
   EndIf
   Call write_controls(lun_diag,data_dir)
+#ifdef XNET_HOST_OPENMP
   !$omp end parallel
+#endif
 
   ! Read and distribute nuclear and reaction data
   Call read_nuclear_data(data_dir,data_desc)
@@ -177,7 +201,7 @@ Program net
   Allocate ( denu(nzevolve) )
   denu = 0.0
 
-  !XDIR XENTER_DATA XASYNC(tid) &
+  !XDIR XENTER_DATA XASYNC(gpu_queue) &
   !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext) &
   !XDIR XCOPYIN(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XCOPYIN(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
@@ -185,14 +209,16 @@ Program net
   !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
   !XDIR XCOPYIN(denu)
 
-  !XDIR XWAIT(tid)
+  !XDIR XWAIT(gpu_queue)
 
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
+#ifdef XNET_HOST_OPENMP
   !$omp parallel default(shared) &
   !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
   !$omp   copyin(timer_setup)
+#endif
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
@@ -203,7 +229,9 @@ Program net
   timer_setup = timer_setup + stop_timer
 
   ! Loop over zones in batches, assigning each batch of zones to MPI tasks in order
+#ifdef XNET_HOST_OPENMP
   !$omp do
+#endif
   Do ibatch = myid+1, batch_count, nproc
 
     start_timer = xnet_wtime()
@@ -289,7 +317,8 @@ Program net
             Open(newunit=lun_ev(izb), file=ev_file, action='write')
 
             ! Write evolution file header
-            Write(ev_header_format,"(a)") "(a4,a15,5a10,"//trim(nnucout_string)//"a9,a4)"
+            ev_header_format = '(a4,a15,5a10,a4)'
+            If ( nnucout > 0 ) ev_header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
             Write(lun_ev(izb),ev_header_format) &
               & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout), ' It '
           EndIf
@@ -297,7 +326,7 @@ Program net
       EndDo
     EndIf
 
-    !XDIR XUPDATE XASYNC(tid) &
+    !XDIR XUPDATE XASYNC(gpu_queue) &
     !XDIR XDEVICE(xext,aext,zext) &
     !XDIR XDEVICE(lzactive,tdel,t,t9,rho,ye,y,nt) &
     !XDIR XDEVICE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
@@ -311,7 +340,7 @@ Program net
 
     ! Test how well sums of fluxes match abundances changes
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(y)
       Do izb = zb_lo, zb_hi
         If ( lzactive(izb) ) Then
@@ -336,13 +365,17 @@ Program net
       EndIf
     EndDo
   EndDo
+#ifdef XNET_HOST_OPENMP
   !$omp end do
+#endif
 
   ! Close diagnostic output file
   If ( idiag >= 0 ) Close(lun_diag)
+#ifdef XNET_HOST_OPENMP
   !$omp end parallel
+#endif
 
-  !XDIR XEXIT_DATA XASYNC(tid) &
+  !XDIR XEXIT_DATA XASYNC(gpu_queue) &
   !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
   !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
@@ -350,7 +383,7 @@ Program net
   !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
   !XDIR XDELETE(denu)
 
-  !XDIR XWAIT(tid)
+  !XDIR XWAIT(gpu_queue)
 
   Call gpu_finalize()
 

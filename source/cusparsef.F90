@@ -3,14 +3,16 @@
 ! this file contains the module defining fortran interfaces for the cublas library
 !***************************************************************************************************
 
-module cusparsef
+module xnet_cusparsef
   !-------------------------------------------------------------------------------------------------
   ! Interface to cuSPARSE routines
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
 
   type(c_ptr) :: cusparse_handle
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(cusparse_handle)
+#endif
 
   enum, bind(c) !:: cusparseIndexBase_t
     enumerator :: CUSPARSE_INDEX_BASE_ZERO = 0
@@ -111,4 +113,4 @@ module cusparsef
 
   end interface
 
-end module cusparsef
+end module xnet_cusparsef

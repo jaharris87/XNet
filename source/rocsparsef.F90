@@ -3,7 +3,7 @@
 ! this file contains the module defining fortran interfaces for the rocSPARSE library
 !***************************************************************************************************
 
-module rocsparsef
+module xnet_rocsparsef
   !-------------------------------------------------------------------------------------------------
   ! Interface to rocSPARSE routines
   !-------------------------------------------------------------------------------------------------
@@ -14,6 +14,8 @@ module rocsparsef
     rocsparse_dgthr
 
   type(c_ptr) :: rocsparse_handle
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(rocsparse_handle)
+#endif
 
-end module rocsparsef
+end module xnet_rocsparsef

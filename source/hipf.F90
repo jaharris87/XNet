@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the HIP Runtime API
 !***************************************************************************************************
 
-module hipf
+module xnet_hipf
   !-------------------------------------------------------------------------------------------------
   ! Interface to hip Runtime API
   !-------------------------------------------------------------------------------------------------
@@ -17,13 +17,18 @@ module hipf
     rocsolverCheck
   use hipfort, only: &
     hipGetDeviceCount, &
+    hipGetDevice, &
     hipSetDevice, &
     hipStreamCreate, &
+    hipStreamCreateWithFlags, &
+    hipStreamNonBlocking, &
     hipStreamDestroy, &
     hipStreamSynchronize, &
     hipDeviceSynchronize
 
-  type(c_ptr), target :: stream
+  type(c_ptr), target :: stream = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(stream)
+#endif
 
-end module hipf
+end module xnet_hipf

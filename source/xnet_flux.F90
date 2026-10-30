@@ -53,13 +53,17 @@ Contains
     Allocate (flx(mflx,nzevolve),flx_int(mflx,nzevolve))
     flx = 0.0
     flx_int = 0.0
+#ifdef XNET_HOST_OPENMP
     !$omp parallel default(shared)
+#endif
     If ( idiag >= 5 ) Then
       Write(lun_diag,"(a)") 'Flux Init'
       Write(lun_diag,"(12i5,2f6.3)") &
         & ((nflx(j,i),j=1,8),ifl_orig(i),ifl_term(i),countf(i),countr(i),(dcflx(k,i),k=1,2),i=1,mflx)
     EndIf
+#ifdef XNET_HOST_OPENMP
     !$omp end parallel
+#endif
 
     Return
   End Subroutine flux_init
@@ -73,7 +77,7 @@ Contains
     Use reaction_data, Only: csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i, nreac
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: tdel
-    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_match, Only: ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx
     Use xnet_types, Only: dp
     Implicit None
@@ -93,7 +97,7 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(csect1,csect2,csect3,csect4,yt,tdel)
 
     Do izb = zb_lo, zb_hi

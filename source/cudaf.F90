@@ -3,14 +3,16 @@
 ! This file contains the module defining Fortran interfaces for the CUDA Runtime API
 !***************************************************************************************************
 
-module cudaf
+module xnet_cudaf
   !-------------------------------------------------------------------------------------------------
   ! Interface to CUDA Runtime API
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
 
-  type(c_ptr), target :: stream
+  type(c_ptr), target :: stream = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(stream)
+#endif
 
   enum, bind(c) !:: cudaMemcpyKind
     enumerator :: cudaMemcpyHostToHost = 0
@@ -262,6 +264,13 @@ module cudaf
       integer(c_int) :: deviceCount
     end function cudaGetDeviceCount
 
+    integer(c_int) function &
+        & cudaGetDevice(device) &
+        & bind(c, name="cudaGetDevice")
+      use, intrinsic :: iso_c_binding
+      integer(c_int) :: device
+    end function cudaGetDevice
+
     !integer(c_int) function &
     !    & cudaGetDeviceProperties(prop, device) &
     !    & bind(c, name="cudaGetDeviceProperties")
@@ -375,4 +384,4 @@ module cudaf
 
   end interface
 
-end module cudaf
+end module xnet_cudaf

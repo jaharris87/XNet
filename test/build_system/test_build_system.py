@@ -51,17 +51,17 @@ def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> No
     ))
     supplied_eos = work / "application_eos.F90"
     supplied_eos.write_text(
-        """module xnet_eos_adapter
+        """module xnet_eos_interface
   use xnet_types, only: dp
   use host_eos_marker, only: marker
   implicit none
 contains
-  subroutine eos_adapter_initialize(nspecies,names,a,z)
+  subroutine xnet_eos_interface_initialize(nspecies,names,a,z)
     integer, intent(in) :: nspecies
     character(*), intent(in) :: names(nspecies)
     real(dp), intent(in) :: a(nspecies), z(nspecies)
   end subroutine
-  subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+  subroutine xnet_eos_interface_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
     integer, intent(in) :: nspecies
     real(dp), intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
     real(dp), intent(out) :: cv, eta, detadt
@@ -69,7 +69,7 @@ contains
     eta = 0.0_dp
     detadt = 0.0_dp
   end subroutine
-  subroutine eos_adapter_finalize
+  subroutine xnet_eos_interface_finalize
   end subroutine
 end module
 """,
@@ -89,6 +89,7 @@ end module
         assert not (external / "obj" / "eos" / f"{unused}.o").exists()
     exported = (external / "xnet-config.mk").read_text(encoding="utf-8")
     assert f"XNET_MODFLAGS := -I{external / 'mod'} -I{host_modules}\n" in exported
+    assert f"XNET_CPPFLAGS := -I{SOURCE} " in exported
     external_config = (external / "config.txt").read_text(encoding="utf-8")
     assert f"EOS_SOURCES={SOURCE / 'xnet_eos.F90'} {supplied_eos}\n" in external_config
     assert f"-I{host_modules}" in external_config
@@ -135,6 +136,39 @@ end module
              "libxnet", environment=environment),
         "incompatible BUILD_DIR configuration",
     )
+
+
+def check_library_selection(
+    work: pathlib.Path, environment: Mapping[str, str], ma48_dir: pathlib.Path
+) -> None:
+    # The API belongs to the library, including when both products share a
+    # build directory. Standalone configurations must not compile API stubs.
+    unsupported = (
+        ("MPI_MODE=ON",),
+        ("OPENMP_MODE=ON",),
+        ("MATRIX_SOLVER=MA48", f"MA48_DIR={ma48_dir}"),
+        ("GPU_MODE=ON", "GPU_BACKEND=CUDA", "GPU_LAPACK_VER=MAGMA",
+         "OPENACC_MODE=ON"),
+    )
+    for index, options in enumerate(((), *unsupported)):
+        build = work / f"api-selection-{index}"
+        common = (f"BUILD_DIR={build}", "PE_ENV=GNU", "MACHINE=generic", *options)
+        standalone = make(*common, "-n", "xnet", environment=environment)
+        require_success(standalone)
+        assert "xnet_api" not in standalone.stdout, standalone.stdout
+        if options:
+            # Reject an unsupported library even if an old archive exists.
+            archive = build / "lib" / "libxnet.a"
+            archive.parent.mkdir(parents=True)
+            archive.write_bytes(b"old unsupported archive\n")
+            for target in ("libxnet", str(archive)):
+                require_failure(make(*common, target, environment=environment),
+                                "libxnet requires a dense solver")
+            assert not (build / "obj" / "source" / "xnet_api.o").exists()
+        else:
+            library = make(*common, "-n", "libxnet", environment=environment)
+            require_success(library)
+            assert "xnet_api.F90" in library.stdout, library.stdout
 
 
 def main() -> int:
@@ -202,6 +236,8 @@ def main() -> int:
         )
         require_success(automatic_ma48)
         assert "BUILD_NAME = GNU-OPT-MA48" in automatic_ma48.stdout
+
+        check_library_selection(work, generic_environment, ma48_dir)
 
         explicit_name = make(
             f"BUILD_BASE={work / 'named-builds'}",

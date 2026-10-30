@@ -3,14 +3,16 @@
 ! This file contains the module defining Fortran interfaces for the cuBLAS library
 !***************************************************************************************************
 
-module cublasf
+module xnet_cublasf
   !-------------------------------------------------------------------------------------------------
   ! Interface to cuBLAS routines
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
 
-  type(c_ptr) :: cublas_handle
+  type(c_ptr) :: cublas_handle = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(cublas_handle)
+#endif
 
   enum, bind(c) !:: cublasStatus_t
     enumerator :: CUBLAS_STATUS_SUCCESS = 0
@@ -507,4 +509,4 @@ module cublasf
 
   end interface
 
-end module cublasf
+end module xnet_cublasf

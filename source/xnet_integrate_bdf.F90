@@ -29,7 +29,7 @@
 
 Module xnet_integrate_bdf
   Use nuclear_data, Only: ny
-  Use xnet_controls, Only: idiag, iheat, iscrn, nzevolve, szbatch, zb_lo, zb_hi, lzactive, tid, &
+  Use xnet_controls, Only: idiag, iheat, iscrn, nzevolve, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue, &
     & lun_diag, lun_stdout
   Use xnet_types, Only: dp
   Implicit None
@@ -175,13 +175,13 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ierr)
 
     ! Initial setup and allocations
     If ( kstep == 1 ) Call bdf_reset
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ydot,ydot0,t9dot,t9dot0,eta_next) &
     !XDIR XPRESENT(ierr,ierr_nr,ierr_ts,nit_ts,nerr_ts,ncf_ts)
     Do izb = zb_lo, zb_hi
@@ -211,7 +211,7 @@ Contains
       nerr_ts(izb) = 0
       ncf_ts(izb) = 0
     EndDo
-    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(ierr_nr)
 
     ! Make adjustments to account for any change in stepsize or order from previous step
@@ -221,7 +221,7 @@ Contains
       Do izb = zb_lo, zb_hi
         bdf_active(izb) = ( ierr_nr(izb) == BDF_STATUS_FAIL )
       EndDo
-      !XDIR XUPDATE XASYNC(tid) &
+      !XDIR XUPDATE XASYNC(gpu_queue) &
       !XDIR XDEVICE(bdf_active)
 
       Call bdf_update(kstep)
@@ -239,7 +239,7 @@ Contains
     Call bdf_eta(kstep)
     If ( check_stability ) Call bdf_stab(kstep)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr,ierr_nr,ierr_ts,nit_ts,nit_nrslv,eta,z) &
     !XDIR XPRESENT(kmon,ktot,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
@@ -282,17 +282,17 @@ Contains
 
     ! Log TS success/failure
     If ( idiag >= 0 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ierr_nr,ierr_ts)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS .and. idiag >= 2 ) Then
-          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XUPDATE XWAIT(gpu_queue) &
           !XDIR XHOST(nit_ts(izb),nit_nr(izb))
           Write(lun_diag,"(a,2i5,2i3)") &
             'BDF TS Success',kstep,izone,nit_ts(izb),nit_nr(izb)
         ElseIf ( ierr_nr(izb) == BDF_STATUS_FAIL .or. ierr_ts(izb) == BDF_STATUS_FAIL ) Then
-          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XUPDATE XWAIT(gpu_queue) &
           !XDIR XHOST(t(izb),tdel(izb),t9t(izb),rhot(izb),nit_ts(izb),nit_nr(izb))
           Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
             'BDF TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),nit_nr(izb),nit_ts(izb)
@@ -300,7 +300,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(ierr)
 
     stop_timer = xnet_wtime()
@@ -474,7 +474,7 @@ Contains
     detect = .false.
     ldflag = 0
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(A_pascal,Ainv_pascal,rtol,atol,bdf_active,retry_ts) &
     !XDIR XCOPYIN(nit_nrslv,nit_nr,nit_ts,ierr_nr,ierr_ts,nerr_ts,ncf_ts) &
     !XDIR XCOPYIN(q,deltaq,j_age,p_age,q_age,nscon,sddat,z,z0,zt0) &
@@ -489,10 +489,23 @@ Contains
 
   Subroutine bdf_finalize
     !-----------------------------------------------------------------------------------------------
-    ! This routine releases the CPU workspace allocated by bdf_init.
+    ! This routine releases the device mappings and CPU workspace allocated by bdf_init.
     !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: gpu_queue
     Implicit None
 
+    If ( allocated(A_pascal) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(A_pascal,Ainv_pascal,rtol,atol,bdf_active,retry_ts) &
+      !XDIR XDELETE(nit_nrslv,nit_nr,nit_ts,ierr_nr,ierr_ts,nerr_ts,ncf_ts) &
+      !XDIR XDELETE(q,deltaq,j_age,p_age,q_age,nscon,sddat,z,z0,zt0) &
+      !XDIR XDELETE(hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio) &
+      !XDIR XDELETE(ewt,acor,acorp,acnrm,crate,tq,tq2save,ydot0,t9dot0) &
+      !XDIR XDELETE(restore,rescale,rebuild,refactor,iterate,converged,eval_rates) &
+      !XDIR XDELETE(diag,mult,yrhs,dy,t9rhs,dt9,dvec,del,delp,dcon) &
+      !XDIR XDELETE(errorq,acorhat,detect,ldflag)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
     If ( allocated(A_pascal) ) Deallocate (A_pascal)
     If ( allocated(Ainv_pascal) ) Deallocate (Ainv_pascal)
     If ( allocated(rtol) ) Deallocate (rtol)
@@ -570,7 +583,7 @@ Contains
     ! Local variables
     Integer :: i, j, k, izb
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(yt,ydot,t9t,t9dot,tdel) &
     !XDIR XPRESENT(bdf_active,retry_ts) &
     !XDIR XPRESENT(nit_nrslv,nit_nr,nit_ts,ierr_nr,ierr_ts,nerr_ts,ncf_ts) &
@@ -679,7 +692,7 @@ Contains
     Integer :: i, j, izb
 
     ! See if stepsize has changed from last step
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(rescale,ierr_ts,tdel,tdel_old,eta)
     Do izb = zb_lo, zb_hi
       rescale(izb) = .false.
@@ -716,7 +729,7 @@ Contains
     ! Local variables
     Integer :: i, j, k, izb, izone
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(bdf_active) &
     !XDIR XPRESENT(z,z0,zt0,q,A_pascal)
     Do izb = zb_lo, zb_hi
@@ -740,7 +753,7 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(q,tdel,z,zt0,yt,ydot,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
@@ -793,7 +806,7 @@ Contains
     Character(5) :: ewtname(2)
     Integer :: iewt(2), i, j, izb, izone
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(bdf_active) &
     !XDIR XPRESENT(lvec,hvec,q,tq,gam,gamhat,gamratio,tdel) &
     !XDIR XPRIVATE(hsum,xi_inv,xistar_inv,alpha0,alpha0_hat,c,cinv) &
@@ -879,7 +892,7 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(bdf_active,q,tdel,tt,hvec,tq,ewt)
       Do izb = zb_lo, zb_hi
         If ( bdf_active(izb) ) Then
@@ -929,7 +942,7 @@ Contains
     timer_nraph = timer_nraph - start_timer
 
     ! Load prediction into abundance vector and initialize masks
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(bdf_active,yt,t9t,zt0,acor,nit_nr,nit_nrslv) &
     !XDIR XPRESENT(rebuild,refactor,iterate,converged,retry_ts) &
     !XDIR XPRESENT(p_age,j_age,gam,gamratio,crate,delp,diag,mult)
@@ -962,7 +975,7 @@ Contains
       diag(izb) = 1.0_dp
       mult(izb) = -gam(izb)
     EndDo
-    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(iterate,refactor,rebuild)
     If ( iheat == 0 ) Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi), &
       rhot(zb_lo:zb_hi),mask_in = retry_ts(zb_lo:zb_hi))
@@ -971,7 +984,7 @@ Contains
     Do kit = 1, max_it_nrslv
 
       ! Increment NR counter
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,nit_nr,nit_nrslv)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
@@ -990,7 +1003,7 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
-      !XDIR XUPDATE XASYNC(tid) &
+      !XDIR XUPDATE XASYNC(gpu_queue) &
       !XDIR XDEVICE(eval_rates)
 
       ! Update abundance derivatives and build Jacobian
@@ -1001,7 +1014,7 @@ Contains
       Call jacobian_decomp(kstep,mask_in = refactor)
 
       If ( idiag >= 4 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(refactor,rebuild,nit_nr,gam,gamratio,p_age,j_age)
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
@@ -1012,7 +1025,7 @@ Contains
         EndDo
       EndIf
 
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(refactor,rebuild,iterate) &
       !XDIR XPRESENT(gam,gamhat,gamratio,crate,p_age,j_age,lvec,acor) &
       !XDIR XPRESENT(yrhs,ydot,t9rhs,t9dot,zt0) &
@@ -1044,7 +1057,7 @@ Contains
       EndDo
 
       If ( idiag >= 4 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(iterate,nit_nr,gam,gamratio,tdel) &
         !XDIR XHOST(yrhs,ydot,yt,zt0,t9rhs,t9dot,t9t)
         Do izb = zb_lo, zb_hi
@@ -1064,7 +1077,7 @@ Contains
       Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
 
       ! Apply the iterative correction
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,aa,yt,dy,t9t,dt9,zt0) &
       !XDIR XPRESENT(acor,dvec,ewt,del,delp,crate,dcon,tq,nit_nr)
       Do izb = zb_lo, zb_hi
@@ -1095,7 +1108,7 @@ Contains
       EndDo
 
       If ( idiag >= 3 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(iterate,nit_nr,dy,y,dt9,t9t,yt,del,dcon,crate)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
@@ -1116,7 +1129,7 @@ Contains
       EndIf
 
       ! Test for convergence
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,converged,refactor,rebuild,nit_nr,nit_nrslv,j_age) &
       !XDIR XPRESENT(dcon,acor,acnrm,ewt,del,delp,gamratio,yt,t9t,zt0)
       Do izb = zb_lo, zb_hi
@@ -1164,7 +1177,7 @@ Contains
           delp(izb) = del(izb)
         EndIf
       EndDo
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(iterate,refactor,rebuild)
 
       ! Check that all zones are converged
@@ -1173,7 +1186,7 @@ Contains
     EndDo
     
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(converged,nit_nr,nit_nrslv,dcon,gamratio,crate,j_age,p_age)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
@@ -1211,7 +1224,7 @@ Contains
     Real(dp) :: error
     Integer :: i, j, k, izb, izone
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(bdf_active,restore,rescale,retry_ts) &
     !XDIR XPRESENT(nit_nr,nit_nrslv,nit_ts,ncf_ts,ierr_nr,ierr_ts,nerr_ts) &
     !XDIR XPRESENT(eta,eta_next,q,tq,q_age,deltaq,acnrm) &
@@ -1348,13 +1361,13 @@ Contains
         nit_ts(izb) = nit_ts(izb) + 1
       EndIf
     EndDo
-    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(ierr_nr,retry_ts)
 
     ! Log the failed integration attempts
     If ( idiag >= 1 ) Then
       Do izb = zb_lo, zb_hi
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(nit_nr,nit_ts,ncf_ts,t,tdel,tq,acnrm,nerr_ts,eta,q,retry_ts)
         If ( bdf_active(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -1416,7 +1429,7 @@ Contains
     ! Local variables
     Integer :: i, j, k, izb, izone
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr_nr,q,acor,lvec,hvec,q_age,j_age,p_age,nscon) &
     !XDIR XPRESENT(yt,t9t,z,zt0)
     Do izb = zb_lo, zb_hi
@@ -1449,7 +1462,7 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ierr_nr,q,acnrm,acor,zt0,z,yt,lvec,ydot,tdel,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
@@ -1489,7 +1502,7 @@ Contains
     Real(dp) :: alpha0, alpha1, prod, xi, xiold, hsum, a1
     Integer :: i, j, izb, izone
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr_nr,eta,etaq,eta_next,tq,tq2save,z,hvec,ewt) &
     !XDIR XPRESENT(q,q_age,deltaq,acor,acorp,acorhat,acnrm,errorq,nscon)
     Do izb = zb_lo, zb_hi
@@ -1573,7 +1586,7 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ierr_nr,eta_next,errorq,etaq,q_age,q,deltaq,eta)
       Do izb = zb_lo, zb_hi
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
@@ -1610,7 +1623,7 @@ Contains
     Real(dp) :: sq, sqm1, sqm2
     Integer :: fact, i, k, izb, izone
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr_nr,q,deltaq,sddat,acnrm,tq,z,ewt,nscon,detect) &
     !XDIR XPRIVATE(sq,sqm1,sqm2,fact)
     Do izb = zb_lo, zb_hi
@@ -1635,7 +1648,7 @@ Contains
         q(izb) >= 3 .and. deltaq(izb) >= 0 .and. nscon(izb) >= q(izb)+5 )
     EndDo
     Call bdf_stab_detect(detect,ldflag)
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(detect,ldflag,deltaq,eta,eta_next,etaq,nscon)
     Do izb = zb_lo, zb_hi
       If ( detect(izb) ) Then
@@ -1648,7 +1661,7 @@ Contains
       EndIf
     EndDo
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ldflag,q,eta,ldflag)
       Do izb = zb_lo, zb_hi
         If ( ldflag(izb) > 3 ) Then
@@ -1690,7 +1703,7 @@ Contains
     Real(dp) :: ratp, ratm, qfac1, qfac2, bb, rrb
     Integer :: i, j, k, kmin, it, izb, izone
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,kflag,sddat,q) &
     !XDIR XPRIVATE(rat,rav,qkr,sigsq,smin,smax,ssmax,ssdat) &
     !XDIR XPRIVATE(qp,rrc,sqmx,qjk,vrat,qc,qco) &
@@ -1932,7 +1945,7 @@ Contains
     Integer :: i, j, izb, izone
 
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(deltaq,q)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
@@ -1941,7 +1954,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XLOOP(1) XASYNC(tid) &
+    !XDIR XLOOP(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(tdel,deltaq,q,q_age,lvec,hvec,acor,z) &
     !XDIR XPRIVATE(alpha0,alpha1,prod,xi,xiold,hsum,a1)
     Do izb = zb_lo, zb_hi
@@ -2025,10 +2038,10 @@ Contains
     ! Local variables
     Integer :: i, j, izb
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,tdel,t,tt,eta,dt_scale,hvec,q,z,nscon)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -2047,7 +2060,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(mask)
 
     Return
@@ -2065,10 +2078,10 @@ Contains
     ! Local variables
     Integer :: i, j, izb
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,z,z0)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -2081,7 +2094,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(mask)
 
     Return

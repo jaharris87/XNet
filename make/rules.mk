@@ -49,9 +49,14 @@ xnet_gpu: ; @echo 'xnet_gpu is unsupported; use xnet with explicit GPU selectors
 $(XNET_EXE): $(XNET_OBJ) | $(BIN_DIR)
 	$(LDR) $(LDFLAGS) -o '$@.$$$$.tmp' $(XNET_OBJ) $(SOLVER_LIBDIR) $(SOLVER_LIBS) \
 	  $(LAPACK_LIBDIR) $(LAPACK_LIBS) && mv '$@.$$$$.tmp' '$@'
+ifeq ($(strip $(LIBXNET_API_SRC)),)
+$(XNET_ARCHIVE): FORCE
+	@echo 'libxnet requires a dense solver, MPI_MODE=OFF, OPENMP_MODE=OFF, and CPU, CUDA/CUBLAS or HIP/ROCM' >&2; exit 2
+else
 $(XNET_ARCHIVE): $(LIBXNET_OBJ) | $(LIB_DIR)
 	@rm -f '$@.$$$$.tmp'
 	$(AR) rcs '$@.$$$$.tmp' $(LIBXNET_OBJ) && mv '$@.$$$$.tmp' '$@'
+endif
 
 # Escape Make metacharacters so including this build-local file preserves the
 # resolved settings. config.txt already rejects single quotes and line breaks.
@@ -63,6 +68,7 @@ $(XNET_CONFIG_MK): $(CONFIG) $(BUILD_LOGIC_INPUTS)
 	  'XNET_FC := $(call escape_config_mk,$(XNET_FC))' \
 	  'XNET_MOD_DIR := $(call escape_config_mk,$(XNET_MOD_DIR))' \
 	  'XNET_MODFLAGS := $(call escape_config_mk,$(XNET_MODFLAGS))' \
+	  'XNET_CPPFLAGS := $(call escape_config_mk,$(XNET_CPPFLAGS))' \
 	  'XNET_ARCHIVE := $(call escape_config_mk,$(XNET_ARCHIVE))' \
 	  'XNET_FFLAGS := $(call escape_config_mk,$(XNET_FFLAGS))' \
 	  'XNET_LDR := $(call escape_config_mk,$(XNET_LDR))' \

@@ -56,7 +56,7 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzevolve, tid
+    Use xnet_controls, Only: iheat, nzevolve, tid, gpu_queue
     Use xnet_gpu, Only: dev_ptr
     Implicit None
 
@@ -91,7 +91,7 @@ Contains
     indx = 0
     info = 0
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(dydotdy,jac,rhs,indx,info,diag0,mult1,pivot)
 
     Allocate (hjac(nzevolve))
@@ -112,18 +112,19 @@ Contains
       dindx(izb) = dev_ptr( indx(1,izb) )
     EndDo
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(djac,drhs,dindx)
 
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
-    Use xnet_controls, Only: tid
+    Use xnet_controls, Only: gpu_queue
     Implicit None
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
+    !XDIR XWAIT(gpu_queue)
 
     Deallocate (diag0,mult1,pivot)
     Deallocate (dydotdy,jac,rhs,indx,info)
@@ -139,7 +140,7 @@ Contains
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Implicit None
 
@@ -173,10 +174,10 @@ Contains
       mult(zb_lo:) => mult1(zb_lo:zb_hi)
     EndIf
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask,diag,mult)
 
-    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(2) XASYNC(gpu_queue) &
     !XDIR XPRESENT(jac,dydotdy,pivot) &
     !XDIR XPRESENT(mask,diag,mult) &
     !XDIR XPRIVATE(rsum)
@@ -198,11 +199,11 @@ Contains
         EndIf
       EndDo
     EndDo
-    !XDIR XUPDATE XASYNC(tid) &
+    !XDIR XUPDATE XASYNC(gpu_queue) &
     !XDIR XHOST(pivot)
 
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(pivot,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -226,7 +227,7 @@ Contains
     EndIf
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(diag,mult,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -248,7 +249,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask,diag,mult)
     
     Return
@@ -266,7 +267,7 @@ Contains
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
     Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
-      & lzactive, tid
+      & lzactive, tid, gpu_queue
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
@@ -290,11 +291,11 @@ Contains
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
     ! Build the Jacobian
-    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(2) XASYNC(gpu_queue) &
     !XDIR XPRIVATE(s1,s2,s3,s4) &
     !XDIR XPRESENT(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
     !XDIR XPRESENT(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
@@ -372,7 +373,7 @@ Contains
     EndDo
 
     If ( iheat > 0 ) Then
-      !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(2) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,dydotdy,cv,mex) &
       !XDIR XPRIVATE(sdot)
       Do izb = zb_lo, zb_hi
@@ -390,7 +391,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -402,7 +403,7 @@ Contains
     Call jacobian_scale(diag_in,mult_in,mask_in = mask_in)
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(dydotdy)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -424,7 +425,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
@@ -438,7 +439,7 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
@@ -458,6 +459,9 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izone, istat
+#if defined(XNET_GPU)
+    Integer :: first, last, batchcount
+#endif
     Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
@@ -471,11 +475,11 @@ Contains
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(dy,dt9) &
     !XDIR XCOPYIN(mask,yrhs,t9rhs)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -499,9 +503,22 @@ Contains
 #else
     any_pivot = .true.
 #endif
-    call LinearSolveBatched_GPU &
-      & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
+    ! Vendor batched solves require contiguous systems. Submit each active run
+    ! in its existing source order, leaving holes and cached factors untouched.
+    first = zb_lo
+    Do last = zb_lo, zb_hi
+      If ( .not. mask(last) ) Then
+        first = last + 1
+        Cycle
+      EndIf
+      If ( last < zb_hi ) Then
+        If ( mask(last+1) ) Cycle
+      EndIf
+      batchcount = last - first + 1
+      call LinearSolveBatched_GPU &
+        & ( 'N', msize, 1, jac(1,1,first), djac(first), msize, indx(1,first), &
+        &   dindx(first), rhs(1,first), drhs(first), msize, info(first), batchcount, pivot = any_pivot )
+    EndDo
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -511,7 +528,7 @@ Contains
     EndDo
 #endif
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -524,7 +541,7 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -536,7 +553,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(dy,dt9) &
     !XDIR XDELETE(mask,yrhs,t9rhs)
 
@@ -550,7 +567,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -563,6 +580,9 @@ Contains
 
     ! Local variables
     Integer :: i, j, izb, izone, istat
+#if defined(XNET_GPU)
+    Integer :: first, last, batchcount
+#endif
     Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
@@ -584,9 +604,21 @@ Contains
 #else
     any_pivot = .true.
 #endif
-    call LUDecompBatched_GPU &
-      & ( msize, msize, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), info(zb_lo), nzbatch, pivot = any_pivot )
+    ! BDF can reuse LU factors in lanes outside the refactor mask.
+    first = zb_lo
+    Do last = zb_lo, zb_hi
+      If ( .not. mask(last) ) Then
+        first = last + 1
+        Cycle
+      EndIf
+      If ( last < zb_hi ) Then
+        If ( mask(last+1) ) Cycle
+      EndIf
+      batchcount = last - first + 1
+      call LUDecompBatched_GPU &
+        & ( msize, msize, jac(1,1,first), djac(first), msize, indx(1,first), &
+        &   dindx(first), info(first), batchcount, pivot = any_pivot )
+    EndDo
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -597,7 +629,7 @@ Contains
 #endif
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -620,7 +652,7 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
@@ -640,6 +672,9 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izone
+#if defined(XNET_GPU)
+    Integer :: first, last, batchcount
+#endif
     Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
@@ -654,11 +689,11 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(dy,dt9) &
     !XDIR XCOPYIN(mask,yrhs,t9rhs)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -677,15 +712,25 @@ Contains
 
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
-    ! TODO: pack djac pointers into djacp array with only non-converged points
 #if USE_NOPIVOT
     any_pivot = any(pivot(zb_lo:zb_hi))
 #else
     any_pivot = .true.
 #endif
-    call LUBksubBatched_GPU &
-      & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
+    first = zb_lo
+    Do last = zb_lo, zb_hi
+      If ( .not. mask(last) ) Then
+        first = last + 1
+        Cycle
+      EndIf
+      If ( last < zb_hi ) Then
+        If ( mask(last+1) ) Cycle
+      EndIf
+      batchcount = last - first + 1
+      call LUBksubBatched_GPU &
+        & ( 'N', msize, 1, jac(1,1,first), djac(first), msize, indx(1,first), &
+        &   dindx(first), rhs(1,first), drhs(first), msize, info(first), batchcount, pivot = any_pivot )
+    EndDo
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -695,7 +740,7 @@ Contains
     EndDo
 #endif
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -708,7 +753,7 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -720,7 +765,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(dy,dt9) &
     !XDIR XDELETE(mask,yrhs,t9rhs)
 

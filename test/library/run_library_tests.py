@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import shutil
 import subprocess
 import tempfile
@@ -12,10 +13,10 @@ from pathlib import Path
 
 
 def run(command: list[str], cwd: Path, log: Path, stdin: str | None = None,
-        expect_failure: bool = False) -> str:
+        expect_failure: bool = False, environment: dict[str, str] | None = None) -> str:
     result = subprocess.run(
         command, cwd=cwd, input=stdin, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, timeout=180, check=False,
+        stderr=subprocess.STDOUT, timeout=180, check=False, env=environment,
     )
     log.write_text(result.stdout + f"\nPROCESS_EXIT_STATUS {result.returncode}\n")
     if expect_failure:
@@ -173,6 +174,8 @@ def main() -> None:
     parser.add_argument("--api", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--failure", type=Path, required=True)
+    parser.add_argument("--cleanup", type=Path, help="host-only simulated GPU cleanup failure test")
+    parser.add_argument("--host-openmp", type=Path, help="application OpenMP caller; checks teams of two and four")
     parser.add_argument("--xnet", type=Path, required=True)
     parser.add_argument("--net-setup", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path, default=Path("build/runs"))
@@ -198,6 +201,27 @@ def main() -> None:
             if not (destination / required).is_file():
                 raise RuntimeError(f"net_setup did not produce {destination / required}")
         networks[network] = destination
+    if args.host_openmp:
+        host_exe = args.host_openmp.resolve(strict=True)
+        for threads in (2, 4):
+            case = work / f"host-openmp-{threads}"
+            case.mkdir()
+            (case / "Data_SN160").symlink_to(networks["SN160"], target_is_directory=True)
+            (case / table.name).symlink_to(table)
+            environment = dict(os.environ, OMP_NUM_THREADS=str(threads), OMP_DYNAMIC="FALSE")
+            output = run([str(host_exe), "Data_SN160"], case, case / "host.log", environment=environment)
+            if f"HOST_OPENMP_CHECKS_PASSED {threads}" not in output:
+                raise RuntimeError(f"application OpenMP checks did not finish; see {case / 'host.log'}")
+            print(f"PASS serialized API calls preserve application OpenMP teams of {threads}", flush=True)
+    if args.cleanup:
+        case = work / "cleanup"
+        case.mkdir()
+        (case / "Data_alpha").symlink_to(networks["alpha"], target_is_directory=True)
+        (case / table.name).symlink_to(table)
+        output = run([str(args.cleanup.resolve(strict=True))], case, case / "cleanup.log")
+        if "GPU_CLEANUP_RETRY_CHECKS_PASSED" not in output:
+            raise RuntimeError(f"cleanup retry checks did not finish; see {case / 'cleanup.log'}")
+        print("PASS production API cleanup retries with simulated GPU failures and real CPU workspaces", flush=True)
     for network, solver, heat in (
         ("alpha", 1, 0), ("alpha", 1, 1), ("alpha", 3, 0),
         ("SN160", 1, 1), ("SN160", 3, 1),

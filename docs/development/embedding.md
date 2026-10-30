@@ -188,9 +188,22 @@ recommendation. The CHIMERA adapter currently supplies zero for BDF.
 `neutrino_loss(:)` returns the integrated XNet weak-reaction loss in erg/g.
 It is distinct from incident-neutrino capture and application neutrino-loss
 corrections. `counters(5,lane)` returns the existing TS, NR, Jacobian,
-derivative, and rate counters. `timing` returns per-batch elapsed, solve,
-Jacobian, derivative, rate, and screening seconds; applications accumulate
-their own totals.
+derivative, and rate counters.
+
+`timing%seconds` is the per-call difference in XNet's internal `full_net`
+wall-time accumulator. It covers the interval timed inside `full_net`,
+including work and synchronization within that interval. It excludes API
+validation, input preparation before `full_net`, and result extraction after
+it. Measure elapsed time around `xnet_burn_batch` in the host when reporting
+the full call cost; measure initialization and finalization separately.
+
+The other `timing` fields return differences in the existing solve, Jacobian,
+derivative, rate, and screening accumulators. Applications accumulate their
+own totals. These component intervals can nest, so do not sum them to reconstruct
+full-call elapsed time or treat them as isolated GPU kernel measurements.
+The public type does not separately expose EOS, factorization/backsolve,
+transfer or synchronization time; the standalone timer summary has additional
+component timers.
 
 Optional integer `max_steps_taken` returns the existing `full_net` `kstep`:
 the maximum accepted outer integration steps taken by an active lane in the

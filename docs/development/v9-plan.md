@@ -25,8 +25,8 @@ for current implementation status.
 | --- | --- | --- |
 | [#128: configuration](https://github.com/jaharris87/XNet/issues/128) | Merged: validated `xnet_controls_t`, programmatic configuration, layered standalone namelists, and migrated maintained inputs | Use the existing representation in the application interface |
 | [#127: starting CPU measurements](https://github.com/jaharris87/XNet/issues/127) | Complete and accepted: serial dense CPU measurements for four network sizes on both facilities, with MA48 deferred | Preserve this starting point for resulting-code comparisons |
-| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: dense serial CPU API/archive (#158), host-controlled fatal-shutdown returns (#159), thin EOS adapters (#160) and scalar NSE query (#161) | Complete consumer checks and the remaining required execution modes |
-| [#130: application integrations](https://github.com/jaharris87/XNet/issues/130) | CHIMERA table-EOS CPU prototype and delivered review copy tested; Flash-X CPU integration in progress | Review both CPU integrations, then check other required modes and ownership |
+| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: CPU API/archive (#158), fatal-shutdown reporting (#159), thin EOS adapters (#160), scalar NSE (#161), and timestep output (#162). GPU PR #164 is ready for maintainer review, unmerged | Complete application GPU and remaining execution-mode checks; leave merges to the maintainer |
+| [#130: application integrations](https://github.com/jaharris87/XNet/issues/130) | Both initial CPU prototypes are tested and reviewed, including the Flash-X partial-batch repair. Both CHIMERA GPU application attempts stopped in the CPU step | Review the private CHIMERA wrapper cleanup, diagnose the two separate facility failures, then validate required modes and ownership |
 | [#131: CPU/GPU and application performance](https://github.com/jaharris87/XNet/issues/131) | Stage A complete: four network sizes on both facilities; stage B remains open | Measure resulting-code and repeated application burns after the relevant #129/#130 work |
 | [#132: release checks](https://github.com/jaharris87/XNet/issues/132) | Not yet a release candidate | Verify the final implementation, supported platforms, and documentation |
 
@@ -119,19 +119,57 @@ private helper routines do not each need approval.
 The merged CPU implementation builds a driver-free library, exercises
 repeated burns through its public procedures, preserves reusable setup, and
 compares results with the direct numerical path. Its build and calls are
-documented in [Fortran embedding](embedding.md). CHIMERA's selected CPU case
-has also run through the API; other application configurations remain to be
-checked. Continue standalone tests and focused independently reviewed PRs;
-an external test caller does not replace the required application checks.
+documented in [Fortran embedding](embedding.md). The optional timestep result
+used by Flash-X is merged in #162. Both selected CPU application cases have
+run through the API and passed independent review, within the limits below.
+Continue standalone tests and focused independently reviewed PRs; an external
+test caller does not replace required application checks.
+
+[PR #164](https://github.com/jaharris87/XNet/pull/164) is ready for maintainer
+review at `721139d12eda4869a9080012c3aa6d67617aea60`, targeting development
+`5468d2aef0572b5bacbc483bd851646c1b9233b2`; it is not merged. Its approved GPU
+direction uses one shared initializer/finalizer, named vendor resources with
+independent ownership and partial borrowing, and one burn procedure with
+optional `data_on_device`. Current library limits are dense, one instance,
+one host thread and library MPI off. CUDA/cuBLAS and HIP/ROCm API tests passed
+on both facilities at `bf25833e95e0a0351c0f3d840a81c830e8a02060`. The later
+cleanup-state repair has separate host tests, review and native rebuilds;
+those earlier GPU runs are not relabeled as runs of the later source.
+Successful API tests and full CHIMERA GPU links do not establish GPU
+application execution. See the [PR's final results and limits](https://github.com/jaharris87/XNet/pull/164#issuecomment-6513396134).
 
 ## 3. Validate both consumers and measure repeated use
 
-Under #130, establish a representative CPU burn sequence for each application.
-Check species ordering, units, normalization, masks and partial batches,
+Under #130, the first representative CPU sequences are complete: CHIMERA's
+finite one-rank table-EOS case reached cycle 6, including the delivered-copy
+repeat; Flash-X's Cellular/alpha case completed 114 steps on four host MPI
+ranks, including repaired batch-10 and batch-16 checks. Independent source and
+results reviews passed. These are limited integration comparisons, with
+cross-version differences reported descriptively; they do not establish broad
+scientific equivalence, performance, or all execution modes. See the
+[CHIMERA repeat](https://github.com/jaharris87/XNet/issues/130#issuecomment-6508231286)
+and [Flash-X repair/results](https://github.com/jaharris87/XNet/issues/130#issuecomment-6508937667).
+
+Complete the remaining checks against each intended support claim. Check
+species ordering, units, normalization, masks and partial batches,
 prior timesteps, counters, self-heating, neutrino losses, and the application's
 energy responsibilities where applicable. Check repeated initialization/use/
 finalization and ownership. Test each GPU integration mode actually claimed;
-standalone GPU success does not establish caller-owned GPU support.
+standalone GPU success does not establish caller-owned GPU support. Multiple
+host MPI ranks using a serial library do not establish MPI-enabled embedding.
+Restart, other selected application configurations, nonzero network neutrino
+loss, threading and application GPU behavior remain unvalidated where listed
+in #130; decide support and any named exceptions with the maintainer.
+
+The private CHIMERA wrapper cleanup remains under maintainer source review.
+Two finite CPU/GPU application pairs stopped before the GPU step: Frontier
+job 5796356 crashed in FFN interpolation during its first CPU burn; its cause
+remains unresolved. Perlmutter job 60526850 failed during MPI initialization
+with GPU-aware MPI enabled but no CUDA GTL in the CPU binary. A CPU-step-only
+launch correction is proposed and untested. Keep these failures separate;
+neither full GPU application ran. Both allocations are released and any
+retry requires fresh approval of a concrete resource request. See the
+[application failure record](https://github.com/jaharris87/XNet/issues/130#issuecomment-6514006239).
 
 If access to an application or its workload is unavailable, report the
 specific limitation and ask the maintainer how it affects release scope.
@@ -158,7 +196,10 @@ regressions, applicable MPI/OpenMP behavior, configuration migration,
 library/interface behavior, both integrations, and supported Frontier and
 Perlmutter accelerator configurations. State unsupported combinations and
 accepted limitations. Older successful runs do not automatically cover code
-changed afterward.
+changed afterward. Bind the release checks to the assembled candidate,
+executables, inputs and environments on both facilities, or obtain a named
+maintainer-approved exception. Performance measurements do not replace these
+correctness checks.
 
 The product documentation should explain how to build and run standalone
 XNet, migrate inputs, link the library, call the public procedures, interpret

@@ -361,6 +361,11 @@ is requested, or that a burn or NSE query is requested before initialization
 or after finalization. It describes call order, not a numerical failure. Calling
 `xnet_finalize` again after finalization is allowed and returns success.
 
+If GPU cleanup returns an error after XNet's arrays have been released,
+initialization, burns and NSE queries remain blocked. Another `xnet_finalize`
+call retries GPU cleanup without repeating array or EOS teardown. This keeps
+the cleanup state; it does not guarantee recovery from a GPU runtime failure.
+
 Numerical burn failure is fatal to the simulation, but returns to the embedded
 caller for host-controlled shutdown. `xnet_integrator_failure=4` reports a
 BE/BDF convergence or timestep failure after the integrator's internal retry

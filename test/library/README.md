@@ -15,10 +15,19 @@ configuration, for example `BUILD_DIR=build-debug` for a debug archive.
 
 Python 3 is required; there are no additional Python packages. The production
 Starkiller EOS table must be present at its normal repository path. The tests
-use the real dense serial CPU archive and selected EOS; they provide no
-replacement solver, EOS, or provider routines. The first configuration is
+use the real dense serial CPU archive and selected EOS; the numerical callers
+provide no replacement solver, EOS, or provider routines. The first configuration is
 GNU Fortran with `EOS=STARKILLER`, `MATRIX_SOLVER=dense`, and MPI, OpenMP, and
 GPU disabled. Other configurations require their own evidence.
+
+A separate host-only cleanup test recompiles the production API with a
+test GPU resource module in an isolated build subdirectory. It uses real
+CPU workspaces and finalizers, but injects two GPU cleanup failures. It
+checks that finalization retries only GPU cleanup, blocks new work while
+cleanup is pending, and permits initialization after cleanup succeeds.
+This checks API bookkeeping, not GPU execution or recovery from a real
+device failure. The replacement module is never used by the normal callers
+or native GPU tests.
 
 `api_consumer.F90` imports only `xnet_api`, standard intrinsic modules, and a
 test fixture that contains no XNet imports. It links against `libxnet.a` and

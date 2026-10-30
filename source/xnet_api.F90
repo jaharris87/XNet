@@ -25,8 +25,9 @@ Module xnet_api
     Real(dp) :: derivative = 0.0_dp, rates = 0.0_dp, screening = 0.0_dp
   End Type xnet_timing_t
 
-  ! Distinguish this lifecycle from applications using the private module state directly.
-  Logical :: api_initialized = .false.
+  ! Pending GPU cleanup must not permit burns or repeat array teardown.
+  Integer, Parameter :: api_uninitialized = 0, api_ready = 1, api_cleanup_pending = 2
+  Integer :: api_state = api_uninitialized
 
 Contains
 
@@ -75,9 +76,10 @@ Contains
 
     ierr = xnet_invalid
     message = ' '
-    If ( api_initialized .or. Allocated(y) ) Then
+    If ( api_state /= api_uninitialized .or. Allocated(y) ) Then
       ierr = xnet_lifecycle_error
       message = 'XNet is already initialized'
+      If ( api_state == api_cleanup_pending ) message = 'Finish XNet finalization before initialization'
       Return
     EndIf
     !$ If ( omp_get_max_threads() /= 1 ) Then
@@ -177,7 +179,7 @@ Contains
     network%charge_number = iz
     network%binding_energy_mev = be
     network%mass_excess_mev = mex
-    api_initialized = .true.
+    api_state = api_ready
     ierr = xnet_success
 #else
     ierr = xnet_unsupported
@@ -241,8 +243,9 @@ Contains
     counters = 0
     message = ' '
     ierr = xnet_lifecycle_error
-    If ( .not. api_initialized ) Then
+    If ( api_state /= api_ready ) Then
       message = 'Initialize XNet before burning'
+      If ( api_state == api_cleanup_pending ) message = 'Finish XNet finalization before burning'
       Return
     EndIf
 #ifdef XNET_GPU
@@ -778,8 +781,9 @@ Contains
     message = ' '
 #ifdef XNET_EMBEDDING
     ierr = xnet_lifecycle_error
-    If ( .not. api_initialized ) Then
+    If ( api_state /= api_ready ) Then
       message = 'Initialize XNet before requesting NSE composition'
+      If ( api_state == api_cleanup_pending ) message = 'Finish XNet finalization before requesting NSE composition'
       Return
     EndIf
 #ifdef XNET_GPU
@@ -841,38 +845,43 @@ Contains
     ierr = xnet_success
     message = ' '
 #ifdef XNET_EMBEDDING
-    If ( .not. api_initialized ) Return
+    If ( api_state == api_uninitialized ) Return
+    If ( api_state == api_ready ) Then
 #ifdef XNET_GPU
-    Call gpu_check_device(ierr,message)
-    If ( ierr /= 0 ) Return
+      Call gpu_check_device(ierr,message)
+      If ( ierr /= 0 ) Return
 #endif
-    ! Release the mappings established here before their owning CPU allocations.
-    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-    !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
-    !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
-    !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
-    !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-    !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
-    !XDIR XWAIT(gpu_queue)
-    Call be_finalize
-    Call bdf_finalize
-    Call nse_finalize
-    Call eos_finalize
-    Call jacobian_finalize
-    Call screening_finalize
-    Call flux_finalize
-    Call match_finalize
-    Call ffn_finalize
-    Call nnu_finalize
-    Call reaction_data_finalize
-    Call nuclear_data_finalize
-    Call abundances_finalize
-    Call conditions_finalize
-    Call controls_finalize
-    api_initialized = .false.
+      ! Release the mappings established here before their owning CPU allocations.
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
+      !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
+      !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
+      !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
+      !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+      !XDIR XWAIT(gpu_queue)
+      Call be_finalize
+      Call bdf_finalize
+      Call nse_finalize
+      Call eos_finalize
+      Call jacobian_finalize
+      Call screening_finalize
+      Call flux_finalize
+      Call match_finalize
+      Call ffn_finalize
+      Call nnu_finalize
+      Call reaction_data_finalize
+      Call nuclear_data_finalize
+      Call abundances_finalize
+      Call conditions_finalize
+      Call controls_finalize
+      api_state = api_cleanup_pending
+    EndIf
 #ifdef XNET_GPU
+    ! A failed cleanup can be retried without touching the released workspaces.
     Call gpu_finalize(ierr,message)
+    If ( ierr /= xnet_success ) Return
 #endif
+    api_state = api_uninitialized
 #else
     ierr = xnet_unsupported
     message = 'Embedding requires a dense single-thread serial CPU or supported GPU build'

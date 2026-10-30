@@ -173,6 +173,7 @@ def main() -> None:
     parser.add_argument("--api", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--failure", type=Path, required=True)
+    parser.add_argument("--cleanup", type=Path, help="host-only simulated GPU cleanup failure test")
     parser.add_argument("--xnet", type=Path, required=True)
     parser.add_argument("--net-setup", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path, default=Path("build/runs"))
@@ -198,6 +199,15 @@ def main() -> None:
             if not (destination / required).is_file():
                 raise RuntimeError(f"net_setup did not produce {destination / required}")
         networks[network] = destination
+    if args.cleanup:
+        case = work / "cleanup"
+        case.mkdir()
+        (case / "Data_alpha").symlink_to(networks["alpha"], target_is_directory=True)
+        (case / table.name).symlink_to(table)
+        output = run([str(args.cleanup.resolve(strict=True))], case, case / "cleanup.log")
+        if "GPU_CLEANUP_RETRY_CHECKS_PASSED" not in output:
+            raise RuntimeError(f"cleanup retry checks did not finish; see {case / 'cleanup.log'}")
+        print("PASS production API cleanup retries with simulated GPU failures and real CPU workspaces", flush=True)
     for network, solver, heat in (
         ("alpha", 1, 0), ("alpha", 1, 1), ("alpha", 3, 0),
         ("SN160", 1, 1), ("SN160", 3, 1),

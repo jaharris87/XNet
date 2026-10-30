@@ -22,7 +22,7 @@ Module xnet_linalg
     stream
 
 #if defined(XNET_LA_CUBLAS)
-  Use cublasf, Only: &
+  Use xnet_cublasf, Only: &
     cublas_handle, &
     cublasDnrm2_v2, &
     cublasDaxpy_v2, &
@@ -39,7 +39,7 @@ Module xnet_linalg
     CUBLAS_SIDE_LEFT, &
     CUBLAS_FILL_MODE_UPPER, &
     CUBLAS_DIAG_NON_UNIT
-  Use cusolverf, Only: &
+  Use xnet_cusolverf, Only: &
     cusolver_handle, &
     cusolverDnDgeqrf_bufferSize, &
     cusolverDnDgeqrf, &
@@ -47,19 +47,19 @@ Module xnet_linalg
     cusolverDnDgetrf_bufferSize, &
     cusolverDnDgetrf, &
     cusolverDnDgetrs
-  Use cusparsef, Only: &
+  Use xnet_cusparsef, Only: &
     cusparse_handle, &
     cusparseDgthr, &
     CUSPARSE_INDEX_BASE_ONE
 #elif defined(XNET_LA_ROCM)
-  Use hipf, Only: &
+  Use xnet_hipf, Only: &
     hipCheck, &
     hipblasCheck, &
     hipsparseCheck, &
     rocblasCheck, &
     rocsparseCheck, &
     rocsolverCheck
-  Use rocblasf, Only: &
+  Use xnet_rocblasf, Only: &
     rocblas_handle, &
     rocblas_dnrm2, &
     rocblas_daxpy, &
@@ -76,15 +76,15 @@ Module xnet_linalg
     rocblas_side_left, &
     rocblas_fill_upper, &
     rocblas_diagonal_non_unit
-  Use rocsolverf, Only: &
+  Use xnet_rocsolverf, Only: &
     rocsolver_handle, &
     rocsolver_dgeqrf, &
     rocsolver_dormqr
-  Use rocsparsef, Only: &
+  Use xnet_rocsparsef, Only: &
     rocsparse_handle, &
     rocsparse_dgthr, &
     rocsparse_index_base_one
-  Use hipblasf, Only: &
+  Use xnet_hipblasf, Only: &
     hipblas_handle, &
     hipblasDnrm2, &
     hipblasDaxpy, &
@@ -106,7 +106,7 @@ Module xnet_linalg
 #elif defined(XNET_LA_ONEMKL)
   Use onemkl_blas_omp_offload_lp64
 #elif defined(XNET_LA_MAGMA)
-  Use magmaf, Only: &
+  Use xnet_magmaf, Only: &
     magma_queue, &
     magma_dnrm2, &
     magma_daxpy, &

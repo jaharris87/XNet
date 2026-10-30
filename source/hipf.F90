@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the HIP Runtime API
 !***************************************************************************************************
 
-module hipf
+module xnet_hipf
   !-------------------------------------------------------------------------------------------------
   ! Interface to hip Runtime API
   !-------------------------------------------------------------------------------------------------
@@ -29,4 +29,4 @@ module hipf
   type(c_ptr), target :: stream = c_null_ptr
   !$omp threadprivate(stream)
 
-end module hipf
+end module xnet_hipf

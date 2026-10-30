@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the rocBLAS library
 !***************************************************************************************************
 
-module rocblasf
+module xnet_rocblasf
   !-------------------------------------------------------------------------------------------------
   ! Interface to rocBLAS routines
   !-------------------------------------------------------------------------------------------------
@@ -35,4 +35,4 @@ module rocblasf
   type(c_ptr) :: rocblas_handle
   !$omp threadprivate(rocblas_handle)
 
-end module rocblasf
+end module xnet_rocblasf

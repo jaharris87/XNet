@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the cuBLAS library
 !***************************************************************************************************
 
-module cublasf
+module xnet_cublasf
   !-------------------------------------------------------------------------------------------------
   ! Interface to cuBLAS routines
   !-------------------------------------------------------------------------------------------------
@@ -507,4 +507,4 @@ module cublasf
 
   end interface
 
-end module cublasf
+end module xnet_cublasf

@@ -12,7 +12,7 @@ Module xnet_gpu
   Use xnet_util, Only: xnet_terminate
 
 #if defined(XNET_CUDA)
-  Use cudaf, Only: &
+  Use xnet_cudaf, Only: &
     cuda_stream=>stream, &
     cudaGetDeviceCount, &
     cudaGetDevice, &
@@ -22,25 +22,25 @@ Module xnet_gpu
     cudaStreamSynchronize, &
     cudaDeviceSynchronize, &
     cudaSuccess
-  Use cublasf, Only: &
+  Use xnet_cublasf, Only: &
     cublas_handle, &
     cublasCreate_v2, &
     cublasDestroy_v2, &
     cublasGetStream_v2, &
     cublasSetStream_v2, &
     cublasSetSmCountTarget
-  Use cusolverf, Only: &
+  Use xnet_cusolverf, Only: &
     cusolver_handle, &
     cusolverDnCreate, &
     cusolverDnDestroy, &
     cusolverDnSetStream
-  !Use cusparsef, Only: &
+  !Use xnet_cusparsef, Only: &
   !  cusparse_handle, &
   !  cusparseCreate, &
   !  cusparseDestroy, &
   !  cusparseSetStream
 #elif defined(XNET_HIP)
-  Use hipf, Only: &
+  Use xnet_hipf, Only: &
     hip_stream=>stream, &
     hipGetDeviceCount, &
     hipGetDevice, &
@@ -54,7 +54,7 @@ Module xnet_gpu
     rocblasCheck, &
     rocsparseCheck, &
     rocsolverCheck
-  Use rocblasf, Only: &
+  Use xnet_rocblasf, Only: &
     rocblas_handle, &
     rocblas_create_handle, &
     rocblas_destroy_handle, &
@@ -62,11 +62,11 @@ Module xnet_gpu
     rocblas_set_stream, &
     rocblas_set_pointer_mode, &
     rocblas_pointer_mode_device
-  Use rocsolverf, Only: &
+  Use xnet_rocsolverf, Only: &
     rocsolver_handle
-  !Use rocsparsef, Only: &
+  !Use xnet_rocsparsef, Only: &
   !  rocsparse_handle
-  Use hipblasf, Only: &
+  Use xnet_hipblasf, Only: &
     hipblas_handle, &
     hipblasCreate, &
     hipblasDestroy, &
@@ -79,7 +79,7 @@ Module xnet_gpu
 #endif
 
 #if defined(XNET_LA_MAGMA)
-  Use magmaf, Only: &
+  Use xnet_magmaf, Only: &
     magma_device, &
     magma_queue, &
     magma_getdevice, &
@@ -92,7 +92,7 @@ Module xnet_gpu
 #endif
 
 #if defined(XNET_OMP_OL)
-  Use openmpf, Only: &
+  Use xnet_openmpf, Only: &
     omp_set_default_device, &
     omp_get_default_device, &
     omp_is_initial_device, &
@@ -103,7 +103,7 @@ Module xnet_gpu
 #endif
 
 #if defined(XNET_OACC)
-  Use openaccf, Only: &
+  Use xnet_openaccf, Only: &
     acc_set_device_num, &
     acc_get_device_num, &
     acc_on_device, &

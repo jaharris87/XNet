@@ -7,7 +7,7 @@
 !
 ! JAH: this file combines magma2.f90, magma2_common.f90, and magma2_dfortran.f90 from magma 2.3.0
 
-module magmaf
+module xnet_magmaf
 
 use iso_c_binding
 
@@ -1090,4 +1090,4 @@ contains
                 __LINE__ )
     end subroutine
 
-end module magmaf
+end module xnet_magmaf

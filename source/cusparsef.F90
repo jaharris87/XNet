@@ -3,7 +3,7 @@
 ! this file contains the module defining fortran interfaces for the cublas library
 !***************************************************************************************************
 
-module cusparsef
+module xnet_cusparsef
   !-------------------------------------------------------------------------------------------------
   ! Interface to cuSPARSE routines
   !-------------------------------------------------------------------------------------------------
@@ -111,4 +111,4 @@ module cusparsef
 
   end interface
 
-end module cusparsef
+end module xnet_cusparsef

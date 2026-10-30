@@ -14,19 +14,19 @@ Program gpu_consumer
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success, xnet_invalid
   Use consumer_fixture, Only: fixture_state, write_state, check
 #if defined(XNET_CUDA)
-  Use cudaf, Only: cudaGetDeviceCount, cudaGetDevice, cudaSetDevice, cudaStreamCreateWithFlags, &
+  Use xnet_cudaf, Only: cudaGetDeviceCount, cudaGetDevice, cudaSetDevice, cudaStreamCreateWithFlags, &
     & cudaStreamNonBlocking, cudaStreamDestroy, cudaStreamSynchronize
-  Use cublasf, Only: cublasCreate_v2, cublasDestroy_v2, cublasGetStream_v2, cublasSetStream_v2, &
+  Use xnet_cublasf, Only: cublasCreate_v2, cublasDestroy_v2, cublasGetStream_v2, cublasSetStream_v2, &
     & cublasDgemm_v2, CUBLAS_OP_N
 #elif defined(XNET_HIP)
-  Use hipf, Only: hipGetDeviceCount, hipGetDevice, hipSetDevice, hipStreamCreateWithFlags, &
+  Use xnet_hipf, Only: hipGetDeviceCount, hipGetDevice, hipSetDevice, hipStreamCreateWithFlags, &
     & hipStreamNonBlocking, hipStreamDestroy, hipStreamSynchronize
-  Use hipblasf, Only: hipblasCreate, hipblasDestroy, hipblasGetStream, hipblasSetStream, &
+  Use xnet_hipblasf, Only: hipblasCreate, hipblasDestroy, hipblasGetStream, hipblasSetStream, &
     & hipblasDgemm, HIPBLAS_OP_N
 #endif
 #if defined(XNET_OACC)
   Use openacc, Only: acc_set_device_num, acc_device_default, acc_on_device, acc_device_host
-  Use openaccf, Only: acc_get_cuda_stream, acc_set_cuda_stream, acc_deviceptr
+  Use xnet_openaccf, Only: acc_get_cuda_stream, acc_set_cuda_stream, acc_deviceptr
 #elif defined(XNET_OMP_OL)
   Use omp_lib, Only: omp_set_default_device, omp_is_initial_device, omp_get_mapped_ptr
 #endif

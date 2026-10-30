@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the OpenACC Runtime Library
 !***************************************************************************************************
 
-module openaccf
+module xnet_openaccf
   !-------------------------------------------------------------------------------------------------
   ! Interface to OpenACC routines
   !-------------------------------------------------------------------------------------------------
@@ -117,4 +117,4 @@ contains
     return
   end function acc_on_device
 
-end module openaccf
+end module xnet_openaccf

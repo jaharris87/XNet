@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the CUDA Runtime API
 !***************************************************************************************************
 
-module cudaf
+module xnet_cudaf
   !-------------------------------------------------------------------------------------------------
   ! Interface to CUDA Runtime API
   !-------------------------------------------------------------------------------------------------
@@ -382,4 +382,4 @@ module cudaf
 
   end interface
 
-end module cudaf
+end module xnet_cudaf

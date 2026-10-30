@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the cuSOLVER library
 !***************************************************************************************************
 
-module cusolverf
+module xnet_cusolverf
   !-------------------------------------------------------------------------------------------------
   ! Interface to cuSOLVER routines
   !-------------------------------------------------------------------------------------------------
@@ -150,4 +150,4 @@ module cusolverf
 
   end interface
 
-end module cusolverf
+end module xnet_cusolverf

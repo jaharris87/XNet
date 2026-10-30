@@ -24,19 +24,19 @@ non-reentrant library instance. When host OpenMP is enabled by the offload
 compiler, `omp_get_max_threads()` must be one; set `OMP_NUM_THREADS=1` before
 starting the application.
 
-The serial CPU library tests exercise the public API. GPU tests of library
-revision `ed6fe9733d065ed5b6fad1476614bd37540a9bfc` with caller
-`5a372438a09ea7602b4196bf7d3132cde6bff0a4` passed five alpha/SN160 BE/BDF
-cases on Frontier with CCE 20.0.0,
+The serial CPU library tests exercise the public API. Library and GPU caller
+revision `bf25833e95e0a0351c0f3d840a81c830e8a02060` passed five alpha/SN160
+BE/BDF cases on Frontier with CCE 20.0.0,
 ROCm/hipfort 6.4.2 and OpenMP target offload, and on Perlmutter with
 NVFORTRAN 26.5, CUDA 13.2 and OpenACC. These checks use the bundled Starkiller
 EOS, dense solves, one device and one host thread. They cover owned/borrowed
-resources, host/device arrays, repeated and masked calls, and device
-continuation without reloading the arrays. See the [GPU test description](../../test/library/README.md#gpu-consumer)
-and [results and limitations](https://github.com/jaharris87/XNet/pull/164#issuecomment-6511841908).
-Those runs predate the shared GPU initializer described below; native GPU
-builds and execution of the rewritten initializer remain pending. They do
-not validate an application EOS or a complete CHIMERA/Flash-X GPU
+resources, partial borrowing of BLAS or solver handles, host/device arrays,
+repeated and masked calls, and device continuation without reloading the
+arrays. See the [GPU test description](../../test/library/README.md#gpu-consumer)
+and [results and limitations](https://github.com/jaharris87/XNet/pull/164#issuecomment-6513138148).
+The full private CHIMERA GPU application also compiles and links on both
+facilities, but has not been executed. These checks do not validate an
+application EOS calculation or a complete CHIMERA/Flash-X GPU
 integration, and do not establish performance or general backend support.
 
 ## Application thermodynamics adapters

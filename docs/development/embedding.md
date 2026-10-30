@@ -24,10 +24,16 @@ non-reentrant library instance. When host OpenMP is enabled by the offload
 compiler, `omp_get_max_threads()` must be one; set `OMP_NUM_THREADS=1` before
 starting the application.
 
-The serial CPU library tests exercise the public API. GPU embedding is
-implemented but has not yet been executed on GPU hardware. Prior standalone
-GPU results do not qualify this API, an application EOS, or a complete
-CHIMERA/Flash-X integration.
+The serial CPU library tests exercise the public API. The GPU caller also
+passed its five alpha/SN160 BE/BDF cases on Frontier with CCE 20.0.0,
+ROCm/hipfort 6.4.2 and OpenMP target offload, and on Perlmutter with
+NVFORTRAN 26.5, CUDA 13.2 and OpenACC. These checks use the bundled Starkiller
+EOS, dense solves, one device and one host thread. They cover owned/borrowed
+resources, host/device arrays, repeated and masked calls, and device
+continuation without reloading the arrays. See the [GPU test description](../../test/library/README.md#gpu-consumer)
+and [results and limitations](https://github.com/jaharris87/XNet/pull/164#issuecomment-6511841908).
+They do not validate an application EOS or a complete CHIMERA/Flash-X GPU
+integration, and do not establish performance or general backend support.
 
 ## Application thermodynamics adapters
 
@@ -336,9 +342,10 @@ Finalization releases allocations and mappings owned by XNet and calls the
 selected thermodynamics interface's finalizer. Built-in standalone providers
 release their own EOS storage; an application interface leaves host-owned EOS
 state intact.
-The API never initializes/finalizes application MPI or a GPU runtime.
-MPI and host-threaded library builds remain unsupported. GPU execution,
-application MPI integration, and performance require separate validation.
+The API does not initialize/finalize application MPI or reset the application's
+GPU runtime. MPI-enabled and host-threaded library builds remain unsupported.
+The library GPU checks do not establish application MPI/GPU integration or
+performance; those require their own validation.
 
 ## NSE composition
 

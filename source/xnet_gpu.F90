@@ -257,6 +257,10 @@ Contains
         Write(init_message,'(A,I0)') 'Cannot select the standalone GPU device, status ',status
         GoTo 900
       EndIf
+#if defined(XNET_OMP_OL)
+      ! Later target regions inherit the calling task's default device.
+      Call omp_set_default_device(device)
+#endif
 #if defined(XNET_LA_MAGMA)
       Call magma_getdevice(magma_device)
       Call magma_init()

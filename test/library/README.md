@@ -190,10 +190,16 @@ to zero when omitted:
 
 Each process requires a real device region and checks that XNet preserves
 the application's selected device. It initializes once with XNet-owned
-resources, then again with an application-owned nonblocking stream and BLAS handle.
+resources, then again with an application-owned nonblocking stream and BLAS
+handle. That second call is partial borrowing: XNet creates the other
+selected library handles itself and releases only those it owns.
 After borrowed-resource finalization, a vendor GEMM checks that the handle
 and stream still work. The OpenACC case also checks the caller's queue
-association.
+association and that the runtime-owned queue-one stream survives XNet-owned
+handle cleanup.
+An additional initialization/finalization check supplies only a solver
+handle, leaves BLAS creation to XNet, and checks that the supplied solver
+still uses the application stream afterward.
 
 For each resource lifetime, the caller runs host-array and mapped-device
 burns through first, repeated, short, inactive-hole, and all-inactive batches.

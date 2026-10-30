@@ -4,14 +4,14 @@
 Module xnet_api
   Use xnet_types, Only: dp
   Use xnet_controls, Only: xnet_controls_t, set_xnet_controls_defaults
-  Use xnet_gpu, Only: xnet_gpu_resources_t
+  Use xnet_gpu, Only: xnet_gpu_t
   Implicit None
   Private
 
   Integer, Parameter, Public :: xnet_success = 0, xnet_invalid = 1
   Integer, Parameter, Public :: xnet_lifecycle_error = 2, xnet_unsupported = 3
   Integer, Parameter, Public :: xnet_integrator_failure = 4, xnet_step_limit = 5
-  Public :: dp, xnet_controls_t, set_xnet_controls_defaults, xnet_gpu_resources_t
+  Public :: dp, xnet_controls_t, set_xnet_controls_defaults, xnet_gpu_t
   Public :: xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize
 
   Type, Public :: xnet_network_t
@@ -52,7 +52,7 @@ Contains
     Use xnet_nse, Only: nse_initialize
     Use xnet_screening, Only: screening_init
 #ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_initialize_embedded, gpu_finalize_embedded
+    Use xnet_gpu, Only: gpu_init, gpu_finalize
 #endif
 #endif
     Implicit None
@@ -60,7 +60,7 @@ Contains
     Type(xnet_network_t), Intent(out) :: network
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
-    Type(xnet_gpu_resources_t), Optional, Intent(in) :: gpu_resources
+    Type(xnet_gpu_t), Optional, Intent(in) :: gpu_resources
 #ifdef XNET_EMBEDDING
     Character(80) :: data_description
     Character(10), Parameter :: required_files(5) = &
@@ -68,6 +68,7 @@ Contains
     Integer :: i, input_unit, input_status
     Logical :: exists
 #ifdef XNET_GPU
+    Type(xnet_gpu_t) :: gpu
     Integer :: cleanup_status
     Character(512) :: cleanup_message
 #endif
@@ -125,14 +126,17 @@ Contains
     sweep = 'x'
     lun_diag = lun_stdout
 #ifdef XNET_GPU
-    ! Attach before any initializer creates device mappings or records device pointers.
-    Call gpu_initialize_embedded(gpu_resources,ierr,message)
+    ! A resource value tells gpu_init to use the application's current device.
+    ! With no supplied handles, XNet creates the resources it needs on that device.
+    gpu = xnet_gpu_t()
+    If ( Present(gpu_resources) ) gpu = gpu_resources
+    Call gpu_init(gpu,ierr,message)
     If ( ierr /= 0 ) Return
 #endif
     Call apply_xnet_controls(controls,ierr,message)
     If ( ierr /= 0 ) Then
 #ifdef XNET_GPU
-      Call gpu_finalize_embedded(cleanup_status,cleanup_message)
+      Call gpu_finalize(cleanup_status,cleanup_message)
 #endif
       Return
     EndIf
@@ -195,7 +199,7 @@ Contains
       & zone_work=>zone_id, iaux, ktot, gpu_queue
     Use xnet_evolve, Only: full_net, evolve_integrator_failure, evolve_step_limit
 #ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_check_embedded_device
+    Use xnet_gpu, Only: gpu_check_device
 #ifdef XNET_OMP_OL
     Use xnet_gpu, Only: stream, stream_sync
 #endif
@@ -242,7 +246,7 @@ Contains
       Return
     EndIf
 #ifdef XNET_GPU
-    Call gpu_check_embedded_device(ierr,message)
+    Call gpu_check_device(ierr,message)
     If ( ierr /= 0 ) Return
     If ( on_device ) Then
 #ifdef XNET_OMP_OL
@@ -761,7 +765,7 @@ Contains
     Use nuclear_data, Only: ny, aa
     Use xnet_nse, Only: nse_solve, ynse
 #ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_check_embedded_device
+    Use xnet_gpu, Only: gpu_check_device
 #endif
 #endif
     Implicit None
@@ -779,7 +783,7 @@ Contains
       Return
     EndIf
 #ifdef XNET_GPU
-    Call gpu_check_embedded_device(ierr,message)
+    Call gpu_check_device(ierr,message)
     If ( ierr /= 0 ) Return
 #endif
     ierr = xnet_invalid
@@ -808,7 +812,7 @@ Contains
   End Subroutine xnet_nse_composition
 
   Subroutine xnet_finalize(ierr,message)
-    ! Release XNet workspaces and restore borrowed resources without destroying host state.
+    ! Release XNet workspaces and owned resources without destroying host state.
 #ifdef XNET_EMBEDDING
     Use nuclear_data, Only: nuclear_data_finalize
     Use reaction_data, Only: reaction_data_finalize
@@ -828,7 +832,7 @@ Contains
     Use xnet_nse, Only: nse_finalize
     Use xnet_screening, Only: screening_finalize
 #ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_check_embedded_device, gpu_finalize_embedded
+    Use xnet_gpu, Only: gpu_check_device, gpu_finalize
 #endif
 #endif
     Implicit None
@@ -839,7 +843,7 @@ Contains
 #ifdef XNET_EMBEDDING
     If ( .not. api_initialized ) Return
 #ifdef XNET_GPU
-    Call gpu_check_embedded_device(ierr,message)
+    Call gpu_check_device(ierr,message)
     If ( ierr /= 0 ) Return
 #endif
     ! Release the mappings established here before their owning CPU allocations.
@@ -867,7 +871,7 @@ Contains
     Call controls_finalize
     api_initialized = .false.
 #ifdef XNET_GPU
-    Call gpu_finalize_embedded(ierr,message)
+    Call gpu_finalize(ierr,message)
 #endif
 #else
     ierr = xnet_unsupported

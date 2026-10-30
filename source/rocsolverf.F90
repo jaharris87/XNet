@@ -14,7 +14,7 @@ module xnet_rocsolverf
     rocsolver_dgetrf_batched, &
     rocsolver_dgetrs_batched
 
-  type(c_ptr) :: rocsolver_handle
+  type(c_ptr) :: rocsolver_handle = c_null_ptr
   !$omp threadprivate(rocsolver_handle)
 
 end module xnet_rocsolverf

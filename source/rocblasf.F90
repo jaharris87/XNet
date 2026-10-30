@@ -32,7 +32,7 @@ module xnet_rocblasf
     rocblas_ddgmm, &
     rocblas_ddot_strided_batched
 
-  type(c_ptr) :: rocblas_handle
+  type(c_ptr) :: rocblas_handle = c_null_ptr
   !$omp threadprivate(rocblas_handle)
 
 end module xnet_rocblasf

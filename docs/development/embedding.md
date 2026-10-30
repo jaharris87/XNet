@@ -176,34 +176,65 @@ agree and leaves the selected device unchanged. Keep that device selected
 through finalization.
 
 The optional final `gpu_resources` argument to `xnet_initialize` has type
-`xnet_gpu_resources_t`, exported by `xnet_api`. Its `device` and `queue`
-fields are integers; `stream` and `blas_handle` are `C_PTR` vendor resources.
-For example, after the application creates and associates its stream and
-cuBLAS or hipBLAS handle:
+`xnet_gpu_t`, exported by `xnet_api`. Its `device` and `queue` fields are
+integers; its stream and library handles are `C_PTR` values. All handles
+default to `C_NULL_PTR`, meaning that the application has not supplied them.
+For example, a HIP application can supply its stream and hipBLAS handle
+without creating the other handles XNet needs:
 
 ```fortran
-Use xnet_api, Only: xnet_gpu_resources_t
-Type(xnet_gpu_resources_t) :: gpu_resources
+Use xnet_api, Only: xnet_gpu_t
+Type(xnet_gpu_t) :: gpu_resources
 
 gpu_resources%device = host_device
 gpu_resources%stream = host_stream
-gpu_resources%blas_handle = host_blas_handle
-gpu_resources%queue = host_queue
+gpu_resources%hipblas_handle = host_hipblas_handle
+! A CUDA application supplies cublas_handle instead.
+! An OpenACC application also supplies the matching queue ID.
 Call xnet_initialize(controls,network,ierr,message,gpu_resources=gpu_resources)
 ```
 
-Its device must match the current application device and its BLAS handle
-must already use the supplied stream. For OpenACC, `queue` must already
-identify that same stream.
-XNet borrows these resources, preserves their associations, and does not
-replace or destroy them. It does not create or change the application's
-OpenACC queue association.
+`device=-1` uses the application's current device; a nonnegative value must
+match that selection. Each supplied handle must already use the selected
+stream. XNet borrows supplied resources without changing their associations,
+creates missing resources needed by the selected backend, and tracks
+ownership separately for each one. It does not create or change the
+application's OpenACC queue association.
 
-When `gpu_resources` is omitted in a GPU build, XNet creates its own BLAS
-handle on the current device. OpenACC uses the runtime's stream for queue
-one; OpenMP offload uses a stream created by XNet. Finalization destroys only
-the resources XNet created. Supplying GPU resources to a CPU build returns
-`xnet_unsupported`.
+XNet passes BLAS scalar parameters from host memory. Supplied BLAS handles
+must use host pointer mode; XNet does not change the application's setting.
+
+| Resource fields | Current use |
+| --- | --- |
+| `cublas_handle`, `cusolver_handle` | CUDA library handles; each can be supplied or created independently. |
+| `hipblas_handle`, `rocblas_handle` | HIP library handles; each can be supplied or created independently. |
+| `rocsolver_handle` | An optional rocBLAS handle for rocSOLVER. When omitted, rocSOLVER shares the selected rocBLAS handle; it is not a second allocation to destroy. |
+| `cusparse_handle`, `rocsparse_handle` | Represented in the resource value but currently unused; XNet neither validates nor changes these supplied handles. This does not enable GPU sparse solves. |
+| `magma_queue` | Represented for the MAGMA backend; application-owned MAGMA initialization is not supported by the current library API. |
+
+The resource value is not limited to the handles used by the present dense
+burn. Additional backend operations can use these fields without another
+initialization interface. Tested execution modes remain limited to those
+listed above.
+
+`queue` is the application's OpenACC async ID, not a CUDA/HIP stream handle
+or an OpenMP thread number. Initialization copies it into XNet's internal
+`gpu_queue`, used by its `async` and `wait` directives. For OpenMP target
+offload, the queue number has no effect: target regions do not use the
+supplied vendor stream.
+
+For OpenACC, `queue` must identify the selected stream; an omitted stream
+uses that queue's runtime stream. For OpenMP offload, an omitted stream is
+inferred from a supplied library handle or created by XNet when no handles
+are supplied. XNet never destroys an inferred or runtime-owned stream.
+
+When `gpu_resources` is omitted in a GPU build, the API supplies a default
+resource value internally: XNet creates the required handles on the current
+application device. OpenACC uses queue one's runtime stream; OpenMP offload
+uses an XNet-created stream. Both the API and standalone program use
+`gpu_init` and `gpu_finalize`; standalone `gpu_init()` retains its rank-based
+device selection and per-thread setup. Supplying GPU resources to a CPU
+build returns `xnet_unsupported`.
 
 The optional final logical `data_on_device` argument to `xnet_burn_batch`
 selects the location of the scientific arrays. Omitted or false means their
@@ -241,9 +272,21 @@ with the runtime status in `message`, before reading scientific inputs.
 
 Call `xnet_finalize` before destroying the application's GPU resources or
 EOS data. It releases XNet's device mappings before their CPU allocations
-and restores the resource slots used by the library. It does not initialize
-or finalize application MPI, reset the selected device, or finalize the GPU
-runtime.
+and clears XNet's handle and stream references. Cleanup follows ownership:
+borrowed resources are left intact; XNet-created resources are destroyed.
+The OpenACC runtime owns its queue stream even when XNet creates library
+handles. Do not overlap the API lifetime with direct calls to XNet's internal
+GPU initialization/finalization routines or assignments to its resource
+variables. The library supports one non-reentrant instance, not saved or
+nested GPU contexts.
+
+XNet's internal Fortran GPU binding modules have `xnet_`-prefixed names so
+application bindings can coexist without sharing module variables. The
+vendor C routine names are unchanged; applications pass their handles through
+`xnet_gpu_t` rather than modifying XNet's binding variables.
+
+The library does not initialize or finalize application MPI, reset the
+selected device, or finalize the GPU runtime.
 
 ## Batch arguments
 

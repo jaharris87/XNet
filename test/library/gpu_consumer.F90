@@ -10,7 +10,7 @@
 Program gpu_consumer
   Use, Intrinsic :: iso_c_binding, Only: C_PTR, C_NULL_PTR, C_INT, C_LONG_LONG, C_LOC, C_Associated
   Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite, ieee_value, ieee_quiet_nan, ieee_positive_inf
-  Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, xnet_gpu_resources_t, &
+  Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, xnet_gpu_t, &
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success, xnet_invalid
   Use consumer_fixture, Only: fixture_state, write_state, check
 #if defined(XNET_CUDA)
@@ -18,11 +18,13 @@ Program gpu_consumer
     & cudaStreamNonBlocking, cudaStreamDestroy, cudaStreamSynchronize
   Use xnet_cublasf, Only: cublasCreate_v2, cublasDestroy_v2, cublasGetStream_v2, cublasSetStream_v2, &
     & cublasDgemm_v2, CUBLAS_OP_N
+  Use xnet_cusolverf, Only: cusolverDnCreate, cusolverDnDestroy, cusolverDnGetStream, cusolverDnSetStream
 #elif defined(XNET_HIP)
   Use xnet_hipf, Only: hipGetDeviceCount, hipGetDevice, hipSetDevice, hipStreamCreateWithFlags, &
     & hipStreamNonBlocking, hipStreamDestroy, hipStreamSynchronize
   Use xnet_hipblasf, Only: hipblasCreate, hipblasDestroy, hipblasGetStream, hipblasSetStream, &
     & hipblasDgemm, HIPBLAS_OP_N
+  Use xnet_rocblasf, Only: rocblas_create_handle, rocblas_destroy_handle, rocblas_get_stream, rocblas_set_stream
 #endif
 #if defined(XNET_OACC)
   Use openacc, Only: acc_set_device_num, acc_device_default, acc_on_device, acc_device_host
@@ -44,10 +46,10 @@ Program gpu_consumer
   Type(xnet_controls_t) :: controls
   Type(xnet_network_t) :: network
   Type(xnet_timing_t) :: timing
-  Type(xnet_gpu_resources_t) :: resources
+  Type(xnet_gpu_t) :: resources
   Type(C_PTR) :: host_handle, host_stream, queried_stream
 #if defined(XNET_OACC)
-  Type(C_PTR) :: prior_queue_stream
+  Type(C_PTR) :: prior_queue_stream, owned_queue_stream
 #endif
   Integer(C_INT) :: status, device_count, current_device
   Integer :: ierr, device, isolv, iheat, i, ownership, path, phase, n, steps
@@ -132,13 +134,20 @@ Program gpu_consumer
   Do ownership = 1, 2
     If ( ownership == 1 ) Then
       prefix = 'owned'
+#if defined(XNET_OACC)
+      owned_queue_stream = acc_get_cuda_stream(1_C_LONG_LONG)
+#endif
       Call xnet_initialize(controls,network,ierr,message)
     Else
       prefix = 'borrowed'
       Call create_host_resources()
       resources%device = device
       resources%stream = host_stream
-      resources%blas_handle = host_handle
+#if defined(XNET_CUDA)
+      resources%cublas_handle = host_handle
+#elif defined(XNET_HIP)
+      resources%hipblas_handle = host_handle
+#endif
       resources%queue = host_queue
       Call xnet_initialize(controls,network,ierr,message,gpu_resources=resources)
     EndIf
@@ -214,8 +223,17 @@ Program gpu_consumer
     Call xnet_finalize(ierr,message)
     Call api_ok(Trim(prefix)//' finalize')
     Call selected_device_unchanged()
+#if defined(XNET_OACC)
+    If ( ownership == 1 ) Then
+      queried_stream = acc_get_cuda_stream(1_C_LONG_LONG)
+      Call check(C_Associated(queried_stream,owned_queue_stream),'OpenACC queue-one stream association survived')
+      status = cudaStreamSynchronize(owned_queue_stream)
+      Call runtime_ok('OpenACC runtime stream after finalize')
+    EndIf
+#endif
     If ( ownership == 2 ) Call check_and_destroy_host_resources()
   EndDo
+  Call solver_only_resources()
   Do i = 1, phases
     Deallocate(expected(i)%x)
   EndDo
@@ -528,6 +546,50 @@ Contains
 #endif
     Return
   End Subroutine create_host_resources
+
+  Subroutine solver_only_resources()
+    ! Borrow a solver handle but let XNet create its missing BLAS handles.
+    Implicit None
+    Type(C_PTR) :: solver_handle
+
+    Call create_host_resources()
+    resources = xnet_gpu_t()
+    resources%device = device
+    resources%stream = host_stream
+    resources%queue = host_queue
+#if defined(XNET_CUDA)
+    status = cusolverDnCreate(solver_handle)
+    Call runtime_ok('host solver creation')
+    status = cusolverDnSetStream(solver_handle,host_stream)
+    resources%cusolver_handle = solver_handle
+#elif defined(XNET_HIP)
+    status = rocblas_create_handle(solver_handle)
+    Call runtime_ok('host solver creation')
+    status = rocblas_set_stream(solver_handle,host_stream)
+    resources%rocsolver_handle = solver_handle
+#endif
+    Call runtime_ok('host solver stream selection')
+    Call xnet_initialize(controls,network,ierr,message,gpu_resources=resources)
+    Call api_ok('solver-only borrowing initialize')
+    Call xnet_finalize(ierr,message)
+    Call api_ok('solver-only borrowing finalize')
+#if defined(XNET_CUDA)
+    status = cusolverDnGetStream(solver_handle,queried_stream)
+#elif defined(XNET_HIP)
+    status = rocblas_get_stream(solver_handle,queried_stream)
+#endif
+    Call runtime_ok('borrowed solver after finalize')
+    Call check(C_Associated(queried_stream,host_stream),'borrowed solver stream association survived')
+#if defined(XNET_CUDA)
+    status = cusolverDnDestroy(solver_handle)
+#elif defined(XNET_HIP)
+    status = rocblas_destroy_handle(solver_handle)
+#endif
+    Call runtime_ok('host solver destruction')
+    Call check_and_destroy_host_resources()
+    Write(*,'(a)') 'GPU_SOLVER_ONLY_BORROWING_COMPLETED'
+    Return
+  End Subroutine solver_only_resources
 
   Subroutine check_and_destroy_host_resources()
     ! A genuine vendor GEMM after finalization proves that the borrowed handle and stream survived.

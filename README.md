@@ -40,10 +40,17 @@ preprocessed sources, and programs under the selected directory. See
 `Makefile.opt` for the principal compiler, parallel, solver, EOS, and
 accelerator choices.
 
-`make -j libxnet` also produces a static archive and compiler-specific module
-files for the initial dense serial CPU embedding interface. See the
-[Fortran embedding guide](docs/development/embedding.md) for its three
-procedures, data conventions, and current error-handling limits.
+`make -j libxnet` also produces a static archive and compiler-specific Fortran
+module files. See the [Fortran library API guide](docs/development/embedding.md)
+for initialization, repeated burns, NSE queries, finalization, data conventions,
+and current configuration and error-handling limits.
+
+Standalone runs read `controls.nml` from the run directory, using the
+`&xnet_controls` namelist group. The former line-oriented `control` input is
+no longer supported. See [runtime configuration](docs/development/runtime-configuration.md)
+for the input fields, configuration layers, and migration from the old format.
+The [annotated alpha-network example](test/regression/cases/tnsn_alpha/controls.nml)
+shows the controls and input filenames for a standalone problem.
 
 Before you dig deep into the source code, we suggest you learn the
 basics of how thermonuclear reaction networks function, from one of the following sources.

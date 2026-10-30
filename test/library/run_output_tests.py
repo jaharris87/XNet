@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-GENERATED = ("nets3", "nets4", "match_data", "match_read", "matr_shape", "sparse_ind", "net_desc", "net_diag", "ab_blank")
+GENERATED = ("nets3", "nets4", "nuc_data", "match_data", "match_read", "matr_shape", "sparse_ind", "net_desc", "net_diag", "ab_blank")
 CALLS = {1: ("first", (1, 3, 4)), 2: ("repeat", (1, 2, 3, 4)),
          3: ("short", (1, 3)), 4: ("after_invalid", (4,)), 5: ("reinitialize", (4,))}
 
@@ -127,14 +127,18 @@ def printed_close(actual: float, expected: float, digits: int) -> bool:
     return abs(actual - expected) <= 0.501 * quantum + 2e-15 * abs(expected)
 
 
-def check_ascii(path: Path, trace: dict, names: list[str]) -> None:
+def check_ascii(path: Path, trace: dict, names: list[str], selected: list[int]) -> None:
     lines = path.read_text().splitlines()
     require(len(lines) == len(trace["steps"]) + 1, f"ASCII/binary row count mismatch: {path}")
-    selected = [names.index("c12"), names.index("o16"), len(names)-1]
-    # The missing-name fallback is the standalone final-species rule.
-    require([lines[0][69+9*i:78+9*i].strip() for i in range(3)] == [names[i] for i in selected],
+    species = len(selected)
+    require(len(lines[0]) == 73 + 9 * species, f"malformed ASCII header width: {path}")
+    require([lines[0][:4].strip(), lines[0][4:19].strip()] +
+            [lines[0][19+10*i:29+10*i].strip() for i in range(5)] ==
+            ["k", "Time", "T(GK)", "Density", "dE/dt", "sqnu", "Timestep"] and
+            lines[0][69+9*species:].strip() == "It", f"ASCII fixed-column header mismatch: {path}")
+    require([lines[0][69+9*i:78+9*i].strip() for i in range(species)] == [names[i] for i in selected],
             f"ASCII selected-species header/fallback mismatch: {path}")
-    widths = (4, 15, 10, 10, 10, 10, 10, 9, 9, 9, 2, 2)
+    widths = (4, 15, 10, 10, 10, 10, 10) + (9,) * species + (2, 2)
     for line, step in zip(lines[1:], trace["steps"]):
         require(len(line) == sum(widths), f"malformed ASCII row width: {path}")
         fields, offset = [], 0
@@ -142,16 +146,16 @@ def check_ascii(path: Path, trace: dict, names: list[str]) -> None:
             fields.append(line[offset:offset+width])
             offset += width
         require(int(fields[0]) == step["k"], f"ASCII timestep mismatch: {path}")
-        values = list(map(number, fields[1:10]))
+        values = list(map(number, fields[1:7+species]))
         expected = [step[k] for k in ("time", "t9", "rho", "edot", "sqnu", "dt")]
         expected += [trace["a"][i] * step["y"][i] for i in selected]
         require(all(math.isfinite(value) and printed_close(value, target, digits)
-                    for value, target, digits in zip(values, expected, (9, 4, 4, 3, 3, 3, 3, 3, 3))),
+                    for value, target, digits in zip(values, expected, (9, 4, 4, 3, 3, 3) + (3,) * species)),
                 f"ASCII time/thermo/energy/loss/timestep/selected abundances differ: {path}")
-        require(all(int(field) >= 0 for field in fields[10:]), f"invalid ASCII iteration fields: {path}")
+        require(all(int(field) >= 0 for field in fields[7+species:]), f"invalid ASCII iteration fields: {path}")
 
 
-def check_case(case: Path, log: dict, level: int, solver: int, heat: int) -> dict:
+def check_case(case: Path, log: dict, level: int, solver: int, heat: int, selected: list[int]) -> dict:
     inventory = {f"ts_call{sequence}_lane{lane}" for sequence, (_, lanes) in CALLS.items() for lane in lanes}
     require({p.name for p in case.glob("ts*")} == (inventory if level else set()), f"wrong binary lane/call inventory: {case}")
     ascii_inventory = {name.replace("ts_", "ev_", 1) for name in inventory}
@@ -187,7 +191,7 @@ def check_case(case: Path, log: dict, level: int, solver: int, heat: int) -> dic
             require(last["t9"]*1e9 == final["zones"][lane][0], f"final self-heating temperature mismatch: {name}")
         require(any(any(value != 0 for value in step["flux"]) for step in trace["steps"][1:]), f"nonzero accepted reaction flux unexercised: {name}")
         if level >= 2:
-            check_ascii(case / name.replace("ts_", "ev_", 1), trace, names)
+            check_ascii(case / name.replace("ts_", "ev_", 1), trace, names, selected)
         traces[name] = trace
     return traces
 
@@ -277,7 +281,10 @@ def main() -> None:
                     baseline_lines = result_lines
                 else:
                     require(result_lines == baseline_lines, f"itsout changed physical results/counters/steps: {label}")
-                enabled[level] = check_case(case, log, level, solver, heat)
+                names = [row[0] for row in log["metadata"]]
+                # The missing-name fallback is the standalone final-species rule.
+                selected = [names.index("c12"), names.index("o16"), len(names)-1]
+                enabled[level] = check_case(case, log, level, solver, heat, selected)
         require(set(reference) == set(enabled[1]), f"reference output inventory differs: {network}")
         for name, trace in enabled[1].items():
             for level in (2, 3):
@@ -287,9 +294,21 @@ def main() -> None:
                     trace["headers"][4:6] == reference[name]["headers"][4:6] and
                     trace["raw_steps"] == reference[name]["raw_steps"],
                     f"complete time/thermo/loss/energy/abundance/flux records differ from direct full_net: {name}")
+        for mode, selected in (("species0", []), ("species1", [names.index("c12")])):
+            label = f"{network}-{solver}-{heat}-2-{mode}"
+            case = new_case(label, network)
+            text = run([consumer, f"Data_{network}", str(solver), str(heat), "2", mode], case, case / "consumer.log")
+            require("OUTPUT_CHECKS_PASSED" in text, f"species-selection consumer did not finish: {case}")
+            result_lines = [line for line in text.splitlines() if line.startswith(("STATE ", "ZONE ", "X ", "STEPS "))]
+            require(result_lines == baseline_lines, f"ASCII species selection changed physical results/counters/steps: {label}")
+            traces = check_case(case, parsed_log(text), 2, solver, heat, selected)
+            for name, trace in traces.items():
+                require(trace["headers"] == enabled[2][name]["headers"] and
+                        trace["raw_steps"] == enabled[2][name]["raw_steps"],
+                        f"ASCII species selection changed complete binary records: {label}/{name}")
         if network == "SN160":
             require(any(step["sqnu"] != 0 for trace in enabled[1].values() for step in trace["steps"]), "SN160 loss output unexercised")
-        print(f"PASS {network} solver={solver} heat={heat}: itsout=0/1/2/3 physical equality; full records equal direct full_net; ASCII/masks/retention", flush=True)
+        print(f"PASS {network} solver={solver} heat={heat}: itsout=0/1/2/3 physical equality; full records equal direct full_net; ASCII 0/1/3 species/masks/retention", flush=True)
 
     for mode in ("open_failure", "collision"):
         case = new_case(f"alpha-{mode}", "alpha")
@@ -318,7 +337,9 @@ def main() -> None:
             text = run([consumer, "Data_alpha", str(solver), "0", "2", mode], case, case / "consumer.log")
             require("OUTPUT_FATAL_CHECKS_PASSED" in text, f"fatal output checks incomplete: {case}")
             partial = binary(case / "ts_call1_lane2")
-            check_ascii(case / "ev_call1_lane2", partial, [row[0] for row in parsed_log(text)["metadata"]])
+            names = [row[0] for row in parsed_log(text)["metadata"]]
+            check_ascii(case / "ev_call1_lane2", partial, names,
+                        [names.index("c12"), names.index("o16"), len(names)-1])
             require({p.name for p in case.glob("ts*")} == {"ts_call1_lane2"} and
                     {p.name for p in case.glob("ev*")} == {"ev_call1_lane2"}, f"wrong failed-call inventory: {case}")
             require(partial["steps"][-1]["time"] < 0.1, f"failure unexpectedly wrote completed burn: {case}")

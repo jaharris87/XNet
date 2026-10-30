@@ -782,57 +782,70 @@ Contains
 #if defined(XNET_CUDA)
     If ( owns_cusolver ) Then
       status = cusolverDnDestroy(cusolver_handle)
-      If ( status /= 0 ) Then
+      If ( status == 0 ) Then
+        cusolver_handle = C_NULL_PTR
+        owns_cusolver = .false.
+      Else
         thread_status = 1
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet cuSOLVER handle, status ',status
       EndIf
     EndIf
     If ( owns_cublas ) Then
       status = cublasDestroy_v2(cublas_handle)
-      If ( status /= 0 .and. thread_status == 0 ) Then
+      If ( status == 0 ) Then
+        cublas_handle = C_NULL_PTR
+        owns_cublas = .false.
+      ElseIf ( thread_status == 0 ) Then
         thread_status = 1
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet cuBLAS handle, status ',status
       EndIf
     EndIf
-    cusolver_handle = C_NULL_PTR
-    cublas_handle = C_NULL_PTR
-    owns_cusolver = .false.
-    owns_cublas = .false.
 #elif defined(XNET_HIP)
     If ( owns_rocblas ) Then
       status = rocblas_destroy_handle(rocblas_handle)
-      If ( status /= 0 ) Then
+      If ( status == 0 ) Then
+        If ( C_Associated(rocsolver_handle,rocblas_handle) ) rocsolver_handle = C_NULL_PTR
+        rocblas_handle = C_NULL_PTR
+        owns_rocblas = .false.
+      Else
         thread_status = 1
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet rocBLAS handle, status ',status
       EndIf
     EndIf
     If ( owns_hipblas ) Then
       status = hipblasDestroy(hipblas_handle)
-      If ( status /= 0 .and. thread_status == 0 ) Then
+      If ( status == 0 ) Then
+        hipblas_handle = C_NULL_PTR
+        owns_hipblas = .false.
+      ElseIf ( thread_status == 0 ) Then
         thread_status = 1
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet hipBLAS handle, status ',status
       EndIf
     EndIf
-    rocblas_handle = C_NULL_PTR
-    rocsolver_handle = C_NULL_PTR
-    hipblas_handle = C_NULL_PTR
-    owns_rocblas = .false.
-    owns_hipblas = .false.
 #endif
+    ! Failed handles may still depend on this stream. Keep their state for cleanup retry.
+    If ( thread_status /= 0 ) GoTo 800
     If ( owns_stream ) Then
 #if defined(XNET_CUDA)
       status = cudaStreamDestroy(stream)
 #elif defined(XNET_HIP)
       status = hipStreamDestroy(stream)
 #endif
-      If ( status /= 0 .and. thread_status == 0 ) Then
+      If ( status /= 0 ) Then
         thread_status = 1
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet GPU stream, status ',status
+        GoTo 800
       EndIf
     EndIf
+    ! Release borrowed associations only after all owned resources are cleaned up.
 #if defined(XNET_CUDA)
+    cusolver_handle = C_NULL_PTR
+    cublas_handle = C_NULL_PTR
     cuda_stream = C_NULL_PTR
 #elif defined(XNET_HIP)
+    rocblas_handle = C_NULL_PTR
+    rocsolver_handle = C_NULL_PTR
+    hipblas_handle = C_NULL_PTR
     hip_stream = C_NULL_PTR
 #endif
     Nullify(stream)

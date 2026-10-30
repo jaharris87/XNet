@@ -826,7 +826,8 @@ Contains
         filename = Trim(ev_file_base)//Trim(suffix)
         Open(newunit=lun_ev(lane),file=Trim(filename),status='new',action='write',iostat=output_status)
         If ( output_status /= 0 ) Exit
-        header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
+        header_format = '(a4,a15,5a10,a4)'
+        If ( nnucout > 0 ) header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
         Write(lun_ev(lane),header_format) &
           & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout),' It '
       EndIf

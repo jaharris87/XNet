@@ -90,6 +90,92 @@ $(BUILD_DIR)/cleanup/cleanup_consumer: $(BUILD_DIR)/cleanup/cleanup_consumer.o \
     $(BUILD_DIR)/cleanup/xnet_api.o $(BUILD_DIR)/cleanup/gpu_cleanup_stub.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
+# Exercise production resource cleanup with host-only CUDA/HIP vendor models.
+# The replacement interfaces and module outputs never enter normal callers.
+ifeq ($(findstring -DXNET_GPU,$(XNET_CPPFLAGS)),)
+test host-openmp-test: gpu-finalize-test
+GPU_FINALIZE_CUDA := $(BUILD_DIR)/gpu-finalize-cuda/consumer
+GPU_FINALIZE_HIP := $(BUILD_DIR)/gpu-finalize-hip/consumer
+GPU_FINALIZE_VENDOR := $(BUILD_DIR)/gpu-finalize-vendor.o
+
+.PHONY: gpu-finalize-test
+gpu-finalize-test: $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP)
+	@set -e; for executable in $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP); do \
+	  for scenario in stream blas solver both borrowed mixed-blas mixed-solver; do \
+	    "$$executable" "$$scenario"; \
+	  done; \
+	done
+
+$(BUILD_DIR)/gpu-finalize-cuda $(BUILD_DIR)/gpu-finalize-hip:
+	mkdir -p '$@'
+
+$(GPU_FINALIZE_VENDOR): gpu_finalize_vendor.c | $(BUILD_DIR)
+	$(CC) -std=c99 -Wall -Wextra -c '$<' -o '$@'
+
+$(BUILD_DIR)/gpu-finalize-cuda/%.f90: ../../source/%.F90 ../../source/xnet_macros.fh $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-cuda
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) -DXNET_GPU -DXNET_CUDA '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu-finalize-hip/%.f90: ../../source/%.F90 ../../source/xnet_macros.fh $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-hip
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) -DXNET_GPU -DXNET_HIP '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu-finalize-cuda/gpu_finalize_consumer.f90: gpu_finalize_consumer.F90 $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-cuda
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) -DXNET_GPU -DXNET_CUDA '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_consumer.f90: gpu_finalize_consumer.F90 $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-hip
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) -DXNET_GPU -DXNET_HIP '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu-finalize-cuda/%.o: $(BUILD_DIR)/gpu-finalize-cuda/%.f90 $(XNET_CONFIG)
+	cd '$(BUILD_DIR)/gpu-finalize-cuda' && $(XNET_FC) $(XNET_FFLAGS) -I. $(XNET_MODFLAGS) \
+	  -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/gpu-finalize-hip/%.o: $(BUILD_DIR)/gpu-finalize-hip/%.f90 $(XNET_CONFIG)
+	cd '$(BUILD_DIR)/gpu-finalize-hip' && $(XNET_FC) $(XNET_FFLAGS) -I. $(XNET_MODFLAGS) \
+	  -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_hipfort.o: gpu_finalize_hipfort.F90 $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-hip
+	cd '$(BUILD_DIR)/gpu-finalize-hip' && $(XNET_FC) $(XNET_FFLAGS) \
+	  -c '$(abspath $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/gpu-finalize-cuda/xnet_gpu.o: $(BUILD_DIR)/gpu-finalize-cuda/xnet_gpu.f90 \
+    $(BUILD_DIR)/gpu-finalize-cuda/cudaf.o \
+    $(BUILD_DIR)/gpu-finalize-cuda/cublasf.o $(BUILD_DIR)/gpu-finalize-cuda/cusolverf.o $(XNET_ARCHIVE)
+	cd '$(BUILD_DIR)/gpu-finalize-cuda' && $(XNET_FC) $(XNET_FFLAGS) -I. $(XNET_MODFLAGS) \
+	  -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/gpu-finalize-hip/hipf.o $(BUILD_DIR)/gpu-finalize-hip/hipblasf.o \
+    $(BUILD_DIR)/gpu-finalize-hip/rocblasf.o $(BUILD_DIR)/gpu-finalize-hip/rocsolverf.o: \
+    $(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_hipfort.o
+
+$(BUILD_DIR)/gpu-finalize-hip/xnet_gpu.o: $(BUILD_DIR)/gpu-finalize-hip/xnet_gpu.f90 \
+    $(BUILD_DIR)/gpu-finalize-hip/hipf.o \
+    $(BUILD_DIR)/gpu-finalize-hip/hipblasf.o $(BUILD_DIR)/gpu-finalize-hip/rocblasf.o \
+    $(BUILD_DIR)/gpu-finalize-hip/rocsolverf.o $(XNET_ARCHIVE)
+	cd '$(BUILD_DIR)/gpu-finalize-hip' && $(XNET_FC) $(XNET_FFLAGS) -I. $(XNET_MODFLAGS) \
+	  -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/gpu-finalize-cuda/gpu_finalize_consumer.o: $(BUILD_DIR)/gpu-finalize-cuda/xnet_gpu.o
+$(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_consumer.o: $(BUILD_DIR)/gpu-finalize-hip/xnet_gpu.o
+
+$(GPU_FINALIZE_CUDA): $(BUILD_DIR)/gpu-finalize-cuda/gpu_finalize_consumer.o \
+    $(BUILD_DIR)/gpu-finalize-cuda/xnet_gpu.o $(BUILD_DIR)/gpu-finalize-cuda/cudaf.o \
+    $(BUILD_DIR)/gpu-finalize-cuda/cublasf.o $(BUILD_DIR)/gpu-finalize-cuda/cusolverf.o \
+    $(GPU_FINALIZE_VENDOR) $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+$(GPU_FINALIZE_HIP): $(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_consumer.o \
+    $(BUILD_DIR)/gpu-finalize-hip/xnet_gpu.o $(BUILD_DIR)/gpu-finalize-hip/hipf.o \
+    $(BUILD_DIR)/gpu-finalize-hip/hipblasf.o $(BUILD_DIR)/gpu-finalize-hip/rocblasf.o \
+    $(BUILD_DIR)/gpu-finalize-hip/rocsolverf.o $(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_hipfort.o \
+    $(GPU_FINALIZE_VENDOR) $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+endif
+
 host-openmp-test: $(BUILD_DIR)/host_openmp_consumer
 
 test host-openmp-test: all

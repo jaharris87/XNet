@@ -191,7 +191,8 @@ records are not appended across calls. The binary record layout and ASCII
 columns are the same as standalone output. Binary header descriptions identify
 the API arrays and constant conditions instead of standalone input files.
 `controls%output_nuclei` selects the ASCII species with the standalone lookup and
-missing-name warning/fallback.
+missing-name warning/fallback. With the default `nnucout=0`, ASCII output
+contains the time, thermodynamic and iteration columns without species columns.
 
 The call number increases for each active output attempt and continues across
 finalization/reinitialization in the same process. Invalid and all-inactive

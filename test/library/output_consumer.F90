@@ -39,8 +39,15 @@ Program output_consumer
   controls%bin_file_base = 'ts'
   controls%ev_file_base = 'ev'
   controls%description = [Character(80) :: 'API output regression', 'constant conditions', 'public C/O fixture']
-  controls%nnucout = 3
-  controls%output_nuclei = [Character(5) :: 'c12', 'o16', 'badxx']
+  If ( mode == 'species0' ) Then
+    Call check(controls%nnucout == 0 .and. Size(controls%output_nuclei) == 0,'default output species selection')
+  ElseIf ( mode == 'species1' ) Then
+    controls%nnucout = 1
+    controls%output_nuclei = [Character(5) :: 'c12']
+  Else
+    controls%nnucout = 3
+    controls%output_nuclei = [Character(5) :: 'c12', 'o16', 'badxx']
+  EndIf
   controls%t9nse = 11.0_dp
   If ( solver == 3 ) Then
     controls%kitmx = 10

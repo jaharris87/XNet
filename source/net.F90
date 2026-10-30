@@ -317,7 +317,8 @@ Program net
             Open(newunit=lun_ev(izb), file=ev_file, action='write')
 
             ! Write evolution file header
-            Write(ev_header_format,"(a)") "(a4,a15,5a10,"//trim(nnucout_string)//"a9,a4)"
+            ev_header_format = '(a4,a15,5a10,a4)'
+            If ( nnucout > 0 ) ev_header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
             Write(lun_ev(izb),ev_header_format) &
               & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout), ' It '
           EndIf

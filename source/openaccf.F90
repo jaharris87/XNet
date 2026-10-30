@@ -13,7 +13,9 @@ module xnet_openaccf
   implicit none
 
   integer(c_long_long) :: acc_queue
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(acc_queue)
+#endif
 
   !enum, bind(c) !:: acc_device_t
   !  enumerator :: acc_device_none = 0

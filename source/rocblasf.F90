@@ -33,6 +33,8 @@ module xnet_rocblasf
     rocblas_ddot_strided_batched
 
   type(c_ptr) :: rocblas_handle = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(rocblas_handle)
+#endif
 
 end module xnet_rocblasf

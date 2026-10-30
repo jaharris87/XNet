@@ -2,7 +2,7 @@
 #include "xnet_macros.fh"
 
 Module xnet_api
-  Use xnet_types, Only: dp
+  Use xnet_types, Only: dp, i8
   Use xnet_controls, Only: xnet_controls_t, set_xnet_controls_defaults
   Use xnet_gpu, Only: xnet_gpu_t
   Implicit None
@@ -28,20 +28,23 @@ Module xnet_api
   ! Pending GPU cleanup must not permit burns or repeat array teardown.
   Integer, Parameter :: api_uninitialized = 0, api_ready = 1, api_cleanup_pending = 2
   Integer :: api_state = api_uninitialized
+  Character(80) :: api_data_description
+  ! Keep separate output segments across burns and initialization lifetimes.
+  Integer(i8) :: output_call = 0_i8
 
 Contains
 
   Subroutine xnet_initialize(controls,network,ierr,message,gpu_resources)
-    ! Load a preprocessed network once. Reader, EOS and solver failures may still terminate.
-    !$ Use omp_lib, Only: omp_get_max_threads
-    Use nuclear_data, Only: ny, nname, ia, iz, be, mex, read_nuclear_data
+    ! Prepare and load a network once. Reader, EOS and solver failures may still terminate.
+    Use nuclear_data, Only: ny, nname, ia, iz, be, mex, read_nuclear_data, index_from_name
     Use reaction_data, Only: read_reaction_data
     Use xnet_abundances, Only: abundances_initialize, y, yo, yt, ydot, ystart, xext, aext, zext
     Use xnet_conditions, Only: conditions_initialize, tdel, tdel_next, tdel_old, t, tt, to, t9, t9t, t9o, t9dot, &
       & rho, rhot, rhoo, ye, yet, yeo, cv, etae, detaedt9, nt, ntt, nto, ints, intso, &
       & tstart, tstop, tdelstart, nstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
     Use xnet_controls, Only: validate_xnet_controls, apply_xnet_controls, zone_id, nzevolve, &
-      & myid, nproc, tid, nthread, lun_diag, lun_stdout, isolv, sweep, gpu_queue
+      & myid, nproc, tid, nthread, lun_diag, lun_stdout, isolv, sweep, gpu_queue, &
+      & nnucout, output_nuc, inucout
     Use xnet_eos, Only: eos_initialize
     Use xnet_flux, Only: flux_init
     Use xnet_integrate_be, Only: be_init
@@ -51,6 +54,7 @@ Contains
     Use xnet_nnu, Only: tmevnu, fluxcms, nnuspec
     Use xnet_nse, Only: nse_initialize
     Use xnet_screening, Only: screening_init
+    Use xnet_preprocess, Only: net_preprocess
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_init, gpu_finalize
 #endif
@@ -60,11 +64,10 @@ Contains
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
     Type(xnet_gpu_t), Optional, Intent(in) :: gpu_resources
-    Character(80) :: data_description
+    Character(10), Parameter :: ascii_files(3) = [Character(10) :: 'sunet', 'netwinv', 'netsu']
     Character(10), Parameter :: required_files(5) = &
       & [Character(10) :: 'sunet', 'netwinv', 'nets3', 'nets4', 'match_data']
-    Integer :: i, input_unit, input_status
-    Logical :: exists
+    Integer :: i, inuc
 #ifdef XNET_GPU
     Type(xnet_gpu_t) :: gpu
     Integer :: cleanup_status
@@ -79,11 +82,6 @@ Contains
       If ( api_state == api_cleanup_pending ) message = 'Finish XNet finalization before initialization'
       Return
     EndIf
-    !$ If ( omp_get_max_threads() /= 1 ) Then
-    !$   ierr = xnet_unsupported
-    !$   message = 'Library calls require one host OpenMP thread'
-    !$   Return
-    !$ EndIf
 #ifndef XNET_GPU
     If ( Present(gpu_resources) ) Then
       ierr = xnet_unsupported
@@ -98,26 +96,19 @@ Contains
       message = 'data_dir is required'
       Return
     EndIf
-    If ( controls%iprocess /= 0 .or. controls%ineutrino /= 0 .or. controls%itsout > 0 ) Then
+    If ( controls%ineutrino /= 0 ) Then
       ierr = xnet_unsupported
-      message = 'Library calls require preprocessed data, no neutrino capture histories, and no time-series files'
+      message = 'Library calls do not support neutrino capture histories'
       Return
     EndIf
-    ! Check file access before installing state. File contents still use the existing fatal readers.
-    Do i = 1, Size(required_files)
-      Inquire(file=Trim(controls%data_dir)//'/'//Trim(required_files(i)),exist=exists)
-      If ( .not. exists ) Then
-        message = 'Missing network file: '//Trim(required_files(i))
-        Return
-      EndIf
-      Open(newunit=input_unit,file=Trim(controls%data_dir)//'/'//Trim(required_files(i)), &
-        & status='old',action='read',access='stream',form='unformatted',iostat=input_status)
-      If ( input_status /= 0 ) Then
-        message = 'Cannot read network file: '//Trim(required_files(i))
-        Return
-      EndIf
-      Close(input_unit)
-    EndDo
+    ! Preprocessing writes data_dir; the host must arrange exclusive access to that directory.
+    If ( controls%iprocess > 0 ) Then
+      Call check_network_files(controls%data_dir,ascii_files,ierr,message)
+      If ( ierr /= xnet_success ) Return
+      Call net_preprocess(lun_stdout,controls%data_dir,controls%data_dir)
+    EndIf
+    Call check_network_files(controls%data_dir,required_files,ierr,message)
+    If ( ierr /= xnet_success ) Return
     myid = 0
     nproc = 1
     tid = 1
@@ -143,7 +134,7 @@ Contains
     Deallocate (zone_id)
     Allocate (zone_id(4,nzevolve))
     zone_id = 0
-    Call read_nuclear_data(controls%data_dir,data_description)
+    Call read_nuclear_data(controls%data_dir,api_data_description)
     Call read_reaction_data(controls%data_dir)
     Call read_jacobian_data(controls%data_dir)
     Call read_match_data(controls%data_dir)
@@ -152,6 +143,18 @@ Contains
     Call eos_initialize
     If ( isolv == 1 ) Call be_init
     If ( isolv == 3 ) Call bdf_init
+    ! Use the standalone species lookup and missing-name fallback for condensed output.
+    If ( controls%itsout > 0 ) Then
+      Do i = 1, nnucout
+        Call index_from_name(output_nuc(i),inuc)
+        If ( inuc < 1 .or. inuc > ny ) Then
+          Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
+          inucout(i) = ny
+        Else
+          inucout(i) = inuc
+        EndIf
+      EndDo
+    EndIf
     Call nse_initialize
     Call abundances_initialize
     Call conditions_initialize(2)
@@ -404,6 +407,8 @@ Contains
     rho = rhostart
     ye_work = yestart
     y = ystart
+    Call open_burn_output(ierr,message)
+    If ( ierr /= xnet_success ) Return
     ! Host inputs remain authoritative even when the caller has stale device mappings.
     ! Transfer only XNet-owned workspace; arbitrary host array sections retain their existing behavior.
     !XDIR XUPDATE XASYNC(gpu_queue) &
@@ -413,6 +418,7 @@ Contains
 
     Allocate (loss_work(nzevolve))
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
+    Call close_burn_output
     ! API results do not depend on diagnostic verbosity or successful final output.
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(ktot)
@@ -707,7 +713,10 @@ Contains
         EndIf
       EndDo
     EndIf
+    Call open_burn_output(ierr,message)
+    If ( ierr /= xnet_success ) GoTo 900
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
+    Call close_burn_output
     ! Attempted counters are host diagnostics even when the physical result is invalid.
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(ktot)
@@ -741,6 +750,113 @@ Contains
     Return
   End Subroutine burn_device_arrays
 #endif
+
+  Subroutine check_network_files(data_dir,filenames,ierr,message)
+    ! Check access before installing state. Contents still use the existing fatal readers.
+    Implicit None
+    Character(*), Intent(in) :: data_dir, filenames(:)
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
+    Integer :: i, input_unit, input_status
+    Logical :: exists
+
+    ierr = xnet_invalid
+    message = ' '
+    Do i = 1, Size(filenames)
+      Inquire(file=Trim(data_dir)//'/'//Trim(filenames(i)),exist=exists)
+      If ( .not. exists ) Then
+        message = 'Missing network file: '//Trim(filenames(i))
+        Return
+      EndIf
+      Open(newunit=input_unit,file=Trim(data_dir)//'/'//Trim(filenames(i)), &
+        & status='old',action='read',access='stream',form='unformatted',iostat=input_status)
+      If ( input_status /= 0 ) Then
+        message = 'Cannot read network file: '//Trim(filenames(i))
+        Return
+      EndIf
+      Close(input_unit)
+    EndDo
+    ierr = xnet_success
+    Return
+  End Subroutine check_network_files
+
+  Subroutine open_burn_output(ierr,message)
+    ! Each call has its own local 0..dt history. Lane numbers distinguish repeated diagnostic IDs.
+    Use nuclear_data, Only: ny, zz, aa, nname
+    Use xnet_controls, Only: itsout, lzactive, lun_ts, lun_ev, bin_file_base, ev_file_base, &
+      & descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, &
+      & tdel_maxmult, iheat, isolv, nnucout, nnucout_string, inucout
+    Use xnet_flux, Only: flx, ifl_orig, ifl_term
+    Use xnet_match, Only: mflx
+    Implicit None
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
+    ! Match the standalone binary header field widths, including programmatic input descriptions.
+    Character(80), Parameter :: input_name = 'XNet API input arrays'
+    Character(80), Parameter :: abundance_description = 'Mass fractions in XNet species order'
+    Character(80), Parameter :: thermo_description = 'Constant conditions; local time 0..dt seconds'
+    Character(256) :: filename
+    Character(64) :: suffix
+    Character(40) :: header_format
+    Integer :: lane, i, output_status
+
+    ierr = xnet_success
+    message = ' '
+    If ( itsout <= 0 .or. .not. Any(lzactive) ) Return
+    ierr = xnet_invalid
+    If ( output_call == Huge(output_call) ) Then
+      message = 'Time-series call number exhausted'
+      Return
+    EndIf
+    output_call = output_call + 1_i8
+    Do lane = 1, Size(lzactive)
+      If ( .not. lzactive(lane) ) Cycle
+      Write(suffix,'(a,i0,a,i0)') '_call',output_call,'_lane',lane
+      filename = Trim(bin_file_base)//Trim(suffix)
+      Open(newunit=lun_ts(lane),file=Trim(filename),status='new',form='unformatted', &
+        & action='write',iostat=output_status)
+      If ( output_status /= 0 ) Exit
+      Write(lun_ts(lane)) descript,api_data_description
+      Write(lun_ts(lane)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
+      Write(lun_ts(lane)) input_name,abundance_description
+      Write(lun_ts(lane)) input_name,thermo_description
+      Write(lun_ts(lane)) ny,zz,aa
+      Write(lun_ts(lane)) mflx,ifl_orig,ifl_term
+      If ( itsout >= 2 ) Then
+        filename = Trim(ev_file_base)//Trim(suffix)
+        Open(newunit=lun_ev(lane),file=Trim(filename),status='new',action='write',iostat=output_status)
+        If ( output_status /= 0 ) Exit
+        header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
+        Write(lun_ev(lane),header_format) &
+          & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout),' It '
+      EndIf
+    EndDo
+    If ( output_status /= 0 ) Then
+      ! A partially opened set is kept for diagnosis, with no burn performed and no units left open.
+      Call close_burn_output
+      message = 'Cannot create time-series file: '//Trim(filename)
+      Return
+    EndIf
+    ! The initial snapshot has no reaction flux; do not reuse the preceding burn's final flux.
+    flx = 0.0_dp
+    ierr = xnet_success
+    Return
+  End Subroutine open_burn_output
+
+  Subroutine close_burn_output
+    Use xnet_controls, Only: lun_ts, lun_ev
+    Implicit None
+    Integer :: lane
+
+    Do lane = 1, Size(lun_ts)
+      ! NEWUNIT may return negative units. Zero alone denotes an unopened API output slot.
+      If ( lun_ts(lane) /= 0 ) Close(lun_ts(lane))
+      If ( lun_ev(lane) /= 0 ) Close(lun_ev(lane))
+      lun_ts(lane) = 0
+      lun_ev(lane) = 0
+    EndDo
+    Return
+  End Subroutine close_burn_output
 
   Subroutine xnet_nse_composition(density,temperature,ye,mass_fraction,ierr,message)
     ! Return a copy of A*ynse in network order for density in g/cm^3 and temperature in K.

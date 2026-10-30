@@ -33,10 +33,12 @@ Module xnet_timers
   Real(dp) :: timer_output = 0.0  ! Output time
   Real(dp) :: start_timer  = 0.0  ! cpu time at the beginning of the timer block
   Real(dp) :: stop_timer   = 0.0  ! cpu time at the end of the timer block
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(timer_burner,timer_xnet,timer_setup,timer_csect,timer_deriv,timer_jacob,timer_decmp, &
   !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_prescrn,timer_eos,timer_output, &
   !$omp   timer_nse,timer_nseinit,timer_nsesolv,timer_nsenrap,timer_nsels,timer_nseeval,timer_nsescrn, &
   !$omp   start_timer,stop_timer)
+#endif
 
 Contains
 

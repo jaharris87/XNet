@@ -94,7 +94,9 @@ Module xnet_controls
   Integer :: zb_lo                    ! Lower zone-batch extent in nzevolve
   Integer :: zb_hi                    ! Upper zone-batch extent in nzevolve
   Logical, Allocatable, Target :: lzactive(:) ! Active-zone mask
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(nzbatch,szbatch,zb_offset,zb_lo,zb_hi)
+#endif
 
   ! Integration Controls
   Integer :: isolv                   ! Integration method (1=BE, 3=BDF)
@@ -134,7 +136,9 @@ Module xnet_controls
   Character(5), Allocatable :: output_nuc(:) ! Condensed-output species names
   Character(80) :: ev_file_base, bin_file_base ! Output filename bases
   Integer :: lun_diag                ! Per-thread diagnostic logical unit
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(lun_diag)
+#endif
 
   ! Input Controls
   Character(80) :: inab_file_base, thermo_file_base ! Input filename bases
@@ -142,13 +146,17 @@ Module xnet_controls
   Character(80), Allocatable :: thermo_file(:)      ! Per-zone thermodynamic histories
   Integer :: lun_th, lun_ab                         ! Input logical units
   Integer, Allocatable :: iaux(:)                   ! Auxiliary-nucleus logical units
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(lun_th,lun_ab)
+#endif
 
   ! Execution and runtime bookkeeping
   Integer :: myid, nproc, tid, nthread ! Task and thread identifiers and counts
   Integer :: gpu_queue = 1             ! Directive queue; a host may supply its existing OpenACC queue
   Character(Len=1) :: sweep            ! Current hydrodynamic sweep: x, y, or z
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(tid,sweep,gpu_queue)
+#endif
 
   ! Accelerator kernels use these controls on the device.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
@@ -947,11 +955,15 @@ Contains
     Write(nnucout_string,'(i4)') nnucout
     nnucout_string = Adjustl(nnucout_string)
 
+#ifdef XNET_HOST_OPENMP
     !$omp parallel default(shared)
+#endif
     zb_offset = (tid-1)*nzbatchmx
     zb_lo = zb_offset+1
     zb_hi = zb_offset+nzbatchmx
+#ifdef XNET_HOST_OPENMP
     !$omp end parallel
+#endif
 
     !XDIR XUPDATE XASYNC(gpu_queue) &
     !XDIR XDEVICE(iheat,iscrn,iconvc,ymin)

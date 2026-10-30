@@ -50,14 +50,18 @@ Module xnet_jacobian
   Integer :: lia
   Integer :: icntl(20), info(20)
   Real(dp) :: cntl(10), rinfo(10), maxerr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(vals,lia,jcn,irn,wB,wC,iwA,iwB,iwC,keep,info,rinfo,cntl,icntl)
+#endif
   Namelist /ma48_controls/ icntl, cntl, maxerr
 
   ! Temporary copies for reallocating
   Real(dp), Allocatable ::  vals0(:,:)
   Integer, Allocatable :: irn0(:,:), jcn0(:,:)
   Integer :: lia0
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(vals0,jcn0,irn0,lia0)
+#endif
 
   ! Some other solver parameters
   Logical, Parameter :: trans = .false. ! Flag for solving the transposed system
@@ -229,7 +233,9 @@ Contains
     jobB = 1
     jobC = 1
 
+#ifdef XNET_HOST_OPENMP
     !$omp parallel default(shared) copyin(cntl,icntl)
+#endif
 
     ! These are variables to be used by the MA48 solver
     lia = 8*nnz
@@ -252,7 +258,9 @@ Contains
     iwB = 0
     iwC = 0
     keep = 0
+#ifdef XNET_HOST_OPENMP
     !$omp end parallel
+#endif
 
     Return
   End Subroutine read_jacobian_data

@@ -376,4 +376,8 @@ SOLVER_LIBS    = $($(MATRIX_SOLVER)_LIBS)
 ## Define compiler flags
 FLAGS     = $($(CMODE)_FLAGS) $(EXTRA_FLAGS)
 FFLAGS   += $(FLAGS) $($(CMODE)_FFLAGS) $(OPENMP)
+# Host regions and thread-private state are independent of target offload flags.
+ifeq ($(OPENMP_MODE),ON)
+FFLAGS   += -DXNET_HOST_OPENMP
+endif
 LDFLAGS  += $(FLAGS) $($(CMODE)_LDFLAGS) $(OPENMP)

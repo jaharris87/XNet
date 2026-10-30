@@ -10,7 +10,9 @@ module xnet_cudaf
   use, intrinsic :: iso_c_binding
 
   type(c_ptr), target :: stream = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(stream)
+#endif
 
   enum, bind(c) !:: cudaMemcpyKind
     enumerator :: cudaMemcpyHostToHost = 0

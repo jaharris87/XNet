@@ -5,13 +5,16 @@ include $(XNET_CONFIG)
 
 BUILD_DIR ?= build
 PROGRAMS := $(BUILD_DIR)/api_consumer $(BUILD_DIR)/legacy_reference $(BUILD_DIR)/failure_consumer
+PROGRAMS += $(BUILD_DIR)/output_consumer $(BUILD_DIR)/preprocess_consumer
 XNET_CPP ?= cpp
+# This opt-in application caller defaults to GNU OpenMP flags.
+HOST_OPENMP_FLAGS ?= -fopenmp
 ifeq ($(findstring -DXNET_GPU,$(XNET_CPPFLAGS)),)
 PROGRAMS += $(BUILD_DIR)/cleanup/cleanup_consumer
 CLEANUP_TEST := --cleanup $(BUILD_DIR)/cleanup/cleanup_consumer
 endif
 
-.PHONY: all test gpu_consumer
+.PHONY: all test host-openmp-test gpu_consumer
 all: $(PROGRAMS)
 gpu_consumer: $(BUILD_DIR)/gpu_consumer
 
@@ -23,6 +26,24 @@ $(BUILD_DIR)/consumer_fixture.o: consumer_fixture.F90 $(XNET_CONFIG) | $(BUILD_D
 
 $(BUILD_DIR)/api_consumer.o: api_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
 	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+
+$(BUILD_DIR)/host_openmp_consumer.o: host_openmp_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(HOST_OPENMP_FLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+
+$(BUILD_DIR)/host_openmp_consumer: $(BUILD_DIR)/host_openmp_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) $(HOST_OPENMP_FLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+$(BUILD_DIR)/output_consumer.o: output_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+
+$(BUILD_DIR)/output_consumer: $(BUILD_DIR)/output_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+$(BUILD_DIR)/preprocess_consumer.o: preprocess_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+
+$(BUILD_DIR)/preprocess_consumer: $(BUILD_DIR)/preprocess_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 $(BUILD_DIR)/legacy_reference.o: legacy_reference.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
 	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
@@ -69,7 +90,12 @@ $(BUILD_DIR)/cleanup/cleanup_consumer: $(BUILD_DIR)/cleanup/cleanup_consumer.o \
     $(BUILD_DIR)/cleanup/xnet_api.o $(BUILD_DIR)/cleanup/gpu_cleanup_stub.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
-test: all
+host-openmp-test: $(BUILD_DIR)/host_openmp_consumer
+
+test host-openmp-test: all
 	python3 run_library_tests.py --api $(BUILD_DIR)/api_consumer --reference $(BUILD_DIR)/legacy_reference \
 	  --failure $(BUILD_DIR)/failure_consumer --xnet $(dir $(XNET_ARCHIVE))../bin/xnet \
-	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/runs $(CLEANUP_TEST)
+	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/runs $(CLEANUP_TEST) \
+	  $(if $(filter host-openmp-test,$@),--host-openmp $(BUILD_DIR)/host_openmp_consumer)
+	python3 run_output_tests.py --consumer $(BUILD_DIR)/output_consumer --preprocess $(BUILD_DIR)/preprocess_consumer \
+	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/output-runs

@@ -20,10 +20,13 @@ The library requires `MATRIX_SOLVER=dense`, `MPI_MODE=OFF`, and
 select CUDA/cuBLAS or HIP/ROCm with exactly one of OpenACC and OpenMP target
 offload enabled. Make rejects other library configurations when building
 `libxnet`. The API source is compiled only for the library; standalone build
-selections are unchanged. Calls use one host thread and one
-non-reentrant library instance. When host OpenMP is enabled by the offload
-compiler, `omp_get_max_threads()` must be one; set `OMP_NUM_THREADS=1` before
-starting the application.
+selections are unchanged. The library executes host work serially and owns
+one non-reentrant instance. The application may use OpenMP elsewhere with any
+team size; serialize all XNet calls, including initialization, NSE queries and
+finalization. The library does not change the application's OpenMP settings.
+`OPENMP_MODE=OFF` excludes XNet's host regions and thread-private state even
+when the compiler enables OpenMP for target offload. Standalone
+`OPENMP_MODE=ON` continues to select XNet host threading.
 
 The serial CPU library tests exercise the public API. Library and GPU caller
 revision `bf25833e95e0a0351c0f3d840a81c830e8a02060` passed five alpha/SN160
@@ -159,13 +162,48 @@ instance. Calls do not overlap or recurse. Initialize once, burn any number
 of batches, and finalize once; finalization is also safe when already
 finalized. The library keeps no association with caller arrays.
 
-Use preprocessed network files (`iprocess=0`), produced separately by
-`net_setup` when necessary. The constant-condition API has no incident
-neutrino histories (`ineutrino=0`) or timestep output files (`itsout<=0`).
-Diagnostic output, if requested, goes to the existing standard-output unit.
+Use existing preprocessed network files with `iprocess=0`, or set
+`iprocess>0` to preprocess the ASCII inputs in `data_dir` during initialization.
+Preprocessing writes that directory using the same routines as `net_setup`.
+The application must arrange exclusive access: for example, preprocess once
+before other MPI ranks initialize with `iprocess=0`, or use a separate writable
+directory per rank. The library neither initializes MPI nor coordinates file
+access between application ranks. Missing or unreadable required input files
+return a checked initialization error; malformed data and errors inside the
+existing preprocessor/readers can still terminate execution.
+
+The constant-condition API has no incident neutrino histories
+(`ineutrino=0`). Diagnostic output, if requested, goes to the existing
+standard-output unit. Time-series output is available through `itsout`, as
+described below.
 The compiled default controls need no standalone trajectory/abundance
 filenames. The selected EOS can require additional inputs; the default
 Starkiller provider reads `helm_table.dat` from the working directory.
+
+With `itsout>=1`, each burn writes a binary time-series file for each active
+lane. Set `bin_file_base` to the desired output prefix. `itsout>=2` also
+writes condensed ASCII evolution files using a distinct `ev_file_base`; larger values
+retain the existing screen/diagnostic output. Filenames append
+`_call<number>_lane<number>` to `bin_file_base` or `ev_file_base`. The lane is
+the original one-based array slot, so holes and duplicate diagnostic zone IDs
+are unambiguous. Each file describes that call's local `0..dt_s` time axis;
+records are not appended across calls. The binary record layout and ASCII
+columns are the same as standalone output. Binary header descriptions identify
+the API arrays and constant conditions instead of standalone input files.
+`controls%output_nuclei` selects the ASCII species with the standalone lookup and
+missing-name warning/fallback.
+
+The call number increases for each active output attempt and continues across
+finalization/reinitialization in the same process. Invalid and all-inactive
+batches create no files. Files are opened with `STATUS='NEW'`: existing files
+are never replaced. Choose filename bases that distinguish application ranks
+and separate process runs. An open failure returns `xnet_invalid` before
+evolution, closes any files already opened for that attempt, and keeps the
+partial file set for diagnosis; its call number is consumed. Output closes
+after both successful and reported failed burns. A numerical failure leaves a
+partial history and still requires host shutdown. Existing fatal behavior for
+output write/close errors is unchanged. Device-array output reads XNet-owned
+workspace and does not refresh caller-owned host mirrors.
 
 On successful initialization, `network` contains copied names, integer A/Z,
 binding energies, and mass excesses from the selected network. Both energy
@@ -396,7 +434,7 @@ selected thermodynamics interface's finalizer. Built-in standalone providers
 release their own EOS storage; an application interface leaves host-owned EOS
 state intact.
 The API does not initialize/finalize application MPI or reset the application's
-GPU runtime. MPI-enabled and host-threaded library builds remain unsupported.
+GPU runtime. MPI-enabled library builds and concurrent XNet calls remain unsupported.
 The library GPU checks do not establish application MPI/GPU integration or
 performance; those require their own validation.
 

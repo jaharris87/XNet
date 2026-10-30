@@ -44,7 +44,9 @@ Module model_input_ascii
       If ( mask(izb) ) Then
         izone = izb + szbatch - zb_lo
 
+#ifdef XNET_HOST_OPENMP
         !$omp critical(th_read)
+#endif
         Open(newunit=lun_th, file=trim(thermo_file(izone)), action='read', status='old', iostat=ierr)
         If ( ierr /= 0 ) Then
           Call xnet_terminate('Failed to open input file: '//trim(thermo_file(izone)))
@@ -91,7 +93,9 @@ Module model_input_ascii
         EndDo
         nh(izb) = n - 1
         Close(lun_th)
+#ifdef XNET_HOST_OPENMP
         !$omp end critical(th_read)
+#endif
 
         ! Do not use tdelstart from thermo files
         tdelstart(izb) = min(0.0,tdelstart(izb))
@@ -255,7 +259,9 @@ Module model_input_ascii
     aext = 1.0
     zext = 0.0
 
+#ifdef XNET_HOST_OPENMP
     !$omp critical(ab_read)
+#endif
     Open(newunit=lun_ab, file=trim(inab_file), action='read', status='old', iostat=ierr)
     If ( ierr /= 0 ) Then
       abund_desc = ' '
@@ -349,7 +355,9 @@ Module model_input_ascii
          yin = yin / xnet
       EndIf
     EndIf
+#ifdef XNET_HOST_OPENMP
     !$omp end critical(ab_read)
+#endif
 
     Return
   End Subroutine read_inab_file

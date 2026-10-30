@@ -10,7 +10,9 @@ module xnet_cublasf
   use, intrinsic :: iso_c_binding
 
   type(c_ptr) :: cublas_handle = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(cublas_handle)
+#endif
 
   enum, bind(c) !:: cublasStatus_t
     enumerator :: CUBLAS_STATUS_SUCCESS = 0

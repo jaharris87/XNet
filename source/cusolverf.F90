@@ -10,7 +10,9 @@ module xnet_cusolverf
   use, intrinsic :: iso_c_binding
 
   type(c_ptr) :: cusolver_handle = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(cusolver_handle)
+#endif
 
   enum, bind(c) !:: cusolverStatus_t
     enumerator :: CUSOLVER_STATUS_SUCCESS = 0

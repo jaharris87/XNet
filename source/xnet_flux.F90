@@ -53,13 +53,17 @@ Contains
     Allocate (flx(mflx,nzevolve),flx_int(mflx,nzevolve))
     flx = 0.0
     flx_int = 0.0
+#ifdef XNET_HOST_OPENMP
     !$omp parallel default(shared)
+#endif
     If ( idiag >= 5 ) Then
       Write(lun_diag,"(a)") 'Flux Init'
       Write(lun_diag,"(12i5,2f6.3)") &
         & ((nflx(j,i),j=1,8),ifl_orig(i),ifl_term(i),countf(i),countr(i),(dcflx(k,i),k=1,2),i=1,mflx)
     EndIf
+#ifdef XNET_HOST_OPENMP
     !$omp end parallel
+#endif
 
     Return
   End Subroutine flux_init

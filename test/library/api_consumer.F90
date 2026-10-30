@@ -52,13 +52,9 @@ Program api_consumer
   Call xnet_initialize(bad_controls,rejected_network,ierr,message)
   Call expect(xnet_invalid,'invalid initialization controls')
   bad_controls = controls
-  bad_controls%itsout = 1
+  bad_controls%ineutrino = 1
   Call xnet_initialize(bad_controls,rejected_network,ierr,message)
-  Call expect(xnet_unsupported,'unsupported time-series output')
-  bad_controls = controls
-  bad_controls%iprocess = 1
-  Call xnet_initialize(bad_controls,rejected_network,ierr,message)
-  Call expect(xnet_unsupported,'unsupported preprocessing')
+  Call expect(xnet_unsupported,'unsupported neutrino capture histories')
   bad_controls = controls
   bad_controls%data_dir = 'missing-embedding-test-network'
   Call xnet_initialize(bad_controls,rejected_network,ierr,message)

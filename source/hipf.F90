@@ -27,6 +27,8 @@ module xnet_hipf
     hipDeviceSynchronize
 
   type(c_ptr), target :: stream = c_null_ptr
+#ifdef XNET_HOST_OPENMP
   !$omp threadprivate(stream)
+#endif
 
 end module xnet_hipf

@@ -68,9 +68,11 @@ callers. The current executable uses `apply_standalone_controls` to enforce its
 file-input requirements and copy the value into the existing module execution
 state. The `xnet_api` lifecycle provides initialization, constant-condition
 batched burns, scalar NSE composition queries, and cleanup for a dense
-single-host-thread instance. CPU and GPU paths share control application and
-abundance/condition allocation with the standalone
-driver; the driver retains its general histories and file-output policy. See
+instance whose host work is serial. CPU and GPU paths share control application,
+network preprocessing and abundance/condition allocation with the standalone
+driver. API burns can write separate per-call timestep histories through the
+existing output routines; the driver retains its general input histories and
+standalone filename policy. See
 [embedding.md](embedding.md) for status and ownership limits.
 
 ## Per-timestep flow

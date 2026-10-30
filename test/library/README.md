@@ -20,6 +20,34 @@ provide no replacement solver, EOS, or provider routines. The first configuratio
 GNU Fortran with `EOS=STARKILLER`, `MATRIX_SOLVER=dense`, and MPI, OpenMP, and
 GPU disabled. Other configurations require their own evidence.
 
+An opt-in application OpenMP check runs real SN160 burns, NSE queries and two
+initialization/finalization cycles between application parallel regions. It
+checks actual two- and four-thread teams and verifies that XNet preserves the
+application's thread settings. With GNU, deliberately enable OpenMP compiler
+processing while keeping XNet host threading off:
+
+```sh
+make BUILD_NAME=library-host-omp OPENMP_MODE=OFF EXTRA_FLAGS=-fopenmp -j libxnet net_setup xnet
+make -C test/library XNET_CONFIG=../../build/library-host-omp/xnet-config.mk \
+  BUILD_DIR=build-host-omp host-openmp-test
+```
+
+`HOST_OPENMP_FLAGS` defaults to `-fopenmp` for the application caller; supply
+the compiler's equivalent flag for other compilers. This check is CPU-only
+evidence, not accelerator qualification or concurrent API-call support.
+
+The normal `test` target also runs `output_consumer.F90` and
+`preprocess_consumer.F90`. Runtime preprocessing uses isolated copies of ASCII
+inputs, compares generated binary files with `net_setup`, and checks missing
+files, duplicate initialization, and repeated initialization with different
+networks. Time-series tests compare all binary timestep records against direct
+`full_net` output and check ASCII columns, species lookup, physical results,
+counters, masks, repeated and short calls, separate filenames across
+initialization lifetimes, checked open failures, no clobbering, and closed
+partial histories after reported numerical failures. These are CPU software
+and same-source numerical comparisons; they do not qualify GPU output or an
+independent scientific reference.
+
 A separate host-only cleanup test recompiles the production API with a
 test GPU resource module in an isolated build subdirectory. It uses real
 CPU workspaces and finalizers, but injects two GPU cleanup failures. It
@@ -83,7 +111,7 @@ must be zero. Metadata names and order are compared with the staged `sunet`;
 all A/Z and energy values are compared with the legacy nuclear-data arrays.
 
 Validation checks cover invalid controls, duplicate initialization, unsupported
-time-series output/preprocessing, invalid extents, incomplete auxiliary
+neutrino capture histories, invalid extents, incomplete auxiliary
 arguments, NaN/Inf input, negative fractions/restart hints, invalid Ye, and an
 auxiliary reservoir with invalid A.
 

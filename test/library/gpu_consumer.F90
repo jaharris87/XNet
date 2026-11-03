@@ -13,6 +13,7 @@ Program gpu_consumer
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, xnet_gpu_t, &
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success, xnet_invalid
   Use consumer_fixture, Only: fixture_state, write_state, check
+  !$ Use omp_lib, Only: omp_get_max_threads, omp_get_num_threads, omp_get_thread_num
 #if defined(XNET_CUDA)
   Use xnet_cudaf, Only: cudaGetDeviceCount, cudaGetDevice, cudaSetDevice, cudaStreamCreateWithFlags, &
     & cudaStreamNonBlocking, cudaStreamDestroy, cudaStreamSynchronize
@@ -53,6 +54,7 @@ Program gpu_consumer
 #endif
   Integer(C_INT) :: status, device_count, current_device
   Integer :: ierr, device, isolv, iheat, i, ownership, path, phase, n, steps
+  Integer :: output_level = 0, output_call = 0, requested_threads = 0, host_max_threads = 1
   Integer :: ids(3,lanes), counters(5,lanes)
   Character(1024) :: data_dir
   Character(80) :: argument, label, prefix
@@ -66,7 +68,8 @@ Program gpu_consumer
   Real(dp) :: input_restart(lanes,phases), input_aux_x(lanes,phases), input_aux_a(lanes,phases), input_aux_z(lanes,phases)
   Real(dp) :: before_temperature(lanes), before_ye(lanes), before_restart(lanes), times(6)
 
-  Call check(Command_Argument_Count() >= 3,'expected data_dir, isolv, iheat, and optional device arguments')
+  Call check(Command_Argument_Count() >= 3 .and. Command_Argument_Count() <= 6, &
+    & 'expected data_dir, isolv, iheat, and optional device, itsout, host_threads arguments')
   Call Get_Command_Argument(1,data_dir)
   Call Get_Command_Argument(2,argument)
   Read(argument,*,iostat=ierr) isolv
@@ -82,6 +85,21 @@ Program gpu_consumer
     Read(argument,*,iostat=ierr) device
     Call check(ierr == 0,'invalid device argument')
   EndIf
+
+  If ( Command_Argument_Count() >= 5 ) Then
+    Call Get_Command_Argument(5,argument)
+    Read(argument,*,iostat=ierr) output_level
+    Call check(ierr == 0,'invalid output level')
+    Call check(output_level == 0 .or. output_level == 2,'output test level must be zero or two')
+  EndIf
+  If ( Command_Argument_Count() >= 6 ) Then
+    Call Get_Command_Argument(6,argument)
+    Read(argument,*,iostat=ierr) requested_threads
+    Call check(ierr == 0 .and. requested_threads > 0,'invalid requested host team')
+  EndIf
+  !$ host_max_threads = omp_get_max_threads()
+  Call application_work('before_initialize')
+  Write(*,'(a,3(1x,i0))') 'GPU_OUTPUT_CASE',output_level,isolv,iheat
 
   ! The host chooses its device before calling the public initialization procedure.
 #if defined(XNET_CUDA)
@@ -112,6 +130,7 @@ Program gpu_consumer
   !$omp end target
 #endif
   Call check(offloaded,'directive region must execute on a GPU')
+  Write(*,'(a,1x,i0)') 'GPU_DEVICE_EXECUTION_CONFIRMED',device
   Call selected_device_unchanged()
 
   Call set_xnet_controls_defaults(controls)
@@ -122,6 +141,13 @@ Program gpu_consumer
   controls%iheat = iheat
   controls%t9nse = 11.0_dp
   controls%idiag = -2
+  controls%itsout = output_level
+  If ( output_level > 0 ) Then
+    controls%bin_file_base = 'ts'
+    controls%ev_file_base = 'ev'
+    controls%nnucout = 3
+    controls%output_nuclei = [Character(5) :: 'c12','o16','badxx']
+  EndIf
   If ( isolv == 3 ) Then
     controls%kitmx = 10
     controls%iconvc = 3
@@ -153,6 +179,7 @@ Program gpu_consumer
     EndIf
     Call api_ok(Trim(prefix)//' initialize')
     Call selected_device_unchanged()
+    Call application_work(Trim(prefix)//'_after_initialize')
     If ( ownership == 1 ) Then
       Allocate(x(Size(network%names),lanes),before_x(Size(network%names),lanes), &
         & input_x(Size(network%names),lanes,phases))
@@ -232,6 +259,7 @@ Program gpu_consumer
     EndIf
 #endif
     If ( ownership == 2 ) Call check_and_destroy_host_resources()
+    Call application_work(Trim(prefix)//'_after_finalize')
   EndDo
   Call solver_only_resources()
   Do i = 1, phases
@@ -257,8 +285,63 @@ Contains
 
     If ( ierr /= xnet_success ) Write(*,'(a,i0,2a)') 'Unexpected status ',ierr,': ',Trim(message)
     Call check(ierr == xnet_success,operation)
+    If ( requested_threads > 0 ) Then
+      !$ Call check(omp_get_max_threads() == host_max_threads,operation//' preserves host team setting')
+    EndIf
     Return
   End Subroutine api_ok
+
+  Subroutine application_work(operation)
+    ! Host regions surround serialized API calls; none contains a library call.
+    Implicit None
+    Character(*), Intent(in) :: operation
+    Integer, Parameter :: work_items = 128
+    Integer :: j, worker, team_size, checksum
+    Integer :: visits(Max(1,requested_threads))
+
+    If ( requested_threads == 0 ) Return
+    !$ Call check(omp_get_max_threads() == host_max_threads,operation//' host team setting')
+    visits = 0
+    team_size = 1
+    checksum = 0
+    !$omp parallel do num_threads(requested_threads) default(none) &
+    !$omp shared(visits,requested_threads) private(j,worker) reduction(+:checksum) reduction(max:team_size)
+    Do j = 1, work_items
+      worker = 1
+      !$ worker = omp_get_thread_num() + 1
+      visits(worker) = visits(worker) + 1
+      !$ team_size = Max(team_size,omp_get_num_threads())
+      checksum = checksum + j * j
+    EndDo
+    !$omp end parallel do
+    Call check(team_size == requested_threads,operation//' actual host team')
+    Call check(All(visits > 0),operation//' every host worker did work')
+    Call check(checksum == work_items*(work_items+1)*(2*work_items+1)/6,operation//' host checksum')
+    Write(*,'(a,1x,a,3(1x,i0))') 'GPU_HOST_TEAM',Trim(operation),requested_threads,team_size,checksum
+    Return
+  End Subroutine application_work
+
+  Subroutine record_burn_output()
+    ! The API owns file units; each successful active call has a separate file set.
+    Implicit None
+    Integer :: lane
+    Logical :: opened
+    Character(80) :: filename
+
+    If ( output_level == 0 .or. .not. Any(active(:n)) ) Return
+    output_call = output_call + 1
+    Write(*,'(a,1x,i0,1x,a,1x,i0,1x,*(l1))') 'GPU_OUTPUT_CALL',output_call,Trim(label),n,active(:n)
+    Do lane = 1, n
+      If ( .not. active(lane) ) Cycle
+      Write(filename,'(a,i0,a,i0)') 'ts_call',output_call,'_lane',lane
+      Inquire(file=Trim(filename),opened=opened)
+      Call check(.not. opened,'binary output closed: '//Trim(filename))
+      Write(filename,'(a,i0,a,i0)') 'ev_call',output_call,'_lane',lane
+      Inquire(file=Trim(filename),opened=opened)
+      Call check(.not. opened,'ASCII output closed: '//Trim(filename))
+    EndDo
+    Return
+  End Subroutine record_burn_output
 
   Subroutine selected_device_unchanged()
     Implicit None
@@ -303,6 +386,12 @@ Contains
     loss = -1.0_dp
     counters = -1
     steps = -1
+    If ( output_level > 0 ) Then
+      ! Observe the consumed host/resident input before poisoning the host mirror.
+      Call write_state('input_'//Trim(label),temperature(:n),ye(:n),x(:,:n),restart(:n), &
+        & 0.0_dp*loss(:n),0*counters(:,:n))
+      Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),density(:n)
+    EndIf
     If ( resident ) Then
       Call poison_host_reals()
       Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
@@ -376,6 +465,9 @@ Contains
         & loss_rtol*Max(Abs(loss(:n)),Abs(expected(phase)%loss(:n)))),Trim(label)//' neutrino-loss comparison')
     EndIf
     If ( phase == 2 ) Call check(Any(x(:,1) /= before_x(:,1)),Trim(label)//' repeated evolution')
+    Call record_burn_output()
+    ! Run host teams only after the immediate resident-result and mirror assertions.
+    Call application_work(Trim(label)//'_after_burn')
     Return
   End Subroutine burn_and_check
 

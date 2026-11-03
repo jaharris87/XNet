@@ -9,6 +9,8 @@ PROGRAMS += $(BUILD_DIR)/output_consumer $(BUILD_DIR)/preprocess_consumer
 XNET_CPP ?= cpp
 # This opt-in application caller defaults to GNU OpenMP flags.
 HOST_OPENMP_FLAGS ?= -fopenmp
+# Optional caller-only host threading for the hardware GPU consumer.
+GPU_HOST_OPENMP_FLAGS ?=
 ifeq ($(findstring -DXNET_GPU,$(XNET_CPPFLAGS)),)
 PROGRAMS += $(BUILD_DIR)/cleanup/cleanup_consumer
 CLEANUP_TEST := --cleanup $(BUILD_DIR)/cleanup/cleanup_consumer
@@ -56,7 +58,7 @@ $(BUILD_DIR)/gpu_consumer.f90: gpu_consumer.F90 ../../source/xnet_macros.fh $(XN
 	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$<' > '$@.tmp' && mv '$@.tmp' '$@'
 
 $(BUILD_DIR)/gpu_consumer.o: $(BUILD_DIR)/gpu_consumer.f90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
-	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+	$(XNET_FC) $(XNET_FFLAGS) $(GPU_HOST_OPENMP_FLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
 
 $(BUILD_DIR)/api_consumer: $(BUILD_DIR)/api_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
@@ -68,7 +70,7 @@ $(BUILD_DIR)/failure_consumer: $(BUILD_DIR)/failure_consumer.o $(BUILD_DIR)/cons
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 $(BUILD_DIR)/gpu_consumer: $(BUILD_DIR)/gpu_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
-	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+	$(XNET_LDR) $(XNET_LDFLAGS) $(GPU_HOST_OPENMP_FLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 # The simulated resource calls never enter the normal caller module directory.
 $(BUILD_DIR)/cleanup:

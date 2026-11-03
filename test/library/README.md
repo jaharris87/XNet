@@ -312,3 +312,53 @@ and direct process status. The checks compare API paths on one backend;
 they do not supply an independent scientific reference, CPU/GPU tolerance
 policy, performance result, or validation of GPU numerical-failure reporting.
 Existing CPU comparisons and failure policy are unchanged.
+
+### Per-call GPU output and application host teams
+
+The GPU consumer accepts optional `itsout` (0 or 2) and a requested host team
+size after the existing device argument. Omitting both preserves the original
+checks. With `itsout=2`, every successful active burn logs its input and file
+sequence and checks that the API closed its binary/ASCII units. The same host,
+resident, continued-device and borrowed-resource calls produce 26 separate
+call sets with 92 binary and 92 ASCII files; inactive and invalid calls create
+none. The selected ASCII species are C12, O16 and the existing missing-name
+fallback to the final species.
+
+On an approved compute allocation, run in a new directory with the selected
+network and EOS table staged as for the existing GPU checks. Capture the direct
+status even on failure, append it to the log, then inspect the complete outputs:
+
+```sh
+status=0
+/path/to/gpu_consumer Data_SN160 1 1 0 2 > consumer.log 2>&1 || status=$?
+printf '\nPROCESS_EXIT_STATUS %s\n' "$status" >> consumer.log
+test "$status" -eq 0
+python3 /path/to/test/library/check_gpu_output.py --run-dir . --log consumer.log
+```
+
+The checker reuses the CPU test's binary/ASCII format readers. It checks the
+entire call/lane inventory, all record shapes and finite timestep vectors,
+local `0..0.1 s` histories, zero initial flux, nonzero accepted flux, complete
+initial/final compositions and thermodynamics against the same call, returned
+penultimate timestep and integrated weak loss, and every ASCII row against its
+binary record. It uses the GPU consumer's existing limits for mass fractions,
+thermodynamics and weak loss. Separate adaptive GPU histories are not compared
+record for record, and this is not an independent scientific reference.
+
+To check application OpenMP around serialized GPU API calls, build a separate
+caller directory with the compiler's host OpenMP flag, for example NVIDIA:
+
+```sh
+make -C test/library XNET_CONFIG=/path/to/gpu-build/xnet-config.mk \
+  BUILD_DIR=/path/to/new-gpu-host-caller GPU_HOST_OPENMP_FLAGS=-mp=multicore gpu_consumer
+```
+
+The library still uses `OPENMP_MODE=OFF`. A sixth argument requests actual host
+teams, for example `Data_SN160 1 1 0 2 4`. Pass the same requested value to the
+checker with `--threads 4`. Each worker must perform integer work in real host
+regions before initialization and after the existing immediate GPU-result
+checks and finalization; all XNet calls remain outside those regions. Team
+checks also confirm that the application maximum-thread setting is unchanged.
+An explicitly requested multi-thread case fails when compiled without host
+OpenMP. These optional checks do not change the default caller flags or claim
+concurrent library entry, application GPU execution or performance.

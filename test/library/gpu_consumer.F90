@@ -39,6 +39,8 @@ Program gpu_consumer
   Real(dp), Parameter :: gpu_rtol = 1.0e-7_dp, mass_fraction_atol = 1.0e-12_dp
   Real(dp), Parameter :: loss_rtol = 1.0e-6_dp
   Character(8), Parameter :: phase_names(phases) = [Character(8) :: 'first','repeat','short','hole','inactive']
+  ! CCE 20.0.0 loses the inline character constructor; a parameter preserves its values.
+  Character(5), Parameter :: output_names(3) = [Character(5) :: 'c12','o16','badxx']
   Type :: result_t
     Real(dp), Allocatable :: x(:,:)
     Real(dp) :: temperature(lanes), ye(lanes), loss(lanes)
@@ -146,8 +148,10 @@ Program gpu_consumer
   If ( output_level > 0 ) Then
     controls%bin_file_base = 'ts'
     controls%ev_file_base = 'ev'
-    controls%nnucout = 3
-    controls%output_nuclei = [Character(5) :: 'c12','o16','badxx']
+    controls%nnucout = Size(output_names)
+    controls%output_nuclei = output_names
+    Call check(Size(controls%output_nuclei) == Size(output_names),'output species array size')
+    Call check(All(controls%output_nuclei == output_names),'output species initialization')
   EndIf
   If ( isolv == 3 ) Then
     controls%kitmx = 10

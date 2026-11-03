@@ -34,6 +34,82 @@ def require_failure(result: subprocess.CompletedProcess[str], message: str) -> N
     assert message in result.stdout + result.stderr, result.stdout + result.stderr
 
 
+def check_host_openmp_flags(
+    work: pathlib.Path, environment: Mapping[str, str]
+) -> None:
+    flags_work = work / "host-openmp-flags"
+    flags_work.mkdir()
+    hipfort = flags_work / "hipfort"
+    # Make checks this directory before selecting HIP sources. These checks
+    # inspect flags only; no HIPFort modules or accelerator compiler are used.
+    (hipfort / "include" / "hipfort" / "amdgcn").mkdir(parents=True)
+    clean_environment = dict(environment)
+    for variable in ("FFLAGS", "F90FLAGS", "MAKEFLAGS", "MFLAGS", "GNUMAKEFLAGS"):
+        clean_environment.pop(variable, None)
+
+    cpu = ("PE_ENV=GNU", "GPU_MODE=OFF")
+    cuda = ("PE_ENV=NVIDIA", "GPU_MODE=ON", "GPU_BACKEND=CUDA",
+            "GPU_LAPACK_VER=CUBLAS", "OPENACC_MODE=ON")
+    hip = ("PE_ENV=CCE", "GPU_MODE=ON", "GPU_BACKEND=HIP", "GPU_LAPACK_VER=ROCM")
+    openacc_flags = ("-acc", "-gpu=ptxinfo", "-Minfo=accel")
+    models = (
+        ("cpu", cpu, ()),
+        ("cuda-openacc", cuda, openacc_flags),
+        ("hip-openacc", (*hip, "OPENACC_MODE=ON"), ("-h", "acc")),
+        ("hip-target", (*hip, "OPENMP_OL_MODE=ON"), ("-fopenmp",)),
+    )
+    cases = [
+        (f"{name}-{host.lower()}", host, options, directive_flags, {}, ())
+        for name, options, directive_flags in models
+        for host in ("OFF", "ON")
+    ]
+    cases.extend((
+        ("cpu-fflags", "ON", (*cpu, "FFLAGS=-O1 -fopenmp -DXNET_TEST_FFLAGS"),
+         (), {}, ("-DXNET_TEST_FFLAGS",)),
+        ("cuda-caller-flags", "ON", (*cuda,
+         "FFLAGS=-O1 -mp=multicore -acc -gpu=ptxinfo -Minfo=accel -DXNET_TEST_FFLAGS",
+         "F90FLAGS=-Mpreprocess -r8 -i4 -DXNET_TEST_F90FLAGS"),
+         openacc_flags, {}, ("-DXNET_TEST_FFLAGS", "-DXNET_TEST_F90FLAGS")),
+        ("cuda-environment-fflags", "ON", cuda, openacc_flags,
+         {"FFLAGS": "-O1 -DXNET_TEST_FFLAGS"}, ("-DXNET_TEST_FFLAGS",)),
+        ("cpu-environment-override", "ON", (*cpu, "-e"), (),
+         {"FFLAGS": "-O1 -fopenmp -DXNET_TEST_FFLAGS",
+          "F90FLAGS": "-cpp -fdefault-real-8 -DXNET_TEST_F90FLAGS"},
+         ("-DXNET_TEST_FFLAGS", "-DXNET_TEST_F90FLAGS")),
+    ))
+    for name, host, options, directive_flags, extra_environment, caller_defines in cases:
+        result = make(
+            f"BUILD_DIR={flags_work / name}", "MACHINE=generic", "CMODE=OPT",
+            "MPI_MODE=OFF", "EOS=STARKILLER", "MATRIX_SOLVER=dense", "LAPACK_VER=NETLIB",
+            "OPENACC_MODE=OFF", "OPENMP_OL_MODE=OFF", f"OPENMP_MODE={host}",
+            f"HIPFORT_DIR={hipfort}", f"ROCM_DIR={flags_work / 'rocm'}", *options,
+            "print-FFLAGS", "print-F90FLAGS", "print-COMPILE_FFLAGS",
+            "print-GPU_DIRECTIVE_FLAGS", "print-CPP_DEFINITION_FLAGS",
+            environment=dict(clean_environment, **extra_environment),
+        )
+        require_success(result)
+        values = dict(line.split(" = ", 1) for line in result.stdout.splitlines()
+                      if " = " in line)
+        definitions = values["CPP_DEFINITION_FLAGS"].split()
+        native_flags = (values["FFLAGS"] + " " + values["F90FLAGS"]).split()
+        compiled_flags = values["COMPILE_FFLAGS"].split()
+        for flags in (definitions, native_flags):
+            assert ("-DXNET_HOST_OPENMP" in flags) == (host == "ON"), (name, result.stdout)
+        assert tuple(values["GPU_DIRECTIVE_FLAGS"].split()) == directive_flags, (name, result.stdout)
+        if directive_flags:
+            assert tuple(compiled_flags[-len(directive_flags):]) == directive_flags, (name, result.stdout)
+            macro = "-DXNET_OMP_OL" if "OPENMP_OL_MODE=ON" in options else "-DXNET_OACC"
+            assert macro in definitions, (name, result.stdout)
+        if "OPENMP_OL_MODE=ON" in options:
+            # CCE spells both contributions -fopenmp. Presence alone could
+            # accept the host flag after the provider append was suppressed.
+            assert compiled_flags.count("-fopenmp") == 1 + (host == "ON"), (name, result.stdout)
+        for definition in caller_defines:
+            assert definition in definitions, (name, result.stdout)
+        if caller_defines:
+            assert "-O1" in compiled_flags, (name, result.stdout)
+
+
 def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> None:
     # A supplied thermodynamics adapter with a compile-time host module
     # dependency. XNet still supplies xnet_eos. This checks Make, not physics.
@@ -193,6 +269,8 @@ def main() -> int:
         generic_environment.pop("LMOD_SYSTEM_NAME", None)
         generic_environment.pop("HOSTNAME", None)
         generic_environment["PATH"] = f"{tools}{os.pathsep}{generic_environment['PATH']}"
+
+        check_host_openmp_flags(work, generic_environment)
 
         auto_base = work / "automatic-names"
         automatic_names = (

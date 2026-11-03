@@ -377,8 +377,9 @@ SOLVER_LIBS    = $($(MATRIX_SOLVER)_LIBS)
 FLAGS     = $($(CMODE)_FLAGS) $(EXTRA_FLAGS)
 FFLAGS   += $(FLAGS) $($(CMODE)_FFLAGS) $(OPENMP)
 # Host regions and thread-private state are independent of target offload flags.
-# Keep this selector definition when a caller replaces compiler flags.
+# Keep the preprocessing definition when callers replace flags, without
+# overriding FFLAGS: accelerator providers append their compiler options later.
 ifeq ($(OPENMP_MODE),ON)
-override FFLAGS += -DXNET_HOST_OPENMP
+override F90FLAGS += -DXNET_HOST_OPENMP
 endif
 LDFLAGS  += $(FLAGS) $($(CMODE)_LDFLAGS) $(OPENMP)

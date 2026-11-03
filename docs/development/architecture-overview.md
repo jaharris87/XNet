@@ -68,7 +68,10 @@ callers. The current executable uses `apply_standalone_controls` to enforce its
 file-input requirements and copy the value into the existing module execution
 state. The `xnet_api` lifecycle provides initialization, constant-condition
 batched burns, scalar NSE composition queries, and cleanup for a dense
-instance whose host work is serial. CPU and GPU paths share control application,
+instance. A CPU OpenMP build assigns disjoint batch banks and NSE scratch to
+application workers; the application owns the batch loop. Initialization and
+finalization stay outside the fixed worker team. GPU host calls remain
+serialized. CPU and GPU paths share control application,
 network preprocessing and abundance/condition allocation with the standalone
 driver. API burns can write separate per-call timestep histories through the
 existing output routines; the driver retains its general input histories and

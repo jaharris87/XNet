@@ -166,6 +166,40 @@ Reader/provider/allocation failures, singular solves, arbitrary nonfinite
 arithmetic, concurrent instances, MPI, OpenMP, GPU and performance remain
 outside these tests' claims.
 
+## Application OpenMP batch calls
+
+The separate `host-batch-openmp-test` target puts `xnet_burn_batch` calls inside
+an application `parallel do` over logical batches. Build a CPU OpenMP archive
+and use a separate caller directory:
+
+```sh
+make BUILD_NAME=library-batch-omp OPENMP_MODE=ON -j libxnet net_setup
+make -C test/library XNET_CONFIG=../../build/library-batch-omp/xnet-config.mk \
+  BUILD_DIR=build-batch-omp host-batch-openmp-test
+```
+
+The runner checks actual teams of two and four workers with dynamic teams
+disabled and no nested execution. Every worker makes repeated batch calls;
+logical inputs and reference results do not depend on worker assignment.
+Selected alpha BE/BDF and SN160 BE/BDF cases cover full, holed, short,
+all-inactive, and tail-only batches, restart hints, self-heating, and weak
+neutrino loss. SN160 uses screening and concurrent scalar NSE queries before
+and after the burns. Complete compositions, temperatures, Ye, restart steps,
+losses, counters, and `max_steps_taken` must equal serial calls to the same
+archive. One SN160 BDF case also compares every binary timestep record and
+ASCII history. Timings must be finite and nonnegative; speedup is not tested.
+
+Each worker's fatal-failure probe checks its local lane and original zone IDs,
+then the process terminates without using failed physical outputs or reusing
+the instance. Separate topology probes reject dynamic, nested, and changed-size
+teams, check unchanged caller state and cleared diagnostic outputs, restore
+application settings, and check successful finalization and reinitialization.
+The runner records actual worker owners, commands, direct status, compiler
+settings, source hashes, and output hashes under the caller's
+`BUILD_DIR/host-batch-runs/`. Differences report affected fields and magnitudes;
+no new numerical tolerances are supplied. These are CPU same-source checks;
+GPU host-worker concurrency and performance require separate evidence.
+
 ## GPU consumer
 
 `gpu_consumer.F90` is an opt-in hardware caller for the CUDA/cuBLAS and

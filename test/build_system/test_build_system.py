@@ -221,18 +221,20 @@ def check_library_selection(
     # build directory. Standalone configurations must not compile API stubs.
     unsupported = (
         ("MPI_MODE=ON",),
-        ("OPENMP_MODE=ON",),
+        ("GPU_MODE=ON", "GPU_BACKEND=CUDA", "GPU_LAPACK_VER=CUBLAS",
+         "OPENACC_MODE=ON", "OPENMP_MODE=ON"),
         ("MATRIX_SOLVER=MA48", f"MA48_DIR={ma48_dir}"),
         ("GPU_MODE=ON", "GPU_BACKEND=CUDA", "GPU_LAPACK_VER=MAGMA",
          "OPENACC_MODE=ON"),
     )
-    for index, options in enumerate(((), *unsupported)):
+    supported = ((), ("OPENMP_MODE=ON",))
+    for index, options in enumerate((*supported, *unsupported)):
         build = work / f"api-selection-{index}"
         common = (f"BUILD_DIR={build}", "PE_ENV=GNU", "MACHINE=generic", *options)
         standalone = make(*common, "-n", "xnet", environment=environment)
         require_success(standalone)
         assert "xnet_api" not in standalone.stdout, standalone.stdout
-        if options:
+        if options in unsupported:
             # Reject an unsupported library even if an old archive exists.
             archive = build / "lib" / "libxnet.a"
             archive.parent.mkdir(parents=True)

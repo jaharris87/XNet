@@ -55,7 +55,7 @@ Contains
     Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
     Real(dp) :: sqnu(zb_lo:zb_hi)
     Real(dp) :: yout(ny+1)
-    Integer :: k, izb, izone, nstep_est, idiag0
+    Integer :: k, izb, izone, nstep_est
     Integer :: its(zb_lo:zb_hi), mykstep(zb_lo:zb_hi)
     Integer :: ierr, failure_status, failure_zone
     Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
@@ -81,9 +81,6 @@ Contains
         its(izb) = -1
       EndIf
     EndDo
-
-    ! Set reaction controls not read in from control
-    idiag0 = idiag
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(its,mykstep,lzsolve,lzoutput) &
@@ -148,10 +145,6 @@ Contains
 
     ! Start evolution
     Do kstep = 1, kstmx
-
-      ! Determine if this is an output step
-      idiag = idiag0
-      !If ( mod(kstep,kstep_output) == 0 ) idiag = 2
 
       ! Calculate an initial guess for the timestep
       Call timestep(kstep,mask_in = lzsolve)

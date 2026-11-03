@@ -15,19 +15,32 @@ Use the same compiler and compatible precision/runtime options for the
 application. The external example under `test/library/`
 links through these outputs without compiling XNet sources.
 
-The library requires `MATRIX_SOLVER=dense`, `MPI_MODE=OFF`, and
-`OPENMP_MODE=OFF`. The CPU configuration has `GPU_MODE=OFF`. GPU builds may
-select CUDA/cuBLAS or HIP/ROCm with exactly one of OpenACC and OpenMP target
-offload enabled. Make rejects other library configurations when building
-`libxnet`. The API source is compiled only for the library; standalone build
-selections are unchanged. The library executes host work serially and owns
-one non-reentrant instance. The application may use OpenMP elsewhere with any
-team size; serialize all XNet calls, including initialization, NSE queries and
-finalization. The library does not change the application's OpenMP settings.
-`OPENMP_MODE=OFF` suppresses XNet's host parallel regions and thread-private
-state even when the compiler enables OpenMP for target offload. Synchronization
-directives may remain enabled; they do not create host teams. Standalone
-`OPENMP_MODE=ON` continues to select XNet host threading.
+The library requires `MATRIX_SOLVER=dense` and `MPI_MODE=OFF`. CPU builds
+(`GPU_MODE=OFF`) support `OPENMP_MODE=OFF` or `ON`. GPU builds require
+`OPENMP_MODE=OFF` and CUDA/cuBLAS or HIP/ROCm with exactly one of OpenACC and
+OpenMP target offload enabled. Make rejects other library configurations.
+The API source is compiled only for the library; standalone selections are
+unchanged. The library does not change the application's OpenMP settings.
+
+With CPU `OPENMP_MODE=ON`, keep the batch loop in the application. Each
+OpenMP worker may call `xnet_burn_batch` or `xnet_nse_composition` for its own
+inputs and outputs. XNet loads one network and allocates a separate batch
+bank and NSE scratch for each worker. Initialize and finalize outside OpenMP
+regions, with no calls in flight. Use the same nonnested team size throughout
+the lifetime, disable dynamic teams, and keep the worker/affinity settings
+that preserve OpenMP threadprivate storage between regions. Calls on the
+initial thread between regions are also supported. Each worker makes one
+call at a time; nested teams, tasks, simultaneous unrelated teams and recursive
+calls are unsupported. A supplied EOS adapter must also support concurrent
+evaluation. Checked team-size/dynamic/nesting errors return before workspace
+preparation; they do not make arbitrary team changes safe.
+
+With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE queries and
+lifecycle operations. The application may still use OpenMP elsewhere with any
+team size. This mode suppresses XNet's host parallel regions and threadprivate
+state even when OpenMP is enabled for target offload. Synchronization
+directives may remain enabled; they do not create host teams. GPU host calls
+remain serialized; CPU worker tests do not establish GPU worker concurrency.
 
 The serial CPU library tests exercise the public API. Library and GPU caller
 revision `bf25833e95e0a0351c0f3d840a81c830e8a02060` passed five alpha/SN160
@@ -159,9 +172,9 @@ Call xnet_finalize(ierr,message)
 
 Declare `controls`, `network`, and `timing` using the corresponding types;
 the other arguments are ordinary caller-owned arrays. The library owns one
-instance. Calls do not overlap or recurse. Initialize once, burn any number
-of batches, and finalize once; finalization is also safe when already
-finalized. The library keeps no association with caller arrays.
+instance. Initialize once, burn any number of batches using the host model
+above, and finalize once; finalization is also safe when already finalized.
+The library keeps no association with caller arrays.
 
 Use existing preprocessed network files with `iprocess=0`, or set
 `iprocess>0` to preprocess the ASCII inputs in `data_dir` during initialization.
@@ -437,7 +450,10 @@ buffer (512 characters accommodates the current message).
 After numerical failure, only `ierr`, `message`, attempted `counters` and
 per-call `timing` are diagnostic results. No physical result is valid for the
 batch. The host must log its context and terminate; do not retry, continue
-successful lanes, or reuse the failed library instance. XNet keeps its
+successful lanes, or reuse the failed library instance. With an application
+batch team, collect returned failures and join the team before host fatal/MPI
+shutdown. Other batches already in flight may finish; this is not cancellation
+or permission to use their results after a failure. XNet keeps its
 internal adaptive retries unchanged. The reporting path closes the elapsed
 timer and skips successful final output and standalone failure-file writes.
 Standalone calls keep their existing termination and failure-output behavior.
@@ -453,7 +469,8 @@ selected thermodynamics interface's finalizer. Built-in standalone providers
 release their own EOS storage; an application interface leaves host-owned EOS
 state intact.
 The API does not initialize/finalize application MPI or reset the application's
-GPU runtime. MPI-enabled library builds and concurrent XNet calls remain unsupported.
+GPU runtime. MPI-enabled library builds remain unsupported. CPU worker calls
+use the fixed-team model above; GPU calls remain serialized.
 The library GPU checks do not establish application MPI/GPU integration or
 performance; those require their own validation.
 
@@ -470,10 +487,10 @@ Call xnet_nse_composition(density,temperature,ye,nse_fraction,ierr,message)
 Density is a scalar in g/cm^3, temperature is in K, and Ye is dimensionless.
 Density and temperature must be finite and positive; Ye must be finite and
 between zero and one. The initialized network and its existing screening
-settings apply. These scalar host calls share the same single-instance,
-non-reentrant lifetime as burns, including in a GPU library build. Their
-arguments and copied results are host values; they have no device-residency
-flag. No additional initialization or EOS table loading occurs.
+settings apply. These scalar host calls use the same lifetime and host
+threading rules as burns. CPU OpenMP workers have separate NSE scratch; GPU
+library queries remain serialized host calls. Their arguments and copied
+results are host values; they have no device-residency flag. No additional initialization or EOS table loading occurs.
 
 The result is a copied vector `A*ynse` in XNet species order, matching the
 mass-number-weighted abundances used by CHIMERA's existing NSE wrapper. It is

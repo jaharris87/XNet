@@ -16,7 +16,7 @@ PROGRAMS += $(BUILD_DIR)/cleanup/cleanup_consumer
 CLEANUP_TEST := --cleanup $(BUILD_DIR)/cleanup/cleanup_consumer
 endif
 
-.PHONY: all test host-openmp-test gpu_consumer
+.PHONY: all test host-openmp-test host-batch-openmp-test gpu_consumer
 all: $(PROGRAMS)
 gpu_consumer: $(BUILD_DIR)/gpu_consumer
 
@@ -33,6 +33,12 @@ $(BUILD_DIR)/host_openmp_consumer.o: host_openmp_consumer.F90 $(BUILD_DIR)/consu
 	$(XNET_FC) $(XNET_FFLAGS) $(HOST_OPENMP_FLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
 
 $(BUILD_DIR)/host_openmp_consumer: $(BUILD_DIR)/host_openmp_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) $(HOST_OPENMP_FLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+$(BUILD_DIR)/host_batch_openmp_consumer.o: host_batch_openmp_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(HOST_OPENMP_FLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+
+$(BUILD_DIR)/host_batch_openmp_consumer: $(BUILD_DIR)/host_batch_openmp_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) $(HOST_OPENMP_FLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 $(BUILD_DIR)/output_consumer.o: output_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
@@ -187,3 +193,9 @@ test host-openmp-test: all
 	  $(if $(filter host-openmp-test,$@),--host-openmp $(BUILD_DIR)/host_openmp_consumer)
 	python3 run_output_tests.py --consumer $(BUILD_DIR)/output_consumer --preprocess $(BUILD_DIR)/preprocess_consumer \
 	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/output-runs
+
+# The application owns the parallel batch loop; this target needs a CPU OPENMP_MODE=ON archive.
+host-batch-openmp-test: $(BUILD_DIR)/host_batch_openmp_consumer
+	python3 run_host_batch_openmp_tests.py --consumer $(BUILD_DIR)/host_batch_openmp_consumer \
+	  --library-config $(XNET_CONFIG) --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup \
+	  --work-dir $(BUILD_DIR)/host-batch-runs --histories

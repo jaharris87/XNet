@@ -13,14 +13,17 @@ SETUP_CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_conditions.F90 xnet_controls.F
   net_setup.F90 xnet_constants.F90 xnet_fd.F90 xnet_ffn.F90 xnet_nnu.F90 \
   xnet_preprocess.F90 xnet_util.F90 xnet_types.F90)
 
-# The library API uses one dense-solver instance and one host thread.
+# The dense CPU API supports application-side OpenMP batch loops.
+# GPU calls remain serialized with host OpenMP disabled in the library.
 # Standalone builds do not compile the API or its unsupported configurations.
 LIBXNET_API_SRC :=
-ifeq ($(MATRIX_SOLVER):$(MPI_MODE):$(OPENMP_MODE),dense:OFF:OFF)
+ifeq ($(MATRIX_SOLVER):$(MPI_MODE),dense:OFF)
   ifeq ($(GPU_MODE),OFF)
     LIBXNET_API_SRC := $(SOURCE_DIR)/xnet_api.F90
-  else ifneq ($(filter CUDA:CUBLAS HIP:ROCM,$(GPU_BACKEND):$(GPU_LAPACK_VER)),)
-    LIBXNET_API_SRC := $(SOURCE_DIR)/xnet_api.F90
+  else ifeq ($(OPENMP_MODE),OFF)
+    ifneq ($(filter CUDA:CUBLAS HIP:ROCM,$(GPU_BACKEND):$(GPU_LAPACK_VER)),)
+      LIBXNET_API_SRC := $(SOURCE_DIR)/xnet_api.F90
+    endif
   endif
 endif
 

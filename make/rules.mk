@@ -51,7 +51,7 @@ $(XNET_EXE): $(XNET_OBJ) | $(BIN_DIR)
 	  $(LAPACK_LIBDIR) $(LAPACK_LIBS) && mv '$@.$$$$.tmp' '$@'
 ifeq ($(strip $(LIBXNET_API_SRC)),)
 $(XNET_ARCHIVE): FORCE
-	@echo 'libxnet requires a dense solver, MPI_MODE=OFF, OPENMP_MODE=OFF, and CPU, CUDA/CUBLAS or HIP/ROCM' >&2; exit 2
+	@echo 'libxnet requires a dense solver and MPI_MODE=OFF; GPU builds also require OPENMP_MODE=OFF and CUDA/CUBLAS or HIP/ROCM' >&2; exit 2
 else
 $(XNET_ARCHIVE): $(LIBXNET_OBJ) | $(LIB_DIR)
 	@rm -f '$@.$$$$.tmp'

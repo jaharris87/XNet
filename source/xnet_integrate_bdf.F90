@@ -708,7 +708,7 @@ Contains
     Call bdf_adjust_order(kstep)
 
     ! Scale Nordsieck vector to account for change in stepsize
-    Call bdf_rescale(rescale)
+    Call bdf_rescale(rescale(zb_lo:zb_hi))
 
     Return
   End Subroutine bdf_adjust
@@ -1006,12 +1006,12 @@ Contains
       !XDIR XUPDATE XASYNC(gpu_queue) &
       !XDIR XDEVICE(eval_rates)
 
-      ! Update abundance derivatives and build Jacobian
-      Call cross_sect(mask_in = eval_rates)
-      Call yderiv(mask_in = iterate)
-      Call jacobian_build(mask_in = rebuild)
-      Call jacobian_scale(diag,mult,mask_in = refactor)
-      Call jacobian_decomp(kstep,mask_in = refactor)
+      ! Update abundance derivatives and build Jacobian using only this worker's bank.
+      Call cross_sect(mask_in = eval_rates(zb_lo:zb_hi))
+      Call yderiv(mask_in = iterate(zb_lo:zb_hi))
+      Call jacobian_build(mask_in = rebuild(zb_lo:zb_hi))
+      Call jacobian_scale(diag(zb_lo:zb_hi),mult(zb_lo:zb_hi),mask_in = refactor(zb_lo:zb_hi))
+      Call jacobian_decomp(kstep,mask_in = refactor(zb_lo:zb_hi))
 
       If ( idiag >= 4 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
@@ -1074,7 +1074,8 @@ Contains
       EndIf
 
       ! Solve using factorized Newton matrix
-      Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
+      Call jacobian_bksub(kstep,yrhs(:,zb_lo:zb_hi),dy(:,zb_lo:zb_hi), &
+        & t9rhs(zb_lo:zb_hi),dt9(zb_lo:zb_hi),mask_in = iterate(zb_lo:zb_hi))
 
       ! Apply the iterative correction
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
@@ -1181,7 +1182,7 @@ Contains
       !XDIR XHOST(iterate,refactor,rebuild)
 
       ! Check that all zones are converged
-      If ( .not. any(iterate) ) Exit
+      If ( .not. any(iterate(zb_lo:zb_hi)) ) Exit
 
     EndDo
     
@@ -1399,13 +1400,13 @@ Contains
     EndIf
 
     ! Undo previous step
-    Call bdf_restore(restore)
+    Call bdf_restore(restore(zb_lo:zb_hi))
 
     ! Reduce order
     Call bdf_adjust_order(kstep)
 
     ! Scale Nordsieck vector to account for change in stepsize
-    Call bdf_rescale(rescale)
+    Call bdf_rescale(rescale(zb_lo:zb_hi))
 
     Return
   End Subroutine bdf_check
@@ -1647,7 +1648,7 @@ Contains
       detect(izb) = ( ierr_nr(izb) == BDF_STATUS_SUCCESS .and. &
         q(izb) >= 3 .and. deltaq(izb) >= 0 .and. nscon(izb) >= q(izb)+5 )
     EndDo
-    Call bdf_stab_detect(detect,ldflag)
+    Call bdf_stab_detect(detect(zb_lo:zb_hi),ldflag(zb_lo:zb_hi))
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(detect,ldflag,deltaq,eta,eta_next,etaq,nscon)
     Do izb = zb_lo, zb_hi

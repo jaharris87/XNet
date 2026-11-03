@@ -557,16 +557,12 @@ Contains
 
 700 Continue
     If ( thread_status /= 0 ) Then
-#ifdef XNET_OMP
       !$omp critical(xnet_gpu_init_status)
-#endif
       If ( init_status == 0 ) Then
         init_status = thread_status
         init_message = thread_message
       EndIf
-#ifdef XNET_OMP
       !$omp end critical(xnet_gpu_init_status)
-#endif
     EndIf
 #ifdef XNET_OMP
     !$omp barrier
@@ -639,13 +635,9 @@ Contains
           & Write(cleanup_message,'(A,I0)') 'GPU stream cleanup status ',cleanup_status
       EndIf
       If ( Len_Trim(cleanup_message) > 0 ) Then
-#ifdef XNET_OMP
         !$omp critical(xnet_gpu_init_status)
-#endif
         init_message = Trim(init_message)//'; '//Trim(cleanup_message)
-#ifdef XNET_OMP
         !$omp end critical(xnet_gpu_init_status)
-#endif
       EndIf
     EndIf
 #ifdef XNET_OMP
@@ -865,17 +857,13 @@ Contains
     gpu_initialized = .false.
 
 800 Continue
-#ifdef XNET_OMP
     !$omp critical(xnet_gpu_finalize_status)
-#endif
     If ( thread_status /= 0 .and. finalize_status == 0 ) Then
       finalize_status = thread_status
       finalize_message = thread_message
     EndIf
     If ( gpu_initialized ) remaining_active = .true.
-#ifdef XNET_OMP
     !$omp end critical(xnet_gpu_finalize_status)
-#endif
 #ifdef XNET_OMP
     !$omp end parallel
 #endif

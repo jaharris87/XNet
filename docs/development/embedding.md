@@ -24,8 +24,9 @@ selections are unchanged. The library executes host work serially and owns
 one non-reentrant instance. The application may use OpenMP elsewhere with any
 team size; serialize all XNet calls, including initialization, NSE queries and
 finalization. The library does not change the application's OpenMP settings.
-`OPENMP_MODE=OFF` excludes XNet's host regions and thread-private state even
-when the compiler enables OpenMP for target offload. Standalone
+`OPENMP_MODE=OFF` suppresses XNet's host parallel regions and thread-private
+state even when the compiler enables OpenMP for target offload. Synchronization
+directives may remain enabled; they do not create host teams. Standalone
 `OPENMP_MODE=ON` continues to select XNet host threading.
 
 The serial CPU library tests exercise the public API. Library and GPU caller

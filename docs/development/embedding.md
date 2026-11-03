@@ -190,7 +190,11 @@ It is distinct from incident-neutrino capture and application neutrino-loss
 corrections. `counters(5,lane)` returns the existing TS, NR, Jacobian,
 derivative, and rate counters.
 
-`timing%seconds` is the per-call difference in XNet's internal `full_net`
+The evolution component is named `evolve` (formerly `seconds`). Update
+callers to use `timing%evolve` and rebuild against the new module. All timing
+components remain durations in seconds.
+
+`timing%evolve` is the per-call difference in XNet's internal `full_net`
 wall-time accumulator. It covers the interval timed inside `full_net`,
 including work and synchronization within that interval. It excludes API
 validation, input preparation before `full_net`, and result extraction after

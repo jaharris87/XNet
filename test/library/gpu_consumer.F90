@@ -324,7 +324,7 @@ Contains
     If ( .not. resident ) Call check_host_device_poison()
     Call check(All(active .eqv. submitted_active),Trim(label)//' unchanged active mask')
     Call selected_device_unchanged()
-    times = [timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
+    times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),Trim(label)//' timing')
     Call check((Any(active(:n)) .and. steps > 0) .or. (.not. Any(active(:n)) .and. steps == 0), &
       & Trim(label)//' accepted step count')
@@ -415,7 +415,7 @@ Contains
       loss = -1.0_dp
       counters = -1
       steps = -1
-      timing = xnet_timing_t(seconds=-1.0_dp,solve=-1.0_dp,jacobian=-1.0_dp, &
+      timing = xnet_timing_t(evolve=-1.0_dp,solve=-1.0_dp,jacobian=-1.0_dp, &
         & derivative=-1.0_dp,rates=-1.0_dp,screening=-1.0_dp)
       !XDIR XENTER_DATA XCOPYIN(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
       ! Keep the host mirror finite so the required rejection must read device data.
@@ -433,7 +433,7 @@ Contains
       Call check(ierr == xnet_invalid,Trim(label)//' invalid status')
       Call check(Trim(message) == 'Active-zone inputs must be finite',Trim(label)//' finite-input diagnostic')
       Call check(All(counters == 0) .and. steps == 0,Trim(label)//' zero counters and accepted steps')
-      times = [timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
+      times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
       Call check(All(times == 0.0_dp),Trim(label)//' zero timing')
       Call selected_device_unchanged()
       Write(*,'(a,1x,a)') 'INVALID_DEVICE_INPUT_REJECTED',Trim(label)

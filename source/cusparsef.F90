@@ -10,7 +10,7 @@ module xnet_cusparsef
   use, intrinsic :: iso_c_binding
 
   type(c_ptr) :: cusparse_handle
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(cusparse_handle)
 #endif
 

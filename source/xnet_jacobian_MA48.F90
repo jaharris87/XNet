@@ -50,7 +50,7 @@ Module xnet_jacobian
   Integer :: lia
   Integer :: icntl(20), info(20)
   Real(dp) :: cntl(10), rinfo(10), maxerr
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(vals,lia,jcn,irn,wB,wC,iwA,iwB,iwC,keep,info,rinfo,cntl,icntl)
 #endif
   Namelist /ma48_controls/ icntl, cntl, maxerr
@@ -59,7 +59,7 @@ Module xnet_jacobian
   Real(dp), Allocatable ::  vals0(:,:)
   Integer, Allocatable :: irn0(:,:), jcn0(:,:)
   Integer :: lia0
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(vals0,jcn0,irn0,lia0)
 #endif
 
@@ -233,7 +233,7 @@ Contains
     jobB = 1
     jobC = 1
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp parallel default(shared) copyin(cntl,icntl)
 #endif
 
@@ -258,7 +258,7 @@ Contains
     iwB = 0
     iwC = 0
     keep = 0
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end parallel
 #endif
 

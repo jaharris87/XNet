@@ -380,6 +380,6 @@ FFLAGS   += $(FLAGS) $($(CMODE)_FFLAGS) $(OPENMP)
 # Keep the preprocessing definition when callers replace flags, without
 # overriding FFLAGS: accelerator providers append their compiler options later.
 ifeq ($(OPENMP_MODE),ON)
-override F90FLAGS += -DXNET_HOST_OPENMP
+override F90FLAGS += -DXNET_OMP
 endif
 LDFLAGS  += $(FLAGS) $($(CMODE)_LDFLAGS) $(OPENMP)

@@ -94,7 +94,7 @@ def check_host_openmp_flags(
         native_flags = (values["FFLAGS"] + " " + values["F90FLAGS"]).split()
         compiled_flags = values["COMPILE_FFLAGS"].split()
         for flags in (definitions, native_flags):
-            assert ("-DXNET_HOST_OPENMP" in flags) == (host == "ON"), (name, result.stdout)
+            assert ("-DXNET_OMP" in flags) == (host == "ON"), (name, result.stdout)
         assert tuple(values["GPU_DIRECTIVE_FLAGS"].split()) == directive_flags, (name, result.stdout)
         if directive_flags:
             assert tuple(compiled_flags[-len(directive_flags):]) == directive_flags, (name, result.stdout)

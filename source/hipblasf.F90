@@ -35,7 +35,7 @@ module xnet_hipblasf
     hipblasDdgmm
 
   type(c_ptr) :: hipblas_handle = c_null_ptr
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(hipblas_handle)
 #endif
 

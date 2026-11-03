@@ -17,7 +17,7 @@ integer(c_int) :: magma_device
 
 integer :: mymagma_queue
 type(c_ptr) :: magma_queue
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
 !$omp threadprivate(magma_queue,mymagma_queue)
 #endif
 

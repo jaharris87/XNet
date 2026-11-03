@@ -147,25 +147,25 @@ Module xnet_gpu
   Logical :: gpu_initialized = .false.       ! Reject overlapping initialization on this host thread.
   Integer :: active_device = -1              ! Keep this device selected until finalization.
   Logical :: owns_stream = .false.           ! OpenACC owns its queue streams.
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(stream,gpu_initialized,active_device,owns_stream)
 #endif
 #if defined(XNET_CUDA)
   Logical :: owns_cublas = .false.           ! Destroy only a cuBLAS handle created by XNet.
   Logical :: owns_cusolver = .false.         ! Destroy only a cuSOLVER handle created by XNet.
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(owns_cublas,owns_cusolver)
 #endif
 #elif defined(XNET_HIP)
   Logical :: owns_hipblas = .false.          ! Destroy only a hipBLAS handle created by XNet.
   Logical :: owns_rocblas = .false.          ! The default rocSOLVER alias shares this ownership.
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(owns_hipblas,owns_rocblas)
 #endif
 #endif
 #if defined(XNET_LA_MAGMA)
   Logical :: owns_magma_queue = .false.      ! Supplied MAGMA queues are not currently supported.
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(owns_magma_queue)
 #endif
 #endif
@@ -275,7 +275,7 @@ Contains
 #endif
     EndIf
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp parallel if(.not. Present(gpu_context)) default(shared) &
     !$omp private(queue,thread_status,thread_message,status,cleanup_status,cleanup_message) &
     !$omp private(work_stream,handle_stream,stream_known,create_stream) &
@@ -557,18 +557,18 @@ Contains
 
 700 Continue
     If ( thread_status /= 0 ) Then
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
       !$omp critical(xnet_gpu_init_status)
 #endif
       If ( init_status == 0 ) Then
         init_status = thread_status
         init_message = thread_message
       EndIf
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
       !$omp end critical(xnet_gpu_init_status)
 #endif
     EndIf
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp barrier
 #endif
 
@@ -639,16 +639,16 @@ Contains
           & Write(cleanup_message,'(A,I0)') 'GPU stream cleanup status ',cleanup_status
       EndIf
       If ( Len_Trim(cleanup_message) > 0 ) Then
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
         !$omp critical(xnet_gpu_init_status)
 #endif
         init_message = Trim(init_message)//'; '//Trim(cleanup_message)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
         !$omp end critical(xnet_gpu_init_status)
 #endif
       EndIf
     EndIf
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end parallel
 #endif
     If ( init_status == 0 ) mydevice = device
@@ -659,11 +659,11 @@ Contains
     Else
       mydevice = -1
       deviceCount = 0
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
       !$omp parallel default(shared)
 #endif
       gpu_queue = tid
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
       !$omp end parallel
 #endif
     EndIf
@@ -759,7 +759,7 @@ Contains
     finalize_message = ' '
 #if defined(XNET_GPU)
     remaining_active = .false.
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
 #if defined(XNET_HIP)
     !$omp parallel default(shared) private(thread_status,status,thread_message,work_rocblas,work_rocsolver)
 #else
@@ -865,7 +865,7 @@ Contains
     gpu_initialized = .false.
 
 800 Continue
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp critical(xnet_gpu_finalize_status)
 #endif
     If ( thread_status /= 0 .and. finalize_status == 0 ) Then
@@ -873,10 +873,10 @@ Contains
       finalize_message = thread_message
     EndIf
     If ( gpu_initialized ) remaining_active = .true.
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end critical(xnet_gpu_finalize_status)
 #endif
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end parallel
 #endif
     If ( .not. remaining_active ) mydevice = -1

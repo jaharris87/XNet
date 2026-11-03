@@ -50,7 +50,7 @@ Module xnet_jacobian
   Integer     :: phase             ! PARDISO execution mode
   Integer     :: msglvl            ! Verbosity of PARDISO diagnostics
   Integer     :: maxfct            ! Number of factors stored by each PARDISO handle
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(iparm,dparm,phase)
 #endif
   Namelist /pardiso_controls/ iparm, dparm
@@ -283,7 +283,7 @@ Contains
 
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp parallel default(shared) copyin(iparm,dparm)
 #endif
 
@@ -291,7 +291,7 @@ Contains
     Allocate (perm(msize))
     perm = 0
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end parallel
 #endif
 

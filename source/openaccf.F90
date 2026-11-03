@@ -13,7 +13,7 @@ module xnet_openaccf
   implicit none
 
   integer(c_long_long) :: acc_queue
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(acc_queue)
 #endif
 

@@ -15,7 +15,7 @@ module xnet_rocsolverf
     rocsolver_dgetrs_batched
 
   type(c_ptr) :: rocsolver_handle = c_null_ptr
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(rocsolver_handle)
 #endif
 

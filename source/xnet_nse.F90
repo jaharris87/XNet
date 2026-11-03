@@ -42,27 +42,27 @@ Module xnet_nse
   Real(dp), Allocatable, Public :: unse(:) ! Chemical potentials for each species
   Real(dp), Allocatable, Public :: xnse(:) ! Mass fractions
   Real(dp), Allocatable, Public :: ynse(:) ! Molar fractions
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(xnse,ynse,unse)
 #endif
 
   ! Other NSE state variables
   Real(dp) :: rhonse, t9nse, yense
   Real(dp), Allocatable :: mm52(:), ggnse(:)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(rhonse,t9nse,yense,ggnse)
 #endif
 
   ! These contain the solution vector and Jacobian of the NSE linear system
   Real(dp) :: fvec(2), fjac(2,2)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(fvec,fjac)
 #endif
 
   ! Scaling variables
   Real(dp) :: typu(2), typfvec(2)
   Real(dp) :: scaleu(2), scalefvec(2)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(typu,typfvec,scaleu,scalefvec)
 #endif
 
@@ -70,14 +70,14 @@ Module xnet_nse
   Integer, Public :: knrtot(3)
   Integer :: knr(3)
   Logical :: use_CP98
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(knrtot,knr,use_CP98)
 #endif
 
   ! Screening variables
   Integer, Allocatable :: intz(:)
   Real(dp), Allocatable :: hnse(:)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(hnse)
 #endif
 
@@ -91,7 +91,7 @@ Module xnet_nse
   Integer :: ife_min, ife_max              ! min/max Z/A (common Fe/Ni isotopes)
   Integer :: iye_fe, iye_fe_l, iye_fe_u    ! closest Z/A to Ye from above and below (common Fe/Ni isotopes)
   Real(dp) :: zatst, za_min, za_max
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(iye_za,iye_za_l,iye_za_u,iye_hvy,iye_hvy_l,iye_hvy_u,iye_fe,iye_fe_l,iye_fe_u,zatst)
 #endif
 
@@ -166,7 +166,7 @@ Contains
     timer_nse = timer_nse - start_timer
     timer_nseinit = timer_nseinit - start_timer
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp parallel default(shared)
 #endif
     ! Allocate NSE composition arrays
@@ -181,7 +181,7 @@ Contains
     typfvec(:) = (/ 1.0_dp, 1.0_dp /)
     scaleu(:)    = 1.0_dp / typu(:)
     scalefvec(:) = 1.0_dp / typfvec(:)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end parallel
 #endif
 
@@ -259,7 +259,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp parallel default(shared)
 #endif
     If ( allocated(xnse) ) Deallocate (xnse)
@@ -267,7 +267,7 @@ Contains
     If ( allocated(unse) ) Deallocate (unse)
     If ( allocated(ggnse) ) Deallocate (ggnse)
     If ( allocated(hnse) ) Deallocate (hnse)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end parallel
 #endif
 

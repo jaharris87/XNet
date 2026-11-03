@@ -44,7 +44,7 @@ Module model_input_ascii
       If ( mask(izb) ) Then
         izone = izb + szbatch - zb_lo
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
         !$omp critical(th_read)
 #endif
         Open(newunit=lun_th, file=trim(thermo_file(izone)), action='read', status='old', iostat=ierr)
@@ -93,7 +93,7 @@ Module model_input_ascii
         EndDo
         nh(izb) = n - 1
         Close(lun_th)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
         !$omp end critical(th_read)
 #endif
 
@@ -259,7 +259,7 @@ Module model_input_ascii
     aext = 1.0
     zext = 0.0
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp critical(ab_read)
 #endif
     Open(newunit=lun_ab, file=trim(inab_file), action='read', status='old', iostat=ierr)
@@ -355,7 +355,7 @@ Module model_input_ascii
          yin = yin / xnet
       EndIf
     EndIf
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end critical(ab_read)
 #endif
 

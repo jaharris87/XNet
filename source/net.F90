@@ -18,7 +18,7 @@ Program net
   ! This is the driver for running XNet
   !-------------------------------------------------------------------------------------------------
   Use nuclear_data, Only: ny, aa, zz, nname, index_from_name, read_nuclear_data
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
 !$ Use omp_lib
 #endif
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, parallel_nprocs, &
@@ -78,24 +78,24 @@ Program net
   nproc = parallel_nprocs()
 
   ! Identify threads
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp parallel default(shared)
 #endif
   tid = 1
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$ tid = omp_get_thread_num() + 1
 #endif
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp single
 #endif
   nthread = 1
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$ nthread = omp_get_num_threads()
 #endif
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp end single
 #endif
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp end parallel
 #endif
 
@@ -119,7 +119,7 @@ Program net
   ! Open diagnostic output file, per thread if OMP. Keep this long-lived stream on a positive
   ! logical unit; some compiler runtimes can alias negative NEWUNIT values after many short-lived
   ! per-zone files are opened and closed.
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp parallel default(shared) private(diag_file,diag_ierr)
 #endif
   If ( idiag >= 0 ) Then
@@ -127,25 +127,25 @@ Program net
     Call name_ordered(diag_file,myid,nproc)
     Call name_ordered(diag_file,tid,nthread)
     diag_ierr = 0
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp critical(diag_open)
 #endif
     lun_diag = getNewUnit()
     If ( lun_diag > 0 ) Open(unit=lun_diag, file=diag_file, action='write', iostat=diag_ierr)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$omp end critical(diag_open)
 #endif
     If ( lun_diag == 0 ) Call xnet_terminate('No free logical unit for diagnostic output')
     If ( diag_ierr /= 0 ) Call xnet_terminate('Failed to open diagnostic output: '//trim(diag_file),diag_ierr)
     Write(lun_diag,"(a5,2i5)") 'MyId',myid,nproc
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
     !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',tid,' of ',nthread
 #endif
   Else
     lun_diag = lun_stdout
   EndIf
   Call write_controls(lun_diag,data_dir)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp end parallel
 #endif
 
@@ -214,7 +214,7 @@ Program net
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp parallel default(shared) &
   !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
   !$omp   copyin(timer_setup)
@@ -229,7 +229,7 @@ Program net
   timer_setup = timer_setup + stop_timer
 
   ! Loop over zones in batches, assigning each batch of zones to MPI tasks in order
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp do
 #endif
   Do ibatch = myid+1, batch_count, nproc
@@ -365,13 +365,13 @@ Program net
       EndIf
     EndDo
   EndDo
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp end do
 #endif
 
   ! Close diagnostic output file
   If ( idiag >= 0 ) Close(lun_diag)
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp end parallel
 #endif
 

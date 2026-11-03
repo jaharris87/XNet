@@ -14,7 +14,7 @@ module xnet_rocsparsef
     rocsparse_dgthr
 
   type(c_ptr) :: rocsparse_handle
-#ifdef XNET_HOST_OPENMP
+#ifdef XNET_OMP
   !$omp threadprivate(rocsparse_handle)
 #endif
 

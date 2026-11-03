@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
 from pathlib import Path
 
 from run_library_tests import states
@@ -31,7 +32,8 @@ def expected_calls() -> dict[str, tuple[int, str]]:
 
 
 def close(actual: float, expected: float, relative: float, absolute: float = 0.0) -> bool:
-    return abs(actual - expected) <= absolute + relative * max(abs(actual), abs(expected))
+    return (math.isfinite(actual) and math.isfinite(expected) and
+            abs(actual - expected) <= absolute + relative * max(abs(actual), abs(expected)))
 
 
 def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
@@ -49,15 +51,22 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
             "expected one itsout=2 GPU case")
     solver, heat = map(int, cases[0][2:])
     require(solver in (1, 3) and heat in (0, 1), "invalid GPU case controls")
+    result = states(text)
+    calls = expected_calls()
     teams = [words for words in lines if words[0] == "GPU_HOST_TEAM"]
     if threads:
         checksum = 128 * 129 * 257 // 6
-        require(len(teams) == 37 and all(tuple(map(int, row[-3:])) == (threads, threads, checksum)
-                                       for row in teams), "missing/mismatched actual host teams")
+        expected_teams = ["before_initialize"]
+        for owner in ("owned", "borrowed"):
+            expected_teams += [owner + "_after_initialize"]
+            expected_teams += [label + "_after_burn" for label in calls if label.startswith(owner + "_")]
+            expected_teams += [owner + "_after_finalize"]
+        require(len(teams) == len(expected_teams) and all(len(row) == 5 for row in teams) and
+                [row[1] for row in teams] == expected_teams and
+                all(tuple(map(int, row[2:])) == (threads, threads, checksum) for row in teams),
+                "missing/mismatched actual host team stages")
     else:
         require(not teams, "unexpected host-team request")
-    result = states(text)
-    calls = expected_calls()
     require(set(result) == set(calls) | {"input_" + label for label in calls},
             "missing, duplicate or unexpected GPU input/result states")
     metadata = [words[1:] for words in lines if words[0] == "META"]
@@ -70,9 +79,22 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
                 for row in values), "invalid species metadata")
     a, z = tuple(row[0] for row in values), tuple(row[1] for row in values)
     selected = [names.index("c12"), names.index("o16"), len(names)-1]
-    densities = {words[1]: tuple(map(float, words[2:])) for words in lines if words[0] == "DENSITY"}
-    steps = {words[1]: int(words[2]) for words in lines if words[0] == "STEPS"}
-    require(set(densities) == set(calls) and set(steps) == set(calls), "missing call density/step record")
+    density_rows = [words for words in lines if words[0] == "DENSITY"]
+    step_rows = [words for words in lines if words[0] == "STEPS"]
+    require(len(density_rows) == len(step_rows) == len(calls) and
+            all(len(row) >= 3 for row in density_rows) and all(len(row) == 3 for row in step_rows) and
+            {row[1] for row in density_rows} == {row[1] for row in step_rows} == set(calls),
+            "missing/duplicate call density/step record")
+    densities = {words[1]: tuple(map(float, words[2:])) for words in density_rows}
+    steps = {words[1]: int(words[2]) for words in step_rows}
+    for label, (n, mask) in calls.items():
+        require(len(result["input_"+label]) == len(result[label]) == len(densities[label]) == n and
+                all(len(row) == len(names)+9 for row in result["input_"+label]+result[label]),
+                f"wrong state dimensions: {label}")
+        require(all(math.isfinite(value) and value > 0 for value in densities[label]),
+                f"invalid input density: {label}")
+        require(steps[label] > 0 if "T" in mask else steps[label] == 0,
+                f"invalid active/inactive accepted steps: {label}")
     active_calls = [(label, shape) for label, shape in calls.items() if "T" in shape[1]]
     markers = [words for words in lines if words[0] == "GPU_OUTPUT_CALL"]
     require(len(markers) == len(active_calls) == 26, "wrong successful output call count")
@@ -100,6 +122,17 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
                     b"Constant conditions; local time 0..dt seconds" in trace["headers"][3],
                     f"controls/input metadata mismatch: {filename}")
             first, last = trace["steps"][0], trace["steps"][-1]
+            require([step["k"] for step in trace["steps"]] == list(range(len(trace["steps"]))) and
+                    first["dt"] >= 0 and all(step["dt"] > 0 for step in trace["steps"][1:]),
+                    f"missing/invalid accepted timestep: {filename}")
+            require(all(step["t9"] > 0 and step["rho"] > 0 for step in trace["steps"]),
+                    f"nonpositive thermodynamics: {filename}")
+            # Reconstruct t(new)=t(old)+dt, allowing only addition/subtraction
+            # roundoff at the recorded binary64 time scale, not an integration tolerance.
+            require(all(abs((new["time"]-old["time"])-new["dt"]) <=
+                        4*sys.float_info.epsilon*max(abs(old["time"]), abs(new["time"]), abs(new["dt"]))
+                        for old, new in zip(trace["steps"], trace["steps"][1:])),
+                    f"time/timestep inconsistency: {filename}")
             left, right = initial[lane-1], final[lane-1]
             require(all(close(mass*y, x, gpu_rtol, mass_atol)
                         for mass, y, x in zip(a, first["y"], left[9:])),
@@ -113,6 +146,9 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
             if heat:
                 require(close(last["t9"]*1e9, right[0], gpu_rtol),
                         f"final self-heating temperature mismatch: {filename}")
+            else:
+                require(all(close(step["t9"]*1e9, left[0], gpu_rtol) for step in trace["steps"]),
+                        f"fixed-temperature history mismatch: {filename}")
             require(math.isclose(last["time"], 0.1, rel_tol=1e-12, abs_tol=1e-18),
                     f"wrong local end time: {filename}")
             require(len(trace["steps"]) >= 2 and trace["steps"][-2]["dt"] == right[2],

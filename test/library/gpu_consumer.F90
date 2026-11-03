@@ -67,6 +67,7 @@ Program gpu_consumer
   Real(dp) :: input_density(lanes,phases), input_temperature(lanes,phases), input_ye(lanes,phases)
   Real(dp) :: input_restart(lanes,phases), input_aux_x(lanes,phases), input_aux_a(lanes,phases), input_aux_z(lanes,phases)
   Real(dp) :: before_temperature(lanes), before_ye(lanes), before_restart(lanes), times(6)
+  Real(dp) :: before_density(lanes)
 
   Call check(Command_Argument_Count() >= 3 .and. Command_Argument_Count() <= 6, &
     & 'expected data_dir, isolv, iheat, and optional device, itsout, host_threads arguments')
@@ -386,12 +387,7 @@ Contains
     loss = -1.0_dp
     counters = -1
     steps = -1
-    If ( output_level > 0 ) Then
-      ! Observe the consumed host/resident input before poisoning the host mirror.
-      Call write_state('input_'//Trim(label),temperature(:n),ye(:n),x(:,:n),restart(:n), &
-        & 0.0_dp*loss(:n),0*counters(:,:n))
-      Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),density(:n)
-    EndIf
+    If ( output_level > 0 ) before_density = density
     If ( resident ) Then
       Call poison_host_reals()
       Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
@@ -437,6 +433,12 @@ Contains
       & All(temperature(n+1:) == before_temperature(n+1:)) .and. All(ye(n+1:) == before_ye(n+1:)) .and. &
       & All(restart(n+1:) == before_restart(n+1:)),Trim(label)//' beyond short batch')
     If ( .not. Any(active(:n)) ) Call check(All(times == 0.0_dp),Trim(label)//' empty timing')
+    If ( output_level > 0 ) Then
+      ! Emit saved inputs after immediate-result checks, outside the queued-producer interval.
+      Call write_state('input_'//Trim(label),before_temperature(:n),before_ye(:n),before_x(:,:n), &
+        & before_restart(:n),0.0_dp*loss(:n),0*counters(:,:n))
+      Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),before_density(:n)
+    EndIf
     ! Print valid results before comparison so a failed comparison can be diagnosed.
     Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),steps
     Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times

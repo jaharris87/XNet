@@ -751,13 +751,20 @@ Contains
     Character(512) :: thread_message
     Logical :: remaining_active
 #endif
+#if defined(XNET_HIP)
+    Type(C_PTR) :: work_rocblas, work_rocsolver
+#endif
 
     finalize_status = 0
     finalize_message = ' '
 #if defined(XNET_GPU)
     remaining_active = .false.
 #ifdef XNET_HOST_OPENMP
+#if defined(XNET_HIP)
+    !$omp parallel default(shared) private(thread_status,status,thread_message,work_rocblas,work_rocsolver)
+#else
     !$omp parallel default(shared) private(thread_status,status,thread_message)
+#endif
 #endif
     thread_status = 0
     thread_message = ' '
@@ -804,7 +811,10 @@ Contains
     If ( owns_rocblas ) Then
       status = rocblas_destroy_handle(rocblas_handle)
       If ( status == 0 ) Then
-        If ( C_Associated(rocsolver_handle,rocblas_handle) ) rocsolver_handle = C_NULL_PTR
+        ! CCE 20 rejects a direct comparison of these imported handles; compare local C pointers.
+        work_rocblas = rocblas_handle
+        work_rocsolver = rocsolver_handle
+        If ( C_Associated(work_rocsolver,work_rocblas) ) rocsolver_handle = C_NULL_PTR
         rocblas_handle = C_NULL_PTR
         owns_rocblas = .false.
       Else

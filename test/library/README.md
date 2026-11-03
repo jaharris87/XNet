@@ -62,8 +62,10 @@ bindings in separate module directories, using a C model for vendor calls and
 minimal host-only hipfort declarations. Fourteen cases check repeated solver,
 BLAS and stream destruction errors, partial successful cleanup, rejection of
 reinitialization during cleanup, no repeated successful destruction, and
-preservation of borrowed resources. These tests require a C compiler (`CC`)
-and exercise resource bookkeeping, not device execution or recovery from real
+preservation of borrowed resources. The HIP `both` case also checks that
+successful rocBLAS cleanup clears its solver alias while preserving a separate
+borrowed solver when hipBLAS cleanup fails. These tests require a C compiler
+(`CC`) and exercise resource bookkeeping, not device execution or recovery from real
 GPU faults. The fake interfaces provide no numerical implementation and are
 not linked into normal consumers. MAGMA's void destructor is outside the
 failure-injection scope.

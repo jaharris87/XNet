@@ -45,6 +45,10 @@ Program gpu_finalize_consumer
   Use, Intrinsic :: iso_c_binding, Only: C_PTR, C_NULL_PTR, C_Associated
   Use xnet_gpu, Only: gpu_init, gpu_finalize, xnet_gpu_t, mydevice, stream
   Use xnet_controls, Only: tid, myid
+#if defined(XNET_HIP)
+  Use xnet_rocblasf, Only: rocblas_handle
+  Use xnet_rocsolverf, Only: rocsolver_handle
+#endif
   Use gpu_finalize_vendor, Only: resource_stream, resource_blas, resource_solver, caller_solver, &
     & vendor_reset, vendor_live, vendor_creates, vendor_destroys, vendor_invalid, vendor_syncs, &
     & vendor_fail, vendor_borrow, vendor_release_borrowed
@@ -64,6 +68,9 @@ Program gpu_finalize_consumer
     Call retry_one(resource_solver)
   Case ('both')
     Call retry_both()
+#if defined(XNET_HIP)
+    Call solver_alias_cleanup()
+#endif
   Case ('borrowed')
     Call borrowed_resources()
   Case ('mixed-blas')
@@ -245,6 +252,48 @@ Contains
     Call check_destroys([1,2,3])
     Return
   End Subroutine retry_both
+
+#if defined(XNET_HIP)
+  Subroutine solver_alias_cleanup()
+    Implicit None
+    Type(xnet_gpu_t) :: context
+    Type(C_PTR) :: solver_before, solver_after, blas_after
+    Integer :: separate_solver
+
+    ! A successful rocBLAS destruction must clear its default solver alias,
+    ! but preserve a separate borrowed solver while hipBLAS cleanup is pending.
+    Do separate_solver = 0, 1
+      Call require(vendor_reset() == 0,'reset completed alias test resources')
+      context = xnet_gpu_t()
+      context%stream = vendor_borrow(resource_stream,C_NULL_PTR)
+      If ( separate_solver == 1 ) Then
+        context%rocsolver_handle = vendor_borrow(caller_solver,context%stream)
+      EndIf
+      Call initialize(context)
+      solver_before = rocsolver_handle
+      Call check_creates([0,1,1])
+      Call vendor_fail(resource_blas,1)
+      Call finish(resource_blas)
+      Call check_destroys([0,1,1])
+      Call check_live([1,1,0])
+      blas_after = rocblas_handle
+      solver_after = rocsolver_handle
+      Call require(.not. C_Associated(blas_after),'successful rocBLAS cleanup clears its handle')
+      If ( separate_solver == 0 ) Then
+        Call require(.not. C_Associated(solver_after),'successful rocBLAS cleanup clears its solver alias')
+      Else
+        Call require(C_Associated(solver_after,solver_before),'pending cleanup preserves the separate solver handle')
+      EndIf
+      Call require(vendor_live(caller_solver) == separate_solver,'borrowed solver remains live')
+      Call finish(0)
+      Call check_destroys([0,2,1])
+      Call check_live([1,0,0])
+      Call require(vendor_live(caller_solver) == separate_solver,'completed cleanup leaves the borrowed solver live')
+      Call vendor_release_borrowed()
+    EndDo
+    Return
+  End Subroutine solver_alias_cleanup
+#endif
 
   Subroutine supply_handle(context,kind,pointer)
     Implicit None

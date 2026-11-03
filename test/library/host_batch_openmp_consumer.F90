@@ -398,33 +398,34 @@ Contains
         active = [.false.,.false.,.false.,.true.]
       End Select
       If ( failure ) active = [.false.,.true.,.false.,.false.]
-      Associate(r=>results(call_number,batch))
-      r%owner = omp_get_thread_num()
-      r%team = omp_get_num_threads()
-      r%n = n
-      r%nids = nids
-      r%ids = ids
-      r%active = active
-      r%dt = 0.02_dp*(1.0_dp+0.01_dp*Real(batch,dp))/Real(call_number,dp)
-      If ( failure ) r%dt = 0.1_dp
-      r%density = d
+      results(call_number,batch)%owner = omp_get_thread_num()
+      results(call_number,batch)%team = omp_get_num_threads()
+      results(call_number,batch)%n = n
+      results(call_number,batch)%nids = nids
+      results(call_number,batch)%ids = ids
+      results(call_number,batch)%active = active
+      results(call_number,batch)%dt = 0.02_dp*(1.0_dp+0.01_dp*Real(batch,dp))/Real(call_number,dp)
+      If ( failure ) results(call_number,batch)%dt = 0.1_dp
+      results(call_number,batch)%density = d
       ! Inactive scientific inputs may be invalid; they must be ignored and remain unchanged.
-      If ( call_number == 4 ) r%density = -1.0_dp
-      r%input_temperature = temp
-      r%input_ye = ey
-      r%input_restart = hint
-      r%input_x = x
-      r%loss = -777.0_dp
-      r%counters = -777
-      Call xnet_burn_batch(r%dt,active(:n),ids(:nids,:n),r%density(:n),temp(:n),ey(:n),x(:,:n), &
-        & hint(:n),r%loss(:n),r%counters(:,:n),r%timing,r%status,r%message,ax(:n),aa(:n),az(:n),r%steps)
+      If ( call_number == 4 ) results(call_number,batch)%density = -1.0_dp
+      results(call_number,batch)%input_temperature = temp
+      results(call_number,batch)%input_ye = ey
+      results(call_number,batch)%input_restart = hint
+      results(call_number,batch)%input_x = x
+      results(call_number,batch)%loss = -777.0_dp
+      results(call_number,batch)%counters = -777
+      Call xnet_burn_batch(results(call_number,batch)%dt,active(:n),ids(:nids,:n), &
+        & results(call_number,batch)%density(:n),temp(:n),ey(:n),x(:,:n),hint(:n), &
+        & results(call_number,batch)%loss(:n),results(call_number,batch)%counters(:,:n), &
+        & results(call_number,batch)%timing,results(call_number,batch)%status,results(call_number,batch)%message, &
+        & ax(:n),aa(:n),az(:n),results(call_number,batch)%steps)
       If ( .not. failure ) Then
-        r%temperature = temp
-        r%ye = ey
-        r%restart = hint
-        r%x = x
+        results(call_number,batch)%temperature = temp
+        results(call_number,batch)%ye = ey
+        results(call_number,batch)%restart = hint
+        results(call_number,batch)%x = x
       EndIf
-      End Associate
     EndDo
     Deallocate(x)
   End Subroutine execute_batch

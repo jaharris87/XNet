@@ -20,7 +20,8 @@ Module xnet_api
   End Type xnet_network_t
 
   Type, Public :: xnet_timing_t
-    Real(dp) :: seconds = 0.0_dp, solve = 0.0_dp, jacobian = 0.0_dp
+    ! Stage durations in seconds; evolve covers the interval inside full_net.
+    Real(dp) :: evolve = 0.0_dp, solve = 0.0_dp, jacobian = 0.0_dp
     Real(dp) :: derivative = 0.0_dp, rates = 0.0_dp, screening = 0.0_dp
   End Type xnet_timing_t
 
@@ -320,7 +321,7 @@ Contains
     EndDo
     Deallocate (loss_work)
     timing = current_timing()
-    timing%seconds = timing%seconds - before%seconds
+    timing%evolve = timing%evolve - before%evolve
     timing%solve = timing%solve - before%solve
     timing%jacobian = timing%jacobian - before%jacobian
     timing%derivative = timing%derivative - before%derivative
@@ -456,7 +457,7 @@ Contains
     Use xnet_timers, Only: timer_xnet, timer_solve, timer_jacob, timer_deriv, timer_csect, timer_scrn
     Implicit None
     Type(xnet_timing_t) :: timing
-    timing%seconds = timer_xnet
+    timing%evolve = timer_xnet
     timing%solve = timer_solve
     timing%jacobian = timer_jacob
     timing%derivative = timer_deriv

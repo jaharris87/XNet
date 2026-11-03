@@ -348,7 +348,7 @@ Contains
       EndIf
       Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),max_steps_taken
     EndIf
-    times = (/ timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening /)
+    times = (/ timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening /)
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),label//' timing')
     Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times
     Do j = 1, n

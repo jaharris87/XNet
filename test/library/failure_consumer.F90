@@ -73,9 +73,9 @@ Program failure_consumer
   Call check(All(counters(:,2) > 0),'attempted active counters')
   Call check(All(counters(:,1) == 0) .and. All(counters(:,3) == 0),'inactive counters')
   If ( mode == 'integrator' ) Call check(counters(1,2) > 1,'internal timestep retries exercised')
-  times = [timing%seconds,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
+  times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
   Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),'completed attempted timing')
-  Call check(timing%seconds > 0.0_dp,'elapsed timer closed')
+  Call check(timing%evolve > 0.0_dp,'evolution timer closed')
   Write(*,'(a,5(1x,i0))') 'ATTEMPTED_COUNTERS',counters(:,2)
   Write(*,'(a,6(1x,es26.17e3))') 'ATTEMPTED_TIMING',times
   ! Do not inspect physical outputs, retry, or reuse this failed library instance.

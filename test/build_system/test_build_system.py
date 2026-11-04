@@ -587,14 +587,20 @@ def main() -> int:
             ),
             "incompatible BUILD_DIR configuration",
         )
-        require_failure(
-            make(
-                f"BUILD_DIR={work / 'invalid-record'}",
-                "FFLAGS=safe_flag\nINJECTED=1",
-                "xnet",
-            ),
-            "cannot represent single quotes or line breaks",
-        )
+        for flag in ("FFLAGS", "F90FLAGS", "EXTRA_FLAGS"):
+            for dry_run in (False, True):
+                mode = "dry" if dry_run else "actual"
+                invalid = work / f"invalid-record-{flag}-{mode}"
+                require_failure(
+                    make(
+                        f"BUILD_DIR={invalid}",
+                        f"{flag}=safe_flag\nINJECTED=1",
+                        *(["-n"] if dry_run else []),
+                        "xnet",
+                    ),
+                    "cannot represent single quotes or line breaks",
+                )
+                assert not invalid.exists(), "invalid flags reached build-directory creation"
 
         dense_sparse_selection = make(
             f"BUILD_DIR={work / 'dense-sparse-selection'}",

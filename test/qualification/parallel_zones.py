@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 from typing import Mapping, Sequence
@@ -248,6 +249,52 @@ def validate_output_inventory(work_directory: Path) -> tuple[Path, ...]:
             f"expected nonempty diagnostics, found {[path.name for path in diagnostics]}"
         )
     return diagnostics
+
+
+def validate_initial_flux(work_directory: Path) -> None:
+    """Require zero timestep-zero flux in each zone's native binary history.
+
+    This check supports native-endian four-byte record markers and integers,
+    and eight-byte reals, as used by the GNU qualification configurations.
+    """
+
+    for zone in EXPECTED_ZONES:
+        path = work_directory / f"ts_parallel_zones_{zone:02d}"
+        file_size = path.stat().st_size
+        records: list[bytes] = []
+        with path.open("rb") as stream:
+            for _ in range(7):  # Six headers followed by the initial state.
+                marker = stream.read(4)
+                if len(marker) != 4:
+                    raise QualificationFailure(f"missing initial binary record in {path}")
+                length = struct.unpack("=i", marker)[0]
+                if length < 0 or length > file_size:
+                    raise QualificationFailure(f"unsupported binary record length in {path}")
+                payload = stream.read(length)
+                if len(payload) != length or stream.read(4) != marker:
+                    raise QualificationFailure(f"malformed binary record in {path}")
+                records.append(payload)
+        if tuple(map(len, records[:4])) != (320, 76, 160, 160):
+            raise QualificationFailure(f"unsupported binary history headers in {path}")
+        if len(records[4]) < 4 or len(records[5]) < 4:
+            raise QualificationFailure(f"missing binary species/flux dimensions in {path}")
+        species = struct.unpack_from("=i", records[4])[0]
+        fluxes = struct.unpack_from("=i", records[5])[0]
+        if (
+            species != len(ALPHA_SPECIES)
+            or fluxes <= 0
+            or len(records[4]) != 4 + 16 * species
+            or len(records[5]) != 4 + 8 * fluxes
+            or len(records[6]) != 4 + 8 * (6 + species + fluxes)
+        ):
+            raise QualificationFailure(f"unsupported binary history layout in {path}")
+        if struct.unpack_from("=i", records[6])[0] != 0:
+            raise QualificationFailure(f"first binary history step is not zero in {path}")
+        initial_flux = struct.unpack_from(
+            f"={fluxes}d", records[6], 4 + 8 * (6 + species)
+        )
+        if any(value != 0.0 for value in initial_flux):
+            raise QualificationFailure(f"nonzero initial reaction flux for zone {zone}: {path}")
 
 
 def _diagnostic_topology(
@@ -531,6 +578,7 @@ def run_configuration(
         environment=environment,
     )
     diagnostics = validate_output_inventory(work_directory)
+    validate_initial_flux(work_directory)
     if expected_mpi_ranks is not None:
         validate_mpi_topology(diagnostics, expected_mpi_ranks)
     if expected_openmp_threads is not None:

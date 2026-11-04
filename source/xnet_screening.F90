@@ -280,7 +280,7 @@ Contains
             lambda = hw0 * zeta3w(mu)
             hw = lambda
             hi = hi0 * zeta3i(mu)
-            hs = fhs(iz31(mu)) + fhs(iz33(mu)) - fhs(iz3c(mu))
+            hs = fhs(iz31(mu)) + fhs(iz32(mu)) + fhs(iz33(mu)) - fhs(iz3c(mu))
 
             dhwdt9 = hw * dlnhw0dt9
             dhidt9 = hi * dlnhi0dt9

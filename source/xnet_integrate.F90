@@ -644,6 +644,8 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,ene,t09,dt09,t9t,rhot,yet)
     Do izb = zb_lo, zb_hi
+      ! FFN interpolation may evaluate inactive density before testing its mask.
+      ene(izb) = 1.0_dp
       If ( mask(izb) ) Then
         ene(izb) = yet(izb)*rhot(izb)
 

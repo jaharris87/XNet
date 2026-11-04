@@ -197,6 +197,8 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,lt1)
     Do izb = zb_lo, zb_hi
+      ! Keep inactive indices valid when interpolation is hoisted before its mask.
+      lt1(izb) = 1
       If ( mask(izb) ) Then
 
         ! Find the temperature grid point

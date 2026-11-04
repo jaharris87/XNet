@@ -199,3 +199,47 @@ host-batch-openmp-test: $(BUILD_DIR)/host_batch_openmp_consumer
 	python3 run_host_batch_openmp_tests.py --consumer $(BUILD_DIR)/host_batch_openmp_consumer \
 	  --library-config $(XNET_CONFIG) --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup \
 	  --work-dir $(BUILD_DIR)/host-batch-runs --histories
+
+# Test-only EOS observation and whole-evolution serialization control. Keep the
+# production archive and its module directory unchanged; link replacements first.
+.PHONY: host-batch-openmp-overlap-test
+ifeq ($(filter -DXNET_GPU,$(XNET_CPPFLAGS)),)
+ifneq ($(filter -DXNET_OMP,$(XNET_CPPFLAGS)),)
+$(BUILD_DIR)/overlap $(BUILD_DIR)/overlap/serialized:
+	mkdir -p '$@'
+
+$(BUILD_DIR)/overlap/host_overlap_eos.o: host_overlap_eos.F90 $(XNET_CONFIG) | $(BUILD_DIR)/overlap
+	cd '$(BUILD_DIR)/overlap' && $(XNET_FC) $(XNET_FFLAGS) $(HOST_OPENMP_FLAGS) $(XNET_MODFLAGS) -c '$(abspath $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/overlap/consumer: $(BUILD_DIR)/host_batch_openmp_consumer.o $(BUILD_DIR)/consumer_fixture.o \
+    $(BUILD_DIR)/overlap/host_overlap_eos.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) $(HOST_OPENMP_FLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+$(BUILD_DIR)/overlap/serialized/xnet_api.f90: ../../source/xnet_api.F90 ../../source/xnet_macros.fh \
+    run_host_overlap_tests.py $(XNET_CONFIG) | $(BUILD_DIR)/overlap/serialized
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$<' > '$@.original'
+	python3 -B run_host_overlap_tests.py serialize-api '$@.original' '$@'
+
+$(BUILD_DIR)/overlap/serialized/xnet_api.o: $(BUILD_DIR)/overlap/serialized/xnet_api.f90 $(dir $(XNET_CONFIG))config.txt
+	cd '$(BUILD_DIR)/overlap/serialized' && $(XNET_FC) $(XNET_FFLAGS) $(HOST_OPENMP_FLAGS) \
+	  $(shell sed -n 's/^XNET_CONTROLS_FFLAGS=//p' '$(dir $(XNET_CONFIG))config.txt') \
+	  $(XNET_MODFLAGS) -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/overlap/serialized/consumer: $(BUILD_DIR)/host_batch_openmp_consumer.o $(BUILD_DIR)/consumer_fixture.o \
+    $(BUILD_DIR)/overlap/serialized/xnet_api.o $(BUILD_DIR)/overlap/host_overlap_eos.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) $(HOST_OPENMP_FLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+host-batch-openmp-overlap-test: $(BUILD_DIR)/host_batch_openmp_consumer \
+    $(BUILD_DIR)/overlap/consumer $(BUILD_DIR)/overlap/serialized/consumer
+	python3 -B run_host_overlap_tests.py run --consumer $(BUILD_DIR)/host_batch_openmp_consumer \
+	  --probe $(BUILD_DIR)/overlap/consumer --serialized $(BUILD_DIR)/overlap/serialized/consumer \
+	  --library-config $(XNET_CONFIG) --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup \
+	  --work-dir $(BUILD_DIR)/overlap-runs
+else
+host-batch-openmp-overlap-test:
+	@echo 'overlap test requires a CPU OPENMP_MODE=ON library' >&2; exit 2
+endif
+else
+host-batch-openmp-overlap-test:
+	@echo 'overlap test requires a CPU OPENMP_MODE=ON library' >&2; exit 2
+endif

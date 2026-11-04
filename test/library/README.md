@@ -200,6 +200,34 @@ settings, source hashes, and output hashes under the caller's
 no new numerical tolerances are supplied. These are CPU same-source checks;
 GPU host-worker concurrency and performance require separate evidence.
 
+The optional `host-batch-openmp-overlap-test` target also checks simultaneous
+entry into evolution at two and four workers, without a speedup threshold:
+
+```sh
+make -C test/library XNET_CONFIG=../../build/library-batch-omp/xnet-config.mk \
+  BUILD_DIR=build-batch-omp host-batch-openmp-overlap-test
+```
+
+This focused check reuses the unchanged application caller with alpha BDF
+self-heating and no NSE queries or time-series output. A test-only EOS
+replacement keeps each worker's first parallel evaluation live until all
+workers arrive. The calculation calls the same bundled EOS. A ten-second
+watchdog bounds a missing-overlap failure; elapsed time does not establish a
+pass. Serial calls outside a team remain valid with `OMP_NUM_THREADS=4`.
+
+The target also compiles a copied API object with a critical region around the
+single CPU `full_net` call. Both worker counts must reject that control for
+missing overlap, rather than an unrelated failure or process timeout. All six
+consumer processes must produce complete physical results equal to the ordinary
+serial caller, including the rejected controls. Replacement objects precede
+the unchanged archive at link time and write modules in separate test
+directories. No production instrumentation or new EOS selection is used.
+The runner saves direct statuses, partial timeout/error logs, configuration,
+and input/output hashes under `BUILD_DIR/overlap-runs/`. The existing
+`host-batch-openmp-test` remains necessary for BE, SN160, screened NSE,
+histories, failures, and topology checks. The overlap target requires a CPU
+OpenMP dense archive with the bundled Starkiller EOS.
+
 ## GPU consumer
 
 `gpu_consumer.F90` is an opt-in hardware caller for the CUDA/cuBLAS and

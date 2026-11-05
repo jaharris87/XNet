@@ -21,11 +21,11 @@ OPENMP_OL_MODE ?= OFF
 
 # STARKILLER, BAHCALL, HELMHOLTZ, or EXTERNAL (libxnet only).
 EOS ?= STARKILLER
-# EXTERNAL uses a supplied free-form module xnet_eos_adapter for thermodynamics;
+# EXTERNAL uses a supplied free-form module xnet_eos_interface for thermodynamics;
 # XNet keeps composition moments, screening, scratch, and unit conversions.
 # The host builds its EOS modules first and owns their initialization,
 # cleanup, and link dependencies.
-# EOS_SOURCE = /path/to/xnet_eos_adapter.F90
+# EOS_SOURCE = /path/to/xnet_eos_interface.F90
 # EOS_MODULE_DIR = /path/to/host/modules
 # dense, MA41, MA48, or the oneMKL implementation PARDISO_MKL.
 MATRIX_SOLVER ?= dense

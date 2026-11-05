@@ -49,7 +49,7 @@ Contains
     Use nuclear_data, Only: zz
     Use reaction_data, Only: nreac, n2i, n3i, n4i
     Use xnet_constants, Only: bip1, thbim1, five3rd
-    Use xnet_controls, Only: iheat, iscrn, nzevolve, tid
+    Use xnet_controls, Only: iheat, iscrn, nzevolve, tid, gpu_queue
     Use xnet_types, Only: dp
     Implicit None
 
@@ -118,7 +118,7 @@ Contains
       lambda0 = 0.0
       gammae = 0.0
       dztildedt9 = 0.0
-      !XDIR XENTER_DATA XASYNC(tid) &
+      !XDIR XENTER_DATA XASYNC(gpu_queue) &
       !XDIR XCOPYIN(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
       !XDIR XCOPYIN(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
       !XDIR XCOPYIN(ztilde,zinter,lambda0,gammae,dztildedt9)
@@ -141,7 +141,7 @@ Contains
     dh3dt9 = 0.0
     dh4dt9 = 0.0
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
 
     Return
@@ -167,7 +167,7 @@ Contains
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_constants, Only: bi, bip1, cds, kbi, thbim2
     Use xnet_conditions, Only: rhot, t9t, etae, detaedt9
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_eos, Only: eos_screen
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_prescrn, timer_scrn
     Use xnet_types, Only: dp
@@ -195,7 +195,7 @@ Contains
     start_timer = xnet_wtime()
     timer_prescrn = timer_prescrn - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
     ! Call EOS to get plasma quantities
@@ -210,7 +210,7 @@ Contains
     start_timer = xnet_wtime()
     timer_scrn = timer_scrn - start_timer
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(nreac,zseq,zseq53,zseqi) &
     !XDIR XPRESENT(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
     !XDIR XPRESENT(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
@@ -324,7 +324,7 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !XDIR XHOST(ztilde,zinter,lambda0,gammae,dztildedt9)
       Do izb = zb_lo, zb_hi
@@ -407,7 +407,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
@@ -470,8 +470,20 @@ Contains
   End Subroutine screen_blend
 
   Subroutine screening_finalize
-    ! Release XNet-owned CPU allocations.
+    ! Release mappings established by screening_init before CPU allocations.
+    Use xnet_controls, Only: gpu_queue
     Implicit None
+    If ( Allocated(iz21) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
+      !XDIR XDELETE(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
+      !XDIR XDELETE(ztilde,zinter,lambda0,gammae,dztildedt9)
+    EndIf
+    If ( Allocated(h1) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
+    EndIf
+    !XDIR XWAIT(gpu_queue)
     If ( Allocated(h1) ) Deallocate (h1)
     If ( Allocated(h2) ) Deallocate (h2)
     If ( Allocated(h3) ) Deallocate (h3)

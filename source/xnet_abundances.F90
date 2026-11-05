@@ -108,7 +108,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, zz, zz2, zzi
     Use xnet_constants, Only: thbim1
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Implicit None
 
@@ -135,12 +135,12 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ye,ytot,abar,zbar,z2bar,zibar) &
     !XDIR XCOPYIN(mask,y,xext,aext,zext)
        
     ! Calculate abundance moments
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar) &
     !XDIR XPRESENT(aa,zz,zz2,zzi) &
     !XDIR XPRESENT(mask,y,xext,aext,zext) &
@@ -179,7 +179,7 @@ Contains
     EndDo
        
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ye,ytot,abar,zbar,z2bar,zibar)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -189,7 +189,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(ye,ytot,abar,zbar,z2bar,zibar) &
     !XDIR XDELETE(mask,y,xext,aext,zext)
 

@@ -123,7 +123,7 @@ Contains
     ! distribution.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: epmev, avn
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Implicit None
 
@@ -149,10 +149,10 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask,y,enb,enm)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,y,enb,enm,zz,be) &
     !XDIR XPRIVATE(ztot,btot)
     Do izb = zb_lo, zb_hi
@@ -175,7 +175,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(enb,enm) &
     !XDIR XDELETE(mask,y)
 
@@ -186,7 +186,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -209,10 +209,10 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask,t9)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,t9i,gg,g,dlngdt9) &
     !XDIR XPRIVATE(ii,rdt9)
     Do izb = zb_lo, zb_hi
@@ -277,7 +277,7 @@ Contains
     !  EndDo
     !EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask,t9)
 
     Return
@@ -461,7 +461,7 @@ Contains
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
-    Use xnet_controls, Only: iheat, nzevolve, tid
+    Use xnet_controls, Only: iheat, nzevolve, tid, gpu_queue
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
@@ -570,7 +570,7 @@ Contains
 
     Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(aa,zz,nn,be,mex,mm,ia,iz,in) &
     !XDIR XCOPYIN(zz2,zz53,zzi,zseq,zseq53,zseqi) &
     !XDIR XCOPYIN(it9i,t9i,g,angm) &
@@ -666,8 +666,15 @@ Contains
   End Subroutine format_nuclear_data
 
   Subroutine nuclear_data_finalize
-    ! Release XNet-owned CPU allocations.
+    ! Release mappings established by read_nuclear_data before CPU allocations.
+    Use xnet_controls, Only: gpu_queue
     Implicit None
+    If ( Allocated(aa) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(aa,zz,nn,be,mex,mm,ia,iz,in) &
+      !XDIR XDELETE(zz2,zz53,zzi,zseq,zseq53,zseqi,it9i,t9i,g,angm,gg,dlngdt9)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
     If ( Allocated(nname) ) Deallocate (nname)
     If ( Allocated(aa) ) Deallocate (aa)
     If ( Allocated(zz) ) Deallocate (zz)
@@ -753,7 +760,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0, tid
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0, tid, gpu_queue
     Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
       & qkffn, phasei, dphaseidt9, ngrid, rffn, dlnrffndt9
     Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, ltnu, fluxnu, rnnu
@@ -1054,7 +1061,7 @@ Contains
     Allocate (dlnrffndt9(max(1,nffn),nzevolve))
     Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
     !XDIR XCOPYIN(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XCOPYIN(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
@@ -1075,7 +1082,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_constants, Only: epmev, avn
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_ffn, Only: qkffn
     Use xnet_types, Only: dp
     Implicit None
@@ -1105,10 +1112,10 @@ Contains
     
       nr1 = nreac(1)
 
-      !XDIR XENTER_DATA XASYNC(tid) &
+      !XDIR XENTER_DATA XASYNC(gpu_queue) &
       !XDIR XCOPYIN(mask,y,sqnu)
 
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,qkffn,iffn,y,sqnu) &
       !XDIR XPRIVATE(sqnu1)
       Do izb = zb_lo, zb_hi
@@ -1127,7 +1134,7 @@ Contains
         EndIf
       EndDo
 
-      !XDIR XEXIT_DATA XASYNC(tid) &
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XCOPYOUT(sqnu) &
       !XDIR XDELETE(mask,y)
 
@@ -1137,8 +1144,19 @@ Contains
   End Subroutine enudot
 
   Subroutine reaction_data_finalize
-    ! Release XNet-owned CPU allocations.
+    ! Release mappings established by read_reaction_data before CPU allocations.
+    Use xnet_controls, Only: gpu_queue
     Implicit None
+    If ( Allocated(la) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
+      !XDIR XDELETE(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
+      !XDIR XDELETE(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
+      !XDIR XDELETE(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
+      !XDIR XDELETE(iffn,innu) &
+      !XDIR XDELETE(b1,b2,b3,b4,csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
     If ( Allocated(n1i) ) Deallocate (n1i)
     If ( Allocated(n2i) ) Deallocate (n2i)
     If ( Allocated(n3i) ) Deallocate (n3i)

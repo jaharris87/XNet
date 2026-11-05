@@ -1,4 +1,6 @@
-# External serial CPU library tests
+# External library tests
+
+## Serial CPU checks
 
 Build the production archive and network preprocessor, then compile and run
 the callers through the build's exported compiler/link settings:
@@ -13,10 +15,68 @@ configuration, for example `BUILD_DIR=build-debug` for a debug archive.
 
 Python 3 is required; there are no additional Python packages. The production
 Starkiller EOS table must be present at its normal repository path. The tests
-use the real dense serial CPU archive and selected EOS; they provide no
-replacement solver, EOS, or provider routines. The first configuration is
+use the real dense serial CPU archive and selected EOS; the numerical callers
+provide no replacement solver, EOS, or provider routines. The first configuration is
 GNU Fortran with `EOS=STARKILLER`, `MATRIX_SOLVER=dense`, and MPI, OpenMP, and
 GPU disabled. Other configurations require their own evidence.
+
+An opt-in application OpenMP check runs real SN160 burns, NSE queries and two
+initialization/finalization cycles between application parallel regions. It
+checks actual two- and four-thread teams and verifies that XNet preserves the
+application's thread settings. With GNU, deliberately enable OpenMP compiler
+processing while keeping XNet host threading off:
+
+```sh
+make BUILD_NAME=library-host-omp OPENMP_MODE=OFF EXTRA_FLAGS=-fopenmp -j libxnet net_setup xnet
+make -C test/library XNET_CONFIG=../../build/library-host-omp/xnet-config.mk \
+  BUILD_DIR=build-host-omp host-openmp-test
+```
+
+`HOST_OPENMP_FLAGS` defaults to `-fopenmp` for the application caller; supply
+the compiler's equivalent flag for other compilers. This check is CPU-only
+evidence, not accelerator qualification or concurrent API-call support.
+
+The normal `test` target also runs `output_consumer.F90` and
+`preprocess_consumer.F90`. Runtime preprocessing uses isolated copies of ASCII
+inputs, compares generated binary files with `net_setup`, and checks missing
+files, duplicate initialization, and repeated initialization with different
+networks. Time-series tests compare all binary timestep records against direct
+`full_net` output and check ASCII columns, species lookup, physical results,
+counters, masks, repeated and short calls, separate filenames across
+initialization lifetimes, checked open failures, no clobbering, and closed
+partial histories after reported numerical failures. These are CPU software
+and same-source numerical comparisons; they do not qualify GPU output or an
+independent scientific reference.
+
+A separate host-only cleanup test recompiles the production API with a
+test GPU resource module in an isolated build subdirectory. It uses real
+CPU workspaces and finalizers, but injects two GPU cleanup failures. It
+checks that finalization retries only GPU cleanup, blocks new work while
+cleanup is pending, and permits initialization after cleanup succeeds. It also
+injects resource initialization failures before workspace creation, checks that
+pending rollback blocks initialize, burn and
+NSE calls, and checks that cleanup retries leave never-created workspaces alone.
+A malformed-controls case fails before resource initialization.
+This checks API bookkeeping, not GPU execution or recovery from a real
+device failure. The replacement module is never used by the normal callers
+or native GPU tests.
+
+The CPU suite also compiles the production GPU resource module and CUDA/HIP
+bindings in separate module directories, using a C model for vendor calls and
+minimal host-only hipfort declarations. Cases check repeated solver,
+BLAS and stream destruction errors, partial successful cleanup, rejection of
+reinitialization during cleanup, no repeated successful destruction, and
+preservation of borrowed resources. The HIP `both` case also checks that
+successful rocBLAS cleanup clears its solver alias while preserving a separate
+borrowed solver when hipBLAS cleanup fails. Failed initialization cases cover
+stream and handle creation, handle association, successful rollback, finite and
+persistent destructor failures, retries, and reinitialization after cleanup.
+They also check borrowed resources and mismatched supplied streams rejected
+before any owned allocation. These tests require a C compiler
+(`CC`) and exercise resource bookkeeping, not device execution or recovery from real
+GPU faults. The fake interfaces provide no numerical implementation and are
+not linked into normal consumers. MAGMA's void destructor is outside the
+failure-injection scope.
 
 `api_consumer.F90` imports only `xnet_api`, standard intrinsic modules, and a
 test fixture that contains no XNet imports. It links against `libxnet.a` and
@@ -59,8 +119,8 @@ the five solver counters. The optional `max_steps_taken` result must equal
 the direct `full_net` `kstep`, including zero for an all-inactive batch.
 Selected rejected calls and all four numerical-failure cases must clear a
 nonzero step-count sentinel. The reinitialized burn omits the new optional
-argument to exercise an existing successful source call. A caller linked to
-the unsupported API branch can use `--unsupported` to check its zero result.
+argument to exercise an existing successful source call. Unsupported library
+configurations are rejected by Make rather than compiling API stubs.
 The same serial archive and equivalent arithmetic
 are expected to produce identical binary64 values; text output has enough
 decimal digits for those values to round-trip. This compares wrapper
@@ -72,7 +132,7 @@ must be zero. Metadata names and order are compared with the staged `sunet`;
 all A/Z and energy values are compared with the legacy nuclear-data arrays.
 
 Validation checks cover invalid controls, duplicate initialization, unsupported
-time-series output/preprocessing, invalid extents, incomplete auxiliary
+neutrino capture histories, invalid extents, incomplete auxiliary
 arguments, NaN/Inf input, negative fractions/restart hints, invalid Ye, and an
 auxiliary reservoir with invalid A.
 
@@ -113,3 +173,278 @@ retry, rollback, failed-instance reuse, or successful-lane continuation.
 Reader/provider/allocation failures, singular solves, arbitrary nonfinite
 arithmetic, concurrent instances, MPI, OpenMP, GPU and performance remain
 outside these tests' claims.
+
+## Application OpenMP batch calls
+
+The separate `host-batch-openmp-test` target puts `xnet_burn_batch` calls inside
+an application `parallel do` over logical batches. Build a CPU OpenMP archive
+and use a separate caller directory:
+
+```sh
+make BUILD_NAME=library-batch-omp OPENMP_MODE=ON -j libxnet net_setup
+make -C test/library XNET_CONFIG=../../build/library-batch-omp/xnet-config.mk \
+  BUILD_DIR=build-batch-omp host-batch-openmp-test
+```
+
+The runner checks actual teams of two and four workers with dynamic teams
+disabled and no nested execution. Every worker makes repeated batch calls;
+logical inputs and reference results do not depend on worker assignment.
+Selected alpha BE/BDF and SN160 BE/BDF cases cover full, holed, short,
+all-inactive, and tail-only batches, restart hints, self-heating, and weak
+neutrino loss. SN160 uses screening and concurrent scalar NSE queries before
+and after the burns. Complete compositions, temperatures, Ye, restart steps,
+losses, counters, and `max_steps_taken` must equal serial calls to the same
+archive. One SN160 BDF case also compares every binary timestep record and
+ASCII history. Timings must be finite and nonnegative; speedup is not tested.
+
+Each worker's fatal-failure probe checks its local lane and original zone IDs,
+then the process terminates without using failed physical outputs or reusing
+the instance. Separate topology probes reject dynamic, nested, and changed-size
+teams, check unchanged caller state and cleared diagnostic outputs, restore
+application settings, and check successful finalization and reinitialization.
+The runner records actual worker owners, commands, direct status, compiler
+settings, source hashes, and output hashes under the caller's
+`BUILD_DIR/host-batch-runs/`. Differences report affected fields and magnitudes;
+no new numerical tolerances are supplied. These are CPU same-source checks;
+GPU host-worker concurrency and performance require separate evidence.
+
+The optional `host-batch-openmp-overlap-test` target also checks simultaneous
+entry into evolution at two and four workers, without a speedup threshold:
+
+```sh
+make -C test/library XNET_CONFIG=../../build/library-batch-omp/xnet-config.mk \
+  BUILD_DIR=build-batch-omp host-batch-openmp-overlap-test
+```
+
+This focused check reuses the unchanged application caller with alpha BDF
+self-heating and no NSE queries or time-series output. A test-only EOS
+replacement keeps each worker's first parallel evaluation live until all
+workers arrive. The calculation calls the same bundled EOS. A ten-second
+watchdog bounds a missing-overlap failure; elapsed time does not establish a
+pass. Serial calls outside a team remain valid with `OMP_NUM_THREADS=4`.
+
+The target also compiles a copied API object with a critical region around the
+single CPU `full_net` call. Both worker counts must reject that control for
+missing overlap, rather than an unrelated failure or process timeout. All six
+consumer processes must produce complete physical results equal to the ordinary
+serial caller, including the rejected controls. Replacement objects precede
+the unchanged archive at link time and write modules in separate test
+directories. No production instrumentation or new EOS selection is used.
+The runner saves direct statuses, partial timeout/error logs, configuration,
+and input/output hashes under `BUILD_DIR/overlap-runs/`. The existing
+`host-batch-openmp-test` remains necessary for BE, SN160, screened NSE,
+histories, failures, and topology checks. The overlap target requires a CPU
+OpenMP dense archive with the bundled Starkiller EOS.
+
+## GPU consumer
+
+`gpu_consumer.F90` is an opt-in hardware caller for the CUDA/cuBLAS and
+HIP/ROCm dense archives. These checks require a real GPU; successful CPU tests,
+preprocessing or compiler checks do not establish a GPU result.
+The normal `test` target above remains the serial CPU suite. The
+`gpu_consumer` target compiles and links the GPU caller without running it.
+
+For example, with an installed NVHPC/CUDA environment, build from the
+repository root:
+
+```sh
+make BUILD_NAME=library-gpu PE_ENV=NVHPC EOS=STARKILLER LAPACK_VER=NETLIB \
+  MATRIX_SOLVER=dense MPI_MODE=OFF OPENMP_MODE=OFF GPU_MODE=ON \
+  GPU_BACKEND=CUDA GPU_LAPACK_VER=CUBLAS OPENACC_MODE=ON OPENMP_OL_MODE=OFF \
+  -j libxnet net_setup
+make -C test/library XNET_CONFIG=../../build/library-gpu/xnet-config.mk \
+  BUILD_DIR=build-gpu gpu_consumer
+```
+
+Supply `CUDA_DIR` when the build cannot locate the installed toolkit. For a
+HIP/ROCm OpenMP target build, use the facility compiler and numerical
+libraries, `GPU_BACKEND=HIP`, `GPU_LAPACK_VER=ROCM`, `OPENACC_MODE=OFF`, and
+`OPENMP_OL_MODE=ON`, with the installed `HIPFORT_DIR` and `ROCM_DIR`. These
+are build selections, not a claim that every compiler/library combination
+works. Consult the current facility instructions for modules and placement.
+
+The exported `XNET_CPPFLAGS` supplies `xnet_macros.fh`'s include directory and
+the archive's actual accelerator definitions. The caller Makefile uses those
+flags directly; no separate `GPU_DEFINES` setting is needed. The caller uses
+the same compiler, modules and external libraries as the archive.
+
+The input directories must contain the prepared `sunet`, `netwinv`, `nets3`,
+`nets4`, and `match_data` files. The serial runner's `Data_alpha` and
+`Data_SN160` copies can be reused on the same platform. Alternatively, prepare
+fresh copies of those public fixtures with the selected build's `net_setup`:
+
+```sh
+xnet_root=$PWD
+gpu_run=$(mktemp -d "${TMPDIR:-/tmp}/xnet-library-gpu.XXXXXX")
+cp -R test/Data_alpha "$gpu_run/Data_alpha"
+cp -R test/Data_SN160 "$gpu_run/Data_SN160"
+for network in Data_alpha Data_SN160; do
+  (
+    cd "$gpu_run/$network"
+    printf '%s\n' 'Public GPU embedding-library tests' | \
+      "$xnet_root/build/library-gpu/bin/net_setup" > "$gpu_run/net_setup_$network.log" 2>&1
+  )
+done
+ln -s "$xnet_root/tools/starkiller-helmholtz/helm_table.dat" "$gpu_run/helm_table.dat"
+```
+
+On a managed facility, run inside an approved compute allocation using its
+launcher and GPU placement. The following are the executable arguments for
+the five existing network/integrator/heating combinations; they do not
+submit a job. The final integer chooses the application device, defaulting
+to zero when omitted:
+
+```sh
+(
+  set -e
+  cd "$gpu_run"
+  export OMP_NUM_THREADS=1
+  export OMP_TARGET_OFFLOAD=MANDATORY
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_alpha 1 0 0 > alpha-be-heat0.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_alpha 1 1 0 > alpha-be-heat1.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_alpha 3 0 0 > alpha-bdf-heat0.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_SN160 1 1 0 > SN160-be-heat1.log 2>&1
+  "$xnet_root/test/library/build-gpu/gpu_consumer" Data_SN160 3 1 0 > SN160-bdf-heat1.log 2>&1
+)
+```
+
+Each process requires a real device region and checks that XNet preserves
+the application's selected device. It initializes once with XNet-owned
+resources, then again with an application-owned nonblocking stream and BLAS
+handle. That second call is partial borrowing: XNet creates the other
+selected library handles itself and releases only those it owns.
+After borrowed-resource finalization, a vendor GEMM checks that the handle
+and stream still work. The OpenACC case also checks the caller's queue
+association and that the runtime-owned queue-one stream survives XNet-owned
+handle cleanup.
+An additional initialization/finalization check supplies only a solver
+handle, leaves BLAS creation to XNet, and checks that the supplied solver
+still uses the application stream afterward.
+
+For each resource lifetime, the caller runs host-array and mapped-device
+burns through first, repeated, short, inactive-hole, and all-inactive batches.
+The first owned host-array sequence saves every phase's scientific inputs
+and expected outputs. Each later compared call restores those saved inputs,
+including the restart hint, on the side consumed by that API mode. Thus all
+four owned/borrowed host/device paths compare outputs from identical inputs,
+not from independently evolved prior outputs. Host-array restores do not
+refresh the deliberately poisoned device mirrors.
+
+A separate five-phase resident-device chain runs in each resource lifetime.
+It maps the fixture once and uploads no scientific arrays or restart hints
+between burns. Its subsequent calls consume its own device outputs, including
+the returned restart hint. These different-history outputs are not compared
+with the same-input reference. Their states, counters, steps, timings and
+restart values are logged; `CONTINUATION_DELTA` reports the maximum absolute
+changes in X, temperature, Ye and restart from each call's consumed inputs.
+These changes are observations, not numerical-equivalence checks. The caller
+runs 34 successful burns in total: 20 same-input phase calls, ten device-chain
+calls, two short-allocation calls and two producer calls described below, plus
+four invalid-input calls.
+
+After the three phase sequences in each lifetime, a separate resident call
+allocates and maps all nine scientific arrays with one lane while the XNet
+workspace capacity remains four. It uses the fixture's first-lane inputs,
+including nonzero auxiliary composition and the positive restart hint, then
+poisons the host scientific inputs after mapping. Each result compares with
+the existing first owned host-array burn under the limits below. The call
+checks all returned physical fields, diagnostics and surviving caller mappings.
+`GPU_SHORT_ALLOCATION` records the one-lane allocation and four-lane capacity;
+the sole lane has zone ID `(101,7,11)`. This covers a genuinely short allocation;
+the earlier short phase covers a three-lane section of four-lane allocations.
+A passing run does not rule out accesses into physical allocator padding.
+
+The phase sequences retain the inactive-state, short-tail, mask, counter,
+accepted-step, status and ownership checks. The unused host or device scientific mirrors
+deliberately disagree. After each host-array call, a device region checks
+that its mirrors still contain the original poison, returning only a logical
+result. Device outputs are read immediately after the API returns without
+another stream wait, including in the persistent chains. Timings must be
+finite and nonnegative; they are not compared across calls.
+
+GPU physical-output comparisons allow for floating-point ordering differences
+from atomic updates and reductions. Temperature and Ye use `rtol=1e-7` and
+`abs(a-b) <= rtol*max(abs(a),abs(b))`; mass fractions use
+`abs(a-b) <= 1e-12 + rtol*max(abs(a),abs(b))`. Integrated neutrino loss uses
+the same relative formula with `rtol=1e-6`. Returned restart timesteps are
+logged and checked for finite nonnegative values, without a cross-run
+closeness requirement. Their input values are still identical for compared
+calls, and inactive restart values must remain exactly unchanged. Counters
+and accepted steps are checked and reported per call without requiring
+identical adaptive work across burns. Inactive state, short-batch tails,
+required zeros, status and resource ownership assertions remain exact.
+These limits compare GPU API paths, not an independent scientific reference.
+The CPU suite retains its bitwise comparisons; production controls, existing
+references and other tolerances are unchanged.
+
+Each lifetime also requires mapped quiet-NaN and positive-infinity densities
+to return the finite-input diagnostic with zero counters, accepted steps, and timing.
+
+Two additional borrowed-resource calls queue four 256-by-256 GEMMs followed
+by a GEMM that replaces poisoned device density with the fixture density.
+The first call synchronizes the stream before entering the API; the second
+enters with the producer work queued and keeps all producer mappings alive
+through the burn. Both compare with the normal first burn. No saved-input
+restore adds a transfer or wait after producer submission. Submission is
+asynchronous, but overlap with API entry depends on device scheduling. A
+successful run alone does not demonstrate that removing the entry wait is
+detected; record a missing-wait comparison separately when hardware permits it.
+
+Logs contain raw metadata, states, counters, accepted step counts and timings,
+plus `GPU_CONSUMER_CHECKS_COMPLETED` on completion. Keep these files outside
+the checkout with the command, source revision, compiler/runtime versions,
+and direct process status. The checks compare API paths on one backend;
+they do not supply an independent scientific reference, CPU/GPU tolerance
+policy, performance result, or validation of GPU numerical-failure reporting.
+Existing CPU comparisons and failure policy are unchanged.
+
+### Per-call GPU output and application host teams
+
+The GPU consumer accepts optional `itsout` (0 or 2) and a requested host team
+size after the existing device argument. Omitting both preserves the original
+checks. With `itsout=2`, every successful active burn logs its input and file
+sequence and checks that the API closed its binary/ASCII units. The same host,
+resident, continued-device, short-allocation and borrowed-resource calls produce
+28 separate call sets with 94 binary and 94 ASCII files; inactive and invalid
+calls create none. The selected ASCII species are C12, O16 and the existing missing-name
+fallback to the final species.
+
+On an approved compute allocation, run in a new directory with the selected
+network and EOS table staged as for the existing GPU checks. Capture the direct
+status even on failure, append it to the log, then inspect the complete outputs:
+
+```sh
+status=0
+/path/to/gpu_consumer Data_SN160 1 1 0 2 > consumer.log 2>&1 || status=$?
+printf '\nPROCESS_EXIT_STATUS %s\n' "$status" >> consumer.log
+test "$status" -eq 0
+python3 /path/to/test/library/check_gpu_output.py --run-dir . --log consumer.log
+```
+
+The checker reuses the CPU test's binary/ASCII format readers. It checks the
+entire call/lane inventory and zone IDs, the short-allocation markers, all
+record shapes and finite timestep vectors, local `0..0.1 s` histories, zero
+initial flux, nonzero accepted flux, complete
+initial/final compositions and thermodynamics against the same call, returned
+penultimate timestep and integrated weak loss, and every ASCII row against its
+binary record. It uses the GPU consumer's existing limits for mass fractions,
+thermodynamics and weak loss. Separate adaptive GPU histories are not compared
+record for record, and this is not an independent scientific reference.
+
+To check application OpenMP around serialized GPU API calls, build a separate
+caller directory with the compiler's host OpenMP flag, for example NVIDIA:
+
+```sh
+make -C test/library XNET_CONFIG=/path/to/gpu-build/xnet-config.mk \
+  BUILD_DIR=/path/to/new-gpu-host-caller GPU_HOST_OPENMP_FLAGS=-mp=multicore gpu_consumer
+```
+
+The library still uses `OPENMP_MODE=OFF`. A sixth argument requests actual host
+teams, for example `Data_SN160 1 1 0 2 4`. Pass the same requested value to the
+checker with `--threads 4`. Each worker must perform integer work in real host
+regions before initialization and after the existing immediate GPU-result
+checks and finalization; all XNet calls remain outside those regions. Team
+checks also confirm that the application maximum-thread setting is unchanged.
+An explicitly requested multi-thread case fails when compiled without host
+OpenMP. These optional checks do not change the default caller flags or claim
+concurrent library entry, application GPU execution or performance.

@@ -8,6 +8,7 @@ Module xnet_controls
   Integer :: lun_diag = error_unit
   Integer :: nzevolve = 0
   Integer :: tid = 1
+  Integer :: gpu_queue = 1
   Integer :: zb_lo = 1
   Integer :: zb_hi = 1
   Logical, Allocatable, Target :: lzactive(:)

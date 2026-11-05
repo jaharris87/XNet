@@ -43,7 +43,7 @@ Contains
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
-      & szbatch, zb_lo, zb_hi, tid
+      & szbatch, zb_lo, zb_hi, tid, gpu_queue
     Use xnet_integrate, Only: timestep
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
@@ -62,11 +62,11 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(its)
 
     ! If the zone has previously converged or failed, do not iterate
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(its,inr,lzstep,mykts)
     Do izb = zb_lo, zb_hi
       If ( its(izb) /= 0 ) Then
@@ -90,7 +90,7 @@ Contains
       ! current worker section explicitly to preserve zb_lo:zb_hi association.
       Call step_be(kstep,inr(zb_lo:zb_hi))
 
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot,lzstep)
       Do izb = zb_lo, zb_hi
 
@@ -124,14 +124,14 @@ Contains
         EndIf
         lzstep(izb) = ( inr(izb) == 0 )
       EndDo
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(lzstep)
 
       ! Reset temperature and density for failed integrations
       Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
         & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep(zb_lo:zb_hi))
       If ( iheat > 0 ) Then
-        !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+        !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
         !XDIR XPRESENT(lzstep,t9t,t9)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
@@ -143,7 +143,7 @@ Contains
       ! For the last attempt, re-calculate timestep based on derivatives
       ! as is done for the first timestep.
       If ( kts == ktsmx-1 ) Then
-        !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+        !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
         !XDIR XPRESENT(lzstep,tdel,tdelstart)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
@@ -156,7 +156,7 @@ Contains
 
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(inr,tt,tdel)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
@@ -171,7 +171,7 @@ Contains
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
     Do izb = zb_lo, zb_hi
@@ -203,17 +203,17 @@ Contains
 
     ! Log TS success/failure
     If ( idiag >= 0 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(inr)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
-          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XUPDATE XWAIT(gpu_queue) &
           !XDIR XHOST(mykts(izb))
           Write(lun_diag,"(a,2i5,2i3)") &
             & 'BE TS Success',kstep,izone,mykts(izb),inr(izb)
         ElseIf ( inr(izb) == 0 ) Then
-          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XUPDATE XWAIT(gpu_queue) &
           !XDIR XHOST(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
           Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
             & 'BE TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),inr(izb),mykts(izb)
@@ -222,7 +222,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(its)
 
     stop_timer = xnet_wtime()
@@ -240,7 +240,7 @@ Contains
     Use xnet_abundances, Only: y, ydot, yt, xext
     Use xnet_conditions, Only: t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
-      & szbatch, zb_lo, zb_hi, tid
+      & szbatch, zb_lo, zb_hi, tid, gpu_queue
     Use xnet_integrate, Only: cross_sect, yderiv
     Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_nraph
@@ -263,10 +263,10 @@ Contains
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(inr)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
     !XDIR XPRIVATE(s1)
     Do izb = zb_lo, zb_hi
@@ -294,7 +294,7 @@ Contains
         mult(izb) = 0.0
       EndIf
     EndDo
-    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(iterate)
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
@@ -313,7 +313,7 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
-      !XDIR XUPDATE XASYNC(tid) &
+      !XDIR XUPDATE XASYNC(gpu_queue) &
       !XDIR XDEVICE(rebuild,eval_rates)
 
       ! Calculate the reaction rates and abundance time derivatives. These module arrays
@@ -325,7 +325,7 @@ Contains
       Call jacobian_decomp(kstep,mask_in = rebuild(zb_lo:zb_hi))
 
       ! Calculate equation to zero
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
@@ -351,7 +351,7 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
@@ -381,7 +381,7 @@ Contains
       ! Considering the uncertainties of the reaction rates, it is doubtful that the
       ! increased precision of testc is truly increased accuracy.
       !-----------------------------------------------------------------------------------------
-      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
       !XDIR XPRESENT(aa,inr,testm,testc,testc2,testn,toln) &
       !XDIR XPRIVATE(s1,s2,s3)
@@ -432,11 +432,11 @@ Contains
           EndIf
         EndIf
       EndDo
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(iterate)
 
       If ( idiag >= 3 ) Then
-        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) >= 0 ) Then
@@ -463,7 +463,7 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(inr,xtot,testn,toln)
       Do izb = zb_lo, zb_hi
         If ( inr(izb) >= 0 ) Then
@@ -477,7 +477,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(inr)
 
     stop_timer = xnet_wtime()
@@ -491,7 +491,7 @@ Contains
     ! This routine initializes the BE data structures
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iconvc, tolc, tolm, nzevolve, tid
+    Use xnet_controls, Only: iconvc, tolc, tolm, nzevolve, tid, gpu_queue
     Implicit None
 
     If ( .not. allocated(inr) ) Allocate (inr(nzevolve))
@@ -548,7 +548,7 @@ Contains
     eval_rates = .false.
     rebuild = .false.
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(inr,mykts,lzstep) &
     !XDIR XCOPYIN(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
     !XDIR XCOPYIN(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
@@ -557,10 +557,18 @@ Contains
 
   Subroutine be_finalize
     !-----------------------------------------------------------------------------------------------
-    ! This routine releases the CPU workspace allocated by be_init.
+    ! This routine releases the device mappings and CPU workspace allocated by be_init.
     !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: gpu_queue
     Implicit None
 
+    If ( allocated(inr) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(inr,mykts,lzstep) &
+      !XDIR XDELETE(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
+      !XDIR XDELETE(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
     Nullify(testn)
     If ( allocated(inr) ) Deallocate (inr)
     If ( allocated(mykts) ) Deallocate (mykts)

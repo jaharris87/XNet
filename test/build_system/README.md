@@ -11,9 +11,23 @@ in temporary GNU build directories. It
 checks generic and Perlmutter defaults, explicit machine selection, separate
 parallel builds, automatic and explicit build-directory names, incremental
 rebuilds, configuration-reuse protection,
-configuration-specific cleaning, solver selection, CUDA path selection, and
-early rejection of incompatible options. The CUDA checks exercise Make
-selection only; they do not qualify NVIDIA hardware or a CUDA toolchain.
+configuration-specific cleaning, solver selection, CUDA path selection,
+host OpenMP preprocessing definitions, accelerator compiler options, and
+early rejection of incompatible options. The accelerator checks exercise Make
+selection only; they do not qualify accelerator hardware or toolchains.
+
+Run only the host OpenMP and accelerator flag checks, including caller flag
+overrides and environment flags with `make -e`, with:
+
+```bash
+python3 - <<'PY'
+import os, pathlib, runpy, tempfile
+checks = runpy.run_path("test/build_system/test_build_system.py")
+with tempfile.TemporaryDirectory(prefix="xnet-host-flags-") as temporary:
+    checks["check_host_openmp_flags"](pathlib.Path(temporary), dict(os.environ))
+print("host OpenMP flag checks passed")
+PY
+```
 
 The external-EOS check compiles a small application thermodynamics module
 with a host-module import, alongside XNet's composition and screening module.

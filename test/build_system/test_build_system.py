@@ -34,6 +34,82 @@ def require_failure(result: subprocess.CompletedProcess[str], message: str) -> N
     assert message in result.stdout + result.stderr, result.stdout + result.stderr
 
 
+def check_host_openmp_flags(
+    work: pathlib.Path, environment: Mapping[str, str]
+) -> None:
+    flags_work = work / "host-openmp-flags"
+    flags_work.mkdir()
+    hipfort = flags_work / "hipfort"
+    # Make checks this directory before selecting HIP sources. These checks
+    # inspect flags only; no HIPFort modules or accelerator compiler are used.
+    (hipfort / "include" / "hipfort" / "amdgcn").mkdir(parents=True)
+    clean_environment = dict(environment)
+    for variable in ("FFLAGS", "F90FLAGS", "MAKEFLAGS", "MFLAGS", "GNUMAKEFLAGS"):
+        clean_environment.pop(variable, None)
+
+    cpu = ("PE_ENV=GNU", "GPU_MODE=OFF")
+    cuda = ("PE_ENV=NVIDIA", "GPU_MODE=ON", "GPU_BACKEND=CUDA",
+            "GPU_LAPACK_VER=CUBLAS", "OPENACC_MODE=ON")
+    hip = ("PE_ENV=CCE", "GPU_MODE=ON", "GPU_BACKEND=HIP", "GPU_LAPACK_VER=ROCM")
+    openacc_flags = ("-acc", "-gpu=ptxinfo", "-Minfo=accel")
+    models = (
+        ("cpu", cpu, ()),
+        ("cuda-openacc", cuda, openacc_flags),
+        ("hip-openacc", (*hip, "OPENACC_MODE=ON"), ("-h", "acc")),
+        ("hip-target", (*hip, "OPENMP_OL_MODE=ON"), ("-fopenmp",)),
+    )
+    cases = [
+        (f"{name}-{host.lower()}", host, options, directive_flags, {}, ())
+        for name, options, directive_flags in models
+        for host in ("OFF", "ON")
+    ]
+    cases.extend((
+        ("cpu-fflags", "ON", (*cpu, "FFLAGS=-O1 -fopenmp -DXNET_TEST_FFLAGS"),
+         (), {}, ("-DXNET_TEST_FFLAGS",)),
+        ("cuda-caller-flags", "ON", (*cuda,
+         "FFLAGS=-O1 -mp=multicore -acc -gpu=ptxinfo -Minfo=accel -DXNET_TEST_FFLAGS",
+         "F90FLAGS=-Mpreprocess -r8 -i4 -DXNET_TEST_F90FLAGS"),
+         openacc_flags, {}, ("-DXNET_TEST_FFLAGS", "-DXNET_TEST_F90FLAGS")),
+        ("cuda-environment-fflags", "ON", cuda, openacc_flags,
+         {"FFLAGS": "-O1 -DXNET_TEST_FFLAGS"}, ("-DXNET_TEST_FFLAGS",)),
+        ("cpu-environment-override", "ON", (*cpu, "-e"), (),
+         {"FFLAGS": "-O1 -fopenmp -DXNET_TEST_FFLAGS",
+          "F90FLAGS": "-cpp -fdefault-real-8 -DXNET_TEST_F90FLAGS"},
+         ("-DXNET_TEST_FFLAGS", "-DXNET_TEST_F90FLAGS")),
+    ))
+    for name, host, options, directive_flags, extra_environment, caller_defines in cases:
+        result = make(
+            f"BUILD_DIR={flags_work / name}", "MACHINE=generic", "CMODE=OPT",
+            "MPI_MODE=OFF", "EOS=STARKILLER", "MATRIX_SOLVER=dense", "LAPACK_VER=NETLIB",
+            "OPENACC_MODE=OFF", "OPENMP_OL_MODE=OFF", f"OPENMP_MODE={host}",
+            f"HIPFORT_DIR={hipfort}", f"ROCM_DIR={flags_work / 'rocm'}", *options,
+            "print-FFLAGS", "print-F90FLAGS", "print-COMPILE_FFLAGS",
+            "print-GPU_DIRECTIVE_FLAGS", "print-CPP_DEFINITION_FLAGS",
+            environment=dict(clean_environment, **extra_environment),
+        )
+        require_success(result)
+        values = dict(line.split(" = ", 1) for line in result.stdout.splitlines()
+                      if " = " in line)
+        definitions = values["CPP_DEFINITION_FLAGS"].split()
+        native_flags = (values["FFLAGS"] + " " + values["F90FLAGS"]).split()
+        compiled_flags = values["COMPILE_FFLAGS"].split()
+        for flags in (definitions, native_flags):
+            assert ("-DXNET_OMP" in flags) == (host == "ON"), (name, result.stdout)
+        assert tuple(values["GPU_DIRECTIVE_FLAGS"].split()) == directive_flags, (name, result.stdout)
+        if directive_flags:
+            assert tuple(compiled_flags[-len(directive_flags):]) == directive_flags, (name, result.stdout)
+            macro = "-DXNET_OMP_OL" if "OPENMP_OL_MODE=ON" in options else "-DXNET_OACC"
+            assert macro in definitions, (name, result.stdout)
+        if "OPENMP_OL_MODE=ON" in options:
+            # CCE spells both contributions -fopenmp. Presence alone could
+            # accept the host flag after the provider append was suppressed.
+            assert compiled_flags.count("-fopenmp") == 1 + (host == "ON"), (name, result.stdout)
+        for definition in caller_defines:
+            assert definition in definitions, (name, result.stdout)
+        if caller_defines:
+            assert "-O1" in compiled_flags, (name, result.stdout)
+
+
 def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> None:
     # A supplied thermodynamics adapter with a compile-time host module
     # dependency. XNet still supplies xnet_eos. This checks Make, not physics.
@@ -51,17 +127,17 @@ def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> No
     ))
     supplied_eos = work / "application_eos.F90"
     supplied_eos.write_text(
-        """module xnet_eos_adapter
+        """module xnet_eos_interface
   use xnet_types, only: dp
   use host_eos_marker, only: marker
   implicit none
 contains
-  subroutine eos_adapter_initialize(nspecies,names,a,z)
+  subroutine xnet_eos_interface_initialize(nspecies,names,a,z)
     integer, intent(in) :: nspecies
     character(*), intent(in) :: names(nspecies)
     real(dp), intent(in) :: a(nspecies), z(nspecies)
   end subroutine
-  subroutine eos_adapter_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
+  subroutine xnet_eos_interface_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
     integer, intent(in) :: nspecies
     real(dp), intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
     real(dp), intent(out) :: cv, eta, detadt
@@ -69,7 +145,7 @@ contains
     eta = 0.0_dp
     detadt = 0.0_dp
   end subroutine
-  subroutine eos_adapter_finalize
+  subroutine xnet_eos_interface_finalize
   end subroutine
 end module
 """,
@@ -89,6 +165,7 @@ end module
         assert not (external / "obj" / "eos" / f"{unused}.o").exists()
     exported = (external / "xnet-config.mk").read_text(encoding="utf-8")
     assert f"XNET_MODFLAGS := -I{external / 'mod'} -I{host_modules}\n" in exported
+    assert f"XNET_CPPFLAGS := -I{SOURCE} " in exported
     external_config = (external / "config.txt").read_text(encoding="utf-8")
     assert f"EOS_SOURCES={SOURCE / 'xnet_eos.F90'} {supplied_eos}\n" in external_config
     assert f"-I{host_modules}" in external_config
@@ -137,6 +214,41 @@ end module
     )
 
 
+def check_library_selection(
+    work: pathlib.Path, environment: Mapping[str, str], ma48_dir: pathlib.Path
+) -> None:
+    # The API belongs to the library, including when both products share a
+    # build directory. Standalone configurations must not compile API stubs.
+    unsupported = (
+        ("MPI_MODE=ON",),
+        ("GPU_MODE=ON", "GPU_BACKEND=CUDA", "GPU_LAPACK_VER=CUBLAS",
+         "OPENACC_MODE=ON", "OPENMP_MODE=ON"),
+        ("MATRIX_SOLVER=MA48", f"MA48_DIR={ma48_dir}"),
+        ("GPU_MODE=ON", "GPU_BACKEND=CUDA", "GPU_LAPACK_VER=MAGMA",
+         "OPENACC_MODE=ON"),
+    )
+    supported = ((), ("OPENMP_MODE=ON",))
+    for index, options in enumerate((*supported, *unsupported)):
+        build = work / f"api-selection-{index}"
+        common = (f"BUILD_DIR={build}", "PE_ENV=GNU", "MACHINE=generic", *options)
+        standalone = make(*common, "-n", "xnet", environment=environment)
+        require_success(standalone)
+        assert "xnet_api" not in standalone.stdout, standalone.stdout
+        if options in unsupported:
+            # Reject an unsupported library even if an old archive exists.
+            archive = build / "lib" / "libxnet.a"
+            archive.parent.mkdir(parents=True)
+            archive.write_bytes(b"old unsupported archive\n")
+            for target in ("libxnet", str(archive)):
+                require_failure(make(*common, target, environment=environment),
+                                "libxnet requires a dense solver")
+            assert not (build / "obj" / "source" / "xnet_api.o").exists()
+        else:
+            library = make(*common, "-n", "libxnet", environment=environment)
+            require_success(library)
+            assert "xnet_api.F90" in library.stdout, library.stdout
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="xnet-build-system-") as temporary:
         work = pathlib.Path(temporary)
@@ -159,6 +271,8 @@ def main() -> int:
         generic_environment.pop("LMOD_SYSTEM_NAME", None)
         generic_environment.pop("HOSTNAME", None)
         generic_environment["PATH"] = f"{tools}{os.pathsep}{generic_environment['PATH']}"
+
+        check_host_openmp_flags(work, generic_environment)
 
         auto_base = work / "automatic-names"
         automatic_names = (
@@ -202,6 +316,8 @@ def main() -> int:
         )
         require_success(automatic_ma48)
         assert "BUILD_NAME = GNU-OPT-MA48" in automatic_ma48.stdout
+
+        check_library_selection(work, generic_environment, ma48_dir)
 
         explicit_name = make(
             f"BUILD_BASE={work / 'named-builds'}",

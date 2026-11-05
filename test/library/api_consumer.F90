@@ -23,11 +23,6 @@ Program api_consumer
   Real(dp) :: nan_value, inf_value
 
   Call get_command_argument(1,data_dir)
-  If ( Trim(data_dir) == '--unsupported' ) Then
-    Call probe_uninitialized(xnet_unsupported)
-    Write(*,'(a)') 'UNSUPPORTED_CHECKS_PASSED'
-    Stop
-  EndIf
   Call get_command_argument(2,arg)
   Read(arg,*) isolv
   Call get_command_argument(3,arg)
@@ -57,13 +52,9 @@ Program api_consumer
   Call xnet_initialize(bad_controls,rejected_network,ierr,message)
   Call expect(xnet_invalid,'invalid initialization controls')
   bad_controls = controls
-  bad_controls%itsout = 1
+  bad_controls%ineutrino = 1
   Call xnet_initialize(bad_controls,rejected_network,ierr,message)
-  Call expect(xnet_unsupported,'unsupported time-series output')
-  bad_controls = controls
-  bad_controls%iprocess = 1
-  Call xnet_initialize(bad_controls,rejected_network,ierr,message)
-  Call expect(xnet_unsupported,'unsupported preprocessing')
+  Call expect(xnet_unsupported,'unsupported neutrino capture histories')
   bad_controls = controls
   bad_controls%data_dir = 'missing-embedding-test-network'
   Call xnet_initialize(bad_controls,rejected_network,ierr,message)

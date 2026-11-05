@@ -3,7 +3,7 @@
 ! This file contains the module defining Fortran interfaces for the OpenACC Runtime Library
 !***************************************************************************************************
 
-module openmpf
+module xnet_openmpf
   !-------------------------------------------------------------------------------------------------
   ! Interface to OpenACC routines
   !-------------------------------------------------------------------------------------------------
@@ -25,4 +25,4 @@ module openmpf
 
   end interface
 
-end module openmpf
+end module xnet_openmpf

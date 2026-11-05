@@ -71,9 +71,13 @@ Contains
     Call parallel_bcast(iwflx)
     Call parallel_bcast(descx)
 
+#ifdef XNET_OMP
     !$omp parallel default(shared)
+#endif
     If ( idiag >= 0 ) Write(lun_diag,*) 'Match',mflx
+#ifdef XNET_OMP
     !$omp end parallel
+#endif
 
     Return
   End Subroutine read_match_data

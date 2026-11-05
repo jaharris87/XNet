@@ -1012,7 +1012,8 @@ Contains
       Write(lun_out,"(8a4)") (desc_new(i),i=2,nnew_desc)
     EndIf
 
-    ! Deallocate Nuclear Data arrays
+    ! Release registration scratch as well as nuclear data before another preprocessing call.
+    Deallocate (l1a,l1e,l2a,l2e,l3a,l3e,l4a,l4e)
     Deallocate (nname,aa,zz,nn,be,mex,iz,in)
 
     ! Close other files

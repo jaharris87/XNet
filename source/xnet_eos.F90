@@ -33,12 +33,12 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Initialize thermodynamics and allocate XNet-owned scratch.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzevolve, tid
+    Use xnet_controls, Only: nzevolve, tid, gpu_queue
     Use nuclear_data, Only: ny, nname, aa, zz
-    Use xnet_eos_adapter, Only: eos_adapter_initialize
+    Use xnet_eos_interface, Only: xnet_eos_interface_initialize
     Implicit None
 
-    Call eos_adapter_initialize(ny,nname(1:ny),aa,zz)
+    Call xnet_eos_interface_initialize(ny,nname(1:ny),aa,zz)
 
     Allocate (ye(nzevolve))
     Allocate (ytot(nzevolve))
@@ -55,7 +55,7 @@ Contains
     zibar = 0.0
     sratio = 0.0
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ye,ytot,abar,zbar,z2bar,zibar,sratio)
 
     Return
@@ -67,7 +67,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: amu
     Use xnet_controls, Only: iheat, iscrn
-    Use xnet_eos_adapter, Only: eos_adapter_evaluate
+    Use xnet_eos_interface, Only: xnet_eos_interface_evaluate
     Use xnet_types, Only: dp
     Implicit None
     !XDIR XROUTINE_SEQ
@@ -89,7 +89,7 @@ Contains
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
       ! Thermodynamics uses K and CGS; Y and the auxiliary reservoir stay raw.
-      Call eos_adapter_evaluate(nspecies,t9*1e9,rho,ye,abar,zbar,y,xext,aext,zext,cv_cgs,etae,detadt)
+      Call xnet_eos_interface_evaluate(nspecies,t9*1e9,rho,ye,abar,zbar,y,xext,aext,zext,cv_cgs,etae,detadt)
 
       ! Convert units from ergs/g to MeV/nucleon and K to GK
       cv = cv_cgs * amu * 1e9
@@ -134,7 +134,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Implicit None
 
@@ -163,7 +163,7 @@ Contains
     ! Pass the species count through a local scalar to device routines.
     nspecies = ny
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ye,cv,etae,detaedt9) &
     !XDIR XCOPYIN(mask,t9,rho,y,xext,aext,zext)
 
@@ -173,7 +173,7 @@ Contains
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Call the eos
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,rho,y,xext,aext,zext,ye,abar,zbar,cv,etae,detaedt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -183,7 +183,7 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(t9,rho,ye,cv,etae,detaedt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -192,7 +192,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(ye,cv,etae,detaedt9) &
     !XDIR XDELETE(mask,t9,rho,y,xext,aext,zext)
 
@@ -244,7 +244,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Use xnet_util, Only: plasma
     Implicit None
@@ -273,7 +273,7 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XCOPYIN(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
@@ -285,7 +285,7 @@ Contains
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
     Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,rho,y,etae,detaedt9) &
     !XDIR XPRESENT(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar,sratio)
@@ -300,7 +300,7 @@ Contains
       EndIf
     EndDo
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(t9,rho,ye,z2bar,zbar,sratio,ztilde,lambda0,gammae)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -311,7 +311,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XDELETE(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
@@ -369,7 +369,7 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Implicit None
 
@@ -393,11 +393,11 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ratio,dratiodeta) &
     !XDIR XCOPYIN(mask,eta)
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ratio,dratiodeta) &
     !XDIR XPRESENT(mask,eta)
     Do izb = zb_lo, zb_hi
@@ -406,7 +406,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYOUT(ratio,dratiodeta) &
     !XDIR XDELETE(mask,eta)
 
@@ -414,10 +414,16 @@ Contains
   End Subroutine salpeter_ratio_vector
 
   Subroutine eos_finalize
-    ! Release XNet-owned CPU allocations.
-    Use xnet_eos_adapter, Only: eos_adapter_finalize
+    ! Release XNet-owned composition scratch and the selected adapter's storage.
+    Use xnet_controls, Only: gpu_queue
+    Use xnet_eos_interface, Only: xnet_eos_interface_finalize
     Implicit None
-    Call eos_adapter_finalize
+    If ( Allocated(ye) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    Call xnet_eos_interface_finalize
     If ( Allocated(ye) ) Deallocate (ye)
     If ( Allocated(ytot) ) Deallocate (ytot)
     If ( Allocated(abar) ) Deallocate (abar)

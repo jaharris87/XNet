@@ -247,6 +247,7 @@ Program gpu_consumer
       EndDo
       !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
     EndDo
+    Call short_allocation_burn()
     If ( ownership == 2 ) Then
       Call producer_burn(.true.)
       Call producer_burn(.false.)
@@ -498,6 +499,112 @@ Contains
     Call check(mirrors_poisoned,Trim(label)//' unchanged scientific device mirrors')
     Return
   End Subroutine check_host_device_poison
+
+  Subroutine short_allocation_burn()
+    ! Every mapped scientific allocation has one lane; workspace capacity remains four.
+    ! The existing short phase uses a section of four-lane backing allocations.
+    Implicit None
+    Integer, Parameter :: n_short = 1
+    Real(dp), Allocatable, Target :: density(:), temperature(:), ye(:), x(:,:), restart(:), loss(:)
+    Real(dp), Allocatable, Target :: aux_x(:), aux_a(:), aux_z(:)
+    Real(dp), Allocatable :: saved_x(:,:)
+    Real(dp) :: saved_density(n_short), saved_temperature(n_short), saved_ye(n_short), saved_restart(n_short)
+    Real(dp) :: saved_aux_x(n_short), saved_aux_a(n_short), saved_aux_z(n_short), short_times(6)
+    Integer :: short_ids(3,n_short), short_counters(5,n_short), short_steps
+    Logical :: short_active(n_short)
+    Type(xnet_timing_t) :: short_timing
+
+    label = Trim(prefix)//'_short_allocation'
+    Call check(n_short < controls%nzbatchmx,Trim(label)//' fewer allocated lanes than workspace capacity')
+    Allocate(density(n_short),temperature(n_short),ye(n_short),x(Size(network%names),n_short), &
+      & restart(n_short),loss(n_short),aux_x(n_short),aux_a(n_short),aux_z(n_short), &
+      & saved_x(Size(network%names),n_short))
+    Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
+    saved_density = density
+    saved_temperature = temperature
+    saved_ye = ye
+    saved_x = x
+    saved_restart = restart
+    saved_aux_x = aux_x
+    saved_aux_a = aux_a
+    saved_aux_z = aux_z
+    Call check(All(aux_x > 0.0_dp) .and. All(aux_a > 0.0_dp) .and. All(aux_z > 0.0_dp), &
+      & Trim(label)//' nonzero auxiliary input')
+    short_ids(:,1) = [101,7,11]
+    short_active = .true.
+    loss = -1.0_dp
+    short_counters = -1
+    short_steps = -1
+    short_timing = xnet_timing_t(evolve=-1.0_dp,solve=-1.0_dp,jacobian=-1.0_dp, &
+      & derivative=-1.0_dp,rates=-1.0_dp,screening=-1.0_dp)
+    Write(*,'(a,1x,a,2(1x,i0))') 'GPU_SHORT_ALLOCATION',Trim(label),Size(density),controls%nzbatchmx
+    ! Map each complete allocation, then make the unconsumed host scientific inputs wrong.
+    !XDIR XENTER_DATA XCOPYIN(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
+    density = -1.0_dp
+    temperature = -1.0_dp
+    ye = -1.0_dp
+    x = -1.0_dp
+    restart = -1.0_dp
+    aux_x = -1.0_dp
+    aux_a = -1.0_dp
+    aux_z = -1.0_dp
+    Call xnet_burn_batch(dt_s=0.1_dp,active=short_active,zone_id=short_ids,density=density, &
+      & temperature=temperature,ye=ye,mass_fraction=x,restart_dt_s=restart,neutrino_loss=loss, &
+      & counters=short_counters,timing=short_timing,ierr=ierr,message=message, &
+      & aux_x=aux_x,aux_a=aux_a,aux_z=aux_z,max_steps_taken=short_steps,data_on_device=.true.)
+    ! As in the other resident calls, no extra stream wait precedes reading device outputs.
+    !XDIR XUPDATE XHOST(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
+    Call api_ok(Trim(label)//' burn')
+    Call check(All(short_active),Trim(label)//' unchanged active mask')
+    Call selected_device_unchanged()
+    short_times = [short_timing%evolve,short_timing%solve,short_timing%jacobian, &
+      & short_timing%derivative,short_timing%rates,short_timing%screening]
+    Call check(All(ieee_is_finite(short_times)) .and. All(short_times >= 0.0_dp),Trim(label)//' timing')
+    Call check(short_steps > 0,Trim(label)//' accepted step count')
+    Call check(All(ieee_is_finite(x)) .and. All(x >= 0.0_dp),Trim(label)//' composition')
+    Call check(All(ieee_is_finite(temperature)) .and. All(temperature > 0.0_dp),Trim(label)//' temperature')
+    Call check(All(ieee_is_finite(ye)) .and. All(ye >= 0.0_dp) .and. All(ye <= 1.0_dp),Trim(label)//' Ye')
+    Call check(All(ieee_is_finite(restart)) .and. All(restart >= 0.0_dp),Trim(label)//' restart')
+    Call check(All(ieee_is_finite(loss)) .and. All(loss >= 0.0_dp),Trim(label)//' neutrino loss')
+    Call check(short_counters(1,1) > 0 .and. All(short_counters >= 0),Trim(label)//' counters')
+    Call check(All(density == saved_density) .and. All(aux_x == saved_aux_x) .and. &
+      & All(aux_a == saved_aux_a) .and. All(aux_z == saved_aux_z),Trim(label)//' unchanged density and auxiliary state')
+    If ( iheat == 0 ) Call check(All(Abs(temperature-saved_temperature) <= &
+      & 2.0_dp*Epsilon(1.0_dp)*saved_temperature),Trim(label)//' fixed temperature')
+    If ( output_level > 0 ) Then
+      Call write_state('input_'//Trim(label),saved_temperature,saved_ye,saved_x,saved_restart, &
+        & 0.0_dp*loss,0*short_counters)
+      Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),saved_density
+    EndIf
+    Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),short_steps
+    Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),short_times
+    Call write_state(label,temperature,ye,x,restart,loss,short_counters)
+    ! Compare lane one with the existing same-input first burn using the current GPU limits.
+    Call check(All(Abs(x-expected(1)%x(:,:n_short)) <= &
+      & mass_fraction_atol + gpu_rtol*Max(Abs(x),Abs(expected(1)%x(:,:n_short)))), &
+      & Trim(label)//' mass-fraction comparison')
+    Call check(All(Abs(temperature-expected(1)%temperature(:n_short)) <= &
+      & gpu_rtol*Max(Abs(temperature),Abs(expected(1)%temperature(:n_short)))), &
+      & Trim(label)//' temperature comparison')
+    Call check(All(Abs(ye-expected(1)%ye(:n_short)) <= &
+      & gpu_rtol*Max(Abs(ye),Abs(expected(1)%ye(:n_short)))),Trim(label)//' Ye comparison')
+    Call check(All(Abs(loss-expected(1)%loss(:n_short)) <= &
+      & loss_rtol*Max(Abs(loss),Abs(expected(1)%loss(:n_short)))),Trim(label)//' neutrino-loss comparison')
+    ! Each caller-owned mapping must still exist before its matching deletion.
+    Call check(C_Associated(mapped_pointer(C_LOC(density(1)))) .and. &
+      & C_Associated(mapped_pointer(C_LOC(temperature(1)))) .and. &
+      & C_Associated(mapped_pointer(C_LOC(ye(1)))) .and. C_Associated(mapped_pointer(C_LOC(x(1,1)))) .and. &
+      & C_Associated(mapped_pointer(C_LOC(restart(1)))) .and. C_Associated(mapped_pointer(C_LOC(loss(1)))) .and. &
+      & C_Associated(mapped_pointer(C_LOC(aux_x(1)))) .and. C_Associated(mapped_pointer(C_LOC(aux_a(1)))) .and. &
+      & C_Associated(mapped_pointer(C_LOC(aux_z(1)))),Trim(label)//' caller mappings survive')
+    n = n_short
+    active = .true.
+    Call record_burn_output()
+    Call application_work(Trim(label)//'_after_burn')
+    !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
+    Deallocate(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z,saved_x)
+    Return
+  End Subroutine short_allocation_burn
 
   Subroutine invalid_device_density()
     ! Reject nonfinite resident input before integration; inspect only host diagnostics.

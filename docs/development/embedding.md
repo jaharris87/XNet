@@ -1,507 +1,818 @@
 # Fortran library API
 
-Build the archive and compiler-specific module files with:
+The `xnet_api` module initializes one reaction network, evolves batches at
+constant density, returns scalar NSE compositions, and releases XNet-owned
+storage. The application owns its species mapping, batch loop, physical
+arrays, EOS and energy policy, MPI lifetime, and accelerator placement.
+
+The library uses the dense matrix solver with `MPI_MODE=OFF`. CPU builds
+allow serial calls or a fixed application OpenMP team. GPU builds use
+serialized host calls, CUDA/cuBLAS or HIP/ROCm, and one accelerator directive
+model. See [build and test](build-and-test.md) for configuration rules and
+[library tests](../../test/library/README.md) for reproducible checks.
+
+**Check every returned status.** Burn statuses `xnet_integrator_failure` and
+`xnet_step_limit` require application shutdown after any worker team joins;
+no physical result from that batch is valid. Some failures, including EOS,
+allocation, malformed-data, singular-solve and NSE convergence failures,
+still terminate inside XNet. The [status reference](#status-and-shutdown)
+describes the limits of checked errors.
+
+## CPU quickstart
+
+Build from the repository root:
 
 ```sh
-make BUILD_NAME=embedding -j libxnet
+make BUILD_NAME=library-cpu MPI_MODE=OFF OPENMP_MODE=OFF GPU_MODE=OFF \
+  MATRIX_SOLVER=dense EOS=STARKILLER -j libxnet
 ```
 
-The archive is `build/embedding/lib/libxnet.a`; modules are in
-`build/embedding/mod`. The generated `build/embedding/xnet-config.mk`
-records the compiler, module path, compile/link flags, archive, and required
-external libraries. `XNET_CPPFLAGS` supplies the XNet header directory and the
-selected build definitions for callers that preprocess `xnet_macros.fh`.
-Use the same compiler and compatible precision/runtime options for the
-application. The external example under `test/library/`
-links through these outputs without compiling XNet sources.
+This creates `build/library-cpu/lib/libxnet.a`, compiler-specific module files
+under `build/library-cpu/mod/`, and `build/library-cpu/xnet-config.mk`.
+Use the exported compiler, flags and libraries for the caller. Fortran module
+files require the same compiler and compatible precision and runtime options.
 
-The library requires `MATRIX_SOLVER=dense` and `MPI_MODE=OFF`. CPU builds
-(`GPU_MODE=OFF`) support `OPENMP_MODE=OFF` or `ON`. GPU builds require
-`OPENMP_MODE=OFF` and CUDA/cuBLAS or HIP/ROCm with exactly one of OpenACC and
-OpenMP target offload enabled. Make rejects other library configurations.
-The API source is compiled only for the library; standalone selections are
-unchanged. The library does not change the application's OpenMP settings.
-
-With CPU `OPENMP_MODE=ON`, keep the batch loop in the application. Each
-OpenMP worker may call `xnet_burn_batch` or `xnet_nse_composition` for its own
-inputs and outputs. XNet loads one network and allocates a separate batch
-bank and NSE scratch for each worker. Initialize and finalize outside OpenMP
-regions, with no calls in flight. Use the same nonnested team size throughout
-the lifetime, disable dynamic teams, and keep the worker/affinity settings
-that preserve OpenMP threadprivate storage between regions. Calls on the
-initial thread between regions are also supported. Each worker makes one
-call at a time; nested teams, tasks, simultaneous unrelated teams and recursive
-calls are unsupported. A supplied EOS adapter must also support concurrent
-evaluation. Checked team-size/dynamic/nesting errors return before workspace
-preparation; they do not make arbitrary team changes safe.
-
-With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE queries and
-lifecycle operations. The application may still use OpenMP elsewhere with any
-team size. This mode suppresses XNet's host parallel regions and threadprivate
-state even when OpenMP is enabled for target offload. Synchronization
-directives may remain enabled; they do not create host teams. GPU host calls
-remain serialized; CPU worker tests do not establish GPU worker concurrency.
-
-The serial CPU library tests exercise the public API. Library and GPU caller
-revision `bf25833e95e0a0351c0f3d840a81c830e8a02060` passed five alpha/SN160
-BE/BDF cases on Frontier with CCE 20.0.0,
-ROCm/hipfort 6.4.2 and OpenMP target offload, and on Perlmutter with
-NVFORTRAN 26.5, CUDA 13.2 and OpenACC. These checks use the bundled Starkiller
-EOS, dense solves, one device and one host thread. They cover owned/borrowed
-resources, partial borrowing of BLAS or solver handles, host/device arrays,
-repeated and masked calls, and device continuation without reloading the
-arrays. See the [GPU test description](../../test/library/README.md#gpu-consumer)
-and [results and limitations](https://github.com/jaharris87/XNet/pull/164#issuecomment-6513138148).
-The full private CHIMERA GPU application also compiles and links on both
-facilities, but has not been executed. These checks do not validate an
-application EOS calculation or a complete CHIMERA/Flash-X GPU
-integration, and do not establish performance or general backend support.
-
-## Application thermodynamics adapters
-
-Applications with their own EOS may supply a small
-`xnet_eos_interface` module when building the library. XNet keeps its composition
-moments, screening, scalar/vector masks, scratch, and internal-unit
-conversions in `source/xnet_eos.F90`:
+The example below preprocesses a private copy of the bundled alpha-network
+ASCII inputs. From the same repository root, create its working directory:
 
 ```sh
-make BUILD_NAME=application-eos -j libxnet \
-  EOS=EXTERNAL EOS_SOURCE=/path/to/XNet_API/xnet_eos_chimera.F90 \
-  EOS_MODULE_DIR=/path/to/host/modules
+xnet_root=$PWD
+run_dir=$(mktemp -d "${TMPDIR:-/tmp}/xnet-library-cpu.XXXXXX")
+mkdir "$run_dir/network"
+for input in sunet netwinv netsu netweak; do
+  cp "$xnet_root/test/Data_alpha/$input" "$run_dir/network/$input"
+done
+ln -s "$xnet_root/tools/starkiller-helmholtz/helm_table.dat" "$run_dir/helm_table.dat"
+cd "$run_dir"
 ```
 
-Build the host EOS modules first, using the same compiler and compatible
-precision options. `EOS_SOURCE` names one free-form Fortran source containing
-the application thermodynamics adapter. Its filename must not use the stem
-`xnet_eos`, which is reserved for XNet's common EOS module; use a name such as
-`xnet_eos_chimera.F90` or `xnet_eos_interface.F90`. `EOS_MODULE_DIR` is optional
-if the adapter needs no additional module directory. Keep host modules in a separate
-directory from this XNet build's modules. XNet's current module directory is
-searched before the host directory, so older XNet modules in an application
-build do not replace the current ones. Host `*.mod` files in that directory
-are ordinary adapter prerequisites; rebuilding a host interface at the same
-path recompiles the adapter.
+The Starkiller EOS reads `helm_table.dat` from the process working directory.
+The program sets `iprocess=1`, which writes generated network files into its
+owned `network/` directory. Do not point runtime preprocessing at a shared or
+tracked input directory. This example neither reads `controls.nml` nor needs
+standalone abundance or trajectory files.
 
-The module supplies three procedures, using `dp` from `xnet_types`:
+Save the following as `quickstart.f90` in that new working directory:
+
+```fortran
+Program quickstart
+  Use, Intrinsic :: iso_fortran_env, Only: error_unit, output_unit
+  Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, &
+    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success
+  Implicit None
+
+  Integer, Parameter :: nlanes = 1, message_length = 512
+  Type(xnet_controls_t) :: controls
+  Type(xnet_network_t) :: network
+  Type(xnet_timing_t) :: timing
+  Logical :: active(nlanes)
+  Integer :: zone_id(3,nlanes), counters(5,nlanes)
+  Integer :: ierr, max_steps_taken, nspecies, i, ic12, io16
+  Character(message_length) :: message
+  Real(dp) :: density(nlanes), temperature(nlanes), ye(nlanes)
+  Real(dp) :: restart_dt_s(nlanes), neutrino_loss(nlanes)
+  Real(dp), Allocatable :: mass_fraction(:,:)
+
+  Call set_xnet_controls_defaults(controls=controls)
+  controls%data_dir = 'network'
+  controls%iprocess = 1
+  controls%nzbatchmx = nlanes
+  controls%idiag = -2
+  Call xnet_initialize(controls=controls,network=network,ierr=ierr,message=message)
+  Call check_status(operation='initialize',status=ierr,detail=message)
+
+  nspecies = Size(network%names)
+  Allocate(mass_fraction(nspecies,nlanes))
+  ic12 = 0
+  io16 = 0
+  Do i = 1, nspecies
+    If ( Trim(Adjustl(network%names(i))) == 'c12' ) ic12 = i
+    If ( Trim(Adjustl(network%names(i))) == 'o16' ) io16 = i
+  EndDo
+  If ( ic12 == 0 .or. io16 == 0 ) Then
+    Write(error_unit,'(a)') 'Example requires c12 and o16'
+    Stop 1
+  EndIf
+
+  active = .true.
+  zone_id(:,1) = [1,1,1]
+  density = 1.0e7_dp
+  temperature = 1.7e9_dp
+  ye = 0.5_dp
+  mass_fraction = 0.0_dp
+  mass_fraction(ic12,:) = 0.5_dp
+  mass_fraction(io16,:) = 0.5_dp
+  restart_dt_s = 0.0_dp
+
+  Call xnet_burn_batch(dt_s=0.1_dp,active=active,zone_id=zone_id,density=density, &
+    & temperature=temperature,ye=ye,mass_fraction=mass_fraction,restart_dt_s=restart_dt_s, &
+    & neutrino_loss=neutrino_loss,counters=counters,timing=timing,ierr=ierr,message=message, &
+    & max_steps_taken=max_steps_taken)
+  Call check_status(operation='burn',status=ierr,detail=message)
+  Write(output_unit,'(a,es13.5,a,i0)') 'evolve seconds: ',timing%evolve, &
+    & '; accepted outer steps: ',max_steps_taken
+  Write(output_unit,'(a,es13.5)') 'returned Ye: ',ye(1)
+
+  Call xnet_finalize(ierr=ierr,message=message)
+  Call check_status(operation='finalize',status=ierr,detail=message)
+  Deallocate(mass_fraction)
+
+Contains
+
+  Subroutine check_status(operation,status,detail)
+    Implicit None
+    Character(*), Intent(in) :: operation, detail
+    Integer, Intent(in) :: status
+
+    If ( status /= xnet_success ) Then
+      Write(error_unit,'(a,a,a,i0,2a)') 'XNet ',operation,': status ',status,': ',Trim(detail)
+      Stop 1
+    EndIf
+    Return
+  End Subroutine check_status
+
+End Program quickstart
+```
+
+Save this `Makefile` beside it. Recipe lines begin with a tab:
+
+```make
+XNET_CONFIG ?= /path/to/XNet/build/library-cpu/xnet-config.mk
+include $(XNET_CONFIG)
+
+quickstart: quickstart.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o $@ quickstart.o $(XNET_ARCHIVE) $(XNET_LIBS)
+
+quickstart.o: quickstart.f90 $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -c $< -o $@
+```
+
+Build and run in the staged working directory:
+
+```sh
+make XNET_CONFIG="$xnet_root/build/library-cpu/xnet-config.mk"
+./quickstart
+```
+
+`set_xnet_controls_defaults` must precede overrides: the bare
+`xnet_controls_t()` constructor contains intentionally invalid values and
+unallocated arrays. After setting defaults, a nonblank `data_dir` is the only
+additional control required for initialization. Choose `nzbatchmx` to hold
+the largest submitted lane count per worker, including inactive holes. Leave
+`szone=nzone=1` for this use: their common validation still requires
+`nzone>=1` and `1<=szone<=nzone`, but they do not select API lanes or zone IDs.
+
+For later runs, `iprocess=0` loads the prepared network. Initialization checks
+for readable `sunet`, `netwinv`, `nets3`, `nets4` and `match_data`; the
+network's rate selection may require further data read by existing readers.
+With `iprocess>0`, it first checks `sunet`, `netwinv` and `netsu`, then runs
+the existing preprocessor. In a multi-rank application, preprocess once
+before other ranks load it, or give each rank an owned directory. The library
+does not coordinate preprocessing through MPI.
+
+## Batch inputs and returned values
+
+The public call is:
+
+```fortran
+Call xnet_burn_batch(dt_s=dt_s,active=active,zone_id=zone_id,density=density, &
+  & temperature=temperature,ye=ye,mass_fraction=mass_fraction,restart_dt_s=restart_dt_s, &
+  & neutrino_loss=neutrino_loss,counters=counters,timing=timing,ierr=ierr,message=message, &
+  & aux_x=aux_x,aux_a=aux_a,aux_z=aux_z,max_steps_taken=max_steps_taken,data_on_device=.false.)
+```
+
+The final five arguments are optional; supply all three auxiliary arguments
+together or omit all three. Use keywords for optional arguments, particularly
+when omitting auxiliaries. All real arguments use `Real(dp)`.
+
+Let `n=Size(active)` and `ny=Size(network%names)`. The thermodynamic, restart,
+loss and optional auxiliary arrays have length `n`; `mass_fraction` has shape
+`(ny,n)`, `zone_id` has shape `(3,n)` or `(4,n)`, and integer `counters` has
+shape `(5,n)`. `n` may be smaller than `nzbatchmx`. `zone_id` contains the
+application's diagnostic tuple; its values need not be unique or consecutive.
+
+| Quantity | Units and convention |
+| --- | --- |
+| `dt_s` | Positive finite duration in seconds; each call has local time `0..dt_s`. |
+| `density` | Positive finite g/cm^3; held constant during the burn. |
+| `temperature` | Positive finite K, in/out. With `iheat<=0`, its caller value is preserved on successful return; with `iheat>0`, temperature is coupled implicitly. Internal/output `T9` uses GK. |
+| `mass_fraction(species,lane)` | Nonnegative finite raw `X`, in XNet species order. No normalization or reordering. Internal abundances are `Y=X/A`. |
+| `ye` | Finite input in `[0,1]`, in/out. Composition moments recompute it during evolution, including with fixed temperature. |
+| `aux_x`, `aux_a`, `aux_z` | Fixed reservoir mass fraction, mass number and charge. `0<=aux_x<=1`, `0<=aux_z<=aux_a`; positive mass requires positive A. Zero auxiliary mass means no reservoir. |
+| `restart_dt_s` | Nonnegative seconds, in/out; a startup hint and historical timestep result, as described below. |
+| `neutrino_loss` | Integrated weak-reaction neutrino energy loss in erg/g; separate from unsupported incident-neutrino histories. |
+| `timing` | Stage durations in seconds; see below. |
+| Network metadata | Copied names and integer A/Z. `binding_energy_mev` is binding energy in MeV per nucleus; `mass_excess_mev` is mass-excess energy in MeV per nucleus. |
+
+The active composition must contain positive total mass, including any
+auxiliary reservoir. The API does not enforce `sum(X)+aux_x=1` or check input
+Ye against X. The composition-based value is
+
+```text
+Ye = (sum(Z*Y) + aux_x*aux_z/aux_a) / (sum(A*Y) + aux_x)
+```
+
+with the auxiliary terms absent when its mass is zero. The reservoir
+contributes to EOS moments without becoming an evolved species. Species
+mapping, normalization policy, nuclear energy release and any application
+neutrino correction remain application responsibilities.
+
+On success, inactive lanes preserve temperature, Ye, X and restart hints,
+and return zero loss and counters. Their scientific values are not read.
+An all-inactive call performs no burn and returns zero timing and step count.
+The library keeps no association with caller arrays. Copied `network`
+metadata remains usable after finalization; failed initialization does not
+produce usable metadata.
+
+### First and later calls: restart hints
+
+Use `restart_dt_s=0` for a fresh startup with either BE or BDF. On later calls,
+keeping zero is also valid. An application that already uses XNet's historical
+positive-hint convention may pass a nonnegative saved result, but it is not a
+recommended next timestep or a checkpoint of solver history.
+
+Positive input changes the initial timestep estimate: it uses the existing
+startup change factor `0.5` instead of `0.01`, and uses half the hint, limited
+by the remaining interval, as a floor combined with the adaptive estimate.
+It does not fix the timestep. Output is `tdel_old`, the preceding
+internal timestep, which can be zero after a single-step burn. BDF starts its
+history again for each burn; passing a positive hint does not restore that
+history. Use zero on every BDF call unless preserving an established hint
+policy deliberately.
+
+### Counters and timings
+
+`counters(:,lane)` is reset for each call and contains:
+
+| Row | Count |
+| --- | --- |
+| 1 | Internal timestep attempts, including retries. |
+| 2 | Newton iteration/attempt accounting, including failed work. |
+| 3 | Jacobian builds. |
+| 4 | Derivative evaluations. |
+| 5 | Rate evaluations. |
+
+Optional `max_steps_taken` returns the maximum accepted outer integration
+step count in the batch (`full_net`'s `kstep`). It differs from row 1, and is
+zero for an all-inactive call or any non-success return.
+
+`xnet_timing_t` contains `evolve`, `solve`, `jacobian`, `derivative`, `rates`
+and `screening`, all in seconds. `evolve` measures the interval timed inside
+`full_net`; it excludes API validation, preparation before `full_net` and
+result extraction afterward. Measure around `xnet_burn_batch` in the
+application for full-call elapsed time, and measure initialization and
+finalization separately. The other components are differences in existing
+XNet accumulators and can nest; do not sum them or interpret them as isolated
+GPU kernel timings. Applications accumulate their own totals.
+
+## Status and shutdown
+
+Initialization, burns, NSE queries and finalization return an integer `ierr`
+and an assumed-length `Character(*)` `message`. The caller chooses the buffer length; 512 characters
+accommodates current diagnostics. Status constants are exported by `xnet_api`.
+
+| Status | Meaning and action |
+| --- | --- |
+| `xnet_success=0` | The requested operation completed. Burn physical results are valid for active lanes. |
+| `xnet_invalid=1` | Invalid controls, extents or active values; missing/unreadable required files; output-open failure; or some GPU runtime checks. Correct the rejected request. Host-input validation preserves in/out physical arrays and clears loss, counters, timing and step count. |
+| `xnet_lifecycle_error=2` | Initialization while already initialized or cleanup is pending; work before initialization/after finalization; or missing worker scratch. Correct the lifecycle or worker use. |
+| `xnet_unsupported=3` | Unsupported feature or checked execution mode, including incident-neutrino histories, GPU arguments in a CPU build, dynamic/nested host OpenMP teams, or a worker-team size mismatch. |
+| `xnet_integrator_failure=4` | BE/BDF reports failure after its internal retry logic. The application must terminate. BDF does not retain a detailed failure reason, so this status does not assert that every failure exhausted the same number of attempts. |
+| `xnet_step_limit=5` | An active lane has not reached the stop time after `kstmx` outer integration steps. The application must terminate. |
+
+For statuses 4 and 5, use only `ierr`, `message`, attempted `counters` and
+per-call `timing` for diagnosis. No physical result from the batch is valid;
+loss and `max_steps_taken` remain zero. The message identifies the one-based
+submitted lane and all three or four supplied zone IDs. Log the application's
+context, join any worker team, then perform its fatal/MPI shutdown. Do not
+retry, use successful lanes from the failed batch, or reuse the instance.
+This is a caller obligation: XNet does not latch a failed state that rejects
+every subsequent call. Other calls already in flight may finish; this is not
+cancellation or permission to continue the simulation after a failure.
+
+These reported failures close the elapsed timer, close partial histories,
+and skip successful final output and standalone failure-file writes. They
+do not provide general error recovery. Malformed-network readers, EOS/provider
+failures, allocation failures, singular linear solves, arbitrary nonfinite
+arithmetic and fatal NSE convergence can still terminate inside the code.
+
+For resident device inputs, mapping, contiguity or device-selection checks can
+fail before scientific outputs are initialized. On those rejections, rely on
+host status and diagnostics rather than a scientific output sentinel. Once
+the device arrays pass those checks, active scientific values are validated
+on the device.
+
+Initialize and finalize with no calls in flight. Repeated finalization after
+completion returns success. If GPU cleanup fails after arrays are released,
+new initialization, burns and NSE queries are blocked; another finalization
+retries GPU cleanup without repeating array/EOS teardown. This preserves
+cleanup bookkeeping and does not promise recovery from a GPU runtime fault.
+
+## CPU OpenMP batches
+
+Build a separate CPU library configuration:
+
+```sh
+make BUILD_NAME=library-openmp MPI_MODE=OFF OPENMP_MODE=ON GPU_MODE=OFF \
+  MATRIX_SOLVER=dense EOS=STARKILLER -j libxnet
+```
+
+The application keeps the batch loop. Each worker may call a burn or an NSE
+query with its own input/output storage, one call at a time. Initialize and
+finalize on the initial thread outside application parallel regions.
+
+Set the intended default team size **before initialization**, for example
+with `OMP_NUM_THREADS=4 OMP_DYNAMIC=FALSE`, or with
+`omp_set_dynamic(.false.)` and `omp_set_num_threads(4)` on the initializing
+thread. XNet enters its own parallel regions during initialization and records
+the actual team size. A `num_threads(4)` clause on a later application loop
+alone does not configure those initialization regions. Preserve those default
+settings through finalization, which also enters internal parallel regions.
+XNet does not change the application's OpenMP settings.
+
+XNet allocates shared batch banks for `nthread*nzbatchmx` lanes and gives each
+worker a disjoint range. It also allocates and frees worker NSE scratch inside
+internal parallel regions. Memory follows that full capacity even when calls
+are short or masked. With eight-byte `dp`, the two dense matrices alone occupy
+approximately `16*msize**2*nthread*nzbatchmx` bytes, where `msize` is `ny` or
+`ny+1` with self-heating, before other solver and physics arrays.
+
+The following application routine submits already prepared batches and stores
+one status per batch. It joins the parallel loop before deciding whether to
+terminate. Compile it and its caller using the OpenMP library's exported
+settings, and configure the team before `xnet_initialize` as above:
+
+```fortran
+Subroutine burn_application_batches(dt_s,active,zone_id,density,temperature,ye, &
+  & mass_fraction,restart_dt_s,neutrino_loss,counters,timings,statuses,messages)
+  Use, Intrinsic :: iso_fortran_env, Only: error_unit
+  Use xnet_api, Only: dp, xnet_timing_t, xnet_burn_batch, xnet_success
+  Implicit None
+  Real(dp), Intent(in) :: dt_s, density(:,:)
+  Logical, Intent(in) :: active(:,:)
+  Integer, Intent(in) :: zone_id(:,:,:)
+  Real(dp), Intent(inout) :: temperature(:,:), ye(:,:), mass_fraction(:,:,:), restart_dt_s(:,:)
+  Real(dp), Intent(out) :: neutrino_loss(:,:)
+  Integer, Intent(out) :: counters(:,:,:), statuses(:)
+  Type(xnet_timing_t), Intent(out) :: timings(:)
+  Character(*), Intent(out) :: messages(:)
+  Integer, Parameter :: not_submitted = -1
+  Integer :: ibatch, failed, stop_requested
+
+  failed = 0
+  statuses = not_submitted
+  messages = 'Not submitted after an earlier batch error'
+  ! Last dimension identifies a batch; each iteration owns its output slices.
+  !$omp parallel do default(shared) private(ibatch,stop_requested) schedule(static)
+  Do ibatch = 1, Size(active,2)
+    !$omp atomic read
+    stop_requested = failed
+    If ( stop_requested /= 0 ) Cycle
+    Call xnet_burn_batch(dt_s=dt_s,active=active(:,ibatch),zone_id=zone_id(:,:,ibatch), &
+      & density=density(:,ibatch),temperature=temperature(:,ibatch),ye=ye(:,ibatch), &
+      & mass_fraction=mass_fraction(:,:,ibatch),restart_dt_s=restart_dt_s(:,ibatch), &
+      & neutrino_loss=neutrino_loss(:,ibatch),counters=counters(:,:,ibatch), &
+      & timing=timings(ibatch),ierr=statuses(ibatch),message=messages(ibatch))
+    If ( statuses(ibatch) /= xnet_success ) Then
+      !$omp atomic write
+      failed = 1
+    EndIf
+  EndDo
+  !$omp end parallel do
+
+  If ( failed /= 0 ) Then
+    Do ibatch = 1, Size(statuses)
+      If ( statuses(ibatch) /= xnet_success ) Then
+        Write(error_unit,'(a,i0,a,i0,2a)') 'Batch ',ibatch,': XNet status ', &
+          & statuses(ibatch),': ',Trim(messages(ibatch))
+      EndIf
+    EndDo
+    ! A multiphysics application invokes its fatal/MPI shutdown here.
+    Stop 1
+  EndIf
+  Return
+End Subroutine burn_application_batches
+```
+
+The routine needs an explicit interface in its caller, normally by placing it
+in an application module. Its array extents must follow the batch argument
+rules, with one `timings`, `statuses` and `messages` entry per batch. This
+example stops submitting batches after an observed error; calls already past
+the flag check may finish. Unsubmitted entries retain the application-local
+`not_submitted=-1`, rather than an XNet result. After any error the example
+terminates and consumes none of the batch results. An application may correct
+a checked input error before evolution, but statuses 4 and 5 always require
+shutdown.
+
+Use one fixed, nonnested worker team throughout the lifetime. Keep affinity
+settings stable and dynamic teams disabled. OpenMP's guarantee that a
+noninitial worker keeps its `threadprivate` allocation between active regions
+also requires no intervening host `teams` region, no `order(concurrent)`
+construct, and no `omp_pause_resource`/`omp_pause_resource_all` call. The
+[OpenMP 5.2 threadprivate rules](https://www.openmp.org/spec-html/5.2/openmpse24.html)
+give the full conditions. XNet checks only part of this: dynamic/nested or
+wrong-sized teams return `xnet_unsupported`, and absent worker scratch returns
+`xnet_lifecycle_error`. Equal thread counts alone do not establish persistence.
+Tasks, recursive calls, simultaneous unrelated teams and arbitrary team
+changes are unsupported. Calls on the initial thread between supported
+regions are allowed. A supplied EOS provider must also permit concurrent
+evaluations.
+
+With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE and lifecycle
+operations. The application may use OpenMP elsewhere. This choice suppresses
+XNet's host teams and threadprivate state even when target-offload compilation
+enables OpenMP directives. GPU host calls remain serialized.
+
+## Controls reference
+
+The following are all 32 fields of `xnet_controls_t`, after
+`set_xnet_controls_defaults`. Integers use default Fortran `Integer`, real
+controls use `Real(dp)`, and numerical ratios/tolerances are dimensionless
+unless stated. Common validation still checks controls that are ignored by
+the API or selected solver; for example, BDF does not permit a nonpositive
+`tolm` merely because it does not use that tolerance.
+
+| Field | Type and default | Effect in the library API |
+| --- | --- | --- |
+| `description` | `Character(80)(3)`, blank | Three description strings in the binary header. |
+| `szone` | Integer, `1` | Common validation requires `1<=szone<=nzone`; does not select API lanes. |
+| `nzone` | Integer, `1` | Must be positive; does not set submitted batch size or diagnostic IDs. |
+| `iweak0` | Integer, `1` | `>0`: strong and weak reactions; `0`: no weak; `<0`: weak only. Existing low-temperature logic can change the effective per-zone weak flag. |
+| `iscrn` | Integer, `1` | `>0` enables screening; `<=0` disables ordinary screening. NSE uses the same setting. |
+| `iprocess` | Integer, `0` | `>0` preprocesses ASCII network inputs, writing `data_dir`; `<=0` loads prepared data. The application provides exclusive access. |
+| `nzbatchmx` | Integer, `1` | Positive maximum submitted lane count per call and worker, including inactive holes. |
+| `isolv` | Integer, `1` | Exactly `1` for Backward Euler or `3` for BDF; other values rejected. |
+| `kstmx` | Integer, `9999` | Positive maximum outer integration steps; reaching it short of the stop time returns status 5. |
+| `kitmx` | Integer, `5` | Positive BE Newton iteration limit; BDF uses `max(kitmx,3)` per Newton solve attempt. |
+| `ijac` | Integer, `1` | Positive BE Jacobian rebuild interval; BDF has its own rebuild logic and ignores this interval. |
+| `iconvc` | Integer, `0` | BE: `0` tests change in total network-plus-auxiliary mass from the start of the step; nonzero tests the sum of relative abundance corrections. BDF: `0` infinity, `1` L1, `2` L2, `3` RMS weighted norm. Use those defined BDF values; the validator does not restrict the integer. |
+| `changemx` | Real, `1e-1` | Positive BE relative-abundance timestep control. BDF replaces it internally with `1e10`. |
+| `yacc` | Real, `1e-7` | Nonnegative abundance threshold in `Y=X/A` units for timestep selection. BDF species absolute-tolerance value, with weighting described below. |
+| `tolm` | Real, `1e-6` | Positive BE absolute mass-fraction-change convergence limit when `iconvc=0`; does not demand final `sum(X)=1`. Ignored by BDF. |
+| `tolc` | Real, `1e-4` | Positive BE relative-abundance-correction convergence limit when `iconvc/=0`; BDF species relative tolerance. |
+| `ymin` | Real, `1e-30` | Nonnegative `Y=X/A` cutoff: the integrator sets lower abundances to zero. Also enters BDF weighting. |
+| `tdel_maxmult` | Real, `2` | Positive BE timestep growth/failed-trial reduction factor. BDF uses its own factor logic. Validation requires only `>0`. |
+| `iheat` | Integer, `0` | `>0` couples temperature implicitly; otherwise successful return preserves caller temperature. |
+| `changemxt` | Real, `1e-2` | Positive BE relative-temperature timestep control; BDF replaces it internally with `1e10`. |
+| `tolt9` | Real, `1e-4` | Positive relative-temperature convergence/error tolerance, dimensionless despite the internal `T9` name. BDF temperature relative tolerance. |
+| `t9nse` | Real, `8` | Nonnegative GK threshold used by the standalone initial-composition reader. Ignored by API burns: supplied X is not replaced automatically. An NSE query runs only when called. |
+| `ineutrino` | Integer, `0` | Any nonzero value rejected as unsupported: the API provides no incident-neutrino histories. Weak-reaction neutrino loss remains available. |
+| `idiag` | Integer, `0` | `>=0` prints initial/final composition and counters/timers, with more internal detail at higher levels. `-1` prints final counters/timers; `<=-2` suppresses normal guarded diagnostics. API diagnostics use standard output, not a standalone diagnostic file. |
+| `itsout` | Integer, `0` | `>=1` binary histories; `>=2` condensed ASCII; `>=3` screen evolution; `>=4` composition diagnostics; `>=5` flux diagnostics. Independent of `idiag` where not separately guarded. |
+| `ev_file_base` | `Character(80)`, `'ev_'` | ASCII output filename base; choose a distinct binary base and rank/run prefix. |
+| `bin_file_base` | `Character(80)`, `'ts_'` | Binary output filename base. Existing output files cause a checked open failure. |
+| `nnucout` | Integer, `0` | Nonnegative number of selected ASCII species, no greater than `Size(output_nuclei)`. |
+| `output_nuclei` | Allocatable `Character(5)(:)`, length zero | Must be allocated; selected names must be nonblank. Names use existing lookup; a missing name prints a warning and selects the final network species rather than rejecting initialization. |
+| `data_dir` | `Character(80)`, blank | Required network directory; keep paths within the field length. Preprocessing writes here when requested. |
+| `inab_files` | Allocatable `Character(80)(:)`, length zero | Must remain allocated for common validation; contents ignored by API burns. |
+| `thermo_files` | Allocatable `Character(80)(:)`, length zero | Must remain allocated for common validation; contents ignored by API burns. |
+
+For BDF `iconvc=0` or `1`, species below `ymin` get zero weight; otherwise
+the weight is `1/(tolc*max(abs(Y),yacc))` for nonnegative abundances. For
+`iconvc=2` or `3`, it is `1/(tolc*max(abs(Y),ymin)+yacc)`. Thus `yacc` does
+not have the same effective absolute-error interpretation for every BDF
+norm. BE and BDF `iconvc=0` select different tests; do not interpret BDF's
+default as a mass-conservation test.
+
+Neither `idiag<=-2` nor `itsout=0` suppresses every warning or fatal print from
+readers or EOS providers. Output controls do not change failure obligations.
+
+## Per-call histories
+
+With `itsout>=1`, an active lane gets a new sequential-unformatted binary
+file; `itsout>=2` adds a condensed ASCII companion. Names append
+`_callN_laneL` to `bin_file_base` and `ev_file_base`. `L` is the original
+one-based local lane, including holes. `N` is reserved once per active output
+attempt; concurrent callers may reserve numbers in either order. Do not use
+it to infer application batch order.
+
+The binary file's third header record starts with an 80-character label
+`XNet API zone_id:` followed by all three or four supplied integer ID
+components separated by spaces. Its second 80-character field remains
+`Mass fractions in XNet species order`. The ASCII companion shares the same
+suffix, so the binary label also identifies its application zone. Duplicate
+ID tuples are allowed; the filename still distinguishes calls and lanes.
+
+The six binary header records, snapshot record layout and ASCII columns
+retain their existing layouts. The API substitutes labels for standalone
+input filenames; the fourth record still describes constant conditions and
+the local `0..dt_s` seconds interval. Each call is a separate segment and
+does not append to a preceding call's history.
+
+Binary snapshots contain the step, local time in seconds, T9 in GK, density
+in g/cm^3, weak-neutrino loss rate, timestep, energy-generation rate,
+`Y=X/A` and fluxes. ASCII rows contain step, local time, T9, density,
+energy-generation rate, weak-neutrino loss rate, timestep, selected mass
+fractions and the timestep/Newton counters. Rates use erg/g/s. There is no
+ASCII Ye or zone-ID column, and the full five-counter vector is not written
+there. `nnucout=0` leaves the ASCII species columns empty.
+
+The process-local call counter continues across finalization and
+reinitialization. Separate process starts do not share it; choose prefixes
+that distinguish MPI ranks and runs. Requests rejected before opening output
+and all-inactive batches reserve no number and create no files. `STATUS='NEW'` prevents replacement of existing
+files. An open failure closes already opened files, preserves that partial
+set for diagnosis, consumes its number and returns `xnet_invalid` before
+evolution. Reported numerical failure closes partial histories and still
+requires shutdown. Existing fatal behavior for write/close errors remains.
+Device-array output reads XNet-owned state without refreshing caller host
+mirrors.
+
+## GPU builds and resources
+
+GPU library builds require `MATRIX_SOLVER=dense`, `MPI_MODE=OFF`,
+`OPENMP_MODE=OFF`, and either CUDA with `GPU_LAPACK_VER=CUBLAS` or HIP with
+`GPU_LAPACK_VER=ROCM`. Exactly one of `OPENACC_MODE` and `OPENMP_OL_MODE`
+must be `ON`. Make rejects other library selections, including MAGMA.
+
+For Perlmutter with its NVIDIA programming environment and CUDA selected,
+an OpenACC build is:
+
+```sh
+make MACHINE=perlmutter BUILD_NAME=library-cuda PE_ENV=NVIDIA LAPACK_VER=LIBSCI \
+  EOS=STARKILLER MATRIX_SOLVER=dense MPI_MODE=OFF OPENMP_MODE=OFF \
+  GPU_MODE=ON GPU_BACKEND=CUDA GPU_LAPACK_VER=CUBLAS \
+  OPENACC_MODE=ON OPENMP_OL_MODE=OFF CUDA_DIR=/path/to/cuda -j libxnet
+```
+
+For Frontier with CCE and ROCm/hipfort selected, an OpenMP target build is:
+
+```sh
+make MACHINE=frontier BUILD_NAME=library-hip PE_ENV=CRAY LAPACK_VER=LIBSCI \
+  EOS=STARKILLER MATRIX_SOLVER=dense MPI_MODE=OFF OPENMP_MODE=OFF \
+  GPU_MODE=ON GPU_BACKEND=HIP GPU_LAPACK_VER=ROCM \
+  OPENACC_MODE=OFF OPENMP_OL_MODE=ON \
+  HIPFORT_DIR=/path/to/hipfort ROCM_DIR=/path/to/rocm -j libxnet
+```
+
+Replace installation paths and load the facility's compiler, modules and
+device-architecture settings first. The site profiles select the Cray compiler
+wrappers. Other installations can select `MACHINE=generic` with their compiler,
+architecture and numerical-library settings. These recipes specify build selections; they
+do not establish numerical validity or portability of every combination.
+Use the resulting `xnet-config.mk` to compile and link the application.
+`XNET_CPPFLAGS` exports the source-header path and selected preprocessor
+definitions when a caller uses `xnet_macros.fh`.
+
+### Device and stream selection
+
+Before initialization, the application selects a device in both the vendor
+runtime (`cudaSetDevice` or `hipSetDevice`) and the selected directive runtime
+(`acc_set_device_num` or `omp_set_default_device`). XNet compares their
+reported integer device numbers; it does not translate between their device
+enumerations. Confirm their correspondence under the application's visibility
+and placement settings. Keep that selection unchanged through finalization.
+The `device` field below uses the current vendor-runtime ordinal, not an
+application rank or physical GPU identifier.
+
+`xnet_initialize` accepts optional `gpu_resources` of type `xnet_gpu_t`:
+
+```fortran
+Type(xnet_gpu_t) :: resources
+
+resources%device = application_device
+resources%stream = application_stream
+resources%hipblas_handle = application_hipblas_handle
+Call xnet_initialize(controls=controls,network=network,ierr=ierr,message=message, &
+  & gpu_resources=resources)
+```
+
+This fragment assumes the application has declared and created the shown
+resources with its vendor interfaces. Use `cublas_handle` for CUDA. Fields
+default to `device=-1`, `queue=1` and `C_NULL_PTR` handles. `device=-1` uses
+the current device; a nonnegative value must match it.
+
+| Fields | Use and ownership |
+| --- | --- |
+| `stream` | `C_PTR` vendor stream. XNet borrows a supplied or inferred stream; it destroys only a stream it creates. |
+| `queue` | Integer OpenACC async ID. It is neither a stream pointer nor an OpenMP thread number. Ignored by OpenMP target. |
+| `cublas_handle`, `cusolver_handle` | CUDA handles, each borrowed or created independently. |
+| `hipblas_handle`, `rocblas_handle` | HIP handles, each borrowed or created independently. |
+| `rocsolver_handle` | Optional rocBLAS handle used by rocSOLVER. If absent, it shares the selected rocBLAS handle without another allocation. |
+| `cusparse_handle`, `rocsparse_handle` | Reserved and unused. XNet neither validates nor modifies them; supplying them does not enable GPU sparse solves. |
+| `magma_queue` | Reserved; application MAGMA initialization is unsupported by the library. |
+
+Supplied handles must already use the selected stream and BLAS host pointer
+mode. XNet checks stream associations, leaves borrowed resources unchanged,
+and creates only missing required resources. It does not change the
+application's OpenACC queue association.
+
+For OpenACC, `queue` must refer to the same stream as supplied handles and
+`stream`. Usually supply just the queue and let XNet obtain its runtime stream.
+When the application also needs the pointer, the existing interoperability
+binding provides this pattern:
+
+```fortran
+Use, Intrinsic :: iso_c_binding, Only: c_long_long
+Use xnet_api, Only: xnet_gpu_t
+Use xnet_openaccf, Only: acc_get_cuda_stream
+Type(xnet_gpu_t) :: resources
+
+resources%queue = 7
+resources%stream = acc_get_cuda_stream(Int(resources%queue,c_long_long))
+! Create or associate application handles with that stream before passing them.
+Call xnet_initialize(controls=controls,network=network,ierr=ierr,message=message, &
+  & gpu_resources=resources)
+```
+
+The queue is an application-selected async ID. With no resources argument,
+OpenACC uses queue 1 and its runtime-owned stream; XNet creates required
+handles on it. The runtime retains ownership of that stream.
+
+OpenMP target regions do not execute on the supplied vendor stream, and
+`queue` has no effect on their ordering. An omitted stream is inferred from
+a supplied library handle, or created by XNet if none is supplied. With no
+resources argument, XNet creates its stream and required handles on the
+application's selected device. Supplying `gpu_resources` to a CPU build
+returns `xnet_unsupported`.
+
+### Host and resident device arrays
+
+By default, `data_on_device` is absent or false: caller host values are current.
+XNet prepares its workspace from those values and returns host results,
+transferring its burn data to/from the device each call. Host array sections
+remain supported. Existing caller device mappings are neither input sources
+nor refreshed output mirrors in this mode.
+
+With `data_on_device=.true.`, the scientific arrays are ordinary contiguous
+Fortran arrays already mapped on the selected device: density, temperature,
+Ye, mass fractions, restart hints, loss and any auxiliary arrays. Their device
+values are current and host mirrors may be stale. XNet checks mapping and
+contiguity, validates active values there, and prepares/extracts physical
+state there without a scientific-array round trip through the host. It
+still copies into its own solver workspace. Raw device pointers and
+noncontiguous device sections are unsupported. The caller owns and preserves
+the lifetime of its mappings; XNet does not delete them.
+
+```fortran
+Call xnet_burn_batch(dt_s=dt_s,active=active,zone_id=zone_id,density=density, &
+  & temperature=temperature,ye=ye,mass_fraction=mass_fraction,restart_dt_s=restart_dt_s, &
+  & neutrino_loss=neutrino_loss,counters=counters,timing=timing,ierr=ierr,message=message, &
+  & max_steps_taken=max_steps_taken,data_on_device=.true.)
+```
+
+`dt_s`, `active`, `zone_id`, `counters`, `timing`, `ierr`, `message` and
+`max_steps_taken` remain host arguments in both modes. Calls complete their
+own work before returning. Resident scientific results are ready on the
+device; the caller explicitly updates its host mirrors when needed.
+Diagnostics can transfer internal state for printing.
+
+The application must complete prior producers or order them correctly before
+the call. OpenACC uses the selected queue's stream ordering. For resident
+inputs, the OpenMP path synchronizes the selected vendor stream before
+reading scientific values, but that does not join unrelated OpenMP target
+tasks. Complete preceding `nowait` target work using the application's
+dependency/task synchronization, such as the appropriate `taskwait`, before
+calling XNet. A vendor-stream synchronization error returns `xnet_invalid`.
+
+Finalize before destroying borrowed GPU resources or EOS data. XNet releases
+its own mappings and CPU allocations, destroys resources it created, and
+clears borrowed references. It does not reset the device, finalize the vendor
+runtime, or initialize/finalize application MPI. Do not mix this lifetime
+with direct assignments to XNet GPU globals or calls to internal
+`gpu_init`/`gpu_finalize`. There is one non-reentrant library instance;
+host calls remain serialized.
+
+## Application EOS interface
+
+For `EOS=STARKILLER` and `EOS=EXTERNAL`, the common `source/xnet_eos.F90`
+keeps XNet's composition moments, screening, masks, scratch and internal-unit
+conversions. A selected `xnet_eos_interface` module supplies thermodynamics.
+Applications with their own EOS provide that module:
+
+```sh
+make BUILD_NAME=library-application-eos -j libxnet \
+  EOS=EXTERNAL EOS_SOURCE=/path/to/xnet_eos_application.F90 \
+  EOS_MODULE_DIR=/path/to/application/modules
+```
+
+Build the application's EOS modules first with the same compiler and
+compatible options. `EOS_SOURCE` is one free-form source whose filename stem
+must differ from `xnet_eos`, reserved for XNet's common module.
+`EOS_MODULE_DIR` is optional when no additional module directory is needed.
+Keep application modules separate from this XNet build's module directory.
+The latter is searched first; application module files are prerequisites of
+the supplied interface source.
+
+The module exports these procedures with `dp` from `xnet_types`:
 
 ```fortran
 Subroutine xnet_eos_interface_initialize(nspecies,names,a,z)
   Integer, Intent(in) :: nspecies
   Character(*), Intent(in) :: names(nspecies)
   Real(dp), Intent(in) :: a(nspecies), z(nspecies)
-End Subroutine
+End Subroutine xnet_eos_interface_initialize
 
 Subroutine xnet_eos_interface_evaluate(nspecies,temp,rho,ye,abar,zbar,y,xext,aext,zext,cv,eta,detadt)
   Integer, Intent(in) :: nspecies
   Real(dp), Intent(in) :: temp, rho, ye, abar, zbar, y(nspecies), xext, aext, zext
   Real(dp), Intent(out) :: cv, eta, detadt
-End Subroutine
+End Subroutine xnet_eos_interface_evaluate
 
 Subroutine xnet_eos_interface_finalize
-End Subroutine
+End Subroutine xnet_eos_interface_finalize
 ```
 
-Initialization receives the species names and mass/charge numbers once, in
-network order. The adapter may copy the metadata it needs for application
-species mapping; it keeps no association with XNet arrays. Thermodynamics
-receives temperature in K, density in g/cm^3, dimensionless Ye and number
-averages Abar/Zbar, and raw molar abundances `Y=X/A` in network order. XNet
-does not normalize this composition. An adapter such as Flash-X must map the
-full species composition and form its mass fractions from `X=A*Y`, rather
-than substituting only the moments.
+Initialization receives names and real-valued A/Z once in network order.
+The interface may copy metadata for application species mapping, without
+keeping associations to XNet arrays. Evaluation receives temperature in K,
+density in g/cm^3, dimensionless Ye, number averages Abar/Zbar and raw
+`Y=X/A`. A provider that requires individual species must map the full
+composition and reconstruct `X=A*Y`; moments alone do not replace it.
+The supplied moments include `xext,aext,zext`. A provider using individual
+species must deliberately handle or reject that auxiliary reservoir.
 
-`xext`, `aext`, and `zext` describe the auxiliary mass reservoir as for the
-batch API. The supplied moments already include it. An EOS that uses moments
-can use those values directly; an adapter that requires individual species
-must handle the reservoir deliberately or report it as unsupported. The
-current Flash-X composition mapping has no auxiliary species; this interface
-does not silently add one.
+Return `cv` in erg/g/K, `eta=mu_kinetic/(k_B*T)` with electron rest mass
+excluded, and `detadt=d(eta)/dT` in K^-1 at fixed density and composition,
+using the same convention. This follows the
+[Helmholtz chemical-potential convention](https://cococubed.com/code_pages/chemical_potential.shtml).
+XNet converts to its internal MeV/nucleon/GK and GK^-1 units. It calls the
+provider when heating or screening requires thermodynamics. The bundled
+`source/xnet_eos_starkiller.F90` shows the signatures and device directives.
 
-Return `cv` in erg/g/K and `eta = mu_kinetic / (k_B T)`, where the electron
-chemical potential excludes electron rest mass. This is the existing
-[Helmholtz convention](https://cococubed.com/code_pages/chemical_potential.shtml).
-Return `detadt = d(eta)/dT` in K^-1 at fixed density and composition, using
-that same rest-mass-excluded convention. XNet retains its current
-conversion to MeV/nucleon/GK and GK^-1, and calls thermodynamics only when
-heating or screening needs it. The adapter imports no mutable XNet working
-arrays and exposes no host derived types. The bundled adapter in
-`source/xnet_eos_starkiller.F90` demonstrates the procedure signatures;
-an application supplies its own calls and ownership hooks.
+The application prepares its EOS tables before their first use. If the
+initialization hook reads those tables, prepare them before
+`xnet_initialize`; if it only builds species mapping, tables may be loaded
+afterward but before a burn or NSE query. The hooks manage only storage they
+own. They must leave application-owned tables, MPI and accelerator state to
+the application. The provider must not import mutable XNet working arrays.
+Its public arguments expose no application derived types; its implementation
+may use the application's EOS types internally.
 
-The host must prepare its EOS data before the adapter first uses them. If
-`xnet_eos_interface_initialize` reads host EOS data, those data must be ready before
-`xnet_initialize`. If the hook only prepares species mapping or other
-table-independent storage, the host may load its tables afterward, but before
-the first burn or NSE query. This permits CHIMERA's existing order: load
-network metadata, initialize the host EOS, then evaluate NSE and burn.
+The application links its EOS objects and dependencies alongside `libxnet.a`;
+they are not bundled or discovered automatically. `EOS=EXTERNAL` supports
+`libxnet` and EOS-independent `net_setup`, not standalone `xnet` or `xnse`.
+For GPU burns, the evaluation procedure and every procedure it calls must be
+callable on the selected device, with tables ready there. Scalar host
+evaluation must remain available for NSE. Providing this module alone does
+not validate the application's EOS, energy treatment or device integration.
 
-The adapter's initialization and finalization hooks manage only adapter-owned
-mapping or storage; neither reinitializes or destroys host tables, MPI, or
-accelerator state. XNet allocates and releases its own EOS scratch. The
-application links its own EOS objects and dependencies alongside
-`libxnet.a`. These dependencies are not bundled into the XNet archive or
-discovered automatically. Module includes are recorded in `xnet-config.mk`.
+## NSE composition queries
 
-`EOS=EXTERNAL` builds `libxnet` and the EOS-independent `net_setup` utility,
-not standalone `xnet` or `xnse`. GPU burns require
-`xnet_eos_interface_evaluate` and every routine it calls to be callable on the
-selected device. The bundled interface retains XNet's device-routine
-directives; an application interface must provide its own device procedures
-and prepare any device tables before their first use. Its scalar host
-procedures must also remain available for NSE queries. Supplying this module
-does not by itself validate the application integration.
-
-## Initialize, burn and finalize
+After initialization, a scalar host query returns one copied composition:
 
 ```fortran
-Use xnet_api, Only: dp, xnet_controls_t, set_xnet_controls_defaults, &
-  & xnet_network_t, xnet_timing_t, xnet_initialize, xnet_burn_batch, xnet_finalize
-
-Call set_xnet_controls_defaults(controls)
-controls%data_dir = 'prepared_network'
-controls%nzbatchmx = 16
-controls%idiag = -2
-Call xnet_initialize(controls,network,ierr,message)
-! Check ierr before using network or burning.
-! Host scientific arrays are current; data_on_device may be omitted or false.
-Call xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
-  & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken)
-! Check ierr. A numerical failure requires the host's fatal/MPI shutdown, not another burn.
-Call xnet_finalize(ierr,message)
+Call xnet_nse_composition(density=density_scalar,temperature=temperature_scalar, &
+  & ye=ye_scalar,mass_fraction=nse_fraction,ierr=ierr,message=message)
 ```
 
-Declare `controls`, `network`, and `timing` using the corresponding types;
-the other arguments are ordinary caller-owned arrays. The library owns one
-instance. Initialize once, burn any number of batches using the host model
-above, and finalize once; finalization is also safe when already finalized.
-The library keeps no association with caller arrays.
+Import `xnet_nse_composition` from `xnet_api`. Declare the three scalar inputs
+and `nse_fraction(:)` as `Real(dp)` and
+allocate the result to `Size(network%names)`. Density is finite positive
+g/cm^3, temperature finite positive K, and Ye finite in `[0,1]`. The current
+network and screening controls apply. Queries obey the same lifetime and CPU
+worker rules as burns; GPU-library queries are serialized host calls with
+no device-residency flag. They do not load EOS tables again.
 
-Use existing preprocessed network files with `iprocess=0`, or set
-`iprocess>0` to preprocess the ASCII inputs in `data_dir` during initialization.
-Preprocessing writes that directory using the same routines as `net_setup`.
-The application must arrange exclusive access: for example, preprocess once
-before other MPI ranks initialize with `iprocess=0`, or use a separate writable
-directory per rank. The library neither initializes MPI nor coordinates file
-access between application ranks. Missing or unreadable required input files
-return a checked initialization error; malformed data and errors inside the
-existing preprocessor/readers can still terminate execution.
+The result is `A*ynse`, not the solver's nuclear-mass-weighted `xnse`.
+Its sum need not equal one. XNet does not normalize/reorder it, add the
+auxiliary reservoir, or calculate application energy changes. A later query
+does not change an earlier copy or the caller's burn arrays. Invalid values
+or result extent return `xnet_invalid`; lifecycle violations return
+`xnet_lifecycle_error`; checked rejections zero the submitted result vector.
+NSE convergence failure remains fatal inside the existing solver and has no
+recoverable NSE status.
 
-The constant-condition API has no incident neutrino histories
-(`ineutrino=0`). Diagnostic output, if requested, goes to the existing
-standard-output unit. Time-series output is available through `itsout`, as
-described below.
-The compiled default controls need no standalone trajectory/abundance
-filenames. The selected EOS can require additional inputs; the default
-Starkiller provider reads `helm_table.dat` from the working directory.
+## Updating an existing caller
 
-With `itsout>=1`, each burn writes a binary time-series file for each active
-lane. Set `bin_file_base` to the desired output prefix. `itsout>=2` also
-writes condensed ASCII evolution files using a distinct `ev_file_base`; larger values
-retain the existing screen/diagnostic output. Filenames append
-`_call<number>_lane<number>` to `bin_file_base` or `ev_file_base`. The lane is
-the original one-based array slot, so holes and duplicate diagnostic zone IDs
-are unambiguous. Each file describes that call's local `0..dt_s` time axis;
-records are not appended across calls. The binary record layout and ASCII
-columns are the same as standalone output. Binary header descriptions identify
-the API arrays and constant conditions instead of standalone input files.
-`controls%output_nuclei` selects the ASCII species with the standalone lookup and
-missing-name warning/fallback. With the default `nnucout=0`, ASCII output
-contains the time, thermodynamic and iteration columns without species columns.
+Rebuild application sources against the new module files and archive. These
+source changes apply to callers of the preceding interface:
 
-The call number increases for each active output attempt and continues across
-finalization/reinitialization in the same process. Invalid and all-inactive
-batches create no files. Files are opened with `STATUS='NEW'`: existing files
-are never replaced. Choose filename bases that distinguish application ranks
-and separate process runs. An open failure returns `xnet_invalid` before
-evolution, closes any files already opened for that attempt, and keeps the
-partial file set for diagnosis; its call number is consumed. Output closes
-after both successful and reported failed burns. A numerical failure leaves a
-partial history and still requires host shutdown. Existing fatal behavior for
-output write/close errors is unchanged. Device-array output reads XNet-owned
-workspace and does not refresh caller-owned host mirrors.
+- Rename `timing%seconds` to `timing%evolve`; all timing fields still use
+  seconds, and `evolve` covers only the interval inside `full_net`.
+- For an external EOS provider, rename module `xnet_eos_adapter` to
+  `xnet_eos_interface`, and rename `eos_adapter_initialize`,
+  `eos_adapter_evaluate` and `eos_adapter_finalize` to
+  `xnet_eos_interface_initialize`, `xnet_eos_interface_evaluate` and
+  `xnet_eos_interface_finalize`. XNet's common module remains `xnet_eos`.
+- XNet's Fortran vendor/directive binding modules now have `xnet_` prefixes,
+  for example `xnet_cudaf`, `xnet_cublasf`, `xnet_hipf`, `xnet_rocblasf`,
+  `xnet_openaccf` and `xnet_openmpf`. Vendor C symbols are unchanged. Pass
+  resources through `xnet_gpu_t` rather than setting binding globals.
+- Remove caller dependence on `XNET_EMBEDDING_CPU`. Supported API source is
+  selected by Make; unsupported library configurations fail at build time.
+  `XNET_CPPFLAGS` supplies the current definitions if the application uses
+  `xnet_macros.fh`.
+- Prefer keywords for optional `gpu_resources`, `aux_x/aux_a/aux_z`,
+  `max_steps_taken` and `data_on_device`. Existing calls may omit the added
+  optional arguments.
 
-On successful initialization, `network` contains copied names, integer A/Z,
-binding energies, and mass excesses from the selected network. Both energy
-arrays use the MeV values in `nuclear_data`. The caller owns this metadata;
-it remains usable after finalization. Failed initialization does not produce
-usable metadata.
+## Application notes: CHIMERA and Flash-X
 
-## GPU resources and array location
+The public burn signature uses ordinary arrays and three- or four-component
+diagnostic IDs so applications can keep their own mesh and species types.
+These responsibilities remain with the application integration:
 
-The application selects its device in both the vendor runtime and the
-directive runtime before initialization. XNet checks that those selections
-agree and leaves the selected device unchanged. Keep that device selected
-through finalization.
-
-The optional final `gpu_resources` argument to `xnet_initialize` has type
-`xnet_gpu_t`, exported by `xnet_api`. Its `device` and `queue` fields are
-integers; its stream and library handles are `C_PTR` values. All handles
-default to `C_NULL_PTR`, meaning that the application has not supplied them.
-For example, a HIP application can supply its stream and hipBLAS handle
-without creating the other handles XNet needs:
-
-```fortran
-Use xnet_api, Only: xnet_gpu_t
-Type(xnet_gpu_t) :: gpu_resources
-
-gpu_resources%device = host_device
-gpu_resources%stream = host_stream
-gpu_resources%hipblas_handle = host_hipblas_handle
-! A CUDA application supplies cublas_handle instead.
-! An OpenACC application also supplies the matching queue ID.
-Call xnet_initialize(controls,network,ierr,message,gpu_resources=gpu_resources)
-```
-
-`device=-1` uses the application's current device; a nonnegative value must
-match that selection. Each supplied handle must already use the selected
-stream. XNet borrows supplied resources without changing their associations,
-creates missing resources needed by the selected backend, and tracks
-ownership separately for each one. It does not create or change the
-application's OpenACC queue association.
-
-XNet passes BLAS scalar parameters from host memory. Supplied BLAS handles
-must use host pointer mode; XNet does not change the application's setting.
-
-| Resource fields | Current use |
-| --- | --- |
-| `cublas_handle`, `cusolver_handle` | CUDA library handles; each can be supplied or created independently. |
-| `hipblas_handle`, `rocblas_handle` | HIP library handles; each can be supplied or created independently. |
-| `rocsolver_handle` | An optional rocBLAS handle for rocSOLVER. When omitted, rocSOLVER shares the selected rocBLAS handle; it is not a second allocation to destroy. |
-| `cusparse_handle`, `rocsparse_handle` | Represented in the resource value but currently unused; XNet neither validates nor changes these supplied handles. This does not enable GPU sparse solves. |
-| `magma_queue` | Represented for the MAGMA backend; application-owned MAGMA initialization is not supported by the current library API. |
-
-The resource value is not limited to the handles used by the present dense
-burn. Additional backend operations can use these fields without another
-initialization interface. Tested execution modes remain limited to those
-listed above.
-
-`queue` is the application's OpenACC async ID, not a CUDA/HIP stream handle
-or an OpenMP thread number. Initialization copies it into XNet's internal
-`gpu_queue`, used by its `async` and `wait` directives. For OpenMP target
-offload, the queue number has no effect: target regions do not use the
-supplied vendor stream.
-
-For OpenACC, `queue` must identify the selected stream; an omitted stream
-uses that queue's runtime stream. For OpenMP offload, an omitted stream is
-inferred from a supplied library handle or created by XNet when no handles
-are supplied. XNet never destroys an inferred or runtime-owned stream.
-
-When `gpu_resources` is omitted in a GPU build, the API supplies a default
-resource value internally: XNet creates the required handles on the current
-application device. OpenACC uses queue one's runtime stream; OpenMP offload
-uses an XNet-created stream. Both the API and standalone program use
-`gpu_init` and `gpu_finalize`; standalone `gpu_init()` retains its rank-based
-device selection and per-thread setup. Supplying GPU resources to a CPU
-build returns `xnet_unsupported`.
-
-The optional final logical `data_on_device` argument to `xnet_burn_batch`
-selects the location of the scientific arrays. Omitted or false means their
-host values are current. This mode retains host array-section support and
-returns host results, including when caller device mappings contain older
-values. It neither reads nor refreshes those caller device mirrors.
-
-True means density, temperature, Ye, mass fractions, restart hints, optional
-auxiliary arrays, and neutrino loss are ordinary contiguous arrays already
-mapped on the selected device. XNet checks their mappings, validates active
-values on the device, and prepares and extracts scientific values there.
-The host copies may be stale. Raw device pointers and noncontiguous device
-sections are not accepted. Existing caller mappings survive the call.
-
-```fortran
-! The application has mapped these scientific arrays and made their device values current.
-Call xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
-  & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z, &
-  & max_steps_taken,data_on_device=.true.)
-! Scientific results are ready on the device; counters, status and timing are ready on the host.
-```
-
-`active`, `zone_id`, `counters`, `ierr`, `message`, `timing`, and
-`max_steps_taken` always remain host arguments; `dt_s` is a host scalar.
-Both modes complete their work before returning. Device mode does not copy
-scientific results through host arrays; requested diagnostics may copy
-internal state for printing. The application orders its preceding work on
-the supplied stream or completes it before calling XNet. CPU builds reject
-`data_on_device=.true.`.
-
-OpenACC uses the supplied queue's stream ordering. Before a device-array burn,
-the OpenMP path waits for the supplied vendor stream, since OpenMP target work
-does not use that stream. A synchronization failure returns `xnet_invalid`
-with the runtime status in `message`, before reading scientific inputs.
-
-Call `xnet_finalize` before destroying the application's GPU resources or
-EOS data. It releases XNet's device mappings before their CPU allocations
-and clears XNet's handle and stream references. Cleanup follows ownership:
-borrowed resources are left intact; XNet-created resources are destroyed.
-The OpenACC runtime owns its queue stream even when XNet creates library
-handles. Do not overlap the API lifetime with direct calls to XNet's internal
-GPU initialization/finalization routines or assignments to its resource
-variables. The library supports one non-reentrant instance, not saved or
-nested GPU contexts.
-
-XNet's internal Fortran GPU binding modules have `xnet_`-prefixed names so
-application bindings can coexist without sharing module variables. The
-vendor C routine names are unchanged; applications pass their handles through
-`xnet_gpu_t` rather than modifying XNet's binding variables.
-
-The library does not initialize or finalize application MPI, reset the
-selected device, or finalize the GPU runtime.
-
-## Batch arguments
-
-The duration `dt_s` is a positive scalar in seconds. Density is fixed in
-g/cm^3. Temperature is in/out K; it evolves when `iheat>0`. `ye` is in/out,
-following the existing composition/EOS calculation. This path supplies two
-identical thermodynamic endpoints internally and has no absolute time origin.
-
-`active(:)` defines the submitted lane count, at most `nzbatchmx`.
-Thermodynamic, restart, and neutrino-loss arrays have that length.
-`mass_fraction(species,lane)` follows XNet species order and contains
-dimensionless mass fractions. The result is raw: the API does not normalize
-or reorder composition or compute application nuclear-energy release.
-Applications retain those operations and their EOS/energy policy.
-
-`zone_id(:,lane)` has three or four integer components for diagnostics.
-On numerical failure, `message` identifies the submitted one-based zone and
-all of its supplied ID components. Standalone failure filenames still use
-the first three components; embedded numerical failures do not write those files.
-Short batches and inactive holes are supported. Inactive lanes preserve
-temperature, Ye, composition and restart hint, and return zero loss/counters.
-Scientific values in inactive lanes are not read. An all-inactive batch
-performs no burn.
-
-Optional `aux_x(:)`, `aux_a(:)`, `aux_z(:)` must be supplied together.
-They describe a fixed auxiliary mass reservoir, its mass number and charge;
-it contributes to existing composition/EOS moments without becoming an
-evolved network species. Positive auxiliary mass requires positive A and
-`0<=Z<=A`. Zero auxiliary mass is treated as no reservoir.
-
-`restart_dt_s(:)` is nonnegative and in/out. Zero requests fresh startup.
-Positive input preserves the existing CHIMERA hint convention: the current
-startup uses half the hint as an initial-step floor, rather than imposing
-that timestep. Output is existing `tdel_old`, the preceding/penultimate
-internal timestep; it can be zero after a single step. It is not a next-step
-recommendation. The CHIMERA adapter currently supplies zero for BDF.
-
-`neutrino_loss(:)` returns the integrated XNet weak-reaction loss in erg/g.
-It is distinct from incident-neutrino capture and application neutrino-loss
-corrections. `counters(5,lane)` returns the existing TS, NR, Jacobian,
-derivative, and rate counters.
-
-The evolution component is named `evolve` (formerly `seconds`). Update
-callers to use `timing%evolve` and rebuild against the new module. All timing
-components remain durations in seconds.
-
-`timing%evolve` is the per-call difference in XNet's internal `full_net`
-wall-time accumulator. It covers the interval timed inside `full_net`,
-including work and synchronization within that interval. It excludes API
-validation, input preparation before `full_net`, and result extraction after
-it. Measure elapsed time around `xnet_burn_batch` in the host when reporting
-the full call cost; measure initialization and finalization separately.
-
-The other `timing` fields return differences in the existing solve, Jacobian,
-derivative, rate, and screening accumulators. Applications accumulate their
-own totals. These component intervals can nest, so do not sum them to reconstruct
-full-call elapsed time or treat them as isolated GPU kernel measurements.
-The public type does not separately expose EOS, factorization/backsolve,
-transfer or synchronization time; the standalone timer summary has additional
-component timers.
-
-Optional integer `max_steps_taken` returns the existing `full_net` `kstep`:
-the maximum accepted outer integration steps taken by an active lane in the
-batch. It is zero for an all-inactive batch or any non-success return. This
-differs from `counters(1,:)`, which includes internal timestep retries. Flash-X
-uses the accepted step count for `MTSB_VAR` and `Grid_setWork` work estimates.
-Existing calls may omit `max_steps_taken` and `data_on_device`.
-
-## Status and remaining limits
-
-`xnet_success=0`, `xnet_invalid=1`, `xnet_lifecycle_error=2`, and
-`xnet_unsupported=3` describe the checked public paths. Validate configuration,
-dimensions, finite active inputs and lifecycle order before a burn. Calls
-rejected by host-input validation preserve in/out physical state and return
-zero loss/counters. Device-input validation does the same in device memory
-when the required contiguous mappings are present. A missing mapping,
-noncontiguous device descriptor, or changed device can prevent scientific
-output initialization; use only the returned host status and diagnostics for
-those rejected requests.
-
-No automatic renormalization or repair is performed.
-
-`xnet_lifecycle_error` means that XNet is already initialized when initialization
-is requested, or that a burn or NSE query is requested before initialization
-or after finalization. It describes call order, not a numerical failure. Calling
-`xnet_finalize` again after finalization is allowed and returns success.
-
-If GPU cleanup returns an error after XNet's arrays have been released,
-initialization, burns and NSE queries remain blocked. Another `xnet_finalize`
-call retries GPU cleanup without repeating array or EOS teardown. This keeps
-the cleanup state; it does not guarantee recovery from a GPU runtime failure.
-
-Numerical burn failure is fatal to the simulation, but returns to the embedded
-caller for host-controlled shutdown. `xnet_integrator_failure=4` reports a
-BE/BDF convergence or timestep failure after the integrator's internal retry
-logic. BDF's existing failure flag does not retain its detailed reason; this
-status does not assert that every failure used the maximum number of attempts.
-`xnet_step_limit=5` reports an active zone still short of the requested stop
-time after `kstmx` integration steps. `message` reports the first affected
-active zone and its caller-supplied IDs. Use a sufficiently long message
-buffer (512 characters accommodates the current message).
-
-After numerical failure, only `ierr`, `message`, attempted `counters` and
-per-call `timing` are diagnostic results. No physical result is valid for the
-batch. The host must log its context and terminate; do not retry, continue
-successful lanes, or reuse the failed library instance. With an application
-batch team, collect returned failures and join the team before host fatal/MPI
-shutdown. Other batches already in flight may finish; this is not cancellation
-or permission to use their results after a failure. XNet keeps its
-internal adaptive retries unchanged. The reporting path closes the elapsed
-timer and skips successful final output and standalone failure-file writes.
-Standalone calls keep their existing termination and failure-output behavior.
-
-This is not general error recovery. Malformed-network readers, EOS/provider
-failures, allocation failures, singular linear solves and arbitrary nonfinite
-arithmetic are not covered by these numerical status values and may still
-terminate execution. Future fallback to another integration method is
-separate work, not a promise that a failed library instance can be reused.
-
-Finalization releases allocations and mappings owned by XNet and calls the
-selected thermodynamics interface's finalizer. Built-in standalone providers
-release their own EOS storage; an application interface leaves host-owned EOS
-state intact.
-The API does not initialize/finalize application MPI or reset the application's
-GPU runtime. MPI-enabled library builds remain unsupported. CPU worker calls
-use the fixed-team model above; GPU calls remain serialized.
-The library GPU checks do not establish application MPI/GPU integration or
-performance; those require their own validation.
-
-## NSE composition
-
-After initialization, applications may also calculate one NSE composition:
-
-```fortran
-Use xnet_api, Only: xnet_nse_composition
-! Allocate nse_fraction with one entry per species in network%names.
-Call xnet_nse_composition(density,temperature,ye,nse_fraction,ierr,message)
-```
-
-Density is a scalar in g/cm^3, temperature is in K, and Ye is dimensionless.
-Density and temperature must be finite and positive; Ye must be finite and
-between zero and one. The initialized network and its existing screening
-settings apply. These scalar host calls use the same lifetime and host
-threading rules as burns. CPU OpenMP workers have separate NSE scratch; GPU
-library queries remain serialized host calls. Their arguments and copied
-results are host values; they have no device-residency flag. No additional initialization or EOS table loading occurs.
-
-The result is a copied vector `A*ynse` in XNet species order, matching the
-mass-number-weighted abundances used by CHIMERA's existing NSE wrapper. It is
-not the solver's nuclear-mass-weighted `xnse`. XNet does not normalize or
-reorder this vector, add an auxiliary reservoir, or compute application energy
-changes. Those operations remain with the application. A later query does
-not change an earlier copied result or the caller's burn arrays.
-
-Invalid inputs or a result vector of the wrong length return `xnet_invalid`;
-calls outside the initialized lifetime return `xnet_lifecycle_error`.
-Rejected calls zero the result vector. The existing `nse_solve` algorithm,
-screening choices and convergence tolerances are unchanged. A solver failure
-still terminates through its existing fatal path; unlike the reported burn
-failures above, it does not return an NSE-failure status or permit retry.
+- CHIMERA maps network metadata to its composition, controls host EOS table
+  initialization, and applies its normalization, energy and neutrino-loss
+  policy. Its historical positive restart hint is optional; zero remains
+  the fresh-start choice, including for BDF.
+- Flash-X maps full network species into its EOS representation rather than
+  substituting only Abar/Zbar. A mapping without an auxiliary species must
+  reject or explicitly handle a nonzero reservoir. Its accepted-step work
+  estimates can use `max_steps_taken`, rather than the retry-inclusive
+  timestep counter.
+- Each application owns MPI shutdown, rank/run output prefixes, accelerator
+  placement, device table preparation, stream/task ordering, and validation
+  of its physical/energy policy. The library test suite does not establish
+  a complete application integration or its performance.

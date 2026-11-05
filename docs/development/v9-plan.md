@@ -119,7 +119,7 @@ private helper routines do not each need approval.
 The merged CPU implementation builds a driver-free library, exercises
 repeated burns through its public procedures, preserves reusable setup, and
 compares results with the direct numerical path. Its build and calls are
-documented in [Fortran embedding](embedding.md). The optional timestep result
+documented in [Fortran library API](embedding.md). The optional timestep result
 used by Flash-X is merged in #162. Both selected CPU application cases have
 run through the API and passed independent review, within the limits below.
 Continue standalone tests and focused independently reviewed PRs; an external

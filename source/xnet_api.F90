@@ -419,7 +419,7 @@ Contains
 #ifdef XNET_GPU
     If ( on_device ) Then
       Call burn_device_arrays(dt_s,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
-        & kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
+        & Size(zone_id,1),kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
       If ( ierr /= xnet_success ) Return
       If ( .not. Any(active) ) Return
       Do lane = 1, n
@@ -474,7 +474,7 @@ Contains
     rho(zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
     ye_work(zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
     y(:,zb_lo:zb_hi) = ystart(:,zb_lo:zb_hi)
-    Call open_burn_output(ierr,message)
+    Call open_burn_output(Size(zone_id,1),ierr,message)
     If ( ierr /= xnet_success ) Return
     ! Host inputs remain authoritative even when the caller has stale device mappings.
     ! Transfer only XNet-owned workspace; arbitrary host array sections retain their existing behavior.
@@ -601,7 +601,7 @@ Contains
   End Subroutine check_device_batch
 
   Subroutine burn_device_arrays(dt_s,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
-    & kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
+    & zone_id_components,kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
     ! Validate, prepare and extract scientific arrays on the device; status and counters return on host.
     Use nuclear_data, Only: ny, aa
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
@@ -614,6 +614,7 @@ Contains
     Real(dp), Intent(inout) :: temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
     Real(dp), Intent(out) :: neutrino_loss(:)
     Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
+    Integer, Intent(in) :: zone_id_components
     Integer, Intent(out) :: kstep, evolve_status, failed_zone, ierr
     Character(*), Intent(out) :: message
     Integer :: n, lane, k
@@ -782,7 +783,7 @@ Contains
         EndIf
       EndDo
     EndIf
-    Call open_burn_output(ierr,message)
+    Call open_burn_output(zone_id_components,ierr,message)
     If ( ierr /= xnet_success ) GoTo 900
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
     Call close_burn_output
@@ -849,15 +850,16 @@ Contains
     Return
   End Subroutine check_network_files
 
-  Subroutine open_burn_output(ierr,message)
+  Subroutine open_burn_output(zone_id_components,ierr,message)
     ! Each call has its own local 0..dt history. Lane numbers distinguish repeated diagnostic IDs.
     Use nuclear_data, Only: ny, zz, aa, nname
-    Use xnet_controls, Only: itsout, lzactive, lun_ts, lun_ev, bin_file_base, ev_file_base, &
+    Use xnet_controls, Only: itsout, lzactive, lun_ts, lun_ev, bin_file_base, ev_file_base, zone_id, &
       & zb_offset, zb_lo, zb_hi, descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, &
       & tdel_maxmult, iheat, isolv, nnucout, nnucout_string, inucout
     Use xnet_flux, Only: flx, ifl_orig, ifl_term
     Use xnet_match, Only: mflx
     Implicit None
+    Integer, Intent(in) :: zone_id_components
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
     ! Match the standalone binary header field widths, including programmatic input descriptions.
@@ -865,6 +867,7 @@ Contains
     Character(80), Parameter :: abundance_description = 'Mass fractions in XNet species order'
     Character(80), Parameter :: thermo_description = 'Constant conditions; local time 0..dt seconds'
     Character(256) :: filename
+    Character(80) :: zone_label
     Character(64) :: suffix
     Character(40) :: header_format
     Integer :: lane, i, output_status
@@ -895,7 +898,9 @@ Contains
       If ( output_status /= 0 ) Exit
       Write(lun_ts(lane)) descript,api_data_description
       Write(lun_ts(lane)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
-      Write(lun_ts(lane)) input_name,abundance_description
+      ! Identify the caller zone in the existing input label; keep the record layout.
+      Write(zone_label,'(a,4(1x,i0))') 'XNet API zone_id:',zone_id(1:zone_id_components,lane)
+      Write(lun_ts(lane)) zone_label,abundance_description
       Write(lun_ts(lane)) input_name,thermo_description
       Write(lun_ts(lane)) ny,zz,aa
       Write(lun_ts(lane)) mflx,ifl_orig,ifl_term

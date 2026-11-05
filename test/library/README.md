@@ -330,11 +330,24 @@ with the same-input reference. Their states, counters, steps, timings and
 restart values are logged; `CONTINUATION_DELTA` reports the maximum absolute
 changes in X, temperature, Ye and restart from each call's consumed inputs.
 These changes are observations, not numerical-equivalence checks. The caller
-runs 32 successful burns in total: 20 same-input phase calls, ten device-chain
-calls and two producer calls described below, plus four invalid-input calls.
+runs 34 successful burns in total: 20 same-input phase calls, ten device-chain
+calls, two short-allocation calls and two producer calls described below, plus
+four invalid-input calls.
 
-All calls retain the inactive-state, short-tail, mask, counter, accepted-step,
-status and ownership checks. The unused host or device scientific mirrors
+After the three phase sequences in each lifetime, a separate resident call
+allocates and maps all nine scientific arrays with one lane while the XNet
+workspace capacity remains four. It uses the fixture's first-lane inputs,
+including nonzero auxiliary composition and the positive restart hint, then
+poisons the host scientific inputs after mapping. Each result compares with
+the existing first owned host-array burn under the limits below. The call
+checks all returned physical fields, diagnostics and surviving caller mappings.
+`GPU_SHORT_ALLOCATION` records the one-lane allocation and four-lane capacity;
+the sole lane has zone ID `(101,7,11)`. This covers a genuinely short allocation;
+the earlier short phase covers a three-lane section of four-lane allocations.
+A passing run does not rule out accesses into physical allocator padding.
+
+The phase sequences retain the inactive-state, short-tail, mask, counter,
+accepted-step, status and ownership checks. The unused host or device scientific mirrors
 deliberately disagree. After each host-array call, a device region checks
 that its mirrors still contain the original poison, returning only a logical
 result. Device outputs are read immediately after the API returns without
@@ -383,9 +396,9 @@ The GPU consumer accepts optional `itsout` (0 or 2) and a requested host team
 size after the existing device argument. Omitting both preserves the original
 checks. With `itsout=2`, every successful active burn logs its input and file
 sequence and checks that the API closed its binary/ASCII units. The same host,
-resident, continued-device and borrowed-resource calls produce 26 separate
-call sets with 92 binary and 92 ASCII files; inactive and invalid calls create
-none. The selected ASCII species are C12, O16 and the existing missing-name
+resident, continued-device, short-allocation and borrowed-resource calls produce
+28 separate call sets with 94 binary and 94 ASCII files; inactive and invalid
+calls create none. The selected ASCII species are C12, O16 and the existing missing-name
 fallback to the final species.
 
 On an approved compute allocation, run in a new directory with the selected
@@ -401,8 +414,9 @@ python3 /path/to/test/library/check_gpu_output.py --run-dir . --log consumer.log
 ```
 
 The checker reuses the CPU test's binary/ASCII format readers. It checks the
-entire call/lane inventory, all record shapes and finite timestep vectors,
-local `0..0.1 s` histories, zero initial flux, nonzero accepted flux, complete
+entire call/lane inventory and zone IDs, the short-allocation markers, all
+record shapes and finite timestep vectors, local `0..0.1 s` histories, zero
+initial flux, nonzero accepted flux, complete
 initial/final compositions and thermodynamics against the same call, returned
 penultimate timestep and integrated weak loss, and every ASCII row against its
 binary record. It uses the GPU consumer's existing limits for mass fractions,

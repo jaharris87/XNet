@@ -66,6 +66,15 @@ def binary(path: Path, *, allow_header_only: bool = False) -> dict:
     require(len(rows) >= (6 if allow_header_only else 7), f"missing binary headers/initial state: {path}")
     require(len(rows[0]) == 320 and len(rows[1]) == 76 and len(rows[2]) == 160 and len(rows[3]) == 160,
             f"six-header layout/Character(80) widths changed: {path}")
+    # Older standalone/API files keep their input label; the new API label identifies the caller zone.
+    zone_label = rows[2][:80].rstrip(b" ")
+    zone_prefix = b"XNet API zone_id:"
+    zone_id = None
+    if zone_label.startswith(zone_prefix):
+        components = zone_label[len(zone_prefix):].split()
+        require(len(components) in (3, 4) and all(re.fullmatch(rb"-?\d+", value) for value in components),
+                f"malformed API zone label: {path}")
+        zone_id = tuple(map(int, components))
     controls = struct.unpack(endian + "5i6d2i", rows[1])
     ny = struct.unpack_from(endian + "i", rows[4])[0]
     require(ny > 0 and len(rows[4]) == 4 + 16 * ny, f"invalid nuclear header: {path}")
@@ -89,7 +98,7 @@ def binary(path: Path, *, allow_header_only: bool = False) -> dict:
         require(all(right["k"] > left["k"] and right["time"] > left["time"]
                     for left, right in zip(steps, steps[1:])), f"nonincreasing accepted times/steps: {path}")
     return {"headers": rows[:6], "raw_steps": rows[6:], "steps": steps,
-            "ny": ny, "z": z, "a": a, "mflx": mflx, "controls": controls}
+            "ny": ny, "z": z, "a": a, "mflx": mflx, "controls": controls, "zone_id": zone_id}
 
 
 def parsed_log(text: str) -> dict:
@@ -176,8 +185,11 @@ def check_case(case: Path, log: dict, level: int, solver: int, heat: int, select
                 f"network description lost: {name}")
         require(trace["controls"][-2:] == (heat, solver) and trace["controls"][0] == 9999,
                 f"integration controls/header order mismatch: {name}")
-        require(b"XNet API input arrays" in trace["headers"][2] and
-                b"Mass fractions in XNet species order" in trace["headers"][2] and
+        # The consumer changes its three/four-component tuples and reorders lanes between calls.
+        ids = (101, 0, -3, 0) if sequence in (1, 2) and lane == 3 else (-2147483647, -7, 9001, 42)
+        expected_ids = ids[:3] if sequence in (1, 4) else ids
+        require(trace["zone_id"] == expected_ids, f"API zone IDs differ: {name}")
+        require(b"Mass fractions in XNet species order" in trace["headers"][2] and
                 b"Constant conditions; local time 0..dt seconds" in trace["headers"][3],
                 f"API input metadata is missing/misleading: {name}")
         first, last = trace["steps"][0], trace["steps"][-1]

@@ -157,6 +157,10 @@ def histories(case: Path, parsed: dict, output_parser) -> dict:
                    and math.isclose(key[3], last["time"], rel_tol=1e-12, abs_tol=1e-18)]
         require(len(matches) == 1, f"cannot identify history by initial state/duration: {path}")
         label, lane = expected[matches[0]]
+        call = parsed["calls"][label]
+        batch = call["batch"]
+        ids = (100*batch+lane, -7-batch, 9000+batch, 40+lane)[:call["nids"]]
+        require(trace["zone_id"] == ids, f"history caller zone IDs differ: {path}")
         identity = f"{label}_lane{lane}"
         require(identity not in traces, f"duplicate history for {identity}: {path}")
         final = parsed["states"][label][lane - 1]

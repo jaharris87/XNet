@@ -76,7 +76,7 @@ network preprocessing and abundance/condition allocation with the standalone
 driver. API burns can write separate per-call timestep histories through the
 existing output routines; the driver retains its general input histories and
 standalone filename policy. See
-[embedding.md](embedding.md) for status and ownership limits.
+[the Fortran library API guide](embedding.md) for status and ownership limits.
 
 ## Per-timestep flow
 
@@ -134,8 +134,8 @@ name:
   `xnet_eos.F90` for XNet's composition moments, screening, scratch,
   masks, and unit conversions. The build selects a small `xnet_eos_interface` module
   for the underlying thermodynamics: the bundled `xnet_eos_starkiller.F90`
-  adapter or an application source supplied with `EOS=EXTERNAL`. An
-  application adapter leaves host-owned EOS initialization and cleanup to the host.
+  provider or an application source supplied with `EOS=EXTERNAL`. An
+  application provider leaves host-owned EOS initialization and cleanup to the host.
 - one `xnet_jacobian_*.F90` file supplies `xnet_jacobian`.
 
 Source inspection and tests must follow the configuration named by the task.

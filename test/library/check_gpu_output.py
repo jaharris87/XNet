@@ -26,6 +26,7 @@ def expected_calls() -> dict[str, tuple[int, str]]:
                     "short": (3, "TTT"), "hole": (4, "TFTT"),
                     "inactive": (4, "FFFF"),
                 }.get(phase, (4, "TTTT"))
+        calls[f"{owner}_short_allocation"] = (1, "T")
     calls["borrowed_producer_sync"] = (4, "TTTT")
     calls["borrowed_producer_queued"] = (4, "TTTT")
     return calls
@@ -53,6 +54,10 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
     require(solver in (1, 3) and heat in (0, 1), "invalid GPU case controls")
     result = states(text)
     calls = expected_calls()
+    short_allocations = [words for words in lines if words[0] == "GPU_SHORT_ALLOCATION"]
+    require(short_allocations == [["GPU_SHORT_ALLOCATION", owner + "_short_allocation", "1", "4"]
+                                  for owner in ("owned", "borrowed")],
+            "missing/mismatched short scientific allocation and workspace capacity")
     teams = [words for words in lines if words[0] == "GPU_HOST_TEAM"]
     if threads:
         checksum = 128 * 129 * 257 // 6
@@ -97,7 +102,7 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
                 f"invalid active/inactive accepted steps: {label}")
     active_calls = [(label, shape) for label, shape in calls.items() if "T" in shape[1]]
     markers = [words for words in lines if words[0] == "GPU_OUTPUT_CALL"]
-    require(len(markers) == len(active_calls) == 26, "wrong successful output call count")
+    require(len(markers) == len(active_calls) == 28, "wrong successful output call count")
     expected_inventory = set()
     lane_files = 0
     for sequence, ((label, (n, mask)), marker) in enumerate(zip(active_calls, markers), 1):
@@ -116,8 +121,9 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
             trace = binary(directory / filename)
             require(trace["a"] == a and trace["z"] == z and trace["ny"] == len(names),
                     f"nuclear metadata mismatch: {filename}")
+            zone_id = (101, 7, 11) if label.endswith("_short_allocation") else (lane, 7, 11)
+            require(trace.get("zone_id") == zone_id, f"zone ID/lane mismatch: {filename}")
             require(trace["controls"][-2:] == (heat, solver) and
-                    b"XNet API input arrays" in trace["headers"][2] and
                     b"Mass fractions in XNet species order" in trace["headers"][2] and
                     b"Constant conditions; local time 0..dt seconds" in trace["headers"][3],
                     f"controls/input metadata mismatch: {filename}")
@@ -161,7 +167,7 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
             last_steps.append(last["k"])
             lane_files += 1
         require(max(last_steps) == steps[label], f"accepted-step maximum mismatch: {label}")
-    require(lane_files == 92 and {path.name for path in directory.glob("ts*")} == expected_inventory,
+    require(lane_files == 94 and {path.name for path in directory.glob("ts*")} == expected_inventory,
             "wrong binary file inventory (including invalid/inactive calls)")
     require({path.name for path in directory.glob("ev*")} ==
             {name.replace("ts_", "ev_", 1) for name in expected_inventory}, "wrong ASCII file inventory")

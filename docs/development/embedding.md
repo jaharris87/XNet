@@ -170,6 +170,188 @@ the existing preprocessor. In a multi-rank application, preprocess once
 before other ranks load it, or give each rank an owned directory. The library
 does not coordinate preprocessing through MPI.
 
+## Choosing an execution model
+
+| Library build | Application calls |
+| --- | --- |
+| [CPU, `OPENMP_MODE=OFF`](#cpu-quickstart) | Serialize all XNet calls. The application may use OpenMP elsewhere. |
+| [CPU, `OPENMP_MODE=ON`](#cpu-openmp-batches) | Each worker in one fixed application team calls XNet for its own batch. Configure the team before initialization, as below. |
+| [GPU, `OPENMP_MODE=OFF`](#mapped-gpu-batch) | Serialize host calls and keep the selected device. Choose host or mapped scientific arrays per call. Application OpenMP remains independent. |
+
+Initialize and finalize with no calls in flight. The following examples keep
+the application batch loop and scientific-array storage in the application.
+Detailed argument, controls, status and ownership rules follow as reference.
+
+## CPU OpenMP batches
+
+Build a separate CPU library configuration:
+
+```sh
+make BUILD_NAME=library-openmp MPI_MODE=OFF OPENMP_MODE=ON GPU_MODE=OFF \
+  MATRIX_SOLVER=dense EOS=STARKILLER -j libxnet
+```
+
+The application keeps the batch loop. Each worker may call a burn or an NSE
+query with its own input/output storage, one call at a time. Initialize and
+finalize on the initial thread outside application parallel regions.
+
+Set the intended default team size **before initialization**, for example
+with `OMP_NUM_THREADS=4 OMP_DYNAMIC=FALSE`, or with
+`omp_set_dynamic(.false.)` and `omp_set_num_threads(4)` on the initializing
+thread. XNet enters its own parallel regions during initialization and records
+the actual team size. A `num_threads(4)` clause on a later application loop
+alone does not configure those initialization regions. Preserve those default
+settings through finalization, which also enters internal parallel regions.
+XNet does not change the application's OpenMP settings.
+
+XNet allocates shared batch banks for `nthread*nzbatchmx` lanes and gives each
+worker a disjoint range. It also allocates and frees worker NSE scratch inside
+internal parallel regions. Memory follows that full capacity even when calls
+are short or masked. With eight-byte `dp`, the two dense matrices alone occupy
+approximately `16*msize**2*nthread*nzbatchmx` bytes, where `msize` is `ny` or
+`ny+1` with self-heating, before other solver and physics arrays.
+
+The following application routine submits already prepared batches and stores
+one status per batch. It joins the parallel loop before deciding whether to
+terminate. Compile it and its caller using the OpenMP library's exported
+settings, and configure the team before `xnet_initialize` as above:
+
+```fortran
+Subroutine burn_application_batches(dt_s,active,zone_id,density,temperature,ye, &
+  & mass_fraction,restart_dt_s,neutrino_loss,counters,timings,statuses,messages)
+  Use, Intrinsic :: iso_fortran_env, Only: error_unit
+  Use xnet_api, Only: dp, xnet_timing_t, xnet_burn_batch, xnet_success
+  Implicit None
+  Real(dp), Intent(in) :: dt_s, density(:,:)
+  Logical, Intent(in) :: active(:,:)
+  Integer, Intent(in) :: zone_id(:,:,:)
+  Real(dp), Intent(inout) :: temperature(:,:), ye(:,:), mass_fraction(:,:,:), restart_dt_s(:,:)
+  Real(dp), Intent(out) :: neutrino_loss(:,:)
+  Integer, Intent(out) :: counters(:,:,:), statuses(:)
+  Type(xnet_timing_t), Intent(out) :: timings(:)
+  Character(*), Intent(out) :: messages(:)
+  Integer, Parameter :: not_submitted = -1
+  Integer :: ibatch, failed, stop_requested
+
+  failed = 0
+  statuses = not_submitted
+  messages = 'Not submitted after an earlier batch error'
+  ! Last dimension identifies a batch; each iteration owns its output slices.
+  !$omp parallel do default(shared) private(ibatch,stop_requested) schedule(static)
+  Do ibatch = 1, Size(active,2)
+    !$omp atomic read
+    stop_requested = failed
+    If ( stop_requested /= 0 ) Cycle
+    Call xnet_burn_batch(dt_s=dt_s,active=active(:,ibatch),zone_id=zone_id(:,:,ibatch), &
+      & density=density(:,ibatch),temperature=temperature(:,ibatch),ye=ye(:,ibatch), &
+      & mass_fraction=mass_fraction(:,:,ibatch),restart_dt_s=restart_dt_s(:,ibatch), &
+      & neutrino_loss=neutrino_loss(:,ibatch),counters=counters(:,:,ibatch), &
+      & timing=timings(ibatch),ierr=statuses(ibatch),message=messages(ibatch))
+    If ( statuses(ibatch) /= xnet_success ) Then
+      !$omp atomic write
+      failed = 1
+    EndIf
+  EndDo
+  !$omp end parallel do
+
+  If ( failed /= 0 ) Then
+    Do ibatch = 1, Size(statuses)
+      If ( statuses(ibatch) /= xnet_success ) Then
+        Write(error_unit,'(a,i0,a,i0,2a)') 'Batch ',ibatch,': XNet status ', &
+          & statuses(ibatch),': ',Trim(messages(ibatch))
+      EndIf
+    EndDo
+    ! A multiphysics application invokes its fatal/MPI shutdown here.
+    Stop 1
+  EndIf
+  Return
+End Subroutine burn_application_batches
+```
+
+The routine needs an explicit interface in its caller, normally by placing it
+in an application module. Its array extents must follow the batch argument
+rules, with one `timings`, `statuses` and `messages` entry per batch. This
+example stops submitting batches after an observed error; calls already past
+the flag check may finish. Unsubmitted entries retain the application-local
+`not_submitted=-1`, rather than an XNet result. After any error the example
+terminates and consumes none of the batch results. An application may correct
+a checked input error before evolution, but statuses 4 and 5 always require
+shutdown.
+
+Use one fixed, nonnested worker team throughout the lifetime. Keep affinity
+settings stable and dynamic teams disabled. OpenMP's guarantee that a
+noninitial worker keeps its `threadprivate` allocation between active regions
+also requires no intervening host `teams` region, no `order(concurrent)`
+construct, and no `omp_pause_resource`/`omp_pause_resource_all` call. The
+[OpenMP 5.2 threadprivate rules](https://www.openmp.org/spec-html/5.2/openmpse24.html)
+give the full conditions. XNet checks only part of this: dynamic/nested or
+wrong-sized teams return `xnet_unsupported`, and absent worker scratch returns
+`xnet_lifecycle_error`. Equal thread counts alone do not establish persistence.
+Tasks, recursive calls, simultaneous unrelated teams and arbitrary team
+changes are unsupported. Calls on the initial thread between supported
+regions are allowed. A supplied EOS provider must also permit concurrent
+evaluations.
+
+With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE and lifecycle
+operations. The application may use OpenMP elsewhere. This choice suppresses
+XNet's host teams and threadprivate state even when target-offload compilation
+enables OpenMP directives. GPU host calls remain serialized.
+
+## Mapped GPU batch
+
+These two fragments replace the burn step in the CPU quickstart, using its
+already-declared arrays and `check_status`. Build/link with the selected GPU
+library and select the device in both runtimes **before initialization**, as
+described in [device and stream selection](#device-and-stream-selection). Keep the
+quickstart's network preparation, initialization and finalization. Omit
+`gpu_resources` for XNet-owned handles; the directive runtime owns the default
+OpenACC stream. [GPU builds and resources](#gpu-builds-and-resources) gives the
+build recipes and borrowing rules.
+
+### CUDA/OpenACC
+
+```fortran
+! Map complete scientific arrays on the device selected before initialization.
+! Queue 1 matches the library's default OpenACC queue.
+!$acc enter data copyin(density,temperature,ye,mass_fraction,restart_dt_s) create(neutrino_loss) async(1)
+!$acc wait(1)
+Call xnet_burn_batch(dt_s=0.1_dp,active=active,zone_id=zone_id,density=density, &
+  & temperature=temperature,ye=ye,mass_fraction=mass_fraction,restart_dt_s=restart_dt_s, &
+  & neutrino_loss=neutrino_loss,counters=counters,timing=timing,ierr=ierr,message=message, &
+  & max_steps_taken=max_steps_taken,data_on_device=.true.)
+Call check_status(operation='burn',status=ierr,detail=message)
+! Transfer results only when the application needs their host values.
+!$acc update self(temperature,ye,mass_fraction,restart_dt_s,neutrino_loss) async(1)
+!$acc wait(1)
+! Delete these application mappings after the last call that uses them.
+!$acc exit data delete(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss) async(1)
+!$acc wait(1)
+```
+
+### HIP/OpenMP target
+
+```fortran
+! Map complete arrays on the device selected before initialization.
+! This nowait enter-data operation creates a target task in the current task.
+!$omp target enter data map(to:density,temperature,ye,mass_fraction,restart_dt_s) map(alloc:neutrino_loss) nowait
+!$omp taskwait
+Call xnet_burn_batch(dt_s=0.1_dp,active=active,zone_id=zone_id,density=density, &
+  & temperature=temperature,ye=ye,mass_fraction=mass_fraction,restart_dt_s=restart_dt_s, &
+  & neutrino_loss=neutrino_loss,counters=counters,timing=timing,ierr=ierr,message=message, &
+  & max_steps_taken=max_steps_taken,data_on_device=.true.)
+Call check_status(operation='burn',status=ierr,detail=message)
+! These directives complete before the application reads or deallocates arrays.
+!$omp target update from(temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
+!$omp target exit data map(delete:density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
+```
+
+In either case, retain mappings across later burns when the application keeps
+its data on the device; delete them only after the final use. The fragments
+show the initial transfer and eventual host update explicitly. Host diagnostic
+arguments remain on the host. For other producer tasks/streams, use the
+application's dependency and synchronization rules described in
+[host and resident device arrays](#host-and-resident-device-arrays).
+
 ## Batch inputs and returned values
 
 The public call is:
@@ -310,121 +492,6 @@ were created on that path. If GPU cleanup fails after arrays are released,
 new initialization, burns and NSE queries are blocked; another finalization
 retries GPU cleanup without repeating array/EOS teardown. This preserves
 cleanup bookkeeping and does not promise recovery from a GPU runtime fault.
-
-## CPU OpenMP batches
-
-Build a separate CPU library configuration:
-
-```sh
-make BUILD_NAME=library-openmp MPI_MODE=OFF OPENMP_MODE=ON GPU_MODE=OFF \
-  MATRIX_SOLVER=dense EOS=STARKILLER -j libxnet
-```
-
-The application keeps the batch loop. Each worker may call a burn or an NSE
-query with its own input/output storage, one call at a time. Initialize and
-finalize on the initial thread outside application parallel regions.
-
-Set the intended default team size **before initialization**, for example
-with `OMP_NUM_THREADS=4 OMP_DYNAMIC=FALSE`, or with
-`omp_set_dynamic(.false.)` and `omp_set_num_threads(4)` on the initializing
-thread. XNet enters its own parallel regions during initialization and records
-the actual team size. A `num_threads(4)` clause on a later application loop
-alone does not configure those initialization regions. Preserve those default
-settings through finalization, which also enters internal parallel regions.
-XNet does not change the application's OpenMP settings.
-
-XNet allocates shared batch banks for `nthread*nzbatchmx` lanes and gives each
-worker a disjoint range. It also allocates and frees worker NSE scratch inside
-internal parallel regions. Memory follows that full capacity even when calls
-are short or masked. With eight-byte `dp`, the two dense matrices alone occupy
-approximately `16*msize**2*nthread*nzbatchmx` bytes, where `msize` is `ny` or
-`ny+1` with self-heating, before other solver and physics arrays.
-
-The following application routine submits already prepared batches and stores
-one status per batch. It joins the parallel loop before deciding whether to
-terminate. Compile it and its caller using the OpenMP library's exported
-settings, and configure the team before `xnet_initialize` as above:
-
-```fortran
-Subroutine burn_application_batches(dt_s,active,zone_id,density,temperature,ye, &
-  & mass_fraction,restart_dt_s,neutrino_loss,counters,timings,statuses,messages)
-  Use, Intrinsic :: iso_fortran_env, Only: error_unit
-  Use xnet_api, Only: dp, xnet_timing_t, xnet_burn_batch, xnet_success
-  Implicit None
-  Real(dp), Intent(in) :: dt_s, density(:,:)
-  Logical, Intent(in) :: active(:,:)
-  Integer, Intent(in) :: zone_id(:,:,:)
-  Real(dp), Intent(inout) :: temperature(:,:), ye(:,:), mass_fraction(:,:,:), restart_dt_s(:,:)
-  Real(dp), Intent(out) :: neutrino_loss(:,:)
-  Integer, Intent(out) :: counters(:,:,:), statuses(:)
-  Type(xnet_timing_t), Intent(out) :: timings(:)
-  Character(*), Intent(out) :: messages(:)
-  Integer, Parameter :: not_submitted = -1
-  Integer :: ibatch, failed, stop_requested
-
-  failed = 0
-  statuses = not_submitted
-  messages = 'Not submitted after an earlier batch error'
-  ! Last dimension identifies a batch; each iteration owns its output slices.
-  !$omp parallel do default(shared) private(ibatch,stop_requested) schedule(static)
-  Do ibatch = 1, Size(active,2)
-    !$omp atomic read
-    stop_requested = failed
-    If ( stop_requested /= 0 ) Cycle
-    Call xnet_burn_batch(dt_s=dt_s,active=active(:,ibatch),zone_id=zone_id(:,:,ibatch), &
-      & density=density(:,ibatch),temperature=temperature(:,ibatch),ye=ye(:,ibatch), &
-      & mass_fraction=mass_fraction(:,:,ibatch),restart_dt_s=restart_dt_s(:,ibatch), &
-      & neutrino_loss=neutrino_loss(:,ibatch),counters=counters(:,:,ibatch), &
-      & timing=timings(ibatch),ierr=statuses(ibatch),message=messages(ibatch))
-    If ( statuses(ibatch) /= xnet_success ) Then
-      !$omp atomic write
-      failed = 1
-    EndIf
-  EndDo
-  !$omp end parallel do
-
-  If ( failed /= 0 ) Then
-    Do ibatch = 1, Size(statuses)
-      If ( statuses(ibatch) /= xnet_success ) Then
-        Write(error_unit,'(a,i0,a,i0,2a)') 'Batch ',ibatch,': XNet status ', &
-          & statuses(ibatch),': ',Trim(messages(ibatch))
-      EndIf
-    EndDo
-    ! A multiphysics application invokes its fatal/MPI shutdown here.
-    Stop 1
-  EndIf
-  Return
-End Subroutine burn_application_batches
-```
-
-The routine needs an explicit interface in its caller, normally by placing it
-in an application module. Its array extents must follow the batch argument
-rules, with one `timings`, `statuses` and `messages` entry per batch. This
-example stops submitting batches after an observed error; calls already past
-the flag check may finish. Unsubmitted entries retain the application-local
-`not_submitted=-1`, rather than an XNet result. After any error the example
-terminates and consumes none of the batch results. An application may correct
-a checked input error before evolution, but statuses 4 and 5 always require
-shutdown.
-
-Use one fixed, nonnested worker team throughout the lifetime. Keep affinity
-settings stable and dynamic teams disabled. OpenMP's guarantee that a
-noninitial worker keeps its `threadprivate` allocation between active regions
-also requires no intervening host `teams` region, no `order(concurrent)`
-construct, and no `omp_pause_resource`/`omp_pause_resource_all` call. The
-[OpenMP 5.2 threadprivate rules](https://www.openmp.org/spec-html/5.2/openmpse24.html)
-give the full conditions. XNet checks only part of this: dynamic/nested or
-wrong-sized teams return `xnet_unsupported`, and absent worker scratch returns
-`xnet_lifecycle_error`. Equal thread counts alone do not establish persistence.
-Tasks, recursive calls, simultaneous unrelated teams and arbitrary team
-changes are unsupported. Calls on the initial thread between supported
-regions are allowed. A supplied EOS provider must also permit concurrent
-evaluations.
-
-With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE and lifecycle
-operations. The application may use OpenMP elsewhere. This choice suppresses
-XNet's host teams and threadprivate state even when target-offload compilation
-enables OpenMP directives. GPU host calls remain serialized.
 
 ## Controls reference
 
@@ -651,12 +718,7 @@ still copies into its own solver workspace. Raw device pointers and
 noncontiguous device sections are unsupported. The caller owns and preserves
 the lifetime of its mappings; XNet does not delete them.
 
-```fortran
-Call xnet_burn_batch(dt_s=dt_s,active=active,zone_id=zone_id,density=density, &
-  & temperature=temperature,ye=ye,mass_fraction=mass_fraction,restart_dt_s=restart_dt_s, &
-  & neutrino_loss=neutrino_loss,counters=counters,timing=timing,ierr=ierr,message=message, &
-  & max_steps_taken=max_steps_taken,data_on_device=.true.)
-```
+See [mapped GPU batch](#mapped-gpu-batch) for transfer and synchronization examples.
 
 `dt_s`, `active`, `zone_id`, `counters`, `timing`, `ierr`, `message` and
 `max_steps_taken` remain host arguments in both modes. Calls complete their

@@ -62,6 +62,8 @@ Contains
       If ( kstep > 0 ) Then
         Call flux(mask_in = mask_in)
       Else
+        ! Initial records use zero flux for every batch, before rates are evaluated.
+        flx(:,zb_lo:zb_hi) = 0.0_dp
         flx_int(:,zb_lo:zb_hi) = 0.0_dp
       EndIf
     EndIf

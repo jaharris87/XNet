@@ -16,6 +16,8 @@ The runner executes one serial reference, one two-rank MPI run, a two-rank
 non-root missing-abundance check, and three two-thread OpenMP runs. It requires:
 
 - exactly one nonempty ASCII and binary history for each global zone 1-10;
+- zero reaction flux in every timestep-zero binary history record, including
+  batches that reuse a worker bank;
 - no output for inactive zones 11-12;
 - runtime topology records proving ranks 0-1 or threads 1-2 actually ran;
 - complete diagnostic records for each zone exactly once across all workers;
@@ -45,7 +47,13 @@ python3 -m pytest -q test/qualification/test_parallel_zones.py
 These checks prove that the qualification helpers reject duplicate/missing
 zones, an off-by-one zone 11 output, filename/result misassociation, copied
 endpoint or ASCII energy values, missing MPI/OpenMP workers, a zero-status
-failure probe, and a process-group timeout.
+failure probe, stale initial binary reaction flux, and a process-group timeout.
+
+The initial-flux check decodes the six binary headers and first state record.
+It supports the native-endian four-byte record markers and integers and
+eight-byte reals used by the GNU configurations below. Initial flux is a zero
+placeholder written before rates are evaluated; this check does not evaluate
+physical initial reaction rates or compare accepted-step histories.
 
 ## Configuration run
 

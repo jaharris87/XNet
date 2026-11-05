@@ -4,6 +4,7 @@ from dataclasses import replace
 import os
 from pathlib import Path
 import signal
+import struct
 import sys
 import time
 
@@ -19,6 +20,7 @@ from parallel_zones import (
     normalize_worker_states,
     run_process,
     validate_ascii_association,
+    validate_initial_flux,
     validate_mpi_topology,
     validate_openmp_topology,
     validate_output_inventory,
@@ -91,6 +93,30 @@ def test_inventory_rejects_missing_or_off_by_one_zone(tmp_path: Path, kind: str)
         (tmp_path / "ev_parallel_zones_11").write_text("ev\n", encoding="utf-8")
     with pytest.raises(QualificationFailure, match="output inventory mismatch"):
         validate_output_inventory(tmp_path)
+
+
+def test_initial_flux_check_reads_flux_after_six_scalars_and_all_species(tmp_path: Path) -> None:
+    species, fluxes = len(ALPHA_SPECIES), 2
+    for zone in EXPECTED_ZONES:
+        headers = [b" " * length for length in (320, 76, 160, 160)]
+        headers += [struct.pack(f"=i{2 * species}d", species, *([1.0] * (2 * species)))]
+        headers += [struct.pack("=5i", fluxes, 1, 2, 2, 3)]
+        # Nonzero scalars/abundances distinguish the flux section from adjacent fields.
+        initial = struct.pack(
+            f"=i{6 + species + fluxes}d", 0, *([float(zone)] * (6 + species)), 0.0, 0.0
+        )
+        with (tmp_path / f"ts_parallel_zones_{zone:02d}").open("wb") as stream:
+            for payload in (*headers, initial):
+                marker = struct.pack("=i", len(payload))
+                stream.write(marker + payload + marker)
+    validate_initial_flux(tmp_path)
+
+    path = tmp_path / "ts_parallel_zones_09"
+    content = bytearray(path.read_bytes())
+    struct.pack_into("=d", content, len(content) - 12, 1.0e-30)
+    path.write_bytes(content)
+    with pytest.raises(QualificationFailure, match="nonzero initial reaction flux for zone 9"):
+        validate_initial_flux(tmp_path)
 
 
 def test_ascii_filename_association_rejects_swapped_zone_content(tmp_path: Path) -> None:

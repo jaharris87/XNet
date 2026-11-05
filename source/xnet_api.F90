@@ -1,7 +1,16 @@
-! Single-instance library API.
+!***************************************************************************************************
+! xnet_api.F90
+! Application interface for network initialization, batch evolution, NSE and finalization.
+!***************************************************************************************************
+
 #include "xnet_macros.fh"
 
 Module xnet_api
+  !-------------------------------------------------------------------------------------------------
+  ! One initialized network is shared by the application. Each OpenMP worker uses its own batch
+  ! workspace and NSE scratch; initialization and finalization run outside application teams.
+  ! See docs/development/embedding.md for the calling sequence and supported execution modes.
+  !-------------------------------------------------------------------------------------------------
   Use xnet_types, Only: dp, i8
   Use xnet_controls, Only: xnet_controls_t, set_xnet_controls_defaults
   Use xnet_gpu, Only: xnet_gpu_t
@@ -17,6 +26,7 @@ Module xnet_api
   Public :: dp, xnet_controls_t, set_xnet_controls_defaults, xnet_gpu_t
   Public :: xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize
 
+  ! Species metadata uses the same ordering as the first dimension of mass_fraction.
   Type, Public :: xnet_network_t
     Character(5), Allocatable :: names(:)
     Integer, Allocatable :: mass_number(:), charge_number(:)
@@ -29,20 +39,26 @@ Module xnet_api
     Real(dp) :: derivative = 0.0_dp, rates = 0.0_dp, screening = 0.0_dp
   End Type xnet_timing_t
 
-  ! Pending GPU cleanup must not permit burns or repeat array teardown.
+  ! A failed GPU teardown leaves cleanup pending. Burns remain disabled, but finalization can
+  ! retry resource release without repeating the array teardown.
   Integer, Parameter :: api_uninitialized = 0, api_ready = 1, api_cleanup_pending = 2
   Integer :: api_state = api_uninitialized
   Character(80) :: api_data_description
+
   ! Keep separate output segments across burns and initialization lifetimes.
   Integer(i8) :: output_call = 0_i8
 
 Contains
 
   Subroutine check_worker(ierr,message)
-    ! Each application worker owns one preallocated batch bank and its NSE scratch.
+    !-----------------------------------------------------------------------------------------------
+    ! Select this worker's preallocated batch bank and check that its NSE scratch is available.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: tid, nthread, nzbatchmx, zb_offset, zb_lo, zb_hi
     Use xnet_nse, Only: ynse
     Implicit None
+
+    ! Output variables
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
@@ -68,6 +84,8 @@ Contains
       message = 'This XNet worker is not initialized; keep the initialized OpenMP team'
       Return
     EndIf
+
+    ! Application lanes start at one; solver arrays span every worker's reserved bank.
     zb_offset = (tid-1)*nzbatchmx
     zb_lo = zb_offset+1
     zb_hi = zb_offset+nzbatchmx
@@ -75,7 +93,10 @@ Contains
   End Subroutine check_worker
 
   Subroutine xnet_initialize(controls,network,ierr,message,gpu_resources)
-    ! Prepare and load a network once. Reader, EOS and solver failures may still terminate.
+    !-----------------------------------------------------------------------------------------------
+    ! Load one network and allocate reusable solver workspaces. Reader, EOS and solver errors
+    ! may still terminate the application rather than return through ierr.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname, ia, iz, be, mex, read_nuclear_data, index_from_name
     Use reaction_data, Only: read_reaction_data
     Use xnet_abundances, Only: abundances_initialize, y, yo, yt, ydot, ystart, xext, aext, zext
@@ -99,11 +120,17 @@ Contains
     Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
 #endif
     Implicit None
+
+    ! Input/Output variables
     Type(xnet_controls_t), Intent(in) :: controls
     Type(xnet_network_t), Intent(out) :: network
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
+
+    ! Optional variables
     Type(xnet_gpu_t), Optional, Intent(in) :: gpu_resources
+
+    ! Local variables
     Character(10), Parameter :: ascii_files(3) = [Character(10) :: 'sunet', 'netwinv', 'netsu']
     Character(10), Parameter :: required_files(5) = &
       & [Character(10) :: 'sunet', 'netwinv', 'nets3', 'nets4', 'match_data']
@@ -153,6 +180,7 @@ Contains
       message = 'Library calls do not support neutrino capture histories'
       Return
     EndIf
+
     ! Preprocessing writes data_dir; the host must arrange exclusive access to that directory.
     If ( controls%iprocess > 0 ) Then
       Call check_network_files(controls%data_dir,ascii_files,ierr,message)
@@ -202,7 +230,8 @@ Contains
 #endif
       Return
     EndIf
-    ! Both real consumers carry diagnostic integer tuples, with three or four entries.
+
+    ! Reserve room for either supported zone-ID tuple (three or four integer components).
     Deallocate (zone_id)
     Allocate (zone_id(4,nzevolve))
     zone_id = 0
@@ -215,12 +244,13 @@ Contains
     Call eos_initialize
     If ( isolv == 1 ) Call be_init
     If ( isolv == 3 ) Call bdf_init
+
     ! Use the standalone species lookup and missing-name fallback for condensed output.
     If ( controls%itsout > 0 ) Then
       Do i = 1, nnucout
         Call index_from_name(output_nuc(i),inuc)
         If ( inuc < 1 .or. inuc > ny ) Then
-          Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
+          Write (lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
           inucout(i) = ny
         Else
           inucout(i) = inuc
@@ -258,7 +288,11 @@ Contains
 
   Subroutine xnet_burn_batch(dt_s,active,zone_id,density,temperature,ye,mass_fraction, &
     & restart_dt_s,neutrino_loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken,data_on_device)
-    ! Constant density, with constant temperature unless self-heating is selected.
+    !-----------------------------------------------------------------------------------------------
+    ! Evolve active zones for dt_s seconds at constant density, with constant temperature unless
+    ! self-heating is selected. Scientific arrays use (species,lane) or (lane) ordering; zone IDs
+    ! and counters remain on the host even when the scientific arrays are on the device.
+    !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: ny, aa
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
@@ -274,19 +308,29 @@ Contains
 #endif
 #endif
     Implicit None
-    Real(dp), Intent(in) :: dt_s
-    Real(dp), Target, Intent(in) :: density(:)
+
+    ! Input variables
+    Real(dp), Intent(in) :: dt_s                         ! Burn duration (s)
+    Real(dp), Target, Intent(in) :: density(:)           ! Density (g/cm^3)
     Logical, Intent(in) :: active(:)
     Integer, Intent(in) :: zone_id(:,:)
+
+    ! Input/Output variables: temperature in K, restart_dt_s in s (zero for fresh startup).
     Real(dp), Target, Intent(inout) :: temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
-    Real(dp), Target, Intent(out) :: neutrino_loss(:)
+
+    ! Output variables
+    Real(dp), Target, Intent(out) :: neutrino_loss(:)     ! Integrated weak-reaction loss (erg/g)
     Integer, Intent(out) :: counters(:,:)
     Type(xnet_timing_t), Intent(out) :: timing
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
+
+    ! Optional variables
     Real(dp), Optional, Target, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
     Integer, Optional, Intent(out) :: max_steps_taken
-    Logical, Optional, Intent(in) :: data_on_device
+    Logical, Optional, Intent(in) :: data_on_device      ! Scientific arrays already mapped on the device
+
+    ! Local variables
     Integer :: n, lane, izb, kstep, evolve_status, failed_zone, id
     Real(dp), Allocatable :: loss_work(:)
     Real(dp) :: total_mass
@@ -300,6 +344,7 @@ Contains
     Integer :: stream_status
 #endif
 
+    ! Establish failure outputs before checking lifecycle, mappings and input values.
     on_device = .false.
     If ( Present(data_on_device) ) on_device = data_on_device
     If ( Present(max_steps_taken) ) max_steps_taken = 0
@@ -324,13 +369,14 @@ Contains
       Call stream_sync(stream,stream_status)
       If ( stream_status /= 0 ) Then
         ierr = xnet_invalid
-        Write(message,'(a,i0)') 'Cannot synchronize the application GPU stream, status ',stream_status
+        Write (message,'(a,i0)') 'Cannot synchronize the application GPU stream, status ',stream_status
         Return
       EndIf
 #endif
       Call check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
         & ierr,message,aux_x,aux_a,aux_z)
       If ( ierr /= 0 ) Return
+
       ! Clear the scientific output in its requested memory space, including rejected requests.
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(neutrino_loss)
@@ -347,6 +393,7 @@ Contains
       Return
     EndIf
 #endif
+    ! Check shapes before indexing arrays, and values only in active lanes.
     ierr = xnet_invalid
     n = Size(active)
     If ( n > nzbatchmx .or. Size(density) /= n .or. Size(temperature) /= n .or. &
@@ -417,6 +464,7 @@ Contains
     ierr = xnet_success
     If ( .not. Any(active) .and. .not. on_device ) Return
 
+    ! Validation is complete. Select this batch within the current worker's workspace.
     before = current_timing()
     szbatch = 1
     nzbatch = Count(active)
@@ -435,12 +483,14 @@ Contains
       EndDo
     Else
 #endif
+    ! Give unused lanes benign values without reading inactive caller storage.
     ystart(:,zb_lo:zb_hi) = 0.0_dp
     xext(zb_lo:zb_hi) = 0.0_dp
     aext(zb_lo:zb_hi) = 1.0_dp
     zext(zb_lo:zb_hi) = 0.0_dp
     iaux(zb_lo:zb_hi) = 0
-    ! The first endpoint is index one; zero can reach history element zero in timestep.
+
+    ! History indices start at one; timestep uses nstart to locate the first interval.
     nstart(zb_lo:zb_hi) = 1
     tstart(zb_lo:zb_hi) = 0.0_dp
     tstop(zb_lo:zb_hi) = dt_s
@@ -455,7 +505,9 @@ Contains
       t9start(izb) = temperature(lane)*1.0e-9_dp
       rhostart(izb) = density(lane)
       yestart(izb) = ye(lane)
-      ! Preserve the CHIMERA startup hint convention without exposing its sign encoding.
+
+      ! timestep interprets a negative tdelstart as a supplied step in seconds; the public
+      ! argument stays nonnegative. Zero requests the usual fresh-start estimate.
       tdelstart(izb) = -restart_dt_s(lane)
       If ( Present(aux_x) ) Then
         If ( aux_x(lane) > 0.0_dp ) Then
@@ -466,6 +518,9 @@ Contains
         EndIf
       EndIf
     EndDo
+
+    ! The integrator consumes histories. Two identical endpoints represent constant conditions;
+    ! self-heating, when enabled, evolves temperature from this initial value.
     nh(zb_lo:zb_hi) = 2
     th(1,zb_lo:zb_hi) = tstart(zb_lo:zb_hi)
     th(2,zb_lo:zb_hi) = tstop(zb_lo:zb_hi)
@@ -484,6 +539,7 @@ Contains
     y(:,zb_lo:zb_hi) = ystart(:,zb_lo:zb_hi)
     Call open_burn_output(Size(zone_id,1),ierr,message)
     If ( ierr /= xnet_success ) Return
+
     ! Host inputs remain authoritative even when the caller has stale device mappings.
     ! Transfer only XNet-owned workspace; arbitrary host array sections retain their existing behavior.
     !XDIR XUPDATE XASYNC(gpu_queue) &
@@ -494,6 +550,7 @@ Contains
     Allocate (loss_work(zb_lo:zb_hi))
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
     Call close_burn_output
+
     ! API results do not depend on diagnostic verbosity or successful final output.
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(ktot)
@@ -505,6 +562,7 @@ Contains
       If ( .not. active(lane) ) Cycle
       izb = zb_offset+lane
       counters(:,lane) = ktot(:,izb)
+
       ! Numerical failure requires host shutdown; no physical result or subsequent burn is supported.
       If ( evolve_status /= 0 ) Cycle
       mass_fraction(:,lane) = y(:,izb)*aa
@@ -517,6 +575,7 @@ Contains
 #ifdef XNET_GPU
     EndIf
 #endif
+    ! Return per-call diagnostics, including attempted work when integration fails.
     If ( evolve_status == 0 .and. Present(max_steps_taken) ) max_steps_taken = kstep
     timing = current_timing()
     timing%evolve = timing%evolve - before%evolve
@@ -534,13 +593,14 @@ Contains
       failure_reason = 'maximum integration steps reached; host must terminate'
     End Select
     If ( evolve_status /= 0 ) Then
+      ! Convert the solver's bank index back to the application's local lane.
       failed_zone = failed_zone-zb_offset
-      Write(failure_ids,'(i0)') zone_id(1,failed_zone)
+      Write (failure_ids,'(i0)') zone_id(1,failed_zone)
       Do id = 2, Size(zone_id,1)
-        Write(id_component,'(i0)') zone_id(id,failed_zone)
+        Write (id_component,'(i0)') zone_id(id,failed_zone)
         failure_ids = Trim(failure_ids)//' '//Trim(id_component)
       EndDo
-      Write(failure_message,'(a,i0,4a)') 'Zone ',failed_zone,', zone IDs [', &
+      Write (failure_message,'(a,i0,4a)') 'Zone ',failed_zone,', zone IDs [', &
         & Trim(failure_ids),']: ',Trim(failure_reason)
       message = failure_message
     EndIf
@@ -550,15 +610,24 @@ Contains
 #ifdef XNET_GPU
   Subroutine check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
     & ierr,message,aux_x,aux_a,aux_z)
-    ! Ordinary array descriptors identify mappings on the device already selected by the host.
+    !-----------------------------------------------------------------------------------------------
+    ! Check that scientific arrays are contiguous and mapped on the selected device. Ordinary
+    ! Fortran descriptors identify the mappings; this routine does not transfer their values.
+    !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_c_binding, Only: C_LOC, C_SIZE_T, C_SIZEOF
     Use xnet_gpu, Only: device_is_present, mydevice
     Implicit None
+
+    ! Input/Output variables
     Real(dp), Target, Intent(in) :: density(:), temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
-    Real(dp), Target, Intent(out) :: neutrino_loss(:)
+    Real(dp), Target, Intent(out) :: neutrino_loss(:)     ! Integrated weak-reaction loss (erg/g)
+
+    ! Optional variables
     Real(dp), Optional, Target, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
+
+    ! Local variables
     Integer(C_SIZE_T), Parameter :: real_bytes = C_SIZEOF(0.0_dp)
     Logical :: mapped
 
@@ -610,7 +679,10 @@ Contains
 
   Subroutine burn_device_arrays(dt_s,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
     & zone_id_components,kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
-    ! Validate, prepare and extract scientific arrays on the device; status and counters return on host.
+    !-----------------------------------------------------------------------------------------------
+    ! Validate and evolve scientific arrays on the device. Status and attempted counters return
+    ! on the host; physical results are exported only after successful integration.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
     Use xnet_conditions, Only: t, t9, rho, ye_work=>ye, tdel, tdel_old, nt, nstart, &
@@ -618,6 +690,8 @@ Contains
     Use xnet_controls, Only: nzevolve, lzactive, iheat, ktot, gpu_queue
     Use xnet_evolve, Only: full_net
     Implicit None
+
+    ! Input/Output variables
     Real(dp), Intent(in) :: dt_s, density(:)
     Real(dp), Intent(inout) :: temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
     Real(dp), Intent(out) :: neutrino_loss(:)
@@ -625,6 +699,8 @@ Contains
     Integer, Intent(in) :: zone_id_components
     Integer, Intent(out) :: kstep, evolve_status, failed_zone, ierr
     Character(*), Intent(out) :: message
+
+    ! Local variables
     Integer :: n, lane, k
     Integer, Allocatable :: validation(:)
     Real(dp), Allocatable :: mass_sum(:), loss_work(:)
@@ -632,6 +708,7 @@ Contains
     Logical :: finite_state, negative_mass
 
     n = Size(density)
+
     ! full_net checks the stop time on the host after updating its completion status.
     tstop = dt_s
     kstep = 0
@@ -641,6 +718,7 @@ Contains
     message = ' '
     If ( n == 0 ) Return
     Allocate (validation(n),mass_sum(n),loss_work(nzevolve))
+
     ! Increment existing mapping references without copying stale host scientific values.
     ! Matching releases below leave every caller-owned mapping in place.
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
@@ -660,6 +738,7 @@ Contains
       validation(lane) = 0
       mass_sum(lane) = 0.0_dp
       If ( .not. lzactive(lane) ) Cycle
+
       ! NVHPC 26.5 cannot link IEEE_IS_FINITE in this OpenACC loop.
       ! Ordered comparisons also reject NaN and infinity without a device helper.
       finite_state = Abs(density(lane)) <= Huge(1.0_dp) .and. Abs(temperature(lane)) <= Huge(1.0_dp) .and. &
@@ -795,6 +874,7 @@ Contains
     If ( ierr /= xnet_success ) GoTo 900
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
     Call close_burn_output
+
     ! Attempted counters are host diagnostics even when the physical result is invalid.
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(ktot)
@@ -830,36 +910,45 @@ Contains
 #endif
 
   Subroutine check_network_files(data_dir,filenames,ierr,message)
-    ! Check access before installing state. Contents still use the existing fatal readers.
+    !-----------------------------------------------------------------------------------------------
+    ! Check access before installing network state. Contents still use the existing fatal readers.
+    !-----------------------------------------------------------------------------------------------
     Implicit None
+
+    ! Input/Output variables
     Character(*), Intent(in) :: data_dir, filenames(:)
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
+
+    ! Local variables
     Integer :: i, input_unit, input_status
     Logical :: exists
 
     ierr = xnet_invalid
     message = ' '
     Do i = 1, Size(filenames)
-      Inquire(file=Trim(data_dir)//'/'//Trim(filenames(i)),exist=exists)
+      Inquire (file=Trim(data_dir)//'/'//Trim(filenames(i)),exist=exists)
       If ( .not. exists ) Then
         message = 'Missing network file: '//Trim(filenames(i))
         Return
       EndIf
-      Open(newunit=input_unit,file=Trim(data_dir)//'/'//Trim(filenames(i)), &
+      Open (newunit=input_unit,file=Trim(data_dir)//'/'//Trim(filenames(i)), &
         & status='old',action='read',access='stream',form='unformatted',iostat=input_status)
       If ( input_status /= 0 ) Then
         message = 'Cannot read network file: '//Trim(filenames(i))
         Return
       EndIf
-      Close(input_unit)
+      Close (input_unit)
     EndDo
     ierr = xnet_success
     Return
   End Subroutine check_network_files
 
   Subroutine open_burn_output(zone_id_components,ierr,message)
-    ! Each call has its own local 0..dt history. Lane numbers distinguish repeated diagnostic IDs.
+    !-----------------------------------------------------------------------------------------------
+    ! Open a separate output segment for this call's local 0..dt history. Call and lane numbers
+    ! distinguish repeated diagnostic zone IDs without changing the standalone record layout.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, zz, aa, nname
     Use xnet_controls, Only: itsout, lzactive, lun_ts, lun_ev, bin_file_base, ev_file_base, zone_id, &
       & zb_offset, zb_lo, zb_hi, descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, &
@@ -867,9 +956,13 @@ Contains
     Use xnet_flux, Only: flx, ifl_orig, ifl_term
     Use xnet_match, Only: mflx
     Implicit None
+
+    ! Input/Output variables
     Integer, Intent(in) :: zone_id_components
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
+
+    ! Local variables
     ! Match the standalone binary header field widths, including programmatic input descriptions.
     Character(80), Parameter :: input_name = 'XNet API input arrays'
     Character(80), Parameter :: abundance_description = 'Mass fractions in XNet species order'
@@ -885,6 +978,7 @@ Contains
     message = ' '
     If ( itsout <= 0 .or. .not. Any(lzactive(zb_lo:zb_hi)) ) Return
     ierr = xnet_invalid
+
     ! Reserve one number for this call; do not serialize file writes or evolution.
     call_number = 0_i8
     !$omp critical(xnet_output_call)
@@ -899,26 +993,27 @@ Contains
     EndIf
     Do lane = zb_lo, zb_hi
       If ( .not. lzactive(lane) ) Cycle
-      Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_lane',lane-zb_offset
+      Write (suffix,'(a,i0,a,i0)') '_call',call_number,'_lane',lane-zb_offset
       filename = Trim(bin_file_base)//Trim(suffix)
-      Open(newunit=lun_ts(lane),file=Trim(filename),status='new',form='unformatted', &
+      Open (newunit=lun_ts(lane),file=Trim(filename),status='new',form='unformatted', &
         & action='write',iostat=output_status)
       If ( output_status /= 0 ) Exit
-      Write(lun_ts(lane)) descript,api_data_description
-      Write(lun_ts(lane)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
+      Write (lun_ts(lane)) descript,api_data_description
+      Write (lun_ts(lane)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
+
       ! Identify the caller zone in the existing input label; keep the record layout.
-      Write(zone_label,'(a,4(1x,i0))') 'XNet API zone_id:',zone_id(1:zone_id_components,lane)
-      Write(lun_ts(lane)) zone_label,abundance_description
-      Write(lun_ts(lane)) input_name,thermo_description
-      Write(lun_ts(lane)) ny,zz,aa
-      Write(lun_ts(lane)) mflx,ifl_orig,ifl_term
+      Write (zone_label,'(a,4(1x,i0))') 'XNet API zone_id:',zone_id(1:zone_id_components,lane)
+      Write (lun_ts(lane)) zone_label,abundance_description
+      Write (lun_ts(lane)) input_name,thermo_description
+      Write (lun_ts(lane)) ny,zz,aa
+      Write (lun_ts(lane)) mflx,ifl_orig,ifl_term
       If ( itsout >= 2 ) Then
         filename = Trim(ev_file_base)//Trim(suffix)
-        Open(newunit=lun_ev(lane),file=Trim(filename),status='new',action='write',iostat=output_status)
+        Open (newunit=lun_ev(lane),file=Trim(filename),status='new',action='write',iostat=output_status)
         If ( output_status /= 0 ) Exit
         header_format = '(a4,a15,5a10,a4)'
         If ( nnucout > 0 ) header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
-        Write(lun_ev(lane),header_format) &
+        Write (lun_ev(lane),header_format) &
           & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout),' It '
       EndIf
     EndDo
@@ -928,6 +1023,7 @@ Contains
       message = 'Cannot create time-series file: '//Trim(filename)
       Return
     EndIf
+
     ! The initial snapshot has no reaction flux; do not reuse the preceding burn's final flux.
     flx(:,zb_lo:zb_hi) = 0.0_dp
     ierr = xnet_success
@@ -935,14 +1031,19 @@ Contains
   End Subroutine open_burn_output
 
   Subroutine close_burn_output
+    !-----------------------------------------------------------------------------------------------
+    ! Close the current worker's output files, including any partial set opened before a failure.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: lun_ts, lun_ev, zb_lo, zb_hi
     Implicit None
+
+    ! Local variables
     Integer :: lane
 
     Do lane = zb_lo, zb_hi
       ! NEWUNIT may return negative units. Zero alone denotes an unopened API output slot.
-      If ( lun_ts(lane) /= 0 ) Close(lun_ts(lane))
-      If ( lun_ev(lane) /= 0 ) Close(lun_ev(lane))
+      If ( lun_ts(lane) /= 0 ) Close (lun_ts(lane))
+      If ( lun_ev(lane) /= 0 ) Close (lun_ev(lane))
       lun_ts(lane) = 0
       lun_ev(lane) = 0
     EndDo
@@ -950,8 +1051,10 @@ Contains
   End Subroutine close_burn_output
 
   Subroutine xnet_nse_composition(density,temperature,ye,mass_fraction,ierr,message)
-    ! Return a copy of A*ynse in network order for density in g/cm^3 and temperature in K.
-    ! Existing NSE solver failures may still terminate the host application.
+    !-----------------------------------------------------------------------------------------------
+    ! Return mass fractions in network order for density in g/cm^3 and temperature in K.
+    ! Existing NSE solver failures may still terminate the application.
+    !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: ny, aa
     Use xnet_nse, Only: nse_solve, ynse
@@ -959,6 +1062,8 @@ Contains
     Use xnet_gpu, Only: gpu_check_device
 #endif
     Implicit None
+
+    ! Input/Output variables
     Real(dp), Intent(in) :: density, temperature, ye
     Real(dp), Intent(out) :: mass_fraction(:)
     Integer, Intent(out) :: ierr
@@ -993,6 +1098,7 @@ Contains
       Return
     EndIf
     Call nse_solve(density,temperature*1.0e-9_dp,ye)
+
     ! Match the existing CHIMERA A*ynse convention without normalization or reordering.
     mass_fraction = aa*ynse
     ierr = xnet_success
@@ -1000,7 +1106,10 @@ Contains
   End Subroutine xnet_nse_composition
 
   Subroutine xnet_finalize(ierr,message)
-    ! Release XNet workspaces and owned resources without destroying host state.
+    !-----------------------------------------------------------------------------------------------
+    ! Release XNet workspaces and owned resources. Caller-owned GPU resources remain intact;
+    ! a failed GPU cleanup can be retried by calling this routine again.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: nuclear_data_finalize
     Use reaction_data, Only: reaction_data_finalize
     Use xnet_abundances, Only: abundances_finalize, y, yo, yt, ydot, ystart, xext, aext, zext
@@ -1025,11 +1134,16 @@ Contains
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
 #endif
     Implicit None
+
+    ! Output variables
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
+
+    ! Local variables
 #ifdef XNET_OMP
     Integer :: final_threads
 #endif
+
     ierr = xnet_success
     message = ' '
     If ( api_state == api_uninitialized ) Return
@@ -1090,9 +1204,15 @@ Contains
   End Subroutine xnet_finalize
 
   Function current_timing() Result(timing)
+    !-----------------------------------------------------------------------------------------------
+    ! Snapshot the current worker's cumulative timers. Differences give per-call seconds.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_timers, Only: timer_xnet, timer_solve, timer_jacob, timer_deriv, timer_csect, timer_scrn
     Implicit None
+
+    ! Result variable
     Type(xnet_timing_t) :: timing
+
     timing%evolve = timer_xnet
     timing%solve = timer_solve
     timing%jacobian = timer_jacob

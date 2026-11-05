@@ -33,6 +33,36 @@ modules that supply only the state needed by those routines. They check:
 - STARKILLER and Bahcall EOS interfaces; and
 - ASCII model-input success, missing-file status, and malformed input.
 
+The screening component check can also be run alone:
+
+```bash
+make -C test/unit screening-test
+make -C test/unit screening-test CMODE=DEBUG
+```
+
+It calls production `screening_init` and `screening` with controlled plasma
+inputs. Triple-alpha, p+alpha+alpha, and n+p+alpha strong-screening exponents
+are compared with sequential two-reactant screening, whose intermediate
+Coulomb free energies cancel. This implements the N-body relation in
+[Kushnir, Waxman & Chugunov (2019), equation (8)](https://arxiv.org/html/1805.08788#S2)
+within XNet's existing linear-mixing prescription. Reactant permutations check
+slot independence, including a neutral reactant. At fixed electron background,
+the test EOS sets `gammae = 0.5/T9` and `lambda0` proportional to `T9**(-1.5)`;
+central temperature differences check the returned strong derivative per GK.
+The difference step is `epsilon**(1/3)` and its comparison bound is
+`5e-9*max(1,abs(derivative))`, allowing truncation and cancellation in double
+precision. Algebraic comparisons use `128*epsilon*max(1,abs(expected))`.
+These are component-check bounds, not changes to scientific acceptance limits.
+
+Both `hi>=hs` choices are exercised at and around lambda 2, 2.15, 4.85, and 5
+for all three tuples, including both transition interiors. The expected
+strong value comes from the sequential pairs. Blended derivatives are checked
+against the existing weighted branch derivatives: the blend does not include
+temperature derivatives of its weights, so a finite difference of the blended
+value is not used as its derivative reference. No blend algorithm is changed.
+These synthetic checks do not establish physical validity across the fit's
+regimes or replace complete CPU and accelerator calculations.
+
 The compact NSE checks exercise software behavior and basic physical
 invariants. A separate executable loads the retained 489-species `torch489`
 network and three independently calculated complete compositions under

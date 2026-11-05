@@ -50,48 +50,6 @@ Module xnet_api
 
 Contains
 
-  Subroutine check_worker(ierr,message)
-    !-----------------------------------------------------------------------------------------------
-    ! Select this worker's preallocated batch bank and check that its NSE scratch is available.
-    !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: tid, nthread, nzbatchmx, zb_offset, zb_lo, zb_hi
-    Use xnet_nse, Only: ynse
-    Implicit None
-
-    ! Output variables
-    Integer, Intent(out) :: ierr
-    Character(*), Intent(out) :: message
-
-    ierr = xnet_success
-    message = ' '
-#ifdef XNET_OMP
-    If ( omp_get_dynamic() .or. omp_get_level() > 1 ) Then
-      ierr = xnet_unsupported
-      message = 'XNet requires a fixed, nonnested OpenMP worker team'
-      Return
-    EndIf
-    If ( omp_get_level() > 0 ) Then
-      If ( omp_get_num_threads() /= nthread ) Then
-        ierr = xnet_unsupported
-        message = 'Use the same OpenMP team size as XNet initialization'
-        Return
-      EndIf
-    EndIf
-    tid = omp_get_thread_num()+1
-#endif
-    If ( tid < 1 .or. tid > nthread .or. .not. Allocated(ynse) ) Then
-      ierr = xnet_lifecycle_error
-      message = 'This XNet worker is not initialized; keep the initialized OpenMP team'
-      Return
-    EndIf
-
-    ! Application lanes start at one; solver arrays span every worker's reserved bank.
-    zb_offset = (tid-1)*nzbatchmx
-    zb_lo = zb_offset+1
-    zb_hi = zb_offset+nzbatchmx
-    Return
-  End Subroutine check_worker
-
   Subroutine xnet_initialize(controls,network,ierr,message,gpu_resources)
     !-----------------------------------------------------------------------------------------------
     ! Load one network and allocate reusable solver workspaces. Reader, EOS and solver errors
@@ -294,13 +252,10 @@ Contains
     ! and counters remain on the host even when the scientific arrays are on the device.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
-    Use nuclear_data, Only: ny, aa
-    Use xnet_abundances, Only: y, ystart, xext, aext, zext
-    Use xnet_conditions, Only: t, t9, rho, ye_work=>ye, tdel, tdel_old, nt, nstart, &
-      & tstart, tstop, tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: nzbatchmx, nzevolve, szbatch, nzbatch, lzactive, iheat, &
-      & zone_work=>zone_id, iaux, ktot, gpu_queue, zb_offset, zb_lo, zb_hi
-    Use xnet_evolve, Only: full_net, evolve_integrator_failure, evolve_step_limit
+    Use nuclear_data, Only: ny
+    Use xnet_controls, Only: nzbatchmx, szbatch, nzbatch, lzactive, zone_work=>zone_id, &
+      & ktot, gpu_queue, zb_offset, zb_lo, zb_hi
+    Use xnet_evolve, Only: evolve_integrator_failure, evolve_step_limit
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_check_device
 #ifdef XNET_OMP_OL
@@ -331,8 +286,7 @@ Contains
     Logical, Optional, Intent(in) :: data_on_device      ! Scientific arrays already mapped on the device
 
     ! Local variables
-    Integer :: n, lane, izb, kstep, evolve_status, failed_zone, id
-    Real(dp), Allocatable :: loss_work(:)
+    Integer :: n, lane, kstep, evolve_status, failed_zone, id
     Real(dp) :: total_mass
     Type(xnet_timing_t) :: before
     Character(128) :: failure_ids
@@ -483,95 +437,9 @@ Contains
       EndDo
     Else
 #endif
-    ! Give unused lanes benign values without reading inactive caller storage.
-    ystart(:,zb_lo:zb_hi) = 0.0_dp
-    xext(zb_lo:zb_hi) = 0.0_dp
-    aext(zb_lo:zb_hi) = 1.0_dp
-    zext(zb_lo:zb_hi) = 0.0_dp
-    iaux(zb_lo:zb_hi) = 0
-
-    ! History indices start at one; timestep uses nstart to locate the first interval.
-    nstart(zb_lo:zb_hi) = 1
-    tstart(zb_lo:zb_hi) = 0.0_dp
-    tstop(zb_lo:zb_hi) = dt_s
-    tdelstart(zb_lo:zb_hi) = 0.0_dp
-    t9start(zb_lo:zb_hi) = 1.0_dp
-    rhostart(zb_lo:zb_hi) = 1.0_dp
-    yestart(zb_lo:zb_hi) = 0.5_dp
-    Do lane = 1, n
-      If ( .not. active(lane) ) Cycle
-      izb = zb_offset+lane
-      ystart(:,izb) = mass_fraction(:,lane) / aa
-      t9start(izb) = temperature(lane)*1.0e-9_dp
-      rhostart(izb) = density(lane)
-      yestart(izb) = ye(lane)
-
-      ! timestep interprets a negative tdelstart as a supplied step in seconds; the public
-      ! argument stays nonnegative. Zero requests the usual fresh-start estimate.
-      tdelstart(izb) = -restart_dt_s(lane)
-      If ( Present(aux_x) ) Then
-        If ( aux_x(lane) > 0.0_dp ) Then
-          xext(izb) = aux_x(lane)
-          aext(izb) = aux_a(lane)
-          zext(izb) = aux_z(lane)
-          iaux(izb) = 1
-        EndIf
-      EndIf
-    EndDo
-
-    ! The integrator consumes histories. Two identical endpoints represent constant conditions;
-    ! self-heating, when enabled, evolves temperature from this initial value.
-    nh(zb_lo:zb_hi) = 2
-    th(1,zb_lo:zb_hi) = tstart(zb_lo:zb_hi)
-    th(2,zb_lo:zb_hi) = tstop(zb_lo:zb_hi)
-    t9h(1,zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
-    t9h(2,zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
-    rhoh(1,zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
-    rhoh(2,zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
-    yeh(1,zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
-    yeh(2,zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
-    tdel(zb_lo:zb_hi) = 0.0_dp
-    nt(zb_lo:zb_hi) = nstart(zb_lo:zb_hi)
-    t(zb_lo:zb_hi) = tstart(zb_lo:zb_hi)
-    t9(zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
-    rho(zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
-    ye_work(zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
-    y(:,zb_lo:zb_hi) = ystart(:,zb_lo:zb_hi)
-    Call open_burn_output(Size(zone_id,1),ierr,message)
-    If ( ierr /= xnet_success ) Return
-
-    ! Host inputs remain authoritative even when the caller has stale device mappings.
-    ! Transfer only XNet-owned workspace; arbitrary host array sections retain their existing behavior.
-    !XDIR XUPDATE XASYNC(gpu_queue) &
-    !XDIR XDEVICE(xext,aext,zext,lzactive,tdel,t,t9,rho,ye_work,y,nt) &
-    !XDIR XDEVICE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
-    !XDIR XDEVICE(nh,th,t9h,rhoh,yeh)
-
-    Allocate (loss_work(zb_lo:zb_hi))
-    Call full_net(kstep,loss_work,evolve_status,failed_zone)
-    Call close_burn_output
-
-    ! API results do not depend on diagnostic verbosity or successful final output.
-    !XDIR XUPDATE XWAIT(gpu_queue) &
-    !XDIR XHOST(ktot)
-    If ( evolve_status == 0 ) Then
-      !XDIR XUPDATE XWAIT(gpu_queue) &
-      !XDIR XHOST(y,t9,ye_work,tdel_old)
-    EndIf
-    Do lane = 1, n
-      If ( .not. active(lane) ) Cycle
-      izb = zb_offset+lane
-      counters(:,lane) = ktot(:,izb)
-
-      ! Numerical failure requires host shutdown; no physical result or subsequent burn is supported.
-      If ( evolve_status /= 0 ) Cycle
-      mass_fraction(:,lane) = y(:,izb)*aa
-      If ( iheat > 0 ) temperature(lane) = t9(izb)*1.0e9_dp
-      ye(lane) = ye_work(izb)
-      restart_dt_s(lane) = tdel_old(izb)
-      neutrino_loss(lane) = loss_work(izb)
-    EndDo
-    Deallocate (loss_work)
+      Call burn_host_arrays(dt_s,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
+        & counters,Size(zone_id,1),kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
+      If ( ierr /= xnet_success ) Return
 #ifdef XNET_GPU
     EndIf
 #endif
@@ -606,6 +474,331 @@ Contains
     EndIf
     Return
   End Subroutine xnet_burn_batch
+
+  Subroutine xnet_nse_composition(density,temperature,ye,mass_fraction,ierr,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Return mass fractions in network order for density in g/cm^3 and temperature in K.
+    ! Existing NSE solver failures may still terminate the application.
+    !-----------------------------------------------------------------------------------------------
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
+    Use nuclear_data, Only: ny, aa
+    Use xnet_nse, Only: nse_solve, ynse
+#ifdef XNET_GPU
+    Use xnet_gpu, Only: gpu_check_device
+#endif
+    Implicit None
+
+    ! Input/Output variables
+    Real(dp), Intent(in) :: density, temperature, ye
+    Real(dp), Intent(out) :: mass_fraction(:)
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
+
+    mass_fraction = 0.0_dp
+    message = ' '
+    ierr = xnet_lifecycle_error
+    If ( api_state /= api_ready ) Then
+      message = 'Initialize XNet before requesting NSE composition'
+      If ( api_state == api_cleanup_pending ) message = 'Finish XNet finalization before requesting NSE composition'
+      Return
+    EndIf
+    Call check_worker(ierr,message)
+    If ( ierr /= xnet_success ) Return
+#ifdef XNET_GPU
+    Call gpu_check_device(ierr,message)
+    If ( ierr /= 0 ) Return
+#endif
+    ierr = xnet_invalid
+    If ( Size(mass_fraction) /= ny ) Then
+      message = 'NSE composition extent must match the initialized network'
+      Return
+    EndIf
+    If ( .not. ieee_is_finite(density) .or. .not. ieee_is_finite(temperature) .or. &
+      & .not. ieee_is_finite(ye) ) Then
+      message = 'NSE density, temperature and Ye must be finite'
+      Return
+    EndIf
+    If ( density <= 0.0_dp .or. temperature <= 0.0_dp .or. ye < 0.0_dp .or. ye > 1.0_dp ) Then
+      message = 'NSE density and temperature must be positive and Ye must be in [0,1]'
+      Return
+    EndIf
+    Call nse_solve(density,temperature*1.0e-9_dp,ye)
+
+    ! Match the existing CHIMERA A*ynse convention without normalization or reordering.
+    mass_fraction = aa*ynse
+    ierr = xnet_success
+    Return
+  End Subroutine xnet_nse_composition
+
+  Subroutine xnet_finalize(ierr,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Release XNet workspaces and owned resources. Caller-owned GPU resources remain intact;
+    ! a failed GPU cleanup can be retried by calling this routine again.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: nuclear_data_finalize
+    Use reaction_data, Only: reaction_data_finalize
+    Use xnet_abundances, Only: abundances_finalize, y, yo, yt, ydot, ystart, xext, aext, zext
+    Use xnet_conditions, Only: conditions_finalize, tdel, tdel_next, tdel_old, t, tt, to, t9, t9t, t9o, t9dot, &
+      & rho, rhot, rhoo, ye, yet, yeo, cv, etae, detaedt9, nt, ntt, nto, ints, intso, &
+      & tstart, tstop, tdelstart, nstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
+    Use xnet_controls, Only: controls_finalize, gpu_queue
+#ifdef XNET_OMP
+    Use xnet_controls, Only: nthread
+#endif
+    Use xnet_eos, Only: eos_finalize
+    Use xnet_ffn, Only: ffn_finalize
+    Use xnet_flux, Only: flux_finalize
+    Use xnet_integrate_be, Only: be_finalize
+    Use xnet_integrate_bdf, Only: bdf_finalize
+    Use xnet_jacobian, Only: jacobian_finalize
+    Use xnet_match, Only: match_finalize
+    Use xnet_nnu, Only: nnu_finalize, tmevnu, fluxcms
+    Use xnet_nse, Only: nse_finalize
+    Use xnet_screening, Only: screening_finalize
+#ifdef XNET_GPU
+    Use xnet_gpu, Only: gpu_check_device, gpu_finalize
+#endif
+    Implicit None
+
+    ! Output variables
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
+
+    ! Local variables
+#ifdef XNET_OMP
+    Integer :: final_threads
+#endif
+
+    ierr = xnet_success
+    message = ' '
+    If ( api_state == api_uninitialized ) Return
+#ifdef XNET_OMP
+    If ( omp_get_level() > 0 .or. omp_get_dynamic() ) Then
+      ierr = xnet_unsupported
+      message = 'Finalize XNet outside application OpenMP regions with the initialized fixed team'
+      Return
+    EndIf
+    !$omp parallel default(shared)
+    !$omp single
+    final_threads = omp_get_num_threads()
+    !$omp end single
+    !$omp end parallel
+    If ( final_threads /= nthread ) Then
+      ierr = xnet_unsupported
+      message = 'Use the initialized OpenMP team size when finalizing XNet'
+      Return
+    EndIf
+#endif
+    If ( api_state == api_ready ) Then
+#ifdef XNET_GPU
+      Call gpu_check_device(ierr,message)
+      If ( ierr /= 0 ) Return
+#endif
+      ! Release the mappings established here before their owning CPU allocations.
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
+      !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
+      !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
+      !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
+      !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+      !XDIR XWAIT(gpu_queue)
+      Call be_finalize
+      Call bdf_finalize
+      Call nse_finalize
+      Call eos_finalize
+      Call jacobian_finalize
+      Call screening_finalize
+      Call flux_finalize
+      Call match_finalize
+      Call ffn_finalize
+      Call nnu_finalize
+      Call reaction_data_finalize
+      Call nuclear_data_finalize
+      Call abundances_finalize
+      Call conditions_finalize
+      Call controls_finalize
+      api_state = api_cleanup_pending
+    EndIf
+#ifdef XNET_GPU
+    ! A failed cleanup can be retried without touching the released workspaces.
+    Call gpu_finalize(ierr,message)
+    If ( ierr /= xnet_success ) Return
+#endif
+    api_state = api_uninitialized
+    Return
+  End Subroutine xnet_finalize
+
+  Subroutine check_worker(ierr,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Select this worker's preallocated batch bank and check that its NSE scratch is available.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: tid, nthread, nzbatchmx, zb_offset, zb_lo, zb_hi
+    Use xnet_nse, Only: ynse
+    Implicit None
+
+    ! Output variables
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
+
+    ierr = xnet_success
+    message = ' '
+#ifdef XNET_OMP
+    If ( omp_get_dynamic() .or. omp_get_level() > 1 ) Then
+      ierr = xnet_unsupported
+      message = 'XNet requires a fixed, nonnested OpenMP worker team'
+      Return
+    EndIf
+    If ( omp_get_level() > 0 ) Then
+      If ( omp_get_num_threads() /= nthread ) Then
+        ierr = xnet_unsupported
+        message = 'Use the same OpenMP team size as XNet initialization'
+        Return
+      EndIf
+    EndIf
+    tid = omp_get_thread_num()+1
+#endif
+    If ( tid < 1 .or. tid > nthread .or. .not. Allocated(ynse) ) Then
+      ierr = xnet_lifecycle_error
+      message = 'This XNet worker is not initialized; keep the initialized OpenMP team'
+      Return
+    EndIf
+
+    ! Application lanes start at one; solver arrays span every worker's reserved bank.
+    zb_offset = (tid-1)*nzbatchmx
+    zb_lo = zb_offset+1
+    zb_hi = zb_offset+nzbatchmx
+    Return
+  End Subroutine check_worker
+
+  Subroutine burn_host_arrays(dt_s,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
+    & counters,zone_id_components,kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
+    !-----------------------------------------------------------------------------------------------
+    ! Copy host inputs into this worker's solver bank, evolve, and export successful results.
+    ! Only XNet-owned workspace is transferred for GPU execution; caller arrays stay on the host.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: aa
+    Use xnet_abundances, Only: y, ystart, xext, aext, zext
+    Use xnet_conditions, Only: t, t9, rho, ye_work=>ye, tdel, tdel_old, nt, nstart, &
+      & tstart, tstop, tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
+    Use xnet_controls, Only: iheat, iaux, ktot, lzactive, gpu_queue, zb_offset, zb_lo, zb_hi
+    Use xnet_evolve, Only: full_net
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: dt_s
+    Real(dp), Target, Intent(in) :: density(:)
+    Logical, Intent(in) :: active(:)
+    Integer, Intent(in) :: zone_id_components
+
+    ! Input/Output variables: preserve the caller's initialized outputs in inactive lanes.
+    Real(dp), Target, Intent(inout) :: temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
+    Real(dp), Target, Intent(inout) :: neutrino_loss(:)
+    Integer, Intent(inout) :: counters(:,:)
+
+    ! Output variables
+    Integer, Intent(out) :: kstep, evolve_status, failed_zone, ierr
+    Character(*), Intent(out) :: message
+
+    ! Optional variables
+    Real(dp), Optional, Target, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
+
+    ! Local variables
+    Integer :: n, lane, izb
+    Real(dp), Allocatable :: loss_work(:)
+
+    n = Size(active)
+
+    ! Give unused lanes benign values without reading inactive caller storage.
+    ystart(:,zb_lo:zb_hi) = 0.0_dp
+    xext(zb_lo:zb_hi) = 0.0_dp
+    aext(zb_lo:zb_hi) = 1.0_dp
+    zext(zb_lo:zb_hi) = 0.0_dp
+    iaux(zb_lo:zb_hi) = 0
+
+    ! History indices start at one; timestep uses nstart to locate the first interval.
+    nstart(zb_lo:zb_hi) = 1
+    tstart(zb_lo:zb_hi) = 0.0_dp
+    tstop(zb_lo:zb_hi) = dt_s
+    tdelstart(zb_lo:zb_hi) = 0.0_dp
+    t9start(zb_lo:zb_hi) = 1.0_dp
+    rhostart(zb_lo:zb_hi) = 1.0_dp
+    yestart(zb_lo:zb_hi) = 0.5_dp
+    Do lane = 1, n
+      If ( .not. active(lane) ) Cycle
+      izb = zb_offset+lane
+      ystart(:,izb) = mass_fraction(:,lane) / aa
+      t9start(izb) = temperature(lane)*1.0e-9_dp
+      rhostart(izb) = density(lane)
+      yestart(izb) = ye(lane)
+
+      ! Negative tdelstart selects the restart startup estimate; keep that sign encoding
+      ! internal. The public hint is in seconds, with zero requesting a fresh start.
+      tdelstart(izb) = -restart_dt_s(lane)
+      If ( Present(aux_x) ) Then
+        If ( aux_x(lane) > 0.0_dp ) Then
+          xext(izb) = aux_x(lane)
+          aext(izb) = aux_a(lane)
+          zext(izb) = aux_z(lane)
+          iaux(izb) = 1
+        EndIf
+      EndIf
+    EndDo
+
+    ! The integrator consumes histories. Equal endpoint values represent constant conditions;
+    ! self-heating, when enabled, evolves temperature from this initial value.
+    nh(zb_lo:zb_hi) = 2
+    th(1,zb_lo:zb_hi) = tstart(zb_lo:zb_hi)
+    th(2,zb_lo:zb_hi) = tstop(zb_lo:zb_hi)
+    t9h(1,zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
+    t9h(2,zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
+    rhoh(1,zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
+    rhoh(2,zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
+    yeh(1,zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
+    yeh(2,zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
+    tdel(zb_lo:zb_hi) = 0.0_dp
+    nt(zb_lo:zb_hi) = nstart(zb_lo:zb_hi)
+    t(zb_lo:zb_hi) = tstart(zb_lo:zb_hi)
+    t9(zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
+    rho(zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
+    ye_work(zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
+    y(:,zb_lo:zb_hi) = ystart(:,zb_lo:zb_hi)
+    Call open_burn_output(zone_id_components,ierr,message)
+    If ( ierr /= xnet_success ) Return
+
+    ! Host inputs remain authoritative even when the caller has stale device mappings.
+    ! Transfer only XNet-owned workspace; arbitrary host array sections retain their existing behavior.
+    !XDIR XUPDATE XASYNC(gpu_queue) &
+    !XDIR XDEVICE(xext,aext,zext,lzactive,tdel,t,t9,rho,ye_work,y,nt) &
+    !XDIR XDEVICE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
+    !XDIR XDEVICE(nh,th,t9h,rhoh,yeh)
+
+    Allocate (loss_work(zb_lo:zb_hi))
+    Call full_net(kstep,loss_work,evolve_status,failed_zone)
+    Call close_burn_output
+
+    ! API results do not depend on diagnostic verbosity or successful final output.
+    !XDIR XUPDATE XWAIT(gpu_queue) &
+    !XDIR XHOST(ktot)
+    If ( evolve_status == 0 ) Then
+      !XDIR XUPDATE XWAIT(gpu_queue) &
+      !XDIR XHOST(y,t9,ye_work,tdel_old)
+    EndIf
+    Do lane = 1, n
+      If ( .not. active(lane) ) Cycle
+      izb = zb_offset+lane
+      counters(:,lane) = ktot(:,izb)
+
+      ! Numerical failure requires host shutdown; no physical result or subsequent burn is supported.
+      If ( evolve_status /= 0 ) Cycle
+      mass_fraction(:,lane) = y(:,izb)*aa
+      If ( iheat > 0 ) temperature(lane) = t9(izb)*1.0e9_dp
+      ye(lane) = ye_work(izb)
+      restart_dt_s(lane) = tdel_old(izb)
+      neutrino_loss(lane) = loss_work(izb)
+    EndDo
+    Deallocate (loss_work)
+    Return
+  End Subroutine burn_host_arrays
 
 #ifdef XNET_GPU
   Subroutine check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
@@ -804,98 +997,99 @@ Contains
       Case (6)
         message = 'Active-zone composition must contain positive mass'
       End Select
-      GoTo 900
+      Exit
     EndDo
-    If ( .not. Any(lzactive) ) GoTo 900
-
-    ! Initialize inactive workspace lanes with benign values without reading their scientific inputs.
-    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-    !XDIR XPRESENT(lzactive,aa,ystart,xext,aext,zext,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart) &
-    !XDIR XPRESENT(nh,th,t9h,rhoh,yeh,tdel,nt,t,t9,rho,ye_work,y) &
-    !XDIR XPRESENT(density,temperature,ye,mass_fraction,restart_dt_s)
-    Do lane = 1, nzevolve
-      xext(lane) = 0.0_dp
-      aext(lane) = 1.0_dp
-      zext(lane) = 0.0_dp
-      nstart(lane) = 1
-      tstart(lane) = 0.0_dp
-      tstop(lane) = dt_s
-      tdelstart(lane) = 0.0_dp
-      t9start(lane) = 1.0_dp
-      rhostart(lane) = 1.0_dp
-      yestart(lane) = 0.5_dp
-      !XDIR XLOOP_SERIAL(1)
-      Do k = 1, ny
-        ystart(k,lane) = 0.0_dp
-      EndDo
-      If ( lzactive(lane) ) Then
+    If ( ierr == xnet_success .and. Any(lzactive) ) Then
+      ! Initialize inactive workspace lanes with benign values without reading their scientific inputs.
+      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
+      !XDIR XPRESENT(lzactive,aa,ystart,xext,aext,zext,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart) &
+      !XDIR XPRESENT(nh,th,t9h,rhoh,yeh,tdel,nt,t,t9,rho,ye_work,y) &
+      !XDIR XPRESENT(density,temperature,ye,mass_fraction,restart_dt_s)
+      Do lane = 1, nzevolve
+        xext(lane) = 0.0_dp
+        aext(lane) = 1.0_dp
+        zext(lane) = 0.0_dp
+        nstart(lane) = 1
+        tstart(lane) = 0.0_dp
+        tstop(lane) = dt_s
+        tdelstart(lane) = 0.0_dp
+        t9start(lane) = 1.0_dp
+        rhostart(lane) = 1.0_dp
+        yestart(lane) = 0.5_dp
         !XDIR XLOOP_SERIAL(1)
         Do k = 1, ny
-          ystart(k,lane) = mass_fraction(k,lane) / aa(k)
+          ystart(k,lane) = 0.0_dp
         EndDo
-        t9start(lane) = temperature(lane)*1.0e-9_dp
-        rhostart(lane) = density(lane)
-        yestart(lane) = ye(lane)
-        tdelstart(lane) = -restart_dt_s(lane)
-      EndIf
-      nh(lane) = 2
-      th(1,lane) = tstart(lane)
-      th(2,lane) = tstop(lane)
-      t9h(1,lane) = t9start(lane)
-      t9h(2,lane) = t9start(lane)
-      rhoh(1,lane) = rhostart(lane)
-      rhoh(2,lane) = rhostart(lane)
-      yeh(1,lane) = yestart(lane)
-      yeh(2,lane) = yestart(lane)
-      tdel(lane) = 0.0_dp
-      nt(lane) = nstart(lane)
-      t(lane) = tstart(lane)
-      t9(lane) = t9start(lane)
-      rho(lane) = rhostart(lane)
-      ye_work(lane) = yestart(lane)
-      !XDIR XLOOP_SERIAL(1)
-      Do k = 1, ny
-        y(k,lane) = ystart(k,lane)
-      EndDo
-    EndDo
-    If ( Present(aux_x) ) Then
-      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(lzactive,xext,aext,zext,aux_x,aux_a,aux_z)
-      Do lane = 1, n
-        If ( .not. lzactive(lane) ) Cycle
-        If ( aux_x(lane) > 0.0_dp ) Then
-          xext(lane) = aux_x(lane)
-          aext(lane) = aux_a(lane)
-          zext(lane) = aux_z(lane)
+        If ( lzactive(lane) ) Then
+          !XDIR XLOOP_SERIAL(1)
+          Do k = 1, ny
+            ystart(k,lane) = mass_fraction(k,lane) / aa(k)
+          EndDo
+          t9start(lane) = temperature(lane)*1.0e-9_dp
+          rhostart(lane) = density(lane)
+          yestart(lane) = ye(lane)
+          tdelstart(lane) = -restart_dt_s(lane)
         EndIf
-      EndDo
-    EndIf
-    Call open_burn_output(zone_id_components,ierr,message)
-    If ( ierr /= xnet_success ) GoTo 900
-    Call full_net(kstep,loss_work,evolve_status,failed_zone)
-    Call close_burn_output
-
-    ! Attempted counters are host diagnostics even when the physical result is invalid.
-    !XDIR XUPDATE XWAIT(gpu_queue) &
-    !XDIR XHOST(ktot)
-    If ( evolve_status == 0 ) Then
-      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(lzactive,aa,y,t9,ye_work,tdel_old,loss_work) &
-      !XDIR XPRESENT(temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
-      Do lane = 1, n
-        If ( .not. lzactive(lane) ) Cycle
+        nh(lane) = 2
+        th(1,lane) = tstart(lane)
+        th(2,lane) = tstop(lane)
+        t9h(1,lane) = t9start(lane)
+        t9h(2,lane) = t9start(lane)
+        rhoh(1,lane) = rhostart(lane)
+        rhoh(2,lane) = rhostart(lane)
+        yeh(1,lane) = yestart(lane)
+        yeh(2,lane) = yestart(lane)
+        tdel(lane) = 0.0_dp
+        nt(lane) = nstart(lane)
+        t(lane) = tstart(lane)
+        t9(lane) = t9start(lane)
+        rho(lane) = rhostart(lane)
+        ye_work(lane) = yestart(lane)
         !XDIR XLOOP_SERIAL(1)
         Do k = 1, ny
-          mass_fraction(k,lane) = y(k,lane)*aa(k)
+          y(k,lane) = ystart(k,lane)
         EndDo
-        If ( iheat > 0 ) temperature(lane) = t9(lane)*1.0e9_dp
-        ye(lane) = ye_work(lane)
-        restart_dt_s(lane) = tdel_old(lane)
-        neutrino_loss(lane) = loss_work(lane)
       EndDo
+      If ( Present(aux_x) ) Then
+        !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
+        !XDIR XPRESENT(lzactive,xext,aext,zext,aux_x,aux_a,aux_z)
+        Do lane = 1, n
+          If ( .not. lzactive(lane) ) Cycle
+          If ( aux_x(lane) > 0.0_dp ) Then
+            xext(lane) = aux_x(lane)
+            aext(lane) = aux_a(lane)
+            zext(lane) = aux_z(lane)
+          EndIf
+        EndDo
+      EndIf
+      Call open_burn_output(zone_id_components,ierr,message)
+      If ( ierr == xnet_success ) Then
+        Call full_net(kstep,loss_work,evolve_status,failed_zone)
+        Call close_burn_output
+
+        ! Attempted counters are host diagnostics even when the physical result is invalid.
+        !XDIR XUPDATE XWAIT(gpu_queue) &
+        !XDIR XHOST(ktot)
+        If ( evolve_status == 0 ) Then
+          !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
+          !XDIR XPRESENT(lzactive,aa,y,t9,ye_work,tdel_old,loss_work) &
+          !XDIR XPRESENT(temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
+          Do lane = 1, n
+            If ( .not. lzactive(lane) ) Cycle
+            !XDIR XLOOP_SERIAL(1)
+            Do k = 1, ny
+              mass_fraction(k,lane) = y(k,lane)*aa(k)
+            EndDo
+            If ( iheat > 0 ) temperature(lane) = t9(lane)*1.0e9_dp
+            ye(lane) = ye_work(lane)
+            restart_dt_s(lane) = tdel_old(lane)
+            neutrino_loss(lane) = loss_work(lane)
+          EndDo
+        EndIf
+      EndIf
     EndIf
 
-900 Continue
+    ! Release this call's mapping references on every path, leaving caller mappings intact.
     If ( Present(aux_x) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(aux_x,aux_a,aux_z)
@@ -1049,159 +1243,6 @@ Contains
     EndDo
     Return
   End Subroutine close_burn_output
-
-  Subroutine xnet_nse_composition(density,temperature,ye,mass_fraction,ierr,message)
-    !-----------------------------------------------------------------------------------------------
-    ! Return mass fractions in network order for density in g/cm^3 and temperature in K.
-    ! Existing NSE solver failures may still terminate the application.
-    !-----------------------------------------------------------------------------------------------
-    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
-    Use nuclear_data, Only: ny, aa
-    Use xnet_nse, Only: nse_solve, ynse
-#ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_check_device
-#endif
-    Implicit None
-
-    ! Input/Output variables
-    Real(dp), Intent(in) :: density, temperature, ye
-    Real(dp), Intent(out) :: mass_fraction(:)
-    Integer, Intent(out) :: ierr
-    Character(*), Intent(out) :: message
-
-    mass_fraction = 0.0_dp
-    message = ' '
-    ierr = xnet_lifecycle_error
-    If ( api_state /= api_ready ) Then
-      message = 'Initialize XNet before requesting NSE composition'
-      If ( api_state == api_cleanup_pending ) message = 'Finish XNet finalization before requesting NSE composition'
-      Return
-    EndIf
-    Call check_worker(ierr,message)
-    If ( ierr /= xnet_success ) Return
-#ifdef XNET_GPU
-    Call gpu_check_device(ierr,message)
-    If ( ierr /= 0 ) Return
-#endif
-    ierr = xnet_invalid
-    If ( Size(mass_fraction) /= ny ) Then
-      message = 'NSE composition extent must match the initialized network'
-      Return
-    EndIf
-    If ( .not. ieee_is_finite(density) .or. .not. ieee_is_finite(temperature) .or. &
-      & .not. ieee_is_finite(ye) ) Then
-      message = 'NSE density, temperature and Ye must be finite'
-      Return
-    EndIf
-    If ( density <= 0.0_dp .or. temperature <= 0.0_dp .or. ye < 0.0_dp .or. ye > 1.0_dp ) Then
-      message = 'NSE density and temperature must be positive and Ye must be in [0,1]'
-      Return
-    EndIf
-    Call nse_solve(density,temperature*1.0e-9_dp,ye)
-
-    ! Match the existing CHIMERA A*ynse convention without normalization or reordering.
-    mass_fraction = aa*ynse
-    ierr = xnet_success
-    Return
-  End Subroutine xnet_nse_composition
-
-  Subroutine xnet_finalize(ierr,message)
-    !-----------------------------------------------------------------------------------------------
-    ! Release XNet workspaces and owned resources. Caller-owned GPU resources remain intact;
-    ! a failed GPU cleanup can be retried by calling this routine again.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: nuclear_data_finalize
-    Use reaction_data, Only: reaction_data_finalize
-    Use xnet_abundances, Only: abundances_finalize, y, yo, yt, ydot, ystart, xext, aext, zext
-    Use xnet_conditions, Only: conditions_finalize, tdel, tdel_next, tdel_old, t, tt, to, t9, t9t, t9o, t9dot, &
-      & rho, rhot, rhoo, ye, yet, yeo, cv, etae, detaedt9, nt, ntt, nto, ints, intso, &
-      & tstart, tstop, tdelstart, nstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: controls_finalize, gpu_queue
-#ifdef XNET_OMP
-    Use xnet_controls, Only: nthread
-#endif
-    Use xnet_eos, Only: eos_finalize
-    Use xnet_ffn, Only: ffn_finalize
-    Use xnet_flux, Only: flux_finalize
-    Use xnet_integrate_be, Only: be_finalize
-    Use xnet_integrate_bdf, Only: bdf_finalize
-    Use xnet_jacobian, Only: jacobian_finalize
-    Use xnet_match, Only: match_finalize
-    Use xnet_nnu, Only: nnu_finalize, tmevnu, fluxcms
-    Use xnet_nse, Only: nse_finalize
-    Use xnet_screening, Only: screening_finalize
-#ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_check_device, gpu_finalize
-#endif
-    Implicit None
-
-    ! Output variables
-    Integer, Intent(out) :: ierr
-    Character(*), Intent(out) :: message
-
-    ! Local variables
-#ifdef XNET_OMP
-    Integer :: final_threads
-#endif
-
-    ierr = xnet_success
-    message = ' '
-    If ( api_state == api_uninitialized ) Return
-#ifdef XNET_OMP
-    If ( omp_get_level() > 0 .or. omp_get_dynamic() ) Then
-      ierr = xnet_unsupported
-      message = 'Finalize XNet outside application OpenMP regions with the initialized fixed team'
-      Return
-    EndIf
-    !$omp parallel default(shared)
-    !$omp single
-    final_threads = omp_get_num_threads()
-    !$omp end single
-    !$omp end parallel
-    If ( final_threads /= nthread ) Then
-      ierr = xnet_unsupported
-      message = 'Use the initialized OpenMP team size when finalizing XNet'
-      Return
-    EndIf
-#endif
-    If ( api_state == api_ready ) Then
-#ifdef XNET_GPU
-      Call gpu_check_device(ierr,message)
-      If ( ierr /= 0 ) Return
-#endif
-      ! Release the mappings established here before their owning CPU allocations.
-      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
-      !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
-      !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
-      !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-      !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
-      !XDIR XWAIT(gpu_queue)
-      Call be_finalize
-      Call bdf_finalize
-      Call nse_finalize
-      Call eos_finalize
-      Call jacobian_finalize
-      Call screening_finalize
-      Call flux_finalize
-      Call match_finalize
-      Call ffn_finalize
-      Call nnu_finalize
-      Call reaction_data_finalize
-      Call nuclear_data_finalize
-      Call abundances_finalize
-      Call conditions_finalize
-      Call controls_finalize
-      api_state = api_cleanup_pending
-    EndIf
-#ifdef XNET_GPU
-    ! A failed cleanup can be retried without touching the released workspaces.
-    Call gpu_finalize(ierr,message)
-    If ( ierr /= xnet_success ) Return
-#endif
-    api_state = api_uninitialized
-    Return
-  End Subroutine xnet_finalize
 
   Function current_timing() Result(timing)
     !-----------------------------------------------------------------------------------------------

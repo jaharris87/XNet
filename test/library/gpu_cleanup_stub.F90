@@ -6,8 +6,8 @@ Module xnet_gpu
   Type :: xnet_gpu_t
     Integer :: device = -1
   End Type
-  Integer :: mydevice = 0, init_calls = 0, finalize_calls = 0, failures_left = 0
-  Logical :: active = .false.
+  Integer :: mydevice = -1, init_calls = 0, finalize_calls = 0, failures_left = 0, init_failures_left = 0
+  Logical :: active = .false., pending_on_init_failure = .true.
 Contains
   Type(C_PTR) Function dev_ptr_int(a)
     Integer, Target, Intent(in) :: a
@@ -23,7 +23,17 @@ Contains
     Character(*), Intent(out) :: message
     If ( active ) Error Stop 'GPU initialized twice'
     init_calls = init_calls + 1
+    If ( init_failures_left > 0 ) Then
+      init_failures_left = init_failures_left - 1
+      active = pending_on_init_failure
+      mydevice = -1
+      If ( active ) mydevice = 0
+      ierr = 1
+      message = 'Injected GPU initialization failure'
+      Return
+    EndIf
     active = .true.
+    mydevice = 0
     ierr = 0
     message = ' '
   End Subroutine
@@ -34,13 +44,14 @@ Contains
     finalize_calls = finalize_calls + 1
     ierr = 0
     message = ' '
-    If ( failures_left > 0 ) Then
-      failures_left = failures_left - 1
+    If ( failures_left /= 0 ) Then
+      If ( failures_left > 0 ) failures_left = failures_left - 1
       ierr = 1
       message = 'Injected stream synchronization failure'
       Return
     EndIf
     active = .false.
+    mydevice = -1
   End Subroutine
   Subroutine gpu_check_device(ierr,message)
     Integer, Intent(out) :: ierr

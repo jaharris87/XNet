@@ -2,7 +2,8 @@ Program cleanup_consumer
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, &
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_nse_composition, &
     & xnet_finalize, xnet_success, xnet_invalid, xnet_lifecycle_error
-  Use xnet_gpu, Only: init_calls, finalize_calls, failures_left, active_gpu=>active
+  Use xnet_gpu, Only: init_calls, finalize_calls, failures_left, active_gpu=>active, &
+    & init_failures_left, pending_on_init_failure, mydevice
   Use xnet_abundances, Only: y
   Implicit None
   Type(xnet_controls_t) :: controls
@@ -76,8 +77,86 @@ Program cleanup_consumer
   Call xnet_finalize(ierr,message)
   Call expect(xnet_success,'ordinary repeated finalize')
   Call check(finalize_calls == calls .and. .not. Allocated(y),'ordinary cleanup runs once')
+  Call failed_initialization_checks()
   Print '(a)', 'GPU_CLEANUP_RETRY_CHECKS_PASSED'
 Contains
+  Subroutine failed_initialization_checks()
+    Integer :: saved_init_calls, saved_finalize_calls, attempt
+    saved_init_calls = init_calls
+    saved_finalize_calls = finalize_calls
+    ! Validation fails before gpu_init and before any owned allocation.
+    controls%nzone = 0
+    Call xnet_initialize(controls,network,ierr,message)
+    Call expect(xnet_invalid,'malformed initialization controls')
+    Call check(init_calls == saved_init_calls,'invalid controls did not initialize GPU resources')
+    Call check(.not. Allocated(y) .and. .not. active_gpu,'invalid controls allocated no workspaces or resources')
+    controls%nzone = 1
+
+    ! A failed initialization whose own rollback succeeded needs no API cleanup.
+    init_failures_left = 1
+    pending_on_init_failure = .false.
+    Call xnet_initialize(controls,network,ierr,message)
+    Call expect(xnet_invalid,'initialization failure with completed rollback')
+    Call check(Index(message,'Injected GPU initialization failure') > 0,'initialization failure diagnostic')
+    Call check(.not. Allocated(y) .and. mydevice == -1,'clean rollback precedes workspace creation')
+    Call xnet_finalize(ierr,message)
+    Call expect(xnet_success,'finalize after completed initialization rollback')
+    Call check(finalize_calls == saved_finalize_calls,'completed rollback does not finalize inactive resources')
+    Call xnet_initialize(controls,network,ierr,message)
+    Call expect(xnet_success,'reinitialize after completed initialization rollback')
+    Call xnet_finalize(ierr,message)
+    Call expect(xnet_success,'finalize reinitialized lifetime')
+
+    ! gpu_init has already attempted rollback; the stub represents resources
+    ! whose destructor keeps failing until the test clears the failure.
+    init_failures_left = 1
+    pending_on_init_failure = .true.
+    failures_left = -1
+    saved_init_calls = init_calls
+    Call xnet_initialize(controls,network,ierr,message)
+    Call expect(xnet_invalid,'initialization failure with pending GPU cleanup')
+    Call check(Index(message,'Injected GPU initialization failure') > 0,'pending cleanup preserves initialization diagnostic')
+    Call check(init_calls == saved_init_calls+1 .and. active_gpu .and. mydevice == 0,'failed rollback retains resources')
+    Call check(.not. Allocated(y),'failed resource initialization never allocated CPU workspaces')
+    Call xnet_initialize(controls,rejected_network,ierr,message)
+    Call expect(xnet_lifecycle_error,'reinitialize during failed initialization cleanup')
+    Call check(init_calls == saved_init_calls+1,'pending rollback blocks resource initialization')
+    Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+    Call expect(xnet_lifecycle_error,'burn during failed initialization cleanup')
+    Call check(All(loss == 0.0_dp) .and. All(counters == 0),'pending rollback burn clears outputs')
+    Call xnet_nse_composition(1.0e7_dp,1.0e10_dp,0.5_dp,nse,ierr,message)
+    Call expect(xnet_lifecycle_error,'NSE during failed initialization cleanup')
+    Call check(All(nse == 0.0_dp),'pending rollback NSE clears output')
+
+    ! The API never created its workspaces, so cleanup must not tear them down.
+    Allocate(y(1,1))
+    y = 43.0_dp
+    saved_finalize_calls = finalize_calls
+    Do attempt = 1, 3
+      Call xnet_finalize(ierr,message)
+      Call expect(xnet_invalid,'persistent initialization rollback cleanup failure')
+      Call check(finalize_calls == saved_finalize_calls+attempt .and. active_gpu,'every finalize retries pending resources')
+      Call check(Allocated(y),'failed initialization cleanup skips workspace teardown')
+      Call check(All(y == 43.0_dp),'failed initialization cleanup preserves workspace sentinel')
+    EndDo
+    failures_left = 0
+    Call xnet_finalize(ierr,message)
+    Call expect(xnet_success,'complete failed initialization cleanup')
+    Call check(.not. active_gpu .and. mydevice == -1,'failed initialization resources released')
+    Call check(Allocated(y),'successful rollback cleanup also skips workspace teardown')
+    Call check(All(y == 43.0_dp),'successful rollback cleanup preserves workspace sentinel')
+    saved_finalize_calls = finalize_calls
+    Call xnet_finalize(ierr,message)
+    Call expect(xnet_success,'repeat finalize after failed initialization cleanup')
+    Call check(finalize_calls == saved_finalize_calls,'completed failed initialization cleanup is a no-op')
+    Deallocate(y)
+    Call xnet_initialize(controls,network,ierr,message)
+    Call expect(xnet_success,'reinitialize after pending initialization cleanup completes')
+    Call check(Allocated(y),'reinitialization creates real workspaces')
+    Call xnet_finalize(ierr,message)
+    Call expect(xnet_success,'finalize after recovered initialization')
+  End Subroutine
+
   Subroutine check(condition,label)
     Logical, Intent(in) :: condition
     Character(*), Intent(in) :: label

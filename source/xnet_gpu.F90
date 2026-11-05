@@ -201,9 +201,9 @@ Contains
     Integer :: device, queue, thread_status
     Integer(C_INT) :: status, cleanup_status
     Type(C_PTR) :: work_stream, handle_stream
-    Logical :: stream_known, create_stream
+    Logical :: stream_known, create_stream, resources_created
     Character(512) :: thread_message
-    Character(128) :: cleanup_message
+    Character(512) :: cleanup_message
 #if defined(XNET_CUDA)
     Type(C_PTR) :: work_cublas, work_cusolver
     Logical :: create_cublas, create_cusolver
@@ -220,7 +220,7 @@ Contains
     init_status = 0
     init_message = ' '
 #if defined(XNET_GPU)
-    If ( gpu_initialized ) Then
+    If ( gpu_initialized .or. mydevice >= 0 ) Then
       init_status = 2
       init_message = 'GPU resources are already initialized'
       GoTo 900
@@ -277,8 +277,8 @@ Contains
 
 #ifdef XNET_OMP
     !$omp parallel if(.not. Present(gpu_context)) default(shared) &
-    !$omp private(queue,thread_status,thread_message,status,cleanup_status,cleanup_message) &
-    !$omp private(work_stream,handle_stream,stream_known,create_stream) &
+    !$omp private(queue,thread_status,thread_message,status) &
+    !$omp private(work_stream,handle_stream,stream_known,create_stream,resources_created) &
 #if defined(XNET_CUDA)
     !$omp private(work_cublas,work_cusolver,create_cublas,create_cusolver) &
 #elif defined(XNET_HIP)
@@ -292,7 +292,6 @@ Contains
 
     thread_status = 0
     thread_message = ' '
-    cleanup_message = ' '
     queue = tid
     work_stream = C_NULL_PTR
     stream_known = .false.
@@ -568,7 +567,17 @@ Contains
     !$omp barrier
 #endif
 
-    If ( init_status == 0 ) Then
+    ! Keep partial ownership too: the same finalizer must be able to retry failed rollback.
+    resources_created = create_stream
+#if defined(XNET_CUDA)
+    resources_created = resources_created .or. create_cublas .or. create_cusolver
+#elif defined(XNET_HIP)
+    resources_created = resources_created .or. create_hipblas .or. create_rocblas
+#endif
+#if defined(XNET_LA_MAGMA)
+    resources_created = resources_created .or. create_magma_queue
+#endif
+    If ( init_status == 0 .or. resources_created ) Then
 #if defined(XNET_CUDA)
       cublas_handle = work_cublas
       cusolver_handle = work_cusolver
@@ -586,7 +595,7 @@ Contains
       owns_rocblas = create_rocblas
 #endif
 #if defined(XNET_OACC)
-      If ( .not. Present(gpu_context) ) Then
+      If ( init_status == 0 .and. .not. Present(gpu_context) ) Then
         acc_queue = Int(queue,C_LONG_LONG)
         Call acc_set_cuda_stream(Int(acc_async_sync,C_LONG_LONG),work_stream)
       EndIf
@@ -599,51 +608,16 @@ Contains
       active_device = device
       owns_stream = create_stream
       gpu_initialized = .true.
-    Else
-      ! Release only allocations made by this attempt. Caller resources were never rebound.
-#if defined(XNET_LA_MAGMA)
-      If ( create_magma_queue ) Call magma_queue_destroy(work_magma_queue)
-#endif
-#if defined(XNET_CUDA)
-      If ( create_cusolver ) Then
-        cleanup_status = cusolverDnDestroy(work_cusolver)
-        If ( cleanup_status /= 0 ) Write(cleanup_message,'(A,I0)') 'cuSOLVER cleanup status ',cleanup_status
-      EndIf
-      If ( create_cublas ) Then
-        cleanup_status = cublasDestroy_v2(work_cublas)
-        If ( cleanup_status /= 0 .and. Len_Trim(cleanup_message) == 0 ) &
-          & Write(cleanup_message,'(A,I0)') 'cuBLAS cleanup status ',cleanup_status
-      EndIf
-#elif defined(XNET_HIP)
-      If ( create_rocblas ) Then
-        cleanup_status = rocblas_destroy_handle(work_rocblas)
-        If ( cleanup_status /= 0 ) Write(cleanup_message,'(A,I0)') 'rocBLAS cleanup status ',cleanup_status
-      EndIf
-      If ( create_hipblas ) Then
-        cleanup_status = hipblasDestroy(work_hipblas)
-        If ( cleanup_status /= 0 .and. Len_Trim(cleanup_message) == 0 ) &
-          & Write(cleanup_message,'(A,I0)') 'hipBLAS cleanup status ',cleanup_status
-      EndIf
-#endif
-      If ( create_stream ) Then
-#if defined(XNET_CUDA)
-        cleanup_status = cudaStreamDestroy(work_stream)
-#elif defined(XNET_HIP)
-        cleanup_status = hipStreamDestroy(work_stream)
-#endif
-        If ( cleanup_status /= 0 .and. Len_Trim(cleanup_message) == 0 ) &
-          & Write(cleanup_message,'(A,I0)') 'GPU stream cleanup status ',cleanup_status
-      EndIf
-      If ( Len_Trim(cleanup_message) > 0 ) Then
-        !$omp critical(xnet_gpu_init_status)
-        init_message = Trim(init_message)//'; '//Trim(cleanup_message)
-        !$omp end critical(xnet_gpu_init_status)
-      EndIf
     EndIf
 #ifdef XNET_OMP
     !$omp end parallel
 #endif
-    If ( init_status == 0 ) mydevice = device
+    mydevice = device
+    If ( init_status /= 0 ) Then
+      ! Roll back after the team joins; failed handles retain their stream and ownership.
+      Call gpu_finalize(cleanup_status,cleanup_message)
+      If ( cleanup_status /= 0 ) init_message = Trim(init_message)//'; '//Trim(cleanup_message)
+    EndIf
 #else
     If ( Present(gpu_context) ) Then
       init_status = 3

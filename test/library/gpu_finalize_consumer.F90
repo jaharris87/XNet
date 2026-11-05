@@ -31,6 +31,14 @@ Module gpu_finalize_vendor
       Import C_INT
       Integer(C_INT), Value :: kind, count
     End Subroutine
+    Subroutine vendor_fail_create(kind,count) Bind(C)
+      Import C_INT
+      Integer(C_INT), Value :: kind, count
+    End Subroutine
+    Subroutine vendor_fail_associate(kind,count) Bind(C)
+      Import C_INT
+      Integer(C_INT), Value :: kind, count
+    End Subroutine
     Type(C_PTR) Function vendor_borrow(kind,stream) Bind(C)
       Import C_INT, C_PTR
       Integer(C_INT), Value :: kind
@@ -51,7 +59,7 @@ Program gpu_finalize_consumer
 #endif
   Use gpu_finalize_vendor, Only: resource_stream, resource_blas, resource_solver, caller_solver, &
     & vendor_reset, vendor_live, vendor_creates, vendor_destroys, vendor_invalid, vendor_syncs, &
-    & vendor_fail, vendor_borrow, vendor_release_borrowed
+    & vendor_fail, vendor_fail_create, vendor_fail_associate, vendor_borrow, vendor_release_borrowed
   Implicit None
   Character(32) :: scenario
 
@@ -77,8 +85,30 @@ Program gpu_finalize_consumer
     Call mixed_resources(resource_blas)
   Case ('mixed-solver')
     Call mixed_resources(resource_solver)
+  Case ('init-create-stream')
+    Call failed_initialization(resource_stream,.false.,0,.false.)
+  Case ('init-create-blas')
+    Call failed_initialization(resource_blas,.false.,0,.false.)
+  Case ('init-create-solver')
+    Call failed_initialization(resource_solver,.false.,0,.false.)
+  Case ('init-associate-blas')
+    Call failed_initialization(resource_blas,.true.,0,.false.)
+  Case ('init-associate-solver')
+    Call failed_initialization(resource_solver,.true.,0,.false.)
+  Case ('init-blas-retry')
+    Call failed_initialization(resource_solver,.false.,resource_blas,.false.)
+  Case ('init-solver-retry')
+    Call failed_initialization(resource_solver,.true.,resource_solver,.false.)
+  Case ('init-stream-retry')
+    Call failed_initialization(resource_blas,.false.,resource_stream,.false.)
+  Case ('init-borrowed')
+    Call failed_initialization(resource_solver,.true.,resource_solver,.true.)
+  Case ('init-persistent')
+    Call persistent_rollback()
+  Case ('init-malformed')
+    Call malformed_initialization()
   Case Default
-    Print '(A)', 'Choose stream, blas, solver, both, borrowed, mixed-blas, or mixed-solver'
+    Print '(A)', 'Unknown cleanup scenario: '//Trim(scenario)
     Stop 1
   End Select
   Call require(vendor_invalid() == 0,'no invalid, duplicate, or caller-owned destruction')
@@ -197,6 +227,147 @@ Contains
     Call check_creates(expected_creates)
     Return
   End Subroutine reject_reinitialize
+
+  Subroutine failed_initialization(kind,association,cleanup_kind,borrowed)
+    Implicit None
+    Integer, Intent(in) :: kind, cleanup_kind
+    Logical, Intent(in) :: association, borrowed
+    Type(xnet_gpu_t) :: context
+    Integer :: ierr, owned(3), creates(3), counts(3), live(3), borrowed_live(3), sync_count
+    Character(512) :: message
+    Character(16) :: status_text
+
+    owned = 0
+    owned(:kind) = 1
+    creates = owned
+    If ( .not. association ) owned(kind) = 0
+    borrowed_live = 0
+    If ( borrowed ) Then
+      context%stream = vendor_borrow(resource_stream,C_NULL_PTR)
+      Call supply_handle(context,resource_blas,vendor_borrow(resource_blas,context%stream))
+      borrowed_live = [1,1,0]
+      owned(:resource_blas) = 0
+      creates(:resource_blas) = 0
+#if defined(XNET_HIP)
+      context%rocsolver_handle = vendor_borrow(caller_solver,context%stream)
+#endif
+    EndIf
+    If ( association ) Then
+      Call vendor_fail_associate(kind,1)
+      Write(status_text,'(I0)') 60+kind
+    Else
+      Call vendor_fail_create(kind,1)
+      Write(status_text,'(I0)') 80+kind
+    EndIf
+    If ( cleanup_kind > 0 ) Call vendor_fail(cleanup_kind,2)
+    Call gpu_init(context,ierr,message)
+    Call require(ierr /= 0,'injected resource initialization failure is reported')
+    Call require(Index(message,'status '//Trim(status_text)) > 0,'initialization diagnostic survives rollback')
+    Call check_creates(creates)
+    counts = owned
+    live = borrowed_live
+    If ( cleanup_kind > 0 ) Then
+      live(cleanup_kind) = 1
+      live(resource_stream) = 1
+      If ( cleanup_kind /= resource_stream ) counts(resource_stream) = 0
+    EndIf
+    Call check_destroys(counts)
+    Call check_live(live)
+    If ( cleanup_kind > 0 ) Then
+      Call reject_reinitialize(context,creates)
+      Call finish(cleanup_kind)
+      counts(cleanup_kind) = counts(cleanup_kind)+1
+      Call check_destroys(counts)
+      Call check_live(live)
+      Call reject_reinitialize(context,creates)
+      Call finish(0)
+      counts(cleanup_kind) = counts(cleanup_kind)+1
+      counts(resource_stream) = owned(resource_stream)
+      If ( cleanup_kind == resource_stream ) counts(resource_stream) = 3
+    Else
+      Call finish(0)
+    EndIf
+    Call check_destroys(counts)
+    Call check_live(borrowed_live)
+    sync_count = vendor_syncs()
+    Call finish(0)
+    Call check_destroys(counts)
+    Call require(vendor_syncs() == sync_count,'completed rollback finalization is a no-op')
+    ! Every failure stage must permit a new lifetime once rollback is complete.
+    Call initialize(context)
+    owned = 1-borrowed_live
+    Call check_creates(creates+owned)
+    Call finish(0)
+    Call check_destroys(counts+owned)
+    Call check_live(borrowed_live)
+#if defined(XNET_HIP)
+    If ( borrowed ) Call require(vendor_live(caller_solver) == 1,'rollback preserves separate borrowed solver')
+#endif
+    Call vendor_release_borrowed()
+    Return
+  End Subroutine failed_initialization
+
+  Subroutine persistent_rollback()
+    Implicit None
+    Type(xnet_gpu_t) :: context
+    Integer :: ierr, attempt
+    Character(512) :: message
+    Call vendor_fail_associate(resource_solver,1)
+    Call vendor_fail(resource_solver,-1)
+    Call gpu_init(context,ierr,message)
+    Call require(ierr /= 0,'initialization reports persistent rollback failure')
+    Call check_creates([1,1,1])
+    Call check_destroys([0,1,1])
+    Call check_live([1,0,1])
+    Do attempt = 2, 4
+      Call reject_reinitialize(context,[1,1,1])
+      Call finish(resource_solver)
+      Call check_destroys([0,1,attempt])
+      Call check_live([1,0,1])
+    EndDo
+    Call vendor_fail(resource_solver,0)
+    Call vendor_fail(resource_stream,-1)
+    Do attempt = 1, 3
+      Call finish(resource_stream)
+      Call check_destroys([attempt,1,5])
+      Call check_live([1,0,0])
+      Call reject_reinitialize(context,[1,1,1])
+    EndDo
+    Call vendor_fail(resource_stream,0)
+    Call finish(0)
+    Call check_destroys([4,1,5])
+    Call finish(0)
+    Call check_destroys([4,1,5])
+    Call initialize(context)
+    Call finish(0)
+    Call check_destroys([5,2,6])
+    Return
+  End Subroutine persistent_rollback
+
+  Subroutine malformed_initialization()
+    Implicit None
+    Type(xnet_gpu_t) :: context
+    Type(C_PTR) :: other_stream
+    Integer :: ierr
+    Character(512) :: message
+    context%stream = vendor_borrow(resource_stream,C_NULL_PTR)
+    other_stream = vendor_borrow(resource_stream,C_NULL_PTR)
+    Call supply_handle(context,resource_blas,vendor_borrow(resource_blas,other_stream))
+    Call gpu_init(context,ierr,message)
+    Call require(ierr /= 0 .and. Index(message,'do not match') > 0,'mismatched borrowed stream is rejected')
+    Call check_creates([0,0,0])
+    Call check_destroys([0,0,0])
+    Call check_live([2,1,0])
+    Call finish(0)
+    Call check_destroys([0,0,0])
+    Call check_live([2,1,0])
+    Call vendor_release_borrowed()
+    context = xnet_gpu_t()
+    Call initialize(context)
+    Call finish(0)
+    Call check_destroys([1,1,1])
+    Return
+  End Subroutine malformed_initialization
 
   Subroutine retry_one(kind)
     Implicit None

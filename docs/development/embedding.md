@@ -303,7 +303,10 @@ the device arrays pass those checks, active scientific values are validated
 on the device.
 
 Initialize and finalize with no calls in flight. Repeated finalization after
-completion returns success. If GPU cleanup fails after arrays are released,
+completion returns success. Failed GPU initialization rolls back resources it
+created; if that cleanup also fails, call finalization to retry it before
+initializing again. Burns and NSE queries remain blocked, and no network arrays
+were created on that path. If GPU cleanup fails after arrays are released,
 new initialization, burns and NSE queries are blocked; another finalization
 retries GPU cleanup without repeating array/EOS teardown. This preserves
 cleanup bookkeeping and does not promise recovery from a GPU runtime fault.
@@ -428,7 +431,11 @@ enables OpenMP directives. GPU host calls remain serialized.
 The following are all 32 fields of `xnet_controls_t`, after
 `set_xnet_controls_defaults`. Integers use default Fortran `Integer`, real
 controls use `Real(dp)`, and numerical ratios/tolerances are dimensionless
-unless stated. Common validation still checks controls that are ignored by
+unless stated. Initialization copies the controls into XNet; changing the
+caller's value afterward does not reconfigure the initialized network. Finalize
+and initialize again to apply different controls.
+
+Common validation still checks controls that are ignored by
 the API or selected solver; for example, BDF does not permit a nonpositive
 `tolm` merely because it does not use that tolerance.
 
@@ -773,10 +780,11 @@ or result extent return `xnet_invalid`; lifecycle violations return
 NSE convergence failure remains fatal inside the existing solver and has no
 recoverable NSE status.
 
-## Updating an existing caller
+## Updating a development caller
 
-Rebuild application sources against the new module files and archive. These
-source changes apply to callers of the preceding interface:
+The following names changed during v9 development. They are notes for callers
+of earlier prototypes, rather than a released-interface compatibility promise.
+Rebuild those application sources against the current module files and archive:
 
 - Rename `timing%seconds` to `timing%evolve`; all timing fields still use
   seconds, and `evolve` covers only the interval inside `full_net`.

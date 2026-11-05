@@ -96,7 +96,7 @@ Contains
     Use xnet_screening, Only: screening_init
     Use xnet_preprocess, Only: net_preprocess
 #ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_init, gpu_finalize
+    Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
 #endif
     Implicit None
     Type(xnet_controls_t), Intent(in) :: controls
@@ -185,12 +185,20 @@ Contains
     gpu = xnet_gpu_t()
     If ( Present(gpu_resources) ) gpu = gpu_resources
     Call gpu_init(gpu,ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= 0 ) Then
+      ! Failed initialization may still own resources whose rollback must be retried.
+      If ( mydevice >= 0 ) api_state = api_cleanup_pending
+      Return
+    EndIf
 #endif
     Call apply_xnet_controls(controls,ierr,message)
     If ( ierr /= 0 ) Then
 #ifdef XNET_GPU
       Call gpu_finalize(cleanup_status,cleanup_message)
+      If ( cleanup_status /= 0 ) Then
+        api_state = api_cleanup_pending
+        message = Trim(message)//'; '//Trim(cleanup_message)
+      EndIf
 #endif
       Return
     EndIf
@@ -368,43 +376,43 @@ Contains
       EndIf
     EndIf
     If ( .not. on_device ) Then
-    Do lane = 1, n
-      If ( .not. active(lane) ) Cycle
-      If ( .not. ieee_is_finite(density(lane)) .or. .not. ieee_is_finite(temperature(lane)) .or. &
-        & .not. ieee_is_finite(ye(lane)) .or. .not. ieee_is_finite(restart_dt_s(lane)) .or. &
-        & .not. All(ieee_is_finite(mass_fraction(:,lane))) ) Then
-        message = 'Active-zone inputs must be finite'
-        Return
-      EndIf
-      If ( density(lane) <= 0.0_dp .or. temperature(lane) <= 0.0_dp .or. &
-        & ye(lane) < 0.0_dp .or. ye(lane) > 1.0_dp .or. restart_dt_s(lane) < 0.0_dp .or. &
-        & Any(mass_fraction(:,lane) < 0.0_dp) ) Then
-        message = 'Invalid active-zone density, temperature, Ye, composition or restart timestep'
-        Return
-      EndIf
-      total_mass = Sum(mass_fraction(:,lane))
-      If ( Present(aux_x) ) Then
-        If ( .not. ieee_is_finite(aux_x(lane)) .or. .not. ieee_is_finite(aux_a(lane)) .or. &
-          & .not. ieee_is_finite(aux_z(lane)) ) Then
-          message = 'Active-zone auxiliary inputs must be finite'
+      Do lane = 1, n
+        If ( .not. active(lane) ) Cycle
+        If ( .not. ieee_is_finite(density(lane)) .or. .not. ieee_is_finite(temperature(lane)) .or. &
+          & .not. ieee_is_finite(ye(lane)) .or. .not. ieee_is_finite(restart_dt_s(lane)) .or. &
+          & .not. All(ieee_is_finite(mass_fraction(:,lane))) ) Then
+          message = 'Active-zone inputs must be finite'
           Return
         EndIf
-        If ( aux_x(lane) < 0.0_dp .or. aux_x(lane) > 1.0_dp .or. aux_a(lane) < 0.0_dp .or. &
-          & aux_z(lane) < 0.0_dp .or. aux_z(lane) > aux_a(lane) ) Then
-          message = 'Invalid auxiliary mass fraction, A or Z'
+        If ( density(lane) <= 0.0_dp .or. temperature(lane) <= 0.0_dp .or. &
+          & ye(lane) < 0.0_dp .or. ye(lane) > 1.0_dp .or. restart_dt_s(lane) < 0.0_dp .or. &
+          & Any(mass_fraction(:,lane) < 0.0_dp) ) Then
+          message = 'Invalid active-zone density, temperature, Ye, composition or restart timestep'
           Return
         EndIf
-        If ( aux_x(lane) > 0.0_dp .and. aux_a(lane) <= 0.0_dp ) Then
-          message = 'Positive auxiliary mass requires positive A'
+        total_mass = Sum(mass_fraction(:,lane))
+        If ( Present(aux_x) ) Then
+          If ( .not. ieee_is_finite(aux_x(lane)) .or. .not. ieee_is_finite(aux_a(lane)) .or. &
+            & .not. ieee_is_finite(aux_z(lane)) ) Then
+            message = 'Active-zone auxiliary inputs must be finite'
+            Return
+          EndIf
+          If ( aux_x(lane) < 0.0_dp .or. aux_x(lane) > 1.0_dp .or. aux_a(lane) < 0.0_dp .or. &
+            & aux_z(lane) < 0.0_dp .or. aux_z(lane) > aux_a(lane) ) Then
+            message = 'Invalid auxiliary mass fraction, A or Z'
+            Return
+          EndIf
+          If ( aux_x(lane) > 0.0_dp .and. aux_a(lane) <= 0.0_dp ) Then
+            message = 'Positive auxiliary mass requires positive A'
+            Return
+          EndIf
+          total_mass = total_mass + aux_x(lane)
+        EndIf
+        If ( total_mass <= 0.0_dp ) Then
+          message = 'Active-zone composition must contain positive mass'
           Return
         EndIf
-        total_mass = total_mass + aux_x(lane)
-      EndIf
-      If ( total_mass <= 0.0_dp ) Then
-        message = 'Active-zone composition must contain positive mass'
-        Return
-      EndIf
-    EndDo
+      EndDo
     EndIf
     ierr = xnet_success
     If ( .not. Any(active) .and. .not. on_device ) Return

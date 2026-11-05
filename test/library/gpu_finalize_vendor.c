@@ -14,6 +14,7 @@ struct resource {
 static struct resource resources[RESOURCE_LIMIT];
 static int used, invalid_calls, sync_calls;
 static int creates[KINDS], destroys[KINDS], failures[KINDS];
+static int create_failures[KINDS], associate_failures[KINDS];
 
 static int invalid(const char *operation)
 {
@@ -52,6 +53,11 @@ static void *allocate(int kind, int borrowed, void *stream)
 static int create(void **pointer, int kind)
 {
     ++creates[kind];
+    if (create_failures[kind] > 0) {
+        --create_failures[kind];
+        *pointer = NULL;
+        return 80 + kind;
+    }
     *pointer = allocate(kind, 0, NULL);
     return *pointer ? 0 : INVALID_RESOURCE;
 }
@@ -63,15 +69,18 @@ static int destroy(void *pointer, int kind)
     ++destroys[kind];
     if (!r || !r->live) return invalid("destroy invalid or dead resource");
     if (r->borrowed) return invalid("destroy caller-owned resource");
+    /* A new handle may still use the null/default stream when binding fails.
+     * Nonnull streams must still be live until every dependent is destroyed. */
     if (kind == STREAM) {
         for (i = 0; i < used; ++i)
             if (resources[i].live && resources[i].stream == pointer)
                 return invalid("destroy stream before a dependent handle");
-    } else if (!find(r->stream, STREAM) || !find(r->stream, STREAM)->live) {
+    } else if (r->stream &&
+               (!find(r->stream, STREAM) || !find(r->stream, STREAM)->live)) {
         return invalid("destroy handle after its stream");
     }
-    if (failures[kind] > 0) {
-        --failures[kind];
+    if (failures[kind] != 0) {
+        if (failures[kind] > 0) --failures[kind];
         return 70 + kind;
     }
     r->live = 0;
@@ -91,6 +100,10 @@ static int set_stream(void *pointer, void *stream, int kind)
     struct resource *r = find(pointer, kind), *s = find(stream, STREAM);
     if (!r || !r->live || !s || !s->live)
         return invalid("bind invalid handle or stream");
+    if (associate_failures[kind] > 0) {
+        --associate_failures[kind];
+        return 60 + kind;
+    }
     r->stream = stream;
     return 0;
 }
@@ -113,7 +126,10 @@ int vendor_creates(int kind) { return creates[kind]; }
 int vendor_destroys(int kind) { return destroys[kind]; }
 int vendor_invalid(void) { return invalid_calls; }
 int vendor_syncs(void) { return sync_calls; }
+/* A negative destruction count persists until the test clears it. */
 void vendor_fail(int kind, int count) { failures[kind] = count; }
+void vendor_fail_create(int kind, int count) { create_failures[kind] = count; }
+void vendor_fail_associate(int kind, int count) { associate_failures[kind] = count; }
 
 int vendor_reset(void)
 {
@@ -124,6 +140,8 @@ int vendor_reset(void)
     memset(creates, 0, sizeof creates);
     memset(destroys, 0, sizeof destroys);
     memset(failures, 0, sizeof failures);
+    memset(create_failures, 0, sizeof create_failures);
+    memset(associate_failures, 0, sizeof associate_failures);
     used = invalid_calls = sync_calls = 0;
     return 0;
 }

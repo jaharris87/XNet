@@ -109,7 +109,9 @@ GPU_FINALIZE_VENDOR := $(BUILD_DIR)/gpu-finalize-vendor.o
 .PHONY: gpu-finalize-test
 gpu-finalize-test: $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP)
 	@set -e; for executable in $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP); do \
-	  for scenario in stream blas solver both borrowed mixed-blas mixed-solver; do \
+	  for scenario in stream blas solver both borrowed mixed-blas mixed-solver \
+	    init-create-stream init-create-blas init-create-solver init-associate-blas init-associate-solver \
+	    init-blas-retry init-solver-retry init-stream-retry init-borrowed init-persistent init-malformed; do \
 	    "$$executable" "$$scenario"; \
 	  done; \
 	done

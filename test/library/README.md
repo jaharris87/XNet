@@ -52,19 +52,27 @@ A separate host-only cleanup test recompiles the production API with a
 test GPU resource module in an isolated build subdirectory. It uses real
 CPU workspaces and finalizers, but injects two GPU cleanup failures. It
 checks that finalization retries only GPU cleanup, blocks new work while
-cleanup is pending, and permits initialization after cleanup succeeds.
+cleanup is pending, and permits initialization after cleanup succeeds. It also
+injects resource initialization failures before workspace creation, checks that
+pending rollback blocks initialize, burn and
+NSE calls, and checks that cleanup retries leave never-created workspaces alone.
+A malformed-controls case fails before resource initialization.
 This checks API bookkeeping, not GPU execution or recovery from a real
 device failure. The replacement module is never used by the normal callers
 or native GPU tests.
 
 The CPU suite also compiles the production GPU resource module and CUDA/HIP
 bindings in separate module directories, using a C model for vendor calls and
-minimal host-only hipfort declarations. Fourteen cases check repeated solver,
+minimal host-only hipfort declarations. Cases check repeated solver,
 BLAS and stream destruction errors, partial successful cleanup, rejection of
 reinitialization during cleanup, no repeated successful destruction, and
 preservation of borrowed resources. The HIP `both` case also checks that
 successful rocBLAS cleanup clears its solver alias while preserving a separate
-borrowed solver when hipBLAS cleanup fails. These tests require a C compiler
+borrowed solver when hipBLAS cleanup fails. Failed initialization cases cover
+stream and handle creation, handle association, successful rollback, finite and
+persistent destructor failures, retries, and reinitialization after cleanup.
+They also check borrowed resources and mismatched supplied streams rejected
+before any owned allocation. These tests require a C compiler
 (`CC`) and exercise resource bookkeeping, not device execution or recovery from real
 GPU faults. The fake interfaces provide no numerical implementation and are
 not linked into normal consumers. MAGMA's void destructor is outside the

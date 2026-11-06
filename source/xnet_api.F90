@@ -1471,7 +1471,7 @@ Contains
       message = 'Cannot create time-series file: '//Trim(filename)
       Return
     EndIf
-    ! The initial snapshot has no reaction flux; do not reuse the preceding burn's final flux.
+    ! The initial snapshot has no reaction flux; do not reuse final flux from the preceding burn.
     flx(:,zb_lo:zb_hi) = 0.0_dp
     ierr = xnet_success
     Return

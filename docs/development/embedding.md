@@ -18,6 +18,13 @@ allocation, malformed-data, singular-solve and NSE convergence failures,
 still terminate inside XNet. The [status reference](#status-and-shutdown)
 describes the limits of checked errors.
 
+| Application operation | Public entry point | Caller responsibility |
+| --- | --- | --- |
+| Load a network once | `xnet_initialize` | Set control defaults and overrides; configure the CPU team or select the GPU before calling. |
+| Evolve one batch | `xnet_burn_batch` | Supply arrays in network species order, check status, and apply the application's energy policy. |
+| Query equilibrium | `xnet_nse_composition` | Supply density, temperature and Ye; use the copied composition in network order. |
+| Release the instance | `xnet_finalize` | Join outstanding calls first; retry if GPU cleanup reports failure. |
+
 ## CPU quickstart
 
 Build from the repository root:
@@ -372,6 +379,8 @@ loss and optional auxiliary arrays have length `n`; `mass_fraction` has shape
 `(ny,n)`, `zone_id` has shape `(3,n)` or `(4,n)`, and integer `counters` has
 shape `(5,n)`. `n` may be smaller than `nzbatchmx`. `zone_id` contains the
 application's diagnostic tuple; its values need not be unique or consecutive.
+
+### Units and conventions at a glance
 
 | Quantity | Units and convention |
 | --- | --- |
@@ -886,3 +895,27 @@ These responsibilities remain with the application integration:
   placement, device table preparation, stream/task ordering, and validation
   of its physical/energy policy. The library test suite does not establish
   a complete application integration or its performance.
+
+## Reading the implementation
+
+Application code imports [`xnet_api`](../../source/xnet_api.F90). Its four
+public procedures appear first, in lifecycle order. The private routines below
+them follow the same sequence:
+
+| Part of a call | Where to read |
+| --- | --- |
+| Initialization | `check_initializable`, `prepare_data_files`, `start_worker_team`, `load_network` and `describe_network` separate checks, setup and copied metadata. `map_workspace` and `unmap_workspace` keep persistent mapping lists together. |
+| Worker selection | `check_worker` checks the fixed team and selects its bank. Local `lane` indexes caller arrays; `zb_offset+lane` indexes the worker's XNet storage. |
+| Batch evolution | `xnet_burn_batch` checks lifecycle, mappings and dimensions before dispatching to `burn_host_arrays` or `burn_device_arrays`. Both stage inputs, call `full_net` and collect results. |
+| Validation and failures | `host_lane_status` and the device validation loops use the same named results and `lane_error_message`. `format_burn_failure` translates numerical failure and the caller's diagnostic tuple. |
+| Histories and timing | `open_burn_output`/`close_burn_output` bracket evolution; `current_timing`/`elapsed_timing` report differences in the worker timers. |
+| Finalization | `xnet_finalize` unmaps storage, releases modules and then releases GPU resources. Pending GPU cleanup skips the completed storage teardown on retry. |
+
+[`xnet_gpu`](../../source/xnet_gpu.F90) manages device selection and resources
+for both the standalone driver and the API. Its public lifecycle routines
+precede directive-runtime helpers and private setup/teardown routines.
+`init_thread_resources` validates borrowed handles before creating missing
+resources, then installs the named vendor handles and their ownership flags.
+After the team joins, `gpu_init` uses the ordinary `gpu_finalize` path for a
+failed setup. `finalize_thread_resources` releases handles before their stream
+and preserves failed resources for the next cleanup attempt.

@@ -12,6 +12,10 @@
 !   NSE scratch. Initialization and finalization must occur outside OpenMP parallel regions.
 ! - GPU (GPU_MODE=ON, OPENMP_MODE=OFF): Host API calls are serialized; the application may supply
 !   borrowed streams/handles via xnet_gpu_t and evolve device-resident arrays via data_on_device.
+!
+! Public entry points appear first; private setup, host staging, device staging, output and timing
+! helpers follow. Application examples and the full argument reference are in
+! docs/development/embedding.md. Application code needs only Use xnet_api, Only: ... .
 !***************************************************************************************************
 
 #include "xnet_macros.fh"
@@ -33,6 +37,7 @@ Module xnet_api
   Integer, Parameter, Public :: xnet_invalid            = 1
   Integer, Parameter, Public :: xnet_lifecycle_error    = 2
   Integer, Parameter, Public :: xnet_unsupported        = 3
+  ! These two burn failures require application shutdown; physical results are unusable.
   Integer, Parameter, Public :: xnet_integrator_failure = 4
   Integer, Parameter, Public :: xnet_step_limit         = 5
 
@@ -49,6 +54,7 @@ Module xnet_api
   Public :: xnet_finalize
 
   Type, Public :: xnet_network_t
+    ! Caller-owned copies in species order; valid after finalization of a successful initialization.
     Character(5), Allocatable :: names(:)
     Integer, Allocatable :: mass_number(:)
     Integer, Allocatable :: charge_number(:)
@@ -57,7 +63,8 @@ Module xnet_api
   End Type xnet_network_t
 
   Type, Public :: xnet_timing_t
-    ! Per-call stage durations in seconds; evolve measures wall time inside full_net.
+    ! Seconds for this call. evolve covers full_net, excluding API staging and result extraction.
+    ! Component timers can nest; they must not be summed to obtain full-call time.
     Real(dp) :: evolve     = 0.0_dp
     Real(dp) :: solve      = 0.0_dp
     Real(dp) :: jacobian   = 0.0_dp
@@ -67,7 +74,7 @@ Module xnet_api
   End Type xnet_timing_t
 
   !-------------------------------------------------------------------------------------------------
-  ! Unit conversion and physical default constants
+  ! Unit conversions and benign values for inactive workspace lanes
   !-------------------------------------------------------------------------------------------------
   Real(dp), Parameter :: kelvin_to_gk = 1.0e-9_dp
   Real(dp), Parameter :: gk_to_kelvin = 1.0e9_dp
@@ -86,6 +93,7 @@ Module xnet_api
   Integer :: api_state = api_uninitialized
 
   Character(80) :: api_data_description = ' '
+  ! Do not reset between lifetimes: earlier time-series files may still exist.
   Integer(i8) :: output_call = 0_i8
 
   ! Per-lane validation results use the same messages on host and device.
@@ -104,7 +112,15 @@ Contains
   !=================================================================================================
 
   Subroutine xnet_initialize(controls,network,ierr,message,gpu_resources)
-    ! Prepare and load a network once. Reader, EOS and solver failures may still terminate.
+    ! Load one network and reserve reusable workspace for subsequent burns and NSE queries.
+    ! Set controls defaults before overriding data_dir, batch capacity and integration options.
+    ! Controls are copied; later edits to the supplied value do not reconfigure this instance.
+    ! network receives independent copies of species names, A/Z and energies in MeV per nucleus.
+    !
+    ! Call outside application OpenMP regions after configuring the intended fixed team.
+    ! GPU resources are optional: borrow supplied handles and create only missing resources.
+    ! A failed GPU rollback may require xnet_finalize before another initialization attempt.
+    ! File-content, allocation, EOS and solver failures can still terminate inside XNet.
     Use xnet_controls, Only: apply_xnet_controls
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
@@ -166,6 +182,18 @@ Contains
     ! Evolve a batch of zones over dt_s seconds at constant density (and constant temperature
     ! unless self-heating is enabled). Supports both host-resident arrays (default) and
     ! pre-mapped contiguous device arrays (data_on_device=.true.).
+    !
+    ! For n = Size(active), scalar-per-zone arrays have length n and mass_fraction has shape
+    ! (network species,n). zone_id is a (3,n) or (4,n) diagnostic tuple; counters has shape (5,n).
+    ! Capacity nzbatchmx includes inactive holes. Only active scientific inputs are read.
+    ! density is in g/cm^3, temperature in K, and mass_fraction contains raw X in network order.
+    ! The optional fixed auxiliary reservoir requires aux_x, aux_a and aux_z together.
+    !
+    ! restart_dt_s is a nonnegative startup hint in seconds; use zero for a fresh burn.
+    ! The returned hint is the preceding internal timestep, not a recommended next application dt.
+    ! neutrino_loss is integrated weak-reaction energy loss in erg/g. Inactive state is preserved
+    ! and its loss/counters are zero. Counters, timing and status always return on the host.
+    ! Fatal burn statuses require shutdown after workers join; no physical batch result is valid.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue, ktot, lzactive, nzbatch, szbatch, &
       & zb_hi, zb_lo, zb_offset, zone_work=>zone_id
@@ -310,6 +338,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Compute Nuclear Statistical Equilibrium mass fractions (A * ynse) in XNet species order for
     ! scalar density [g/cm^3], temperature [K], and electron fraction Ye.
+    ! Copy without normalization or species mapping. NSE convergence failures remain fatal.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: aa, ny
@@ -362,7 +391,11 @@ Contains
   End Subroutine xnet_nse_composition
 
   Subroutine xnet_finalize(ierr,message)
-    ! Release XNet workspaces and owned resources without destroying host state.
+    ! Release device mappings before their CPU allocations, then release owned GPU resources.
+    ! Borrowed application resources and copied network metadata remain with the application.
+    ! Call outside application parallel regions, with no work in flight and the initialized team.
+    ! If GPU cleanup fails, repeat this call to retry only the resources that remain.
+    ! After successful cleanup, repeated calls succeed without repeating teardown.
 #ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
 #endif
@@ -474,6 +507,44 @@ Contains
     Call check_network_files(controls%data_dir,required_files,ierr,message)
     Return
   End Subroutine prepare_data_files
+
+  Subroutine check_network_files(data_dir,filenames,ierr,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Verify that all required network files exist and can be opened for reading before state setup.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input arguments
+    Character(*), Intent(in) :: data_dir, filenames(:)
+
+    ! Output arguments
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
+
+    ! Local variables
+    Integer :: i, input_unit, input_status
+    Logical :: exists
+
+    ierr = xnet_invalid
+    message = ' '
+    Do i = 1, Size(filenames)
+      Inquire(file=Trim(data_dir)//'/'//Trim(filenames(i)),exist=exists)
+      If ( .not. exists ) Then
+        message = 'Missing network file: '//Trim(filenames(i))
+        Return
+      EndIf
+      Open(newunit=input_unit,file=Trim(data_dir)//'/'//Trim(filenames(i)), &
+        & status='old',action='read',access='stream',form='unformatted',iostat=input_status)
+      If ( input_status /= 0 ) Then
+        message = 'Cannot read network file: '//Trim(filenames(i))
+        Return
+      EndIf
+      Close(input_unit)
+    EndDo
+    ierr = xnet_success
+
+    Return
+  End Subroutine check_network_files
 
   Subroutine start_worker_team
     ! One XNet worker per application OpenMP thread, one process.
@@ -703,7 +774,8 @@ Contains
     Real(dp), Allocatable :: loss_work(:)
     Integer :: lane, izb
 
-    ! Idle lanes get benign values, so the integrator never reads garbage.
+    ! lane indexes caller arrays; izb = zb_offset + lane indexes this worker bank.
+    ! Reset the full bank so a short or masked call cannot reuse the preceding batch state.
     ystart(:,zb_lo:zb_hi) = 0.0_dp
     xext(zb_lo:zb_hi) = 0.0_dp
     aext(zb_lo:zb_hi) = 1.0_dp
@@ -909,7 +981,7 @@ Contains
     message = ' '
     Do lane = 1, n
       If ( .not. active(lane) ) Cycle
-      validation_status = host_lane_verdict(density(lane),temperature(lane),ye(lane),mass_fraction(:,lane), &
+      validation_status = host_lane_status(density(lane),temperature(lane),ye(lane),mass_fraction(:,lane), &
         & restart_dt_s(lane),aux_x,aux_a,aux_z,lane)
       If ( validation_status /= lane_ok ) Then
         message = lane_error_message(validation_status)
@@ -921,7 +993,7 @@ Contains
     Return
   End Subroutine validate_host_inputs
 
-  Integer Function host_lane_verdict(density,temperature,ye,x,restart_dt_s,aux_x,aux_a,aux_z,lane)
+  Integer Function host_lane_status(density,temperature,ye,x,restart_dt_s,aux_x,aux_a,aux_z,lane)
     ! Check one active lane; keep the order consistent with the device validator.
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Implicit None
@@ -930,28 +1002,28 @@ Contains
     Integer, Intent(in) :: lane
     Real(dp) :: total_mass
 
-    host_lane_verdict = lane_not_finite
+    host_lane_status = lane_not_finite
     If ( .not. (ieee_is_finite(density) .and. ieee_is_finite(temperature) .and. ieee_is_finite(ye) .and. &
       & ieee_is_finite(restart_dt_s) .and. All(ieee_is_finite(x))) ) Return
-    host_lane_verdict = lane_out_of_range
+    host_lane_status = lane_out_of_range
     If ( density <= 0.0_dp .or. temperature <= 0.0_dp .or. ye < 0.0_dp .or. ye > 1.0_dp .or. &
       & restart_dt_s < 0.0_dp .or. Any(x < 0.0_dp) ) Return
     total_mass = Sum(x)
     If ( Present(aux_x) ) Then
-      host_lane_verdict = lane_aux_not_finite
+      host_lane_status = lane_aux_not_finite
       If ( .not. (ieee_is_finite(aux_x(lane)) .and. ieee_is_finite(aux_a(lane)) .and. ieee_is_finite(aux_z(lane))) ) Return
-      host_lane_verdict = lane_aux_out_of_range
+      host_lane_status = lane_aux_out_of_range
       If ( aux_x(lane) < 0.0_dp .or. aux_x(lane) > 1.0_dp .or. aux_a(lane) < 0.0_dp .or. &
         & aux_z(lane) < 0.0_dp .or. aux_z(lane) > aux_a(lane) ) Return
-      host_lane_verdict = lane_aux_needs_a
+      host_lane_status = lane_aux_needs_a
       If ( aux_x(lane) > 0.0_dp .and. aux_a(lane) <= 0.0_dp ) Return
       total_mass = total_mass + aux_x(lane)
     EndIf
-    host_lane_verdict = lane_no_mass
+    host_lane_status = lane_no_mass
     If ( total_mass <= 0.0_dp ) Return
-    host_lane_verdict = lane_ok
+    host_lane_status = lane_ok
     Return
-  End Function host_lane_verdict
+  End Function host_lane_status
 
   Function lane_error_message(verdict) Result(text)
     Implicit None
@@ -1020,6 +1092,10 @@ Contains
 
     Return
   End Subroutine format_burn_failure
+
+  !=================================================================================================
+  ! Private Device Mapping, Validation and Batch Execution
+  !=================================================================================================
 
 #ifdef XNET_GPU
   Subroutine check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
@@ -1320,43 +1396,10 @@ Contains
   End Subroutine burn_device_arrays
 #endif
 
-  Subroutine check_network_files(data_dir,filenames,ierr,message)
-    !-----------------------------------------------------------------------------------------------
-    ! Verify that all required network files exist and can be opened for reading before state setup.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
 
-    ! Input arguments
-    Character(*), Intent(in) :: data_dir, filenames(:)
-
-    ! Output arguments
-    Integer, Intent(out) :: ierr
-    Character(*), Intent(out) :: message
-
-    ! Local variables
-    Integer :: i, input_unit, input_status
-    Logical :: exists
-
-    ierr = xnet_invalid
-    message = ' '
-    Do i = 1, Size(filenames)
-      Inquire(file=Trim(data_dir)//'/'//Trim(filenames(i)),exist=exists)
-      If ( .not. exists ) Then
-        message = 'Missing network file: '//Trim(filenames(i))
-        Return
-      EndIf
-      Open(newunit=input_unit,file=Trim(data_dir)//'/'//Trim(filenames(i)), &
-        & status='old',action='read',access='stream',form='unformatted',iostat=input_status)
-      If ( input_status /= 0 ) Then
-        message = 'Cannot read network file: '//Trim(filenames(i))
-        Return
-      EndIf
-      Close(input_unit)
-    EndDo
-    ierr = xnet_success
-
-    Return
-  End Subroutine check_network_files
+  !=================================================================================================
+  ! Private Time-series Output and Per-call Timing
+  !=================================================================================================
 
   Subroutine open_burn_output(zone_id_components,ierr,message)
     ! Each call has its own local 0..dt history. Lane numbers distinguish repeated diagnostic IDs.

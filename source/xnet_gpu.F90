@@ -4,6 +4,9 @@
 !
 ! Supports both standalone rank-based device initialization and application-embedded resource
 ! borrowing/creation with independent per-handle ownership tracking and retryable teardown.
+! Public lifecycle routines come first, then directive-runtime helpers and private resource setup.
+! Each host thread installs named vendor handles; ownership flags describe only resources XNet
+! created. A failed destructor leaves its handle and dependent stream available for a later retry.
 !***************************************************************************************************
 
 #include "xnet_macros.fh"
@@ -121,22 +124,22 @@ Module xnet_gpu
   ! Public module state and types
   !-------------------------------------------------------------------------------------------------
   Integer(C_INT), Public :: deviceCount = 0
-  Integer, Public :: mydevice = -1
+  Integer, Public :: mydevice = -1            ! Nonnegative while any thread still holds resources
   Type(C_PTR), Pointer, Public :: stream => Null()
 
   ! Application-supplied GPU context for borrowing or creating streams and vendor handles.
   ! Fields unused by the active backend are ignored and never modified.
   Type, Public :: xnet_gpu_t
-    Integer :: device = -1
+    Integer :: device = -1                     ! Accept the current application device by default
     Type(C_PTR) :: stream = C_NULL_PTR
     Integer :: queue = 1                        ! OpenACC async ID; unused for OpenMP target offload
     Type(C_PTR) :: cublas_handle = C_NULL_PTR
     Type(C_PTR) :: cusolver_handle = C_NULL_PTR
-    Type(C_PTR) :: cusparse_handle = C_NULL_PTR ! Reserved for future sparse GPU support
+    Type(C_PTR) :: cusparse_handle = C_NULL_PTR ! Reserved; unused by the current implementation
     Type(C_PTR) :: hipblas_handle = C_NULL_PTR
     Type(C_PTR) :: rocblas_handle = C_NULL_PTR
     Type(C_PTR) :: rocsolver_handle = C_NULL_PTR ! Optional rocBLAS handle; shares rocblas_handle if null
-    Type(C_PTR) :: rocsparse_handle = C_NULL_PTR ! Reserved for future sparse GPU support
+    Type(C_PTR) :: rocsparse_handle = C_NULL_PTR ! Reserved; unused by the current implementation
     Type(C_PTR) :: magma_queue = C_NULL_PTR     ! Reserved; external MAGMA queues are unsupported
   End Type xnet_gpu_t
 
@@ -146,6 +149,7 @@ Module xnet_gpu
   Logical :: gpu_initialized = .false.
   Integer :: active_device = -1
   Logical :: owns_stream = .false.
+  ! OpenACC owns queue streams; XNet must never destroy those streams.
 #ifdef XNET_OMP
   !$omp threadprivate(stream,gpu_initialized,active_device,owns_stream)
 #endif
@@ -362,7 +366,8 @@ Contains
 
   Logical Function device_is_present(hostptr,device,bytes)
     !-----------------------------------------------------------------------------------------------
-    ! Return .true. if the host address range [hostptr, hostptr + bytes) is mapped on device.
+    ! Query the directive runtime for a mapping. OpenACC checks bytes starting at hostptr;
+    ! OpenMP checks the base address only. The caller must map the full contiguous array extent.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -716,7 +721,7 @@ Contains
   Subroutine init_thread_resources(device,gpu_context,init_status,init_message)
     !-----------------------------------------------------------------------------------------------
     ! Validate borrowed handles, allocate any missing stream/handles on the calling thread, and
-    ! commit or roll back cleanly across the host team.
+    ! install their ownership state. The outer gpu_init joins the team before attempting rollback.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 

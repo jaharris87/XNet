@@ -6,7 +6,7 @@ Program host_batch_openmp_consumer
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, set_xnet_controls_defaults, &
     & xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize, xnet_success, &
     & xnet_step_limit, xnet_integrator_failure, xnet_unsupported
-  Use consumer_fixture, Only: fixture_state, write_state, check
+  Use consumer_fixture, Only: fixture_state, write_state, check, check_ye_consistency
   Implicit None
 
   Integer, Parameter :: lanes = 4, batches = 8, calls = 6
@@ -16,6 +16,7 @@ Program host_batch_openmp_consumer
     Logical :: active(lanes)
     Real(dp) :: dt, density(lanes), temperature(lanes), ye(lanes), restart(lanes), loss(lanes)
     Real(dp) :: input_temperature(lanes), input_ye(lanes), input_restart(lanes)
+    Real(dp) :: aux_x(lanes), aux_a(lanes), aux_z(lanes)
     Real(dp), Allocatable :: x(:,:), input_x(:,:)
     Type(xnet_timing_t) :: timing
     Character(512) :: message
@@ -413,6 +414,9 @@ Contains
       results(call_number,batch)%input_ye = ey
       results(call_number,batch)%input_restart = hint
       results(call_number,batch)%input_x = x
+      results(call_number,batch)%aux_x = ax
+      results(call_number,batch)%aux_a = aa
+      results(call_number,batch)%aux_z = az
       results(call_number,batch)%loss = -777.0_dp
       results(call_number,batch)%counters = -777
       Call xnet_burn_batch(results(call_number,batch)%dt,active(:n),ids(:nids,:n), &
@@ -479,6 +483,8 @@ Contains
     Do lane = 1, lanes
       If ( lane <= r%n ) Then
         If ( r%active(lane) ) Then
+          Call check_ye_consistency(r%ye(lane),r%x(:,lane),network%mass_number,network%charge_number, &
+            & 'logical batch/call',r%aux_x(lane),r%aux_a(lane),r%aux_z(lane))
           Call check(r%counters(1,lane) > 0,'active attempted counters')
           Call check(ieee_is_finite(r%restart(lane)) .and. r%restart(lane) >= 0.0_dp,'nonnegative restart timestep')
           Cycle

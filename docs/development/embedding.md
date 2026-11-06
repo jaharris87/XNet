@@ -379,7 +379,7 @@ application's diagnostic tuple; its values need not be unique or consecutive.
 | `density` | Positive finite g/cm^3; held constant during the burn. |
 | `temperature` | Positive finite K, in/out. With `iheat<=0`, its caller value is preserved on successful return; with `iheat>0`, temperature is coupled implicitly. Internal/output `T9` uses GK. |
 | `mass_fraction(species,lane)` | Nonnegative finite raw `X`, in XNet species order. No normalization or reordering. Internal abundances are `Y=X/A`. |
-| `ye` | Finite input in `[0,1]`, in/out. Composition moments recompute it during evolution, including with fixed temperature. |
+| `ye` | Finite input in `[0,1]`, in/out. Successful steps recompute it from the accepted composition, including with fixed temperature. |
 | `aux_x`, `aux_a`, `aux_z` | Fixed reservoir mass fraction, mass number and charge. `0<=aux_x<=1`, `0<=aux_z<=aux_a`; positive mass requires positive A. Zero auxiliary mass means no reservoir. |
 | `restart_dt_s` | Nonnegative seconds, in/out; a startup hint and historical timestep result, as described below. |
 | `neutrino_loss` | Integrated weak-reaction neutrino energy loss in erg/g; separate from unsupported incident-neutrino histories. |
@@ -398,6 +398,10 @@ with the auxiliary terms absent when its mass is zero. The reservoir
 contributes to EOS moments without becoming an evolved species. Species
 mapping, normalization policy, nuclear energy release and any application
 neutrino correction remain application responsibilities.
+
+Both BE and BDF return Ye from the accepted abundances, including changes
+from weak reactions. This replaces the earlier value from the EOS evaluation
+before the final Newton correction; it does not renormalize the composition.
 
 On success, inactive lanes preserve temperature, Ye, X and restart hints,
 and return zero loss and counters. Their scientific values are not read.

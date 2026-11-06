@@ -740,14 +740,14 @@ def test_nonexact_scalar_boundary_covers_only_binary_subtraction_roundoff() -> N
     state = _state_from_reference(reference, 3)
     zone_reference = replace(reference, expected_zones=(3,))
     policy = reference.fields[3]["electron_fraction"]
-    last_passing = float.fromhex("0x1.ff4369364f727p-2")
+    last_passing = float.fromhex("0x1.ff43840e420d2p-2")
     first_failing = math.nextafter(last_passing, math.inf)
 
     # The decimal 1e-7 boundary is not exactly representable as a binary
     # subtraction.  Pin the adjacent binary floats so any larger decimal
     # guard, including 1e-13, moves this boundary and fails the test.
-    assert last_passing.hex() == "0x1.ff4369364f727p-2"
-    assert first_failing.hex() == "0x1.ff4369364f728p-2"
+    assert last_passing.hex() == "0x1.ff43840e420d2p-2"
+    assert first_failing.hex() == "0x1.ff43840e420d3p-2"
     assert abs(last_passing - policy.value) > policy.atol
     compare_final_states(
         (replace(state, electron_fraction=last_passing),), zone_reference
@@ -898,7 +898,7 @@ def test_num_obs_001_old_bounds_fail_and_revised_composition_bounds_pass() -> No
             mass_fractions.values()
         )
         if zone == 3:
-            state = replace(state, electron_fraction=0.49928059)
+            state = replace(state, electron_fraction=state.electron_fraction + 1.0e-7)
         observation = replace(state, mass_fractions=mass_fractions)
         printed_policy = bdf_reference.mass_fraction_printed_sum_tolerances[zone]  # type: ignore[index]
         assert abs(actual_sum - printed_policy.value) > 3.0e-7
@@ -2379,7 +2379,7 @@ def test_registered_num_obs_001_composition_observations_pass(
         bdf_states[state_index] = replace(
             state,
             electron_fraction=(
-                0.49928059
+                state.electron_fraction + 1.0e-7
                 if state.zone == 3
                 else state.electron_fraction
             ),

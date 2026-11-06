@@ -12,7 +12,7 @@ Program gpu_consumer
   Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite, ieee_value, ieee_quiet_nan, ieee_positive_inf
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, xnet_gpu_t, &
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success, xnet_invalid
-  Use consumer_fixture, Only: fixture_state, write_state, check
+  Use consumer_fixture, Only: fixture_state, write_state, check, check_ye_consistency
   !$ Use omp_lib, Only: omp_get_max_threads, omp_get_num_threads, omp_get_thread_num
 #if defined(XNET_CUDA)
   Use xnet_cudaf, Only: cudaGetDeviceCount, cudaGetDevice, cudaSetDevice, cudaStreamCreateWithFlags, &
@@ -381,6 +381,7 @@ Contains
     Logical, Intent(in) :: compare_outputs
     Integer :: j
     Logical :: submitted_active(lanes)
+    Real(dp) :: saved_aux_x(lanes), saved_aux_a(lanes), saved_aux_z(lanes)
 
     submitted_active = active
     If ( phase == 4 ) Call check(active(1) .and. .not. active(2) .and. active(3) .and. active(4) .and. &
@@ -389,6 +390,9 @@ Contains
     before_temperature = temperature
     before_ye = ye
     before_restart = restart
+    saved_aux_x = aux_x
+    saved_aux_a = aux_a
+    saved_aux_z = aux_z
     loss = -1.0_dp
     counters = -1
     steps = -1
@@ -423,6 +427,8 @@ Contains
         Call check(All(ieee_is_finite(x(:,j))) .and. All(x(:,j) >= 0.0_dp),Trim(label)//' composition')
         Call check(ieee_is_finite(temperature(j)) .and. temperature(j) > 0.0_dp,Trim(label)//' temperature')
         Call check(ieee_is_finite(ye(j)) .and. ye(j) >= 0.0_dp .and. ye(j) <= 1.0_dp,Trim(label)//' Ye')
+        Call check_ye_consistency(ye(j),x(:,j),network%mass_number,network%charge_number, &
+          & Trim(label),saved_aux_x(j),saved_aux_a(j),saved_aux_z(j))
         Call check(ieee_is_finite(restart(j)) .and. restart(j) >= 0.0_dp,Trim(label)//' restart')
         Call check(ieee_is_finite(loss(j)) .and. loss(j) >= 0.0_dp,Trim(label)//' neutrino loss')
         Call check(counters(1,j) > 0 .and. All(counters(:,j) >= 0),Trim(label)//' counters')
@@ -564,6 +570,8 @@ Contains
     Call check(All(ieee_is_finite(x)) .and. All(x >= 0.0_dp),Trim(label)//' composition')
     Call check(All(ieee_is_finite(temperature)) .and. All(temperature > 0.0_dp),Trim(label)//' temperature')
     Call check(All(ieee_is_finite(ye)) .and. All(ye >= 0.0_dp) .and. All(ye <= 1.0_dp),Trim(label)//' Ye')
+    Call check_ye_consistency(ye(1),x(:,1),network%mass_number,network%charge_number, &
+      & Trim(label),saved_aux_x(1),saved_aux_a(1),saved_aux_z(1))
     Call check(All(ieee_is_finite(restart)) .and. All(restart >= 0.0_dp),Trim(label)//' restart')
     Call check(All(ieee_is_finite(loss)) .and. All(loss >= 0.0_dp),Trim(label)//' neutrino loss')
     Call check(short_counters(1,1) > 0 .and. All(short_counters >= 0),Trim(label)//' counters')

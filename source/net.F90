@@ -39,7 +39,7 @@ Program net
   Use xnet_integrate_be, Only: be_init
   Use xnet_jacobian, Only: read_jacobian_data
   Use xnet_match, Only: mflx, nflx, read_match_data
-  Use xnet_nnu, Only: nnu_initialize, nnu_finalize
+  Use xnet_nnu, Only: tmevnu, fluxcms, nnu_initialize, nnu_finalize
   Use xnet_nse, Only: nse_initialize
   Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
   Use xnet_preprocess, Only: net_preprocess

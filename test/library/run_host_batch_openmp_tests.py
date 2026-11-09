@@ -53,6 +53,7 @@ def parse(text: str, library_parser) -> dict:
         if kind == "CALL":
             require(len(parts) == 10 and parts[1] not in result["calls"], f"invalid CALL: {line}")
             b, c, owner, team, n, nids = map(int, parts[2:8])
+            require(nids == 4, "zone_id requires [i,j,k,block]")
             result["calls"][parts[1]] = {"batch": b, "call": c, "owner": owner, "team": team,
                                          "n": n, "nids": nids, "dt": float(parts[8]), "mask": parts[9]}
         elif kind in ("STEPS", "STATUS"):
@@ -70,7 +71,7 @@ def parse(text: str, library_parser) -> dict:
         elif kind == "DENSITY":
             result["densities"][parts[1]] = tuple(map(float, parts[2:]))
         elif kind == "TIMING":
-            require(len(parts) == 8 and all(math.isfinite(float(v)) and float(v) >= 0 for v in parts[2:]),
+            require(len(parts) == 15 and all(math.isfinite(float(v)) and float(v) >= 0 for v in parts[2:]),
                     f"invalid per-call stage times: {line}")
     return result
 
@@ -159,7 +160,7 @@ def histories(case: Path, parsed: dict, output_parser) -> dict:
         label, lane = expected[matches[0]]
         call = parsed["calls"][label]
         batch = call["batch"]
-        ids = (100*batch+lane, -7-batch, 9000+batch, 40+lane)[:call["nids"]]
+        ids = (100*batch+lane, -7-batch, 9000+batch, 40+lane)
         require(trace["zone_id"] == ids, f"history caller zone IDs differ: {path}")
         identity = f"{label}_lane{lane}"
         require(identity not in traces, f"duplicate history for {identity}: {path}")

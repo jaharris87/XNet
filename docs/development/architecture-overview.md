@@ -74,8 +74,10 @@ finalization stay outside the fixed worker team. GPU host calls remain
 serialized. CPU and GPU paths share control application,
 network preprocessing and abundance/condition allocation with the standalone
 driver. API burns can write separate per-call timestep histories through the
-existing output routines; the driver retains its general input histories and
-standalone filename policy. See
+existing output routines. Both drivers use `xnet_output` to open binary and ASCII
+files, write their headers, and close the current worker's files. Each driver
+chooses its filenames and file-creation policy; the standalone driver retains
+its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
 
 ## Per-timestep flow

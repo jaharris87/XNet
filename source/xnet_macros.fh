@@ -4,6 +4,7 @@
 #define XLOOP_OUTER(N)     parallel loop gang collapse(N)
 #define XLOOP_INNER(N)     loop vector collapse(N)
 #define XLOOP_SERIAL(N)    loop seq collapse(N)
+#define XIF(COND)          if(COND)
 #define XPRIVATE(...)      private(__VA_ARGS__)
 #define XREDUCTION(OP,...) reduction( OP:__VA_ARGS__)
 #define XPRESENT(...)      present(__VA_ARGS__)
@@ -35,9 +36,11 @@
 #define XLOOP_OUTER(N)     target teams distribute collapse(N)
 #define XLOOP_INNER(N)     parallel do simd collapse(N)
 #define XLOOP_SERIAL(N)    nothing
+#define XIF(COND)          if(target:COND)
 #define XPRIVATE(...)      private(__VA_ARGS__)
 #define XREDUCTION(OP,...) reduction(OP:__VA_ARGS__)
-#define XPRESENT(...)      & !present
+! Keep empty clause lines connected; an inline comment would discard the trailing ampersand.
+#define XPRESENT(...)      &
 #define XUPDATE            target update
 #define XDEVICE(...)       to(__VA_ARGS__)
 #define XHOST(...)         from(__VA_ARGS__)

@@ -13,7 +13,7 @@
 ! - GPU (GPU_MODE=ON, OPENMP_MODE=OFF): Host API calls are serialized; the application may supply
 !   borrowed streams/handles via xnet_gpu_t and evolve device-resident arrays via data_on_device.
 !
-! Public entry points appear first; private setup, host staging, device staging, output and timing
+! Public entry points appear first; private setup, batch execution, validation, output and timing
 ! helpers follow. Application examples and the full argument reference are in
 ! docs/development/embedding.md. Application code needs only Use xnet_api, Only: ... .
 !***************************************************************************************************
@@ -24,9 +24,7 @@ Module xnet_api
   Use xnet_types, Only: dp, i8
   Use xnet_controls, Only: xnet_controls_t, set_xnet_controls_defaults
   Use xnet_gpu, Only: xnet_gpu_t
-#ifdef XNET_OMP
-  Use omp_lib, Only: omp_get_dynamic, omp_get_level, omp_get_num_threads, omp_get_thread_num
-#endif
+!$ Use omp_lib, Only: omp_get_dynamic, omp_get_level, omp_get_num_threads, omp_get_thread_num
   Implicit None
   Private
 
@@ -37,6 +35,7 @@ Module xnet_api
   Integer, Parameter, Public :: xnet_invalid            = 1
   Integer, Parameter, Public :: xnet_lifecycle_error    = 2
   Integer, Parameter, Public :: xnet_unsupported        = 3
+
   ! These two burn failures require application shutdown; physical results are unusable.
   Integer, Parameter, Public :: xnet_integrator_failure = 4
   Integer, Parameter, Public :: xnet_step_limit         = 5
@@ -54,7 +53,8 @@ Module xnet_api
   Public :: xnet_finalize
 
   Type, Public :: xnet_network_t
-    ! Caller-owned copies in species order; valid after finalization of a successful initialization.
+    ! Caller-owned metadata; entry i describes names(i). This list defines API species indices
+    ! for this initialization. The copies remain valid after finalization.
     Character(5), Allocatable :: names(:)
     Integer, Allocatable :: mass_number(:)
     Integer, Allocatable :: charge_number(:)
@@ -63,18 +63,27 @@ Module xnet_api
   End Type xnet_network_t
 
   Type, Public :: xnet_timing_t
-    ! Seconds for this call. evolve covers full_net, excluding API staging and result extraction.
-    ! Component timers can nest; they must not be summed to obtain full-call time.
-    Real(dp) :: evolve     = 0.0_dp
-    Real(dp) :: solve      = 0.0_dp
-    Real(dp) :: jacobian   = 0.0_dp
-    Real(dp) :: derivative = 0.0_dp
-    Real(dp) :: rates      = 0.0_dp
-    Real(dp) :: screening  = 0.0_dp
+    ! Per-burn wall times in seconds for the calling worker. Timers overlap; do not sum them.
+    ! evolve excludes API staging, result extraction and final_output. output can extend beyond evolve.
+    ! Zero can mean an unused stage, missing instrumentation or insufficient timer resolution.
+    ! GPU values are host wall times, not individual kernel timings.
+    Real(dp) :: evolve           = 0.0_dp ! Timed interval inside full_net.
+    Real(dp) :: solve            = 0.0_dp ! Linear solves, including decomposition and backsubstitution.
+    Real(dp) :: jacobian         = 0.0_dp ! Jacobian construction.
+    Real(dp) :: derivative       = 0.0_dp ! ODE right-hand side evaluation.
+    Real(dp) :: rates            = 0.0_dp ! Rate evaluation after EOS and screening updates.
+    Real(dp) :: screening        = 0.0_dp ! Screening factors, excluding plasma-state preparation.
+    Real(dp) :: timestep         = 0.0_dp ! Implicit timestep solves and retries in solve_be/solve_bdf.
+    Real(dp) :: newton           = 0.0_dp ! Newton iterations within the implicit solves.
+    Real(dp) :: decomposition    = 0.0_dp ! LU factorization where measured separately.
+    Real(dp) :: backsubstitution = 0.0_dp ! Solution using LU factors where measured separately.
+    Real(dp) :: prescreening     = 0.0_dp ! Plasma-state preparation through eos_screen.
+    Real(dp) :: eos              = 0.0_dp ! Thermodynamic updates through update_eos.
+    Real(dp) :: output           = 0.0_dp ! Timed sections of ts_output and final_output, including flux work.
   End Type xnet_timing_t
 
   !-------------------------------------------------------------------------------------------------
-  ! Unit conversions and benign values for inactive workspace lanes
+  ! Unit conversions and benign values for inactive workspace zones
   !-------------------------------------------------------------------------------------------------
   Real(dp), Parameter :: kelvin_to_gk = 1.0e-9_dp
   Real(dp), Parameter :: gk_to_kelvin = 1.0e9_dp
@@ -93,17 +102,20 @@ Module xnet_api
   Integer :: api_state = api_uninitialized
 
   Character(80) :: api_data_description = ' '
-  ! Do not reset between lifetimes: earlier time-series files may still exist.
+
+  ! Shared sequence for per-call history filenames; each output attempt reserves the next number.
+  ! Keep counting across initialization lifetimes because earlier history files may still exist.
   Integer(i8) :: output_call = 0_i8
 
-  ! Per-lane validation results use the same messages on host and device.
-  Integer, Parameter :: lane_ok               = 0
-  Integer, Parameter :: lane_not_finite       = 1
-  Integer, Parameter :: lane_out_of_range     = 2
-  Integer, Parameter :: lane_aux_not_finite   = 3
-  Integer, Parameter :: lane_aux_out_of_range = 4
-  Integer, Parameter :: lane_aux_needs_a      = 5
-  Integer, Parameter :: lane_no_mass          = 6
+  ! Per-zone validation results use the same messages on host and device.
+  Integer, Parameter :: zone_inactive         = -1
+  Integer, Parameter :: zone_ok               = 0
+  Integer, Parameter :: zone_not_finite       = 1
+  Integer, Parameter :: zone_out_of_range     = 2
+  Integer, Parameter :: zone_aux_not_finite   = 3
+  Integer, Parameter :: zone_aux_out_of_range = 4
+  Integer, Parameter :: zone_aux_needs_a      = 5
+  Integer, Parameter :: zone_no_mass          = 6
 
 Contains
 
@@ -111,65 +123,74 @@ Contains
   ! Public Entry Points
   !=================================================================================================
 
-  Subroutine xnet_initialize(controls,network,ierr,message,gpu_resources)
-    ! Load one network and reserve reusable workspace for subsequent burns and NSE queries.
-    ! Set controls defaults before overriding data_dir, batch capacity and integration options.
-    ! Controls are copied; later edits to the supplied value do not reconfigure this instance.
-    ! network receives independent copies of species names, A/Z and energies in MeV per nucleus.
+  Subroutine xnet_initialize(controls,network,ierr,message,gpu_context)
+    !-----------------------------------------------------------------------------------------------
+    ! Validate controls, optionally preprocess nuclear data, initialize GPU resources and solver
+    ! workspaces once, map persistent device arrays, and return copied network metadata.
     !
-    ! Call outside application OpenMP regions after configuring the intended fixed team.
-    ! GPU resources are optional: borrow supplied handles and create only missing resources.
+    ! Set control defaults before overrides and configure the fixed team before initialization.
+    ! Call outside application OpenMP regions. Controls are copied; later edits do not reconfigure XNet.
     ! A failed GPU rollback may require xnet_finalize before another initialization attempt.
-    ! File-content, allocation, EOS and solver failures can still terminate inside XNet.
+    ! Supplied GPU handles remain caller-owned.
+    ! Reader, allocation, EOS and solver failures can still terminate.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: apply_xnet_controls
-#ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
-#endif
     Implicit None
+
+    ! Required arguments
     Type(xnet_controls_t), Intent(in) :: controls
     Type(xnet_network_t), Intent(out) :: network
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
-    Type(xnet_gpu_t), Optional, Intent(in) :: gpu_resources
-#ifdef XNET_GPU
+
+    ! Optional arguments
+    Type(xnet_gpu_t), Optional, Intent(in) :: gpu_context
+
+    ! Local variables
     Type(xnet_gpu_t) :: gpu
     Integer :: cleanup_status
     Character(512) :: cleanup_message
-#endif
 
-    Call check_initializable(controls,Present(gpu_resources),ierr,message)
+    ! Initialize outputs and check lifecycle state
+    Call check_initializable(controls,present(gpu_context),ierr,message)
     If ( ierr /= xnet_success ) Return
+
+    ! Prepare data files before allocating resources; preprocessing may write data_dir.
     Call prepare_data_files(controls,ierr,message)
     If ( ierr /= xnet_success ) Return
-    Call start_worker_team
 
-#ifdef XNET_GPU
-    ! A default resource value tells gpu_init to use the current application device;
+    ! Initialize thread IDs and diagnostic units; record the actual OpenMP team size.
+    Call initialize_thread_state
+
+    ! A default GPU context tells gpu_init to use the current application device;
     ! with no supplied handles, XNet creates the resources it needs on that device.
+    ! CPU builds return success without creating GPU resources.
     gpu = xnet_gpu_t()
-    If ( Present(gpu_resources) ) gpu = gpu_resources
+    If ( present(gpu_context) ) gpu = gpu_context
     Call gpu_init(gpu,ierr,message)
     If ( ierr /= xnet_success ) Then
       ! Failed initialization may still own resources whose rollback must be retried.
       If ( mydevice >= 0 ) api_state = api_cleanup_pending
       Return
     EndIf
-#endif
+
+    ! Validate controls and copy them into the XNet runtime state;
+    ! allocate and initialize internal bookkeeping.
     Call apply_xnet_controls(controls,ierr,message)
     If ( ierr /= xnet_success ) Then
-#ifdef XNET_GPU
       Call gpu_finalize(cleanup_status,cleanup_message)
       If ( cleanup_status /= xnet_success ) Then
         api_state = api_cleanup_pending
-        message = Trim(message)//'; '//Trim(cleanup_message)
+        message = trim(message)//'; '//trim(cleanup_message)
       EndIf
-#endif
       Return
     EndIf
 
+    ! Initialize the network and solver modules, then allocate and map persistent XNet workspace.
     Call load_network(controls)
-    Call map_workspace
-    Call describe_network(network)
+    Call initialize_workspace
+    Call copy_network_data(network)
     api_state = api_ready
     ierr = xnet_success
     Return
@@ -183,26 +204,30 @@ Contains
     ! unless self-heating is enabled). Supports both host-resident arrays (default) and
     ! pre-mapped contiguous device arrays (data_on_device=.true.).
     !
-    ! For n = Size(active), scalar-per-zone arrays have length n and mass_fraction has shape
-    ! (network species,n). zone_id is a (3,n) or (4,n) diagnostic tuple; counters has shape (5,n).
-    ! Capacity nzbatchmx includes inactive holes. Only active scientific inputs are read.
-    ! density is in g/cm^3, temperature in K, and mass_fraction contains raw X in network order.
-    ! The optional fixed auxiliary reservoir requires aux_x, aux_a and aux_z together.
+    ! Batch arrays (nz = size(active); ny = number of network species):
+    !   active(nz)              Input mask selecting zones to evolve.
+    !   zone_id(4,nz)           Input location [i,j,k,block]; unused dimensions are 1, no block is 0.
+    !   density(nz)             Input density in g/cm^3; held constant during the burn.
+    !   temperature(nz)         In/out temperature in K; updated when self-heating is enabled.
+    !   ye(nz)                  In/out electron fraction.
+    !   mass_fraction(ny,nz)    In/out raw mass fractions; row i corresponds to network%names(i).
+    !   restart_dt_s(nz)        In/out startup hint in seconds; nonnegative, with 0 for a fresh burn.
+    !   neutrino_loss(nz)       Output integrated weak-reaction neutrino energy loss in erg/g.
+    !   counters(5,nz)          Output integration-work counters, returned on the host.
+    !   aux_x(nz)               Optional fixed auxiliary reservoir mass fraction.
+    !   aux_a(nz)               Optional auxiliary mass number.
+    !   aux_z(nz)               Optional auxiliary charge number.
     !
-    ! restart_dt_s is a nonnegative startup hint in seconds; use zero for a fresh burn.
-    ! The returned hint is the preceding internal timestep, not a recommended next application dt.
-    ! neutrino_loss is integrated weak-reaction energy loss in erg/g. Inactive state is preserved
-    ! and its loss/counters are zero. Counters, timing and status always return on the host.
+    ! Batch capacity includes inactive zones. Only active scientific inputs are read.
+    ! Inactive zones preserve their input state and return zero neutrino loss and work counters.
+    ! Supply all three auxiliary arrays together, or omit all three.
+    ! The returned restart hint is the preceding internal timestep, not a recommended application dt.
+    ! Timing and status always return on the host.
     ! Fatal burn statuses require shutdown after workers join; no physical batch result is valid.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: gpu_queue, ktot, lzactive, nzbatch, szbatch, &
-      & zb_hi, zb_lo, zb_offset, zone_work=>zone_id
-#ifdef XNET_GPU
-    Use xnet_gpu, Only: gpu_check_device
-#ifdef XNET_OMP_OL
-    Use xnet_gpu, Only: stream, stream_sync
-#endif
-#endif
+    Use xnet_controls, Only: ktot, lzactive, nzbatch, szbatch, &
+      & zb_hi, zb_lo, zone_work=>zone_id
+    Use xnet_gpu, Only: gpu_check_device, stream, stream_sync
     Implicit None
 
     ! Required arguments
@@ -223,18 +248,18 @@ Contains
     Logical, Optional, Intent(in) :: data_on_device
 
     ! Local variables
-    Integer :: n, lane, kstep, evolve_status, failed_zone
+    Integer :: nz, izone, izb, kstep, evolve_status, failed_zone
     Type(xnet_timing_t) :: before
     Logical :: on_device
-#ifdef XNET_OMP_OL
     Integer :: stream_status
-#endif
 
     on_device = .false.
-    If ( Present(data_on_device) ) on_device = data_on_device
-    If ( Present(max_steps_taken) ) max_steps_taken = 0
+    If ( present(data_on_device) ) on_device = data_on_device
+
+    ! Initialize host outputs
+    If ( present(max_steps_taken) ) max_steps_taken = 0
     timing = xnet_timing_t()
-    If ( .not. on_device ) neutrino_loss = 0.0_dp
+    neutrino_loss = 0.0_dp
     counters = 0
     message = ' '
 
@@ -249,7 +274,6 @@ Contains
     If ( ierr /= xnet_success ) Return
 
     ! 2. Verify GPU device state and device-array mappings when requested
-#ifdef XNET_GPU
     Call gpu_check_device(ierr,message)
     If ( ierr /= 0 ) Return
     If ( on_device ) Then
@@ -265,70 +289,45 @@ Contains
       Call check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
         & ierr,message,aux_x,aux_a,aux_z)
       If ( ierr /= 0 ) Return
-      ! Clear the scientific output in its requested memory space, including rejected requests.
-      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(neutrino_loss)
-      Do lane = 1, Size(neutrino_loss)
-        neutrino_loss(lane) = 0.0_dp
-      EndDo
-      !XDIR XWAIT(gpu_queue)
     EndIf
-#else
-    If ( on_device ) Then
-      neutrino_loss = 0.0_dp
-      ierr = xnet_unsupported
-      message = 'Device-array burns require a supported GPU library build'
-      Return
-    EndIf
-#endif
 
-    ! 3. Validate batch extents, duration, and host-resident active inputs
-    n = Size(active)
-    Call validate_batch_extents(n,dt_s,zone_id,density,temperature,ye,mass_fraction, &
+    ! 3. Validate batch extents, duration, and active scientific inputs
+    nz = size(active)  ! Includes inactive zones.
+    Call validate_batch_extents(nz,dt_s,zone_id,density,temperature,ye,mass_fraction, &
       & restart_dt_s,neutrino_loss,counters,ierr,message,aux_x,aux_a,aux_z)
     If ( ierr /= xnet_success ) Return
 
-    If ( .not. on_device ) Then
-      Call validate_host_inputs(n,active,density,temperature,ye,mass_fraction,restart_dt_s, &
-        & ierr,message,aux_x,aux_a,aux_z)
-      If ( ierr /= xnet_success ) Return
-    EndIf
+    Call validate_inputs(on_device,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
+      & ierr,message,aux_x,aux_a,aux_z)
+    If ( ierr /= xnet_success ) Return
 
-    If ( .not. Any(active) .and. .not. on_device ) Return
+    If ( .not. any(active) ) Return
 
-    ! 4. Configure worker-bank masks and zone identifiers
-    before = current_timing()
+    ! 4. Configure active zone masks and identifiers
+    before = get_timing()
     szbatch = 1
-    nzbatch = Count(active)
+    nzbatch = count(active)
     lzactive(zb_lo:zb_hi) = .false.
-    lzactive(zb_lo:zb_lo+n-1) = active
+    lzactive(zb_lo:zb_lo+nz-1) = active
     zone_work(:,zb_lo:zb_hi) = 0
-    zone_work(1:Size(zone_id,1),zb_lo:zb_lo+n-1) = zone_id
+    zone_work(:,zb_lo:zb_lo+nz-1) = zone_id
 
-    ! 5. Stage, evolve and collect in the requested memory space.
-#ifdef XNET_GPU
-    If ( on_device ) Then
-      Call burn_device_arrays(dt_s,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
-        & Size(zone_id,1),kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
-    Else
-#endif
-      Call burn_host_arrays(dt_s,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
-        & Size(zone_id,1),aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
-#ifdef XNET_GPU
-    EndIf
-#endif
-    If ( ierr /= xnet_success .or. .not. Any(active) ) Return
+    ! 5. Stage, evolve and collect in the requested memory space
+    Call evolve_batch(dt_s,on_device,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
+      & aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
+    If ( ierr /= xnet_success ) Return
 
-    ! Attempted counters remain useful even when numerical failure invalidates the physical result.
-    Do lane = 1, n
-      If ( active(lane) ) counters(:,lane) = ktot(:,zb_offset+lane)
+    ! Record XNet counters for active zones.
+    Do izb = zb_lo, zb_lo+nz-1
+      izone = izb + szbatch - zb_lo
+      If ( active(izone) ) counters(:,izone) = ktot(:,izb)
     EndDo
 
     ! 6. Record per-call timing differences and format any numerical failure diagnostic
-    If ( evolve_status == 0 .and. Present(max_steps_taken) ) max_steps_taken = kstep
-    timing = elapsed_timing(before)
+    If ( evolve_status == 0 .and. present(max_steps_taken) ) max_steps_taken = kstep
+    timing = get_timing_since(before)
     If ( evolve_status /= 0 ) Then
-      Call format_burn_failure(evolve_status,failed_zone-zb_offset,zone_id,ierr,message)
+      Call format_burn_failure(evolve_status,failed_zone+szbatch-zb_lo,zone_id,ierr,message)
     EndIf
 
     Return
@@ -336,16 +335,15 @@ Contains
 
   Subroutine xnet_nse_composition(density,temperature,ye,mass_fraction,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Compute Nuclear Statistical Equilibrium mass fractions (A * ynse) in XNet species order for
-    ! scalar density [g/cm^3], temperature [K], and electron fraction Ye.
+    ! Compute Nuclear Statistical Equilibrium mass fractions (A * ynse) for scalar density [g/cm^3],
+    ! temperature [K], and electron fraction Ye. Entry i corresponds to network%names(i) returned
+    ! by xnet_initialize.
     ! Copy without normalization or species mapping. NSE convergence failures remain fatal.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: aa, ny
     Use xnet_nse, Only: nse_solve, ynse
-#ifdef XNET_GPU
     Use xnet_gpu, Only: gpu_check_device
-#endif
     Implicit None
 
     ! Input/Output arguments
@@ -364,12 +362,12 @@ Contains
     EndIf
     Call check_worker(ierr,message)
     If ( ierr /= xnet_success ) Return
-#ifdef XNET_GPU
+
     Call gpu_check_device(ierr,message)
     If ( ierr /= 0 ) Return
-#endif
+
     ierr = xnet_invalid
-    If ( Size(mass_fraction) /= ny ) Then
+    If ( size(mass_fraction) /= ny ) Then
       message = 'NSE composition extent must match the initialized network'
       Return
     EndIf
@@ -391,14 +389,16 @@ Contains
   End Subroutine xnet_nse_composition
 
   Subroutine xnet_finalize(ierr,message)
-    ! Release device mappings before their CPU allocations, then release owned GPU resources.
-    ! Borrowed application resources and copied network metadata remain with the application.
+    !-----------------------------------------------------------------------------------------------
+    ! Release XNet-owned device mappings, CPU workspaces, and GPU handles without destroying
+    ! host-owned resources. If GPU cleanup fails, preserve api_cleanup_pending so a subsequent
+    ! xnet_finalize call retries only GPU handle/stream teardown.
+    !
+    ! Release mappings before CPU allocations. Copied network metadata remains with the application.
     ! Call outside application parallel regions, with no work in flight and the initialized team.
-    ! If GPU cleanup fails, repeat this call to retry only the resources that remain.
     ! After successful cleanup, repeated calls succeed without repeating teardown.
-#ifdef XNET_GPU
+    !-----------------------------------------------------------------------------------------------
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
-#endif
     Implicit None
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
@@ -406,24 +406,17 @@ Contains
     ierr = xnet_success
     message = ' '
     If ( api_state == api_uninitialized ) Return
-#ifdef XNET_OMP
     Call check_finalize_team(ierr,message)
     If ( ierr /= xnet_success ) Return
-#endif
     If ( api_state == api_ready ) Then
-#ifdef XNET_GPU
       Call gpu_check_device(ierr,message)
       If ( ierr /= xnet_success ) Return
-#endif
-      Call unmap_workspace
-      Call release_modules
+      Call finalize_workspace
       api_state = api_cleanup_pending
     EndIf
-#ifdef XNET_GPU
     ! A failed cleanup can be retried without touching the released workspaces.
     Call gpu_finalize(ierr,message)
     If ( ierr /= xnet_success ) Return
-#endif
     api_state = api_uninitialized
     Return
   End Subroutine xnet_finalize
@@ -433,7 +426,9 @@ Contains
   !=================================================================================================
 
   Subroutine check_initializable(controls,gpu_requested,ierr,message)
+    !-----------------------------------------------------------------------------------------------
     ! Reject unsupported lifecycle, controls and team settings before allocating resources.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: y
     Use xnet_controls, Only: validate_xnet_controls
     Implicit None
@@ -444,7 +439,7 @@ Contains
 
     ierr = xnet_invalid
     message = ' '
-    If ( api_state /= api_uninitialized .or. Allocated(y) ) Then
+    If ( api_state /= api_uninitialized .or. allocated(y) ) Then
       ierr = xnet_lifecycle_error
       message = 'XNet is already initialized'
       If ( api_state == api_cleanup_pending ) message = 'Finish XNet finalization before initialization'
@@ -473,7 +468,7 @@ Contains
     Call validate_xnet_controls(controls,ierr,message)
     If ( ierr /= 0 ) Return
     ierr = xnet_invalid
-    If ( Len_Trim(controls%data_dir) == 0 ) Then
+    If ( len_trim(controls%data_dir) == 0 ) Then
       message = 'data_dir is required'
       Return
     EndIf
@@ -488,7 +483,10 @@ Contains
   End Subroutine check_initializable
 
   Subroutine prepare_data_files(controls,ierr,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Optionally preprocess nuclear data, then check the files needed for network initialization.
     ! Preprocessing writes data_dir; the host must arrange exclusive access to that directory.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: lun_stdout
     Use xnet_preprocess, Only: net_preprocess
     Implicit None
@@ -527,16 +525,16 @@ Contains
 
     ierr = xnet_invalid
     message = ' '
-    Do i = 1, Size(filenames)
-      Inquire(file=Trim(data_dir)//'/'//Trim(filenames(i)),exist=exists)
+    Do i = 1, size(filenames)
+      Inquire(file=trim(data_dir)//'/'//trim(filenames(i)),exist=exists)
       If ( .not. exists ) Then
-        message = 'Missing network file: '//Trim(filenames(i))
+        message = 'Missing network file: '//trim(filenames(i))
         Return
       EndIf
-      Open(newunit=input_unit,file=Trim(data_dir)//'/'//Trim(filenames(i)), &
+      Open(newunit=input_unit,file=trim(data_dir)//'/'//trim(filenames(i)), &
         & status='old',action='read',access='stream',form='unformatted',iostat=input_status)
       If ( input_status /= 0 ) Then
-        message = 'Cannot read network file: '//Trim(filenames(i))
+        message = 'Cannot read network file: '//trim(filenames(i))
         Return
       EndIf
       Close(input_unit)
@@ -546,13 +544,14 @@ Contains
     Return
   End Subroutine check_network_files
 
-  Subroutine start_worker_team
-    ! One XNet worker per application OpenMP thread, one process.
-    Use xnet_controls, Only: myid, nproc, tid, nthread, sweep, lun_diag, lun_stdout
+  Subroutine initialize_thread_state
+    !-----------------------------------------------------------------------------------------------
+    ! Initialize XNet thread IDs and diagnostic units; record the actual OpenMP team size.
+    ! The application controls OpenMP settings. Serial builds use one thread.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: tid, nthread, lun_diag, lun_stdout
     Implicit None
 
-    myid = 0
-    nproc = 1
     nthread = 1
 #ifdef XNET_OMP
     !$omp parallel default(shared)
@@ -564,69 +563,35 @@ Contains
     nthread = omp_get_num_threads()
     !$omp end single
 #endif
-    sweep = 'x'
     lun_diag = lun_stdout
 #ifdef XNET_OMP
     !$omp end parallel
 #endif
     Return
-  End Subroutine start_worker_team
+  End Subroutine initialize_thread_state
 
   Subroutine load_network(controls)
-    ! Read the data files and bring up every module the burn depends on.
-    Use nuclear_data, Only: ny, read_nuclear_data, index_from_name
+    !-----------------------------------------------------------------------------------------------
+    ! Read nuclear, reaction, Jacobian and matching data for the selected network.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: read_nuclear_data
     Use reaction_data, Only: read_reaction_data
-    Use xnet_abundances, Only: abundances_initialize
-    Use xnet_conditions, Only: conditions_initialize
-    Use xnet_controls, Only: zone_id, nzevolve, lun_stdout, isolv, nnucout, output_nuc, inucout
-    Use xnet_eos, Only: eos_initialize
-    Use xnet_flux, Only: flux_init
-    Use xnet_integrate_be, Only: be_init
-    Use xnet_integrate_bdf, Only: bdf_init
     Use xnet_jacobian, Only: read_jacobian_data
     Use xnet_match, Only: read_match_data
-    Use xnet_nnu, Only: tmevnu, fluxcms, nnuspec
-    Use xnet_nse, Only: nse_initialize
-    Use xnet_screening, Only: screening_init
     Implicit None
     Type(xnet_controls_t), Intent(in) :: controls
-    Integer :: i, inuc
 
-    ! Both real consumers carry diagnostic integer tuples, with three or four entries.
-    Deallocate (zone_id)
-    Allocate (zone_id(4,nzevolve))
-    zone_id = 0
     Call read_nuclear_data(controls%data_dir,api_data_description)
     Call read_reaction_data(controls%data_dir)
     Call read_jacobian_data(controls%data_dir)
     Call read_match_data(controls%data_dir)
-    Call screening_init
-    Call flux_init
-    Call eos_initialize
-    If ( isolv == 1 ) Call be_init
-    If ( isolv == 3 ) Call bdf_init
-    ! Use the standalone species lookup and missing-name fallback for condensed output.
-    If ( controls%itsout > 0 ) Then
-      Do i = 1, nnucout
-        Call index_from_name(output_nuc(i),inuc)
-        If ( inuc < 1 .or. inuc > ny ) Then
-          Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
-          inucout(i) = ny
-        Else
-          inucout(i) = inuc
-        EndIf
-      EndDo
-    EndIf
-    Call nse_initialize
-    Call abundances_initialize
-    Call conditions_initialize(2)
-    Allocate (tmevnu(2,nnuspec,nzevolve),fluxcms(2,nnuspec,nzevolve))
-    tmevnu = 0.0_dp
-    fluxcms = 0.0_dp
     Return
   End Subroutine load_network
 
-  Subroutine describe_network(network)
+  Subroutine copy_network_data(network)
+    !-----------------------------------------------------------------------------------------------
+    ! Copy species names, A/Z and nuclear energies into independent, caller-owned metadata arrays.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname, ia, iz, be, mex
     Implicit None
     Type(xnet_network_t), Intent(out) :: network
@@ -639,51 +604,56 @@ Contains
     network%binding_energy_mev = be
     network%mass_excess_mev = mex
     Return
-  End Subroutine describe_network
+  End Subroutine copy_network_data
 
-  Subroutine map_workspace
-    Use xnet_abundances, Only: y, yo, yt, ydot, ystart, xext, aext, zext
-    Use xnet_conditions, Only: tdel, tdel_next, tdel_old, t, tt, to, t9, t9t, t9o, t9dot, &
-      & rho, rhot, rhoo, ye, yet, yeo, cv, etae, detaedt9, nt, ntt, nto, ints, intso, &
-      & tstart, tstop, tdelstart, nstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: gpu_queue
-    Use xnet_nnu, Only: tmevnu, fluxcms
+  Subroutine initialize_workspace
+    !-----------------------------------------------------------------------------------------------
+    ! Initialize physics and EOS providers, integrators, and reusable zone storage.
+    ! Each module owns the device mappings for the arrays it allocates.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny, index_from_name
+    Use xnet_abundances, Only: abundances_initialize
+    Use xnet_conditions, Only: conditions_initialize
+    Use xnet_controls, Only: isolv, itsout, lun_stdout, nnucout, output_nuc, inucout
+    Use xnet_eos, Only: eos_initialize
+    Use xnet_flux, Only: flux_init
+    Use xnet_integrate_be, Only: be_init
+    Use xnet_integrate_bdf, Only: bdf_init
+    Use xnet_nnu, Only: nnu_initialize
+    Use xnet_nse, Only: nse_initialize
+    Use xnet_screening, Only: screening_init
     Implicit None
+    Integer :: i, inuc
 
-    ! Keep the same reusable workspace as the standalone driver, with two history endpoints.
-    !XDIR XENTER_DATA XASYNC(gpu_queue) &
-    !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext) &
-    !XDIR XCOPYIN(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
-    !XDIR XCOPYIN(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
-    !XDIR XCOPYIN(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-    !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+    Call screening_init
+    Call flux_init
+    Call eos_initialize
+    If ( isolv == 1 ) Call be_init
+    If ( isolv == 3 ) Call bdf_init
+    ! Use the standalone species lookup and missing-name fallback for condensed output.
+    If ( itsout > 0 ) Then
+      Do i = 1, nnucout
+        Call index_from_name(output_nuc(i),inuc)
+        If ( inuc < 1 .or. inuc > ny ) Then
+          Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
+          inucout(i) = ny
+        Else
+          inucout(i) = inuc
+        EndIf
+      EndDo
+    EndIf
 
-    !XDIR XWAIT(gpu_queue)
+    Call nse_initialize
+    Call abundances_initialize
+    Call conditions_initialize(2)
+    Call nnu_initialize(2)
     Return
-  End Subroutine map_workspace
+  End Subroutine initialize_workspace
 
-  Subroutine unmap_workspace
-    ! Release the mappings established above before their owning CPU allocations.
-    Use xnet_abundances, Only: y, yo, yt, ydot, ystart, xext, aext, zext
-    Use xnet_conditions, Only: tdel, tdel_next, tdel_old, t, tt, to, t9, t9t, t9o, t9dot, &
-      & rho, rhot, rhoo, ye, yet, yeo, cv, etae, detaedt9, nt, ntt, nto, ints, intso, &
-      & tstart, tstop, tdelstart, nstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: gpu_queue
-    Use xnet_nnu, Only: tmevnu, fluxcms
-    Implicit None
-
-    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-    !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
-    !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
-    !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
-    !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-    !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
-    !XDIR XWAIT(gpu_queue)
-    Return
-  End Subroutine unmap_workspace
-
-  Subroutine release_modules
-    ! The reverse of load_network.
+  Subroutine finalize_workspace
+    !-----------------------------------------------------------------------------------------------
+    ! Finalize module state; each module releases its mappings before its CPU allocations.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: nuclear_data_finalize
     Use reaction_data, Only: reaction_data_finalize
     Use xnet_abundances, Only: abundances_finalize
@@ -717,11 +687,13 @@ Contains
     Call conditions_finalize
     Call controls_finalize
     Return
-  End Subroutine release_modules
+  End Subroutine finalize_workspace
 
-#ifdef XNET_OMP
   Subroutine check_finalize_team(ierr,message)
+    !-----------------------------------------------------------------------------------------------
     ! Finalization must use the fixed team established at initialization.
+    ! Builds without XNet host threading return success.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nthread
     Implicit None
     Integer, Intent(out) :: ierr
@@ -730,6 +702,7 @@ Contains
 
     ierr = xnet_success
     message = ' '
+#ifdef XNET_OMP
     If ( omp_get_level() > 0 .or. omp_get_dynamic() ) Then
       ierr = xnet_unsupported
       message = 'Finalize XNet outside application OpenMP regions with the initialized fixed team'
@@ -745,127 +718,193 @@ Contains
       message = 'Use the initialized OpenMP team size when finalizing XNet'
       Return
     EndIf
+#endif
     Return
   End Subroutine check_finalize_team
-#endif
 
   !=================================================================================================
-  ! Private Worker Validation and Host Batch Execution
+  ! Private Batch Execution and Worker Validation
   !=================================================================================================
 
-  Subroutine burn_host_arrays(dt_s,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
-    & zone_id_components,aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
-    ! Copy validated host inputs into the current worker bank, evolve, and copy results back.
-    Use nuclear_data, Only: aa
+  Subroutine evolve_batch(dt_s,on_device,active,density,temperature,electron_fraction,mass_fraction,restart_dt_s,neutrino_loss, &
+    & aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Prepare the current worker bank, evolve once, and return results in the requested memory space.
+    ! The caller has validated inputs and selected at least one active zone.
+    ! Conditional offload keeps host values authoritative even when stale device mappings exist.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: aa, ny
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
-    Use xnet_conditions, Only: t, t9, rho, ye_work=>ye, tdel, tdel_old, nt, nstart, &
+    Use xnet_conditions, Only: t, t9, rho, ye, tdel, tdel_old, nt, nstart, &
       & tstart, tstop, tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: lzactive, iheat, iaux, ktot, gpu_queue, zb_offset, zb_lo, zb_hi
+    Use xnet_controls, Only: lzactive, iheat, ktot, gpu_queue, szbatch, zb_lo, zb_hi
     Use xnet_evolve, Only: full_net
+    Use xnet_output, Only: close_output_files
     Implicit None
+
+    ! Input/Output arguments
     Real(dp), Intent(in) :: dt_s, density(:)
-    Logical, Intent(in) :: active(:)
-    Real(dp), Intent(inout) :: temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
-    Real(dp), Intent(inout) :: neutrino_loss(:)
-    Integer, Intent(in) :: zone_id_components
+    Logical, Intent(in) :: on_device, active(:)
+    Real(dp), Intent(inout) :: temperature(:), electron_fraction(:), mass_fraction(:,:), restart_dt_s(:), neutrino_loss(:)
     Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
     Integer, Intent(out) :: kstep, evolve_status, failed_zone, ierr
     Character(*), Intent(out) :: message
+
+    ! Local variables
     Real(dp), Allocatable :: loss_work(:)
-    Integer :: lane, izb
+    Integer :: nz, izone, izb, k
 
-    ! lane indexes caller arrays; izb = zb_offset + lane indexes this worker bank.
-    ! Reset the full bank so a short or masked call cannot reuse the preceding batch state.
-    ystart(:,zb_lo:zb_hi) = 0.0_dp
-    xext(zb_lo:zb_hi) = 0.0_dp
-    aext(zb_lo:zb_hi) = 1.0_dp
-    zext(zb_lo:zb_hi) = 0.0_dp
-    iaux(zb_lo:zb_hi) = 0
-    ! The first endpoint is index one; zero can reach history element zero in timestep.
-    nstart(zb_lo:zb_hi) = 1
-    tstart(zb_lo:zb_hi) = 0.0_dp
-    tstop(zb_lo:zb_hi) = dt_s
-    tdelstart(zb_lo:zb_hi) = 0.0_dp
-    t9start(zb_lo:zb_hi) = inactive_t9
-    rhostart(zb_lo:zb_hi) = inactive_rho
-    yestart(zb_lo:zb_hi) = inactive_ye
-    Do lane = 1, Size(active)
-      If ( .not. active(lane) ) Cycle
-      izb = zb_offset+lane
-      ystart(:,izb) = mass_fraction(:,lane) / aa
-      t9start(izb) = temperature(lane) * kelvin_to_gk
-      rhostart(izb) = density(lane)
-      yestart(izb) = ye(lane)
-      ! Preserve the CHIMERA startup hint convention without exposing its sign encoding.
-      tdelstart(izb) = -restart_dt_s(lane)
-      If ( Present(aux_x) ) Then
-        If ( aux_x(lane) > 0.0_dp ) Then
-          xext(izb) = aux_x(lane)
-          aext(izb) = aux_a(lane)
-          zext(izb) = aux_z(lane)
-          iaux(izb) = 1
-        EndIf
-      EndIf
-    EndDo
-    ! Constant conditions: both history endpoints carry the start values.
-    nh(zb_lo:zb_hi) = 2
-    th(1,zb_lo:zb_hi) = tstart(zb_lo:zb_hi)
-    th(2,zb_lo:zb_hi) = tstop(zb_lo:zb_hi)
-    t9h(1,zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
-    t9h(2,zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
-    rhoh(1,zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
-    rhoh(2,zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
-    yeh(1,zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
-    yeh(2,zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
-    tdel(zb_lo:zb_hi) = 0.0_dp
-    nt(zb_lo:zb_hi) = nstart(zb_lo:zb_hi)
-    t(zb_lo:zb_hi) = tstart(zb_lo:zb_hi)
-    t9(zb_lo:zb_hi) = t9start(zb_lo:zb_hi)
-    rho(zb_lo:zb_hi) = rhostart(zb_lo:zb_hi)
-    ye_work(zb_lo:zb_hi) = yestart(zb_lo:zb_hi)
-    y(:,zb_lo:zb_hi) = ystart(:,zb_lo:zb_hi)
-
+    nz = size(active)
     kstep = 0
     evolve_status = 0
     failed_zone = 0
-    Call open_burn_output(zone_id_components,ierr,message)
+    ierr = xnet_success
+    message = ' '
+
+    ! Open histories before allocating or staging burn workspace.
+    Call open_burn_output(ierr,message)
     If ( ierr /= xnet_success ) Return
 
-    ! Host inputs remain authoritative even when the caller has stale device mappings.
-    ! Transfer only XNet-owned workspace; arbitrary host array sections retain their existing behavior.
-    !XDIR XUPDATE XASYNC(gpu_queue) &
-    !XDIR XDEVICE(xext,aext,zext,lzactive,tdel,t,t9,rho,ye_work,y,nt) &
-    !XDIR XDEVICE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
-    !XDIR XDEVICE(nh,th,t9h,rhoh,yeh)
-
+    ! full_net also checks the stop time on the host.
+    tstop(zb_lo:zb_hi) = dt_s
     Allocate (loss_work(zb_lo:zb_hi))
+
+    If ( on_device ) Then
+      ! Keep loss_work mapped across full_net (including denu cleanup) and result collection.
+      ! Caller scientific arrays are already mapped and remain caller-owned.
+      !XDIR XENTER_DATA XASYNC(gpu_queue) &
+      !XDIR XCREATE(loss_work)
+      !XDIR XUPDATE XASYNC(gpu_queue) &
+      !XDIR XDEVICE(lzactive)
+    EndIf
+
+    ! Follow the standalone convention: izb indexes workspace, izone indexes input arrays.
+    ! The API sets szbatch = 1, so izone is the caller-array column within this batch.
+    ! Reset inactive and unused zones without reading their scientific inputs.
+    ! XIF(on_device) selects the device or host copy of every array in these loops.
+    !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
+    !XDIR XPRIVATE(izone) &
+    !XDIR XPRESENT(lzactive,aa,ystart,xext,aext,zext,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart) &
+    !XDIR XPRESENT(nh,th,t9h,rhoh,yeh,tdel,nt,t,t9,rho,ye,y) &
+    !XDIR XPRESENT(density,temperature,electron_fraction,mass_fraction,restart_dt_s)
+    Do izb = zb_lo, zb_hi
+      izone = izb + szbatch - zb_lo
+      xext(izb) = 0.0_dp
+      aext(izb) = 1.0_dp
+      zext(izb) = 0.0_dp
+      ! The first endpoint is one; zero can reach history element zero in timestep.
+      nstart(izb) = 1
+      tstart(izb) = 0.0_dp
+      tstop(izb) = dt_s
+      tdelstart(izb) = 0.0_dp
+      t9start(izb) = inactive_t9
+      rhostart(izb) = inactive_rho
+      yestart(izb) = inactive_ye
+      !XDIR XLOOP_SERIAL(1)
+      Do k = 1, ny
+        ystart(k,izb) = 0.0_dp
+      EndDo
+      If ( izone <= nz ) Then
+        If ( lzactive(izb) ) Then
+          !XDIR XLOOP_SERIAL(1)
+          Do k = 1, ny
+            ystart(k,izb) = mass_fraction(k,izone) / aa(k)
+          EndDo
+          t9start(izb) = temperature(izone) * kelvin_to_gk
+          rhostart(izb) = density(izone)
+          yestart(izb) = electron_fraction(izone)
+          ! Preserve the CHIMERA startup hint convention without exposing its sign encoding.
+          tdelstart(izb) = -restart_dt_s(izone)
+        EndIf
+      EndIf
+      ! Constant conditions: both history endpoints carry the start values.
+      nh(izb) = 2
+      th(1,izb) = tstart(izb)
+      th(2,izb) = tstop(izb)
+      t9h(1,izb) = t9start(izb)
+      t9h(2,izb) = t9start(izb)
+      rhoh(1,izb) = rhostart(izb)
+      rhoh(2,izb) = rhostart(izb)
+      yeh(1,izb) = yestart(izb)
+      yeh(2,izb) = yestart(izb)
+      tdel(izb) = 0.0_dp
+      nt(izb) = nstart(izb)
+      t(izb) = tstart(izb)
+      t9(izb) = t9start(izb)
+      rho(izb) = rhostart(izb)
+      ye(izb) = yestart(izb)
+      !XDIR XLOOP_SERIAL(1)
+      Do k = 1, ny
+        y(k,izb) = ystart(k,izb)
+      EndDo
+    EndDo
+
+    If ( present(aux_x) ) Then
+      !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
+      !XDIR XPRIVATE(izone) &
+      !XDIR XPRESENT(lzactive,xext,aext,zext,aux_x,aux_a,aux_z)
+      Do izb = zb_lo, zb_lo+nz-1
+        izone = izb + szbatch - zb_lo
+        If ( .not. lzactive(izb) ) Cycle
+        If ( aux_x(izone) > 0.0_dp ) Then
+          xext(izb) = aux_x(izone)
+          aext(izb) = aux_a(izone)
+          zext(izb) = aux_z(izone)
+        EndIf
+      EndDo
+    EndIf
+
+    If ( .not. on_device ) Then
+      ! Transfer only XNet-owned workspace; host array sections need no caller mappings.
+      !XDIR XUPDATE XASYNC(gpu_queue) &
+      !XDIR XDEVICE(xext,aext,zext,lzactive,tdel,t,t9,rho,ye,y,nt) &
+      !XDIR XDEVICE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
+      !XDIR XDEVICE(nh,th,t9h,rhoh,yeh)
+    EndIf
+
     Call full_net(kstep,loss_work,evolve_status,failed_zone)
-    Call close_burn_output
-    ! API results do not depend on diagnostic verbosity or successful final output.
+    Call close_output_files
+
+    ! Attempted counters remain useful when numerical failure invalidates physical results.
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(ktot)
     If ( evolve_status == 0 ) Then
-      !XDIR XUPDATE XWAIT(gpu_queue) &
-      !XDIR XHOST(y,t9,ye_work,tdel_old)
-      Do lane = 1, Size(active)
-        If ( .not. active(lane) ) Cycle
-        izb = zb_offset+lane
-        mass_fraction(:,lane) = y(:,izb) * aa
-        If ( iheat > 0 ) temperature(lane) = t9(izb) * gk_to_kelvin
-        ye(lane) = ye_work(izb)
-        restart_dt_s(lane) = tdel_old(izb)
-        neutrino_loss(lane) = loss_work(izb)
+      If ( .not. on_device ) Then
+        !XDIR XUPDATE XWAIT(gpu_queue) &
+        !XDIR XHOST(y,t9,ye,tdel_old)
+      EndIf
+      !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
+      !XDIR XPRIVATE(izone) &
+      !XDIR XPRESENT(lzactive,aa,y,t9,ye,tdel_old,loss_work) &
+      !XDIR XPRESENT(temperature,electron_fraction,mass_fraction,restart_dt_s,neutrino_loss)
+      Do izb = zb_lo, zb_lo+nz-1
+        izone = izb + szbatch - zb_lo
+        If ( .not. lzactive(izb) ) Cycle
+        !XDIR XLOOP_SERIAL(1)
+        Do k = 1, ny
+          mass_fraction(k,izone) = y(k,izb) * aa(k)
+        EndDo
+        If ( iheat > 0 ) temperature(izone) = t9(izb) * gk_to_kelvin
+        electron_fraction(izone) = ye(izb)
+        restart_dt_s(izone) = tdel_old(izb)
+        neutrino_loss(izone) = loss_work(izb)
       EndDo
+    EndIf
+
+    If ( on_device ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(loss_work)
+      !XDIR XWAIT(gpu_queue)
     EndIf
     Deallocate (loss_work)
     Return
-  End Subroutine burn_host_arrays
+  End Subroutine evolve_batch
 
   Subroutine check_worker(ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Verify the OpenMP team topology and bind the disjoint batch bank (zb_lo:zb_hi) of the caller.
+    ! Verify the OpenMP team topology and initialized scratch for the calling worker.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nthread, nzbatchmx, tid, zb_hi, zb_lo, zb_offset
+    Use xnet_controls, Only: nthread, tid
     Use xnet_nse, Only: ynse
     Implicit None
 
@@ -875,6 +914,7 @@ Contains
 
     ierr = xnet_success
     message = ' '
+
 #ifdef XNET_OMP
     If ( omp_get_dynamic() .or. omp_get_level() > 1 ) Then
       ierr = xnet_unsupported
@@ -890,19 +930,17 @@ Contains
     EndIf
     tid = omp_get_thread_num()+1
 #endif
-    If ( tid < 1 .or. tid > nthread .or. .not. Allocated(ynse) ) Then
+
+    If ( tid < 1 .or. tid > nthread .or. .not. allocated(ynse) ) Then
       ierr = xnet_lifecycle_error
       message = 'This XNet worker is not initialized; keep the initialized OpenMP team'
       Return
     EndIf
-    zb_offset = (tid-1)*nzbatchmx
-    zb_lo = zb_offset+1
-    zb_hi = zb_offset+nzbatchmx
 
     Return
   End Subroutine check_worker
 
-  Subroutine validate_batch_extents(n,dt_s,zone_id,density,temperature,ye,mass_fraction, &
+  Subroutine validate_batch_extents(nz,dt_s,zone_id,density,temperature,ye,mass_fraction, &
     & restart_dt_s,neutrino_loss,counters,ierr,message,aux_x,aux_a,aux_z)
     !-----------------------------------------------------------------------------------------------
     ! Validate batch array shapes, auxiliary argument pairing, and burn duration.
@@ -913,7 +951,7 @@ Contains
     Implicit None
 
     ! Input arguments
-    Integer, Intent(in) :: n
+    Integer, Intent(in) :: nz
     Real(dp), Intent(in) :: dt_s
     Integer, Intent(in) :: zone_id(:,:), counters(:,:)
     Real(dp), Intent(in) :: density(:), temperature(:), ye(:), mass_fraction(:,:)
@@ -926,11 +964,14 @@ Contains
 
     ierr = xnet_invalid
     message = ' '
-    If ( n > nzbatchmx .or. Size(density) /= n .or. Size(temperature) /= n .or. &
-      & Size(ye) /= n .or. Size(restart_dt_s) /= n .or. Size(neutrino_loss) /= n .or. &
-      & Size(mass_fraction,1) /= ny .or. Size(mass_fraction,2) /= n .or. &
-      & Size(counters,1) /= 5 .or. Size(counters,2) /= n .or. Size(zone_id,2) /= n .or. &
-      & (Size(zone_id,1) /= 3 .and. Size(zone_id,1) /= 4) ) Then
+    If ( size(zone_id,1) /= 4 .or. size(zone_id,2) /= nz ) Then
+      message = 'zone_id must have shape (4,nz): [i,j,k,block]'
+      Return
+    EndIf
+    If ( nz > nzbatchmx .or. size(density) /= nz .or. size(temperature) /= nz .or. &
+      & size(ye) /= nz .or. size(restart_dt_s) /= nz .or. size(neutrino_loss) /= nz .or. &
+      & size(mass_fraction,1) /= ny .or. size(mass_fraction,2) /= nz .or. &
+      & size(counters,1) /= 5 .or. size(counters,2) /= nz ) Then
       message = 'Inconsistent batch dimensions or batch larger than nzbatchmx'
       Return
     EndIf
@@ -942,12 +983,12 @@ Contains
       message = 'Burn duration must be finite and positive'
       Return
     EndIf
-    If ( (Present(aux_x) .neqv. Present(aux_a)) .or. (Present(aux_x) .neqv. Present(aux_z)) ) Then
+    If ( (present(aux_x) .neqv. present(aux_a)) .or. (present(aux_x) .neqv. present(aux_z)) ) Then
       message = 'Supply auxiliary mass fraction, A and Z together'
       Return
     EndIf
-    If ( Present(aux_x) ) Then
-      If ( Size(aux_x) /= n .or. Size(aux_a) /= n .or. Size(aux_z) /= n ) Then
+    If ( present(aux_x) ) Then
+      If ( size(aux_x) /= nz .or. size(aux_a) /= nz .or. size(aux_z) /= nz ) Then
         message = 'Inconsistent auxiliary dimensions'
         Return
       EndIf
@@ -957,99 +998,191 @@ Contains
     Return
   End Subroutine validate_batch_extents
 
-  Subroutine validate_host_inputs(n,active,density,temperature,ye,mass_fraction,restart_dt_s, &
+  Subroutine validate_inputs(on_device,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
     & ierr,message,aux_x,aux_a,aux_z)
     !-----------------------------------------------------------------------------------------------
-    ! Validate finiteness and physical ranges for all active lanes in a host-resident batch.
-    ! Inactive lanes are not read.
+    ! Validate active scientific inputs after checking extents and any required device mappings.
+    ! A temporary verdict array also carries the host active mask; no worker workspace is needed.
+    ! Clear device loss here; the public entry point has already cleared the host output.
     !-----------------------------------------------------------------------------------------------
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
+    Use nuclear_data, Only: ny
+    Use xnet_controls, Only: gpu_queue
     Implicit None
 
     ! Input arguments
-    Integer, Intent(in) :: n
-    Logical, Intent(in) :: active(:)
+    Logical, Intent(in) :: on_device, active(:)
     Real(dp), Intent(in) :: density(:), temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
     Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
+
+    ! Input/Output arguments
+    Real(dp), Intent(inout) :: neutrino_loss(:)
 
     ! Output arguments
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
-    Integer :: lane, validation_status
+    ! Local variables
+    Integer :: nz, izone, k
+    Integer, Allocatable :: validation(:)
+    Real(dp), Allocatable :: mass_sum(:)
+    Real(dp) :: total_mass
+    Logical :: finite_state, negative_mass
 
-    ierr = xnet_invalid
+    nz = size(active)
+    ierr = xnet_success
     message = ' '
-    Do lane = 1, n
-      If ( .not. active(lane) ) Cycle
-      validation_status = host_lane_status(density(lane),temperature(lane),ye(lane),mass_fraction(:,lane), &
-        & restart_dt_s(lane),aux_x,aux_a,aux_z,lane)
-      If ( validation_status /= lane_ok ) Then
-        message = lane_error_message(validation_status)
-        Return
+    If ( nz == 0 ) Return
+
+    If ( .not. any(active) ) Then
+      If ( on_device ) Then
+        ! Clear only the mapped output; inactive scientific inputs are not read.
+        !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
+        !XDIR XPRESENT(neutrino_loss)
+        Do izone = 1, nz
+          neutrino_loss(izone) = 0.0_dp
+        EndDo
+        !XDIR XWAIT(gpu_queue)
+      EndIf
+      Return
+    EndIf
+
+    Allocate (validation(nz),mass_sum(nz))
+    validation = zone_inactive
+    Where ( active ) validation = zone_ok
+
+    If ( .not. on_device ) Then
+      ! Classify host values without raising invalid-operation traps for quiet NaNs.
+      ! NVHPC 26.5 cannot link IEEE_IS_FINITE inside device loops.
+      Do izone = 1, nz
+        If ( .not. active(izone) ) Cycle
+        If ( .not. (ieee_is_finite(density(izone)) .and. ieee_is_finite(temperature(izone)) .and. &
+          & ieee_is_finite(ye(izone)) .and. ieee_is_finite(restart_dt_s(izone)) .and. &
+          & all(ieee_is_finite(mass_fraction(:,izone)))) ) Then
+          validation(izone) = zone_not_finite
+        ElseIf ( present(aux_x) ) Then
+          If ( .not. (ieee_is_finite(aux_x(izone)) .and. ieee_is_finite(aux_a(izone)) .and. &
+            & ieee_is_finite(aux_z(izone))) ) validation(izone) = zone_aux_not_finite
+        EndIf
+      EndDo
+    Else
+      ! Scientific arrays are caller-mapped. Only the temporary validation storage is owned here.
+      !XDIR XENTER_DATA XASYNC(gpu_queue) &
+      !XDIR XCOPYIN(validation) XCREATE(mass_sum)
+    EndIf
+
+    ! Check the primary state in either memory space, without reading inactive zones.
+    !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
+    !XDIR XPRIVATE(total_mass,finite_state,negative_mass) &
+    !XDIR XPRESENT(validation,mass_sum,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
+    Do izone = 1, nz
+      If ( on_device ) neutrino_loss(izone) = 0.0_dp
+      mass_sum(izone) = 0.0_dp
+      If ( validation(izone) == zone_inactive .or. validation(izone) == zone_not_finite ) Cycle
+      finite_state = .true.
+      If ( on_device ) Then
+        ! Ordered device comparisons reject NaNs and infinities without a device helper.
+        finite_state = abs(density(izone)) <= huge(1.0_dp) .and. abs(temperature(izone)) <= huge(1.0_dp) .and. &
+          & abs(ye(izone)) <= huge(1.0_dp) .and. abs(restart_dt_s(izone)) <= huge(1.0_dp)
+      EndIf
+      negative_mass = .false.
+      !XDIR XLOOP_SERIAL(1)
+      Do k = 1, ny
+        If ( on_device ) finite_state = finite_state .and. abs(mass_fraction(k,izone)) <= huge(1.0_dp)
+        negative_mass = negative_mass .or. mass_fraction(k,izone) < 0.0_dp
+      EndDo
+      If ( .not. finite_state ) Then
+        validation(izone) = zone_not_finite
+      ElseIf ( density(izone) <= 0.0_dp .or. temperature(izone) <= 0.0_dp .or. &
+        & ye(izone) < 0.0_dp .or. ye(izone) > 1.0_dp .or. restart_dt_s(izone) < 0.0_dp .or. negative_mass ) Then
+        ! Primary-state errors take precedence over any auxiliary nonfinite values.
+        validation(izone) = zone_out_of_range
+      Else
+        ! Sum only after rejecting invalid primary values.
+        total_mass = 0.0_dp
+        !XDIR XLOOP_SERIAL(1)
+        Do k = 1, ny
+          total_mass = total_mass + mass_fraction(k,izone)
+        EndDo
+        mass_sum(izone) = total_mass
       EndIf
     EndDo
-    ierr = xnet_success
 
-    Return
-  End Subroutine validate_host_inputs
-
-  Integer Function host_lane_status(density,temperature,ye,x,restart_dt_s,aux_x,aux_a,aux_z,lane)
-    ! Check one active lane; keep the order consistent with the device validator.
-    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
-    Implicit None
-    Real(dp), Intent(in) :: density, temperature, ye, x(:), restart_dt_s
-    Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
-    Integer, Intent(in) :: lane
-    Real(dp) :: total_mass
-
-    host_lane_status = lane_not_finite
-    If ( .not. (ieee_is_finite(density) .and. ieee_is_finite(temperature) .and. ieee_is_finite(ye) .and. &
-      & ieee_is_finite(restart_dt_s) .and. All(ieee_is_finite(x))) ) Return
-    host_lane_status = lane_out_of_range
-    If ( density <= 0.0_dp .or. temperature <= 0.0_dp .or. ye < 0.0_dp .or. ye > 1.0_dp .or. &
-      & restart_dt_s < 0.0_dp .or. Any(x < 0.0_dp) ) Return
-    total_mass = Sum(x)
-    If ( Present(aux_x) ) Then
-      host_lane_status = lane_aux_not_finite
-      If ( .not. (ieee_is_finite(aux_x(lane)) .and. ieee_is_finite(aux_a(lane)) .and. ieee_is_finite(aux_z(lane))) ) Return
-      host_lane_status = lane_aux_out_of_range
-      If ( aux_x(lane) < 0.0_dp .or. aux_x(lane) > 1.0_dp .or. aux_a(lane) < 0.0_dp .or. &
-        & aux_z(lane) < 0.0_dp .or. aux_z(lane) > aux_a(lane) ) Return
-      host_lane_status = lane_aux_needs_a
-      If ( aux_x(lane) > 0.0_dp .and. aux_a(lane) <= 0.0_dp ) Return
-      total_mass = total_mass + aux_x(lane)
+    If ( present(aux_x) ) Then
+      !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
+      !XDIR XPRIVATE(finite_state) &
+      !XDIR XPRESENT(validation,mass_sum,aux_x,aux_a,aux_z)
+      Do izone = 1, nz
+        If ( validation(izone) /= zone_ok ) Cycle
+        finite_state = .true.
+        If ( on_device ) finite_state = abs(aux_x(izone)) <= huge(1.0_dp) .and. &
+          & abs(aux_a(izone)) <= huge(1.0_dp) .and. abs(aux_z(izone)) <= huge(1.0_dp)
+        If ( .not. finite_state ) Then
+          validation(izone) = zone_aux_not_finite
+        ElseIf ( aux_x(izone) < 0.0_dp .or. aux_x(izone) > 1.0_dp .or. aux_a(izone) < 0.0_dp .or. &
+          & aux_z(izone) < 0.0_dp .or. aux_z(izone) > aux_a(izone) ) Then
+          validation(izone) = zone_aux_out_of_range
+        ElseIf ( aux_x(izone) > 0.0_dp .and. aux_a(izone) <= 0.0_dp ) Then
+          validation(izone) = zone_aux_needs_a
+        ElseIf ( mass_sum(izone) + aux_x(izone) <= 0.0_dp ) Then
+          validation(izone) = zone_no_mass
+        EndIf
+      EndDo
+    Else
+      !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
+      !XDIR XPRESENT(validation,mass_sum)
+      Do izone = 1, nz
+        If ( validation(izone) == zone_ok .and. mass_sum(izone) <= 0.0_dp ) validation(izone) = zone_no_mass
+      EndDo
     EndIf
-    host_lane_status = lane_no_mass
-    If ( total_mass <= 0.0_dp ) Return
-    host_lane_status = lane_ok
-    Return
-  End Function host_lane_status
 
-  Function lane_error_message(verdict) Result(text)
+    If ( on_device ) Then
+      !XDIR XUPDATE XWAIT(gpu_queue) &
+      !XDIR XHOST(validation)
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(validation,mass_sum)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+
+    Do izone = 1, nz
+      If ( validation(izone) == zone_ok .or. validation(izone) == zone_inactive ) Cycle
+      ierr = xnet_invalid
+      message = zone_error_message(validation(izone))
+      Exit
+    EndDo
+    Deallocate (validation,mass_sum)
+
+    Return
+  End Subroutine validate_inputs
+
+  Function zone_error_message(verdict) Result(text)
+    !-----------------------------------------------------------------------------------------------
+    ! Translate host and device zone-validation results into the same public diagnostic text.
+    !-----------------------------------------------------------------------------------------------
     Implicit None
     Integer, Intent(in) :: verdict
     Character(80) :: text
 
     Select Case (verdict)
-    Case (lane_not_finite)
+    Case (zone_not_finite)
       text = 'Active-zone inputs must be finite'
-    Case (lane_out_of_range)
+    Case (zone_out_of_range)
       text = 'Invalid active-zone density, temperature, Ye, composition or restart timestep'
-    Case (lane_aux_not_finite)
+    Case (zone_aux_not_finite)
       text = 'Active-zone auxiliary inputs must be finite'
-    Case (lane_aux_out_of_range)
+    Case (zone_aux_out_of_range)
       text = 'Invalid auxiliary mass fraction, A or Z'
-    Case (lane_aux_needs_a)
+    Case (zone_aux_needs_a)
       text = 'Positive auxiliary mass requires positive A'
-    Case (lane_no_mass)
+    Case (zone_no_mass)
       text = 'Active-zone composition must contain positive mass'
     Case Default
       text = ' '
     End Select
     Return
-  End Function lane_error_message
+  End Function zone_error_message
 
-  Subroutine format_burn_failure(evolve_status,failed_lane,zone_id,ierr,message)
+  Subroutine format_burn_failure(evolve_status,failed_zone,zone_id,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Translate an internal full_net failure status into the public status code and zone diagnostic.
     !-----------------------------------------------------------------------------------------------
@@ -1057,7 +1190,7 @@ Contains
     Implicit None
 
     ! Input arguments
-    Integer, Intent(in) :: evolve_status, failed_lane
+    Integer, Intent(in) :: evolve_status, failed_zone
     Integer, Intent(in) :: zone_id(:,:)
 
     ! Output arguments
@@ -1065,9 +1198,7 @@ Contains
     Character(*), Intent(out) :: message
 
     ! Local variables
-    Integer :: id
     Character(128) :: failure_ids
-    Character(32) :: id_component
     Character(512) :: failure_message
     Character(80) :: failure_reason
 
@@ -1081,84 +1212,84 @@ Contains
       failure_reason = 'maximum integration steps reached; host must terminate'
     End Select
 
-    Write(failure_ids,'(i0)') zone_id(1,failed_lane)
-    Do id = 2, Size(zone_id,1)
-      Write(id_component,'(i0)') zone_id(id,failed_lane)
-      failure_ids = Trim(failure_ids)//' '//Trim(id_component)
-    EndDo
-    Write(failure_message,'(a,i0,4a)') 'Zone ',failed_lane,', zone IDs [', &
-      & Trim(failure_ids),']: ',Trim(failure_reason)
+    Write(failure_ids,'(4(i0,1x))') zone_id(:,failed_zone)
+    Write(failure_message,'(a,i0,4a)') 'Zone ',failed_zone,', zone_id [i,j,k,block] = [', &
+      & trim(failure_ids),']: ',trim(failure_reason)
     message = failure_message
 
     Return
   End Subroutine format_burn_failure
 
   !=================================================================================================
-  ! Private Device Mapping, Validation and Batch Execution
+  ! Private Device Mapping and Input Validation
   !=================================================================================================
 
-#ifdef XNET_GPU
   Subroutine check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
     & ierr,message,aux_x,aux_a,aux_z)
     !-----------------------------------------------------------------------------------------------
     ! Verify that all scientific arrays for a device-resident burn are contiguous and mapped on
-    ! the active device.
+    ! the active device. CPU builds reject device-array requests before inspecting the arrays.
     !-----------------------------------------------------------------------------------------------
-    Use, Intrinsic :: iso_c_binding, Only: C_LOC, C_SIZEOF, C_SIZE_T
+    Use, Intrinsic :: iso_c_binding, Only: c_loc, c_sizeof, C_SIZE_T
     Use xnet_gpu, Only: device_is_present, mydevice
     Implicit None
 
     ! Input/Output arguments
     Real(dp), Target, Intent(in) :: density(:), temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
-    Real(dp), Target, Intent(out) :: neutrino_loss(:)
+    Real(dp), Target, Intent(in) :: neutrino_loss(:)
     Real(dp), Optional, Target, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
     ! Local constants and variables
-    Integer(C_SIZE_T), Parameter :: real_bytes = C_SIZEOF(0.0_dp)
+    Integer(C_SIZE_T), Parameter :: real_bytes = c_sizeof(0.0_dp)
     Logical :: mapped
 
+#ifndef XNET_GPU
+    ierr = xnet_unsupported
+    message = 'Device-array burns require a supported GPU library build'
+    Return
+#endif
     ierr = xnet_invalid
     message = 'Device-array burns require contiguous scientific arrays'
-    If ( .not. Is_Contiguous(density) .or. .not. Is_Contiguous(temperature) .or. &
-      & .not. Is_Contiguous(ye) .or. .not. Is_Contiguous(mass_fraction) .or. &
-      & .not. Is_Contiguous(restart_dt_s) .or. .not. Is_Contiguous(neutrino_loss) ) Return
-    If ( Present(aux_x) ) Then
-      If ( .not. Is_Contiguous(aux_x) ) Return
+    If ( .not. is_contiguous(density) .or. .not. is_contiguous(temperature) .or. &
+      & .not. is_contiguous(ye) .or. .not. is_contiguous(mass_fraction) .or. &
+      & .not. is_contiguous(restart_dt_s) .or. .not. is_contiguous(neutrino_loss) ) Return
+    If ( present(aux_x) ) Then
+      If ( .not. is_contiguous(aux_x) ) Return
     EndIf
-    If ( Present(aux_a) ) Then
-      If ( .not. Is_Contiguous(aux_a) ) Return
+    If ( present(aux_a) ) Then
+      If ( .not. is_contiguous(aux_a) ) Return
     EndIf
-    If ( Present(aux_z) ) Then
-      If ( .not. Is_Contiguous(aux_z) ) Return
+    If ( present(aux_z) ) Then
+      If ( .not. is_contiguous(aux_z) ) Return
     EndIf
 
     message = 'Device-array burns require every scientific array mapped on the selected device'
     mapped = .true.
-    If ( Size(density) > 0 ) mapped = mapped .and. &
-      & device_is_present(C_LOC(density(1)),mydevice,Int(Size(density),C_SIZE_T)*real_bytes)
-    If ( Size(temperature) > 0 ) mapped = mapped .and. &
-      & device_is_present(C_LOC(temperature(1)),mydevice,Int(Size(temperature),C_SIZE_T)*real_bytes)
-    If ( Size(ye) > 0 ) mapped = mapped .and. &
-      & device_is_present(C_LOC(ye(1)),mydevice,Int(Size(ye),C_SIZE_T)*real_bytes)
-    If ( Size(mass_fraction) > 0 ) mapped = mapped .and. &
-      & device_is_present(C_LOC(mass_fraction(1,1)),mydevice,Int(Size(mass_fraction),C_SIZE_T)*real_bytes)
-    If ( Size(restart_dt_s) > 0 ) mapped = mapped .and. &
-      & device_is_present(C_LOC(restart_dt_s(1)),mydevice,Int(Size(restart_dt_s),C_SIZE_T)*real_bytes)
-    If ( Size(neutrino_loss) > 0 ) mapped = mapped .and. &
-      & device_is_present(C_LOC(neutrino_loss(1)),mydevice,Int(Size(neutrino_loss),C_SIZE_T)*real_bytes)
-    If ( Present(aux_x) ) Then
-      If ( Size(aux_x) > 0 ) mapped = mapped .and. &
-        & device_is_present(C_LOC(aux_x(1)),mydevice,Int(Size(aux_x),C_SIZE_T)*real_bytes)
+    If ( size(density) > 0 ) mapped = mapped .and. &
+      & device_is_present(c_loc(density(1)),mydevice,int(size(density),C_SIZE_T)*real_bytes)
+    If ( size(temperature) > 0 ) mapped = mapped .and. &
+      & device_is_present(c_loc(temperature(1)),mydevice,int(size(temperature),C_SIZE_T)*real_bytes)
+    If ( size(ye) > 0 ) mapped = mapped .and. &
+      & device_is_present(c_loc(ye(1)),mydevice,int(size(ye),C_SIZE_T)*real_bytes)
+    If ( size(mass_fraction) > 0 ) mapped = mapped .and. &
+      & device_is_present(c_loc(mass_fraction(1,1)),mydevice,int(size(mass_fraction),C_SIZE_T)*real_bytes)
+    If ( size(restart_dt_s) > 0 ) mapped = mapped .and. &
+      & device_is_present(c_loc(restart_dt_s(1)),mydevice,int(size(restart_dt_s),C_SIZE_T)*real_bytes)
+    If ( size(neutrino_loss) > 0 ) mapped = mapped .and. &
+      & device_is_present(c_loc(neutrino_loss(1)),mydevice,int(size(neutrino_loss),C_SIZE_T)*real_bytes)
+    If ( present(aux_x) ) Then
+      If ( size(aux_x) > 0 ) mapped = mapped .and. &
+        & device_is_present(c_loc(aux_x(1)),mydevice,int(size(aux_x),C_SIZE_T)*real_bytes)
     EndIf
-    If ( Present(aux_a) ) Then
-      If ( Size(aux_a) > 0 ) mapped = mapped .and. &
-        & device_is_present(C_LOC(aux_a(1)),mydevice,Int(Size(aux_a),C_SIZE_T)*real_bytes)
+    If ( present(aux_a) ) Then
+      If ( size(aux_a) > 0 ) mapped = mapped .and. &
+        & device_is_present(c_loc(aux_a(1)),mydevice,int(size(aux_a),C_SIZE_T)*real_bytes)
     EndIf
-    If ( Present(aux_z) ) Then
-      If ( Size(aux_z) > 0 ) mapped = mapped .and. &
-        & device_is_present(C_LOC(aux_z(1)),mydevice,Int(Size(aux_z),C_SIZE_T)*real_bytes)
+    If ( present(aux_z) ) Then
+      If ( size(aux_z) > 0 ) mapped = mapped .and. &
+        & device_is_present(c_loc(aux_z(1)),mydevice,int(size(aux_z),C_SIZE_T)*real_bytes)
     EndIf
     If ( .not. mapped ) Return
 
@@ -1168,270 +1299,42 @@ Contains
     Return
   End Subroutine check_device_batch
 
-  Subroutine burn_device_arrays(dt_s,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
-    & zone_id_components,kstep,evolve_status,failed_zone,ierr,message,aux_x,aux_a,aux_z)
-    !-----------------------------------------------------------------------------------------------
-    ! Validate, stage, evolve, and extract device-resident scientific arrays directly on the GPU.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: aa, ny
-    Use xnet_abundances, Only: aext, xext, y, ystart, zext
-    Use xnet_conditions, Only: nh, nstart, nt, rho, rhoh, rhostart, t, t9, t9h, t9start, &
-      & tdel, tdel_old, tdelstart, th, tstart, tstop, ye_work=>ye, yeh, yestart
-    Use xnet_controls, Only: gpu_queue, iheat, ktot, lzactive, nzevolve
-    Use xnet_evolve, Only: full_net
-    Implicit None
-
-    ! Input/Output arguments
-    Real(dp), Intent(in) :: dt_s, density(:)
-    Real(dp), Intent(inout) :: temperature(:), ye(:), mass_fraction(:,:), restart_dt_s(:)
-    Real(dp), Intent(out) :: neutrino_loss(:)
-    Real(dp), Optional, Intent(in) :: aux_x(:), aux_a(:), aux_z(:)
-    Integer, Intent(in) :: zone_id_components
-    Integer, Intent(out) :: kstep, evolve_status, failed_zone, ierr
-    Character(*), Intent(out) :: message
-
-    ! Local variables
-    Integer :: n, lane, k
-    Integer, Allocatable :: validation(:)
-    Real(dp), Allocatable :: mass_sum(:), loss_work(:)
-    Real(dp) :: total_mass
-    Logical :: finite_state, negative_mass
-
-    n = Size(density)
-    ! full_net checks the stop time on the host after updating its completion status.
-    tstop = dt_s
-    kstep = 0
-    evolve_status = 0
-    failed_zone = 0
-    ierr = xnet_success
-    message = ' '
-    If ( n == 0 ) Return
-
-    Allocate (validation(n),mass_sum(n),loss_work(nzevolve))
-    ! Increment existing mapping references without copying stale host scientific values.
-    ! Matching releases below leave every caller-owned mapping in place.
-    !XDIR XENTER_DATA XASYNC(gpu_queue) &
-    !XDIR XCOPYIN(density,temperature,ye,mass_fraction,restart_dt_s) &
-    !XDIR XCREATE(neutrino_loss,validation,mass_sum,loss_work)
-    If ( Present(aux_x) ) Then
-      !XDIR XENTER_DATA XASYNC(gpu_queue) &
-      !XDIR XCOPYIN(aux_x,aux_a,aux_z)
-    EndIf
-    !XDIR XUPDATE XASYNC(gpu_queue) &
-    !XDIR XDEVICE(lzactive)
-
-    !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-    !XDIR XPRESENT(lzactive,validation,mass_sum,density,temperature,ye,mass_fraction,restart_dt_s) &
-    !XDIR XPRIVATE(total_mass,finite_state,negative_mass)
-    Do lane = 1, n
-      validation(lane) = lane_ok
-      mass_sum(lane) = 0.0_dp
-      If ( .not. lzactive(lane) ) Cycle
-      ! NVHPC 26.5 cannot link IEEE_IS_FINITE in this OpenACC loop.
-      ! Ordered comparisons also reject NaN and infinity without a device helper.
-      finite_state = Abs(density(lane)) <= Huge(1.0_dp) .and. Abs(temperature(lane)) <= Huge(1.0_dp) .and. &
-        & Abs(ye(lane)) <= Huge(1.0_dp) .and. Abs(restart_dt_s(lane)) <= Huge(1.0_dp)
-      negative_mass = .false.
-      total_mass = 0.0_dp
-      !XDIR XLOOP_SERIAL(1)
-      Do k = 1, ny
-        finite_state = finite_state .and. Abs(mass_fraction(k,lane)) <= Huge(1.0_dp)
-        negative_mass = negative_mass .or. mass_fraction(k,lane) < 0.0_dp
-        total_mass = total_mass + mass_fraction(k,lane)
-      EndDo
-      mass_sum(lane) = total_mass
-      If ( .not. finite_state ) Then
-        validation(lane) = lane_not_finite
-      ElseIf ( density(lane) <= 0.0_dp .or. temperature(lane) <= 0.0_dp .or. &
-        & ye(lane) < 0.0_dp .or. ye(lane) > 1.0_dp .or. restart_dt_s(lane) < 0.0_dp .or. negative_mass ) Then
-        validation(lane) = lane_out_of_range
-      EndIf
-    EndDo
-
-    If ( Present(aux_x) ) Then
-      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(lzactive,validation,mass_sum,aux_x,aux_a,aux_z) &
-      !XDIR XPRIVATE(finite_state)
-      Do lane = 1, n
-        If ( .not. lzactive(lane) .or. validation(lane) /= lane_ok ) Cycle
-        finite_state = Abs(aux_x(lane)) <= Huge(1.0_dp) .and. Abs(aux_a(lane)) <= Huge(1.0_dp) .and. &
-          & Abs(aux_z(lane)) <= Huge(1.0_dp)
-        If ( .not. finite_state ) Then
-          validation(lane) = lane_aux_not_finite
-        ElseIf ( aux_x(lane) < 0.0_dp .or. aux_x(lane) > 1.0_dp .or. aux_a(lane) < 0.0_dp .or. &
-          & aux_z(lane) < 0.0_dp .or. aux_z(lane) > aux_a(lane) ) Then
-          validation(lane) = lane_aux_out_of_range
-        ElseIf ( aux_x(lane) > 0.0_dp .and. aux_a(lane) <= 0.0_dp ) Then
-          validation(lane) = lane_aux_needs_a
-        ElseIf ( mass_sum(lane) + aux_x(lane) <= 0.0_dp ) Then
-          validation(lane) = lane_no_mass
-        EndIf
-      EndDo
-    Else
-      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(lzactive,validation,mass_sum)
-      Do lane = 1, n
-        If ( lzactive(lane) .and. validation(lane) == lane_ok .and. mass_sum(lane) <= 0.0_dp ) validation(lane) = lane_no_mass
-      EndDo
-    EndIf
-
-    !XDIR XUPDATE XWAIT(gpu_queue) &
-    !XDIR XHOST(validation)
-
-    device_burn: Do
-      Do lane = 1, n
-        If ( validation(lane) == lane_ok ) Cycle
-        ierr = xnet_invalid
-        message = lane_error_message(validation(lane))
-        Exit device_burn
-      EndDo
-      If ( .not. Any(lzactive) ) Exit device_burn
-
-      ! Initialize inactive workspace lanes with benign values without reading their scientific inputs.
-      ! Guard active-lane reads with (lane <= n) so short batches (n < nzevolve) never read past n.
-      !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(lzactive,aa,ystart,xext,aext,zext,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart) &
-      !XDIR XPRESENT(nh,th,t9h,rhoh,yeh,tdel,nt,t,t9,rho,ye_work,y) &
-      !XDIR XPRESENT(density,temperature,ye,mass_fraction,restart_dt_s)
-      Do lane = 1, nzevolve
-        xext(lane) = 0.0_dp
-        aext(lane) = 1.0_dp
-        zext(lane) = 0.0_dp
-        nstart(lane) = 1
-        tstart(lane) = 0.0_dp
-        tstop(lane) = dt_s
-        tdelstart(lane) = 0.0_dp
-        t9start(lane) = inactive_t9
-        rhostart(lane) = inactive_rho
-        yestart(lane) = inactive_ye
-        !XDIR XLOOP_SERIAL(1)
-        Do k = 1, ny
-          ystart(k,lane) = 0.0_dp
-        EndDo
-        If ( lane <= n ) Then
-          If ( lzactive(lane) ) Then
-            !XDIR XLOOP_SERIAL(1)
-            Do k = 1, ny
-              ystart(k,lane) = mass_fraction(k,lane) / aa(k)
-            EndDo
-            t9start(lane) = temperature(lane) * kelvin_to_gk
-            rhostart(lane) = density(lane)
-            yestart(lane) = ye(lane)
-            tdelstart(lane) = -restart_dt_s(lane)
-          EndIf
-        EndIf
-        nh(lane) = 2
-        th(1,lane) = tstart(lane)
-        th(2,lane) = tstop(lane)
-        t9h(1,lane) = t9start(lane)
-        t9h(2,lane) = t9start(lane)
-        rhoh(1,lane) = rhostart(lane)
-        rhoh(2,lane) = rhostart(lane)
-        yeh(1,lane) = yestart(lane)
-        yeh(2,lane) = yestart(lane)
-        tdel(lane) = 0.0_dp
-        nt(lane) = nstart(lane)
-        t(lane) = tstart(lane)
-        t9(lane) = t9start(lane)
-        rho(lane) = rhostart(lane)
-        ye_work(lane) = yestart(lane)
-        !XDIR XLOOP_SERIAL(1)
-        Do k = 1, ny
-          y(k,lane) = ystart(k,lane)
-        EndDo
-      EndDo
-
-      If ( Present(aux_x) ) Then
-        !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-        !XDIR XPRESENT(lzactive,xext,aext,zext,aux_x,aux_a,aux_z)
-        Do lane = 1, n
-          If ( .not. lzactive(lane) ) Cycle
-          If ( aux_x(lane) > 0.0_dp ) Then
-            xext(lane) = aux_x(lane)
-            aext(lane) = aux_a(lane)
-            zext(lane) = aux_z(lane)
-          EndIf
-        EndDo
-      EndIf
-
-      Call open_burn_output(zone_id_components,ierr,message)
-      If ( ierr /= xnet_success ) Exit device_burn
-
-      Call full_net(kstep,loss_work,evolve_status,failed_zone)
-      Call close_burn_output
-
-      ! Attempted counters are host diagnostics even when the physical result is invalid.
-      !XDIR XUPDATE XWAIT(gpu_queue) &
-      !XDIR XHOST(ktot)
-      If ( evolve_status == 0 ) Then
-        !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-        !XDIR XPRESENT(lzactive,aa,y,t9,ye_work,tdel_old,loss_work) &
-        !XDIR XPRESENT(temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
-        Do lane = 1, n
-          If ( .not. lzactive(lane) ) Cycle
-          !XDIR XLOOP_SERIAL(1)
-          Do k = 1, ny
-            mass_fraction(k,lane) = y(k,lane) * aa(k)
-          EndDo
-          If ( iheat > 0 ) temperature(lane) = t9(lane) * gk_to_kelvin
-          ye(lane) = ye_work(lane)
-          restart_dt_s(lane) = tdel_old(lane)
-          neutrino_loss(lane) = loss_work(lane)
-        EndDo
-      EndIf
-      Exit device_burn
-    EndDo device_burn
-
-    If ( Present(aux_x) ) Then
-      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(aux_x,aux_a,aux_z)
-    EndIf
-    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-    !XDIR XDELETE(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss) &
-    !XDIR XDELETE(validation,mass_sum,loss_work)
-    !XDIR XWAIT(gpu_queue)
-    Deallocate (validation,mass_sum,loss_work)
-
-    Return
-  End Subroutine burn_device_arrays
-#endif
-
-
   !=================================================================================================
   ! Private Time-series Output and Per-call Timing
   !=================================================================================================
 
-  Subroutine open_burn_output(zone_id_components,ierr,message)
-    ! Each call has its own local 0..dt history. Lane numbers distinguish repeated diagnostic IDs.
-    Use nuclear_data, Only: ny, zz, aa, nname
-    Use xnet_controls, Only: itsout, lzactive, lun_ts, lun_ev, bin_file_base, ev_file_base, zone_id, &
-      & zb_offset, zb_lo, zb_hi, descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, &
-      & tdel_maxmult, iheat, isolv, nnucout, nnucout_string, inucout
-    Use xnet_flux, Only: flx, ifl_orig, ifl_term
-    Use xnet_match, Only: mflx
+  Subroutine open_burn_output(ierr,message)
+    !-----------------------------------------------------------------------------------------------
+    ! Open per-call binary (itsout>=1) and ASCII (itsout>=2) time-series files for active zones
+    ! in the current worker bank. Reserve a unique process-wide call number under a short
+    ! critical region while keeping file writes and evolution outside the critical region.
+    ! Each call has its own local 0..dt_s history. Zone numbers distinguish repeated diagnostic IDs.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: itsout, lzactive, bin_file_base, ev_file_base, zone_id, szbatch, zb_lo, zb_hi
+    Use xnet_flux, Only: flx
+    Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
     Implicit None
-    Integer, Intent(in) :: zone_id_components
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
     ! Match the standalone binary header field widths, including programmatic input descriptions.
-    Character(80), Parameter :: input_name = 'XNet API input arrays'
+    Character(80), Parameter :: input_name            = 'XNet API input arrays'
     Character(80), Parameter :: abundance_description = 'Mass fractions in XNet species order'
-    Character(80), Parameter :: thermo_description = 'Constant conditions; local time 0..dt seconds'
+    Character(80), Parameter :: thermo_description    = 'Constant conditions; local time 0..dt seconds'
     Character(256) :: filename
     Character(80) :: zone_label
     Character(64) :: suffix
-    Character(40) :: header_format
-    Integer :: lane, i, output_status
+    Integer :: izb, output_status
     Integer(i8) :: call_number
 
     ierr = xnet_success
     message = ' '
-    If ( itsout <= 0 .or. .not. Any(lzactive(zb_lo:zb_hi)) ) Return
+    If ( itsout <= 0 .or. .not. any(lzactive(zb_lo:zb_hi)) ) Return
     ierr = xnet_invalid
+
     ! Reserve one number for this call; do not serialize file writes or evolution.
     call_number = 0_i8
     !$omp critical(xnet_output_call)
-    If ( output_call < Huge(output_call) ) Then
+    If ( output_call < huge(output_call) ) Then
       output_call = output_call+1_i8
       call_number = output_call
     EndIf
@@ -1440,85 +1343,69 @@ Contains
       message = 'Time-series call number exhausted'
       Return
     EndIf
-    Do lane = zb_lo, zb_hi
-      If ( .not. lzactive(lane) ) Cycle
-      Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_lane',lane-zb_offset
-      filename = Trim(bin_file_base)//Trim(suffix)
-      Open(newunit=lun_ts(lane),file=Trim(filename),status='new',form='unformatted', &
-        & action='write',iostat=output_status)
-      If ( output_status /= 0 ) Exit
-      Write(lun_ts(lane)) descript,api_data_description
-      Write(lun_ts(lane)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
+
+    ! Open ts/ev files for each active zone.
+    Do izb = zb_lo, zb_hi
+      If ( .not. lzactive(izb) ) Cycle
+      Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_lane',izb+szbatch-zb_lo
+      filename = trim(bin_file_base)//trim(suffix)
+
       ! Identify the caller zone in the existing input label; keep the record layout.
-      Write(zone_label,'(a,4(1x,i0))') 'XNet API zone_id:',zone_id(1:zone_id_components,lane)
-      Write(lun_ts(lane)) zone_label,abundance_description
-      Write(lun_ts(lane)) input_name,thermo_description
-      Write(lun_ts(lane)) ny,zz,aa
-      Write(lun_ts(lane)) mflx,ifl_orig,ifl_term
+      Write(zone_label,'(a,4(1x,i0))') 'XNet API zone_id [i,j,k,block]:',zone_id(:,izb)
+      Call open_ts_file(izb,filename,api_data_description,zone_label,abundance_description, &
+        & input_name,thermo_description,status='new',ierr=output_status)
+      If ( output_status /= 0 ) Exit
+
       If ( itsout >= 2 ) Then
-        filename = Trim(ev_file_base)//Trim(suffix)
-        Open(newunit=lun_ev(lane),file=Trim(filename),status='new',action='write',iostat=output_status)
+        filename = trim(ev_file_base)//trim(suffix)
+        Call open_ev_file(izb,filename,status='new',ierr=output_status)
         If ( output_status /= 0 ) Exit
-        header_format = '(a4,a15,5a10,a4)'
-        If ( nnucout > 0 ) header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
-        Write(lun_ev(lane),header_format) &
-          & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout),' It '
       EndIf
     EndDo
+
+    ! If any file failed to open, close all files and return an error.
     If ( output_status /= 0 ) Then
-      ! A partially opened set is kept for diagnosis, with no burn performed and no units left open.
-      Call close_burn_output
-      message = 'Cannot create time-series file: '//Trim(filename)
+      Call close_output_files
+      message = 'Cannot create time-series file: '//trim(filename)
       Return
     EndIf
+
     ! The initial snapshot has no reaction flux; do not reuse final flux from the preceding burn.
     flx(:,zb_lo:zb_hi) = 0.0_dp
     ierr = xnet_success
+
     Return
   End Subroutine open_burn_output
 
-  Subroutine close_burn_output
-    !-----------------------------------------------------------------------------------------------
-    ! Close any open binary or ASCII time-series logical units in the current worker bank.
-    !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_ev, lun_ts, zb_hi, zb_lo
-    Implicit None
-
-    ! Local variables
-    Integer :: lane
-
-    Do lane = zb_lo, zb_hi
-      ! NEWUNIT may return negative units. Zero alone denotes an unopened API output slot.
-      If ( lun_ts(lane) /= 0 ) Close(lun_ts(lane))
-      If ( lun_ev(lane) /= 0 ) Close(lun_ev(lane))
-      lun_ts(lane) = 0
-      lun_ev(lane) = 0
-    EndDo
-
-    Return
-  End Subroutine close_burn_output
-
-  Function current_timing() Result(timing)
+  Function get_timing() Result(timing)
     !-----------------------------------------------------------------------------------------------
     ! Snapshot cumulative XNet timers for the calling thread.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_timers, Only: timer_csect, timer_deriv, timer_jacob, timer_scrn, timer_solve, timer_xnet
+    Use xnet_timers, Only: timer_xnet, timer_solve, timer_jacob, timer_deriv, timer_csect, timer_scrn, &
+      & timer_tstep, timer_nraph, timer_decmp, timer_bksub, timer_prescrn, timer_eos, timer_output
     Implicit None
 
     ! Result variable
     Type(xnet_timing_t) :: timing
 
-    timing%evolve     = timer_xnet
-    timing%solve      = timer_solve
-    timing%jacobian   = timer_jacob
-    timing%derivative = timer_deriv
-    timing%rates      = timer_csect
-    timing%screening  = timer_scrn
+    timing%evolve           = timer_xnet
+    timing%solve            = timer_solve
+    timing%jacobian         = timer_jacob
+    timing%derivative       = timer_deriv
+    timing%rates            = timer_csect
+    timing%screening        = timer_scrn
+    timing%timestep         = timer_tstep
+    timing%newton           = timer_nraph
+    timing%decomposition    = timer_decmp
+    timing%backsubstitution = timer_bksub
+    timing%prescreening     = timer_prescrn
+    timing%eos              = timer_eos
+    timing%output           = timer_output
 
     Return
-  End Function current_timing
+  End Function get_timing
 
-  Function elapsed_timing(before) Result(delta)
+  Function get_timing_since(before) Result(delta)
     !-----------------------------------------------------------------------------------------------
     ! Compute the per-call elapsed timing difference since the before snapshot.
     !-----------------------------------------------------------------------------------------------
@@ -1530,15 +1417,22 @@ Contains
     ! Result variable
     Type(xnet_timing_t) :: delta
 
-    delta = current_timing()
-    delta%evolve     = delta%evolve     - before%evolve
-    delta%solve      = delta%solve      - before%solve
-    delta%jacobian   = delta%jacobian   - before%jacobian
-    delta%derivative = delta%derivative - before%derivative
-    delta%rates      = delta%rates      - before%rates
-    delta%screening  = delta%screening  - before%screening
+    delta = get_timing()
+    delta%evolve           = delta%evolve           - before%evolve
+    delta%solve            = delta%solve            - before%solve
+    delta%jacobian         = delta%jacobian         - before%jacobian
+    delta%derivative       = delta%derivative       - before%derivative
+    delta%rates            = delta%rates            - before%rates
+    delta%screening        = delta%screening        - before%screening
+    delta%timestep         = delta%timestep         - before%timestep
+    delta%newton           = delta%newton           - before%newton
+    delta%decomposition    = delta%decomposition    - before%decomposition
+    delta%backsubstitution = delta%backsubstitution - before%backsubstitution
+    delta%prescreening     = delta%prescreening     - before%prescreening
+    delta%eos              = delta%eos              - before%eos
+    delta%output           = delta%output           - before%output
 
     Return
-  End Function elapsed_timing
+  End Function get_timing_since
 
 End Module xnet_api

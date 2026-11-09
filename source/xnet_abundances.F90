@@ -9,7 +9,7 @@ Module xnet_abundances
   !-------------------------------------------------------------------------------------------------
   ! This module contains the abundances of the nuclear species, at the previous time (yo), current
   ! time (y), and trial time (yt), as well as the time derivatives (ydot), at the trial time. The
-  ! size of these arrays is allocated in an external routine, where the initial values are set.
+  ! storage and persistent device mappings are managed by abundances_initialize/finalize.
   !-------------------------------------------------------------------------------------------------
   Use xnet_types, Only: dp
   Implicit None
@@ -32,14 +32,20 @@ Module xnet_abundances
 Contains
 
   Subroutine abundances_initialize
-    ! Allocate the reusable abundance workspace after the network size is known.
+    !-----------------------------------------------------------------------------------------------
+    ! Allocate and zero the reusable abundance workspace, then establish its device mappings.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: nzevolve
+    Use xnet_controls, Only: nzevolve, gpu_queue
     Implicit None
     Allocate (y(ny,nzevolve),yo(ny,nzevolve),yt(ny,nzevolve),ydot(ny,nzevolve),ystart(ny,nzevolve))
     Allocate (xext(nzevolve),aext(nzevolve),zext(nzevolve))
     y = 0.0 ; yo = 0.0 ; yt = 0.0 ; ydot = 0.0 ; ystart = 0.0
     xext = 0.0 ; aext = 0.0 ; zext = 0.0
+
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
+    !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext)
+    !XDIR XWAIT(gpu_queue)
     Return
   End Subroutine abundances_initialize
 
@@ -197,16 +203,24 @@ Contains
   End Subroutine y_moment_vector
 
   Subroutine abundances_finalize
-    ! Release XNet-owned CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Release persistent device mappings before their owning CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: gpu_queue
     Implicit None
-    If ( Allocated(ystart) ) Deallocate (ystart)
-    If ( Allocated(yo) ) Deallocate (yo)
-    If ( Allocated(y) ) Deallocate (y)
-    If ( Allocated(yt) ) Deallocate (yt)
-    If ( Allocated(ydot) ) Deallocate (ydot)
-    If ( Allocated(xext) ) Deallocate (xext)
-    If ( Allocated(aext) ) Deallocate (aext)
-    If ( Allocated(zext) ) Deallocate (zext)
+    If ( allocated(y) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    If ( allocated(ystart) ) Deallocate (ystart)
+    If ( allocated(yo) ) Deallocate (yo)
+    If ( allocated(y) ) Deallocate (y)
+    If ( allocated(yt) ) Deallocate (yt)
+    If ( allocated(ydot) ) Deallocate (ydot)
+    If ( allocated(xext) ) Deallocate (xext)
+    If ( allocated(aext) ) Deallocate (aext)
+    If ( allocated(zext) ) Deallocate (zext)
     Return
   End Subroutine abundances_finalize
 

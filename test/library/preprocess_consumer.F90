@@ -11,7 +11,7 @@ Program preprocess_consumer
   Character(80) :: data_dir, bad_dir, filename
   Character(512) :: message
   Character :: first_byte, marker
-  Integer :: ierr, iteration, missing, unit, ids(3,1), counters(5,1), steps, species(3)
+  Integer :: ierr, iteration, missing, unit, ids(4,1), counters(5,1), steps, species(3)
   Real(dp) :: density(1), temperature(1), ye(1), restart(1), loss(1), aux_x(1), aux_a(1), aux_z(1)
   Real(dp), Allocatable :: x(:,:)
   Logical :: exists
@@ -78,7 +78,7 @@ Program preprocess_consumer
 
     Allocate(x(Size(network%names),1))
     Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
-    ids(:,1) = [iteration,-7,42]
+    ids(:,1) = [iteration,-7,42,0]
     Call xnet_burn_batch(0.01_dp,[.true.],ids,density,temperature,ye,x,restart,loss,counters,timing, &
       & ierr,message,aux_x,aux_a,aux_z,steps)
     Call check(ierr == xnet_success .and. steps > 0,'burn after runtime preprocessing')

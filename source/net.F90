@@ -17,30 +17,31 @@ Program net
   !-------------------------------------------------------------------------------------------------
   ! This is the driver for running XNet
   !-------------------------------------------------------------------------------------------------
-  Use nuclear_data, Only: ny, aa, zz, nname, index_from_name, read_nuclear_data
+  Use nuclear_data, Only: ny, nname, index_from_name, read_nuclear_data
 !$ Use omp_lib
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, parallel_nprocs, &
     & parallel_IOProcessor
   Use reaction_data, Only: read_reaction_data
-  Use xnet_abundances, Only: ystart, yo, y, yt, ydot, xext, zext, aext, abundances_initialize
+  Use xnet_abundances, Only: ystart, yo, y, yt, ydot, xext, zext, aext, abundances_initialize, abundances_finalize
   Use xnet_conditions, Only: t, tt, to, tdel, tdel_next, tdel_old, t9t, rhot, yet, t9, rho, ye, &
     & t9o, rhoo, yeo, t9dot, cv, etae, detaedt9, nt, ntt, nto, ints, intso, nstart, tstart, tstop, &
-    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind, conditions_initialize
-  Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
-    & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
-    & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
-    & lun_diag, lun_ev, lun_stdout, lun_ts, tid, gpu_queue, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
-    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls, iaux
+    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind, &
+    & conditions_initialize, conditions_finalize
+  Use xnet_controls, Only: idiag, inucout, iprocess, isolv, itsout, nnucout, output_nuc, szone, nzone, zone_id, &
+    & kstmx, ev_file_base, bin_file_base, thermo_file, inab_file, lun_diag, lun_stdout, tid, gpu_queue, nthread, &
+    & nzevolve, nzbatchmx, nzbatch, szbatch, zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, &
+    & read_controls, write_controls, iaux
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
-  Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
+  Use xnet_flux, Only: flx_int, flux_init
   Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_integrate_bdf, Only: bdf_init
   Use xnet_integrate_be, Only: be_init
   Use xnet_jacobian, Only: read_jacobian_data
   Use xnet_match, Only: mflx, nflx, read_match_data
-  Use xnet_nnu, Only: nnuspec, tmevnu, fluxcms
+  Use xnet_nnu, Only: nnu_initialize, nnu_finalize
   Use xnet_nse, Only: nse_initialize
+  Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
   Use xnet_preprocess, Only: net_preprocess
   Use xnet_screening, Only: screening_init
   Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_setup
@@ -68,7 +69,6 @@ Program net
   ! Filenames
   Character(80) :: ev_file, bin_file, diag_file
   Character(80) :: diag_file_base = 'net_diag'
-  Character(25) :: ev_header_format
 
   ! Identify number of MPI nodes and ID number for this PE
   Call parallel_initialize()
@@ -177,8 +177,7 @@ Program net
 
   Call abundances_initialize
   Call conditions_initialize(nhmx)
-  Allocate (tmevnu(nhmx,nnuspec,nzevolve),fluxcms(nhmx,nnuspec,nzevolve))
-  tmevnu = 0.0 ; fluxcms = 0.0
+  Call nnu_initialize(nhmx)
 
   ! Allocate zone description arrays
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
@@ -188,11 +187,6 @@ Program net
   denu = 0.0
 
   !XDIR XENTER_DATA XASYNC(gpu_queue) &
-  !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext) &
-  !XDIR XCOPYIN(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
-  !XDIR XCOPYIN(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
-  !XDIR XCOPYIN(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-  !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
   !XDIR XCOPYIN(denu)
 
   !XDIR XWAIT(gpu_queue)
@@ -257,9 +251,7 @@ Program net
       rho(izb)  = rhostart(izb)
       ye(izb)   = yestart(izb)
       y(:,izb)  = ystart(:,izb)
-      zone_id(1,izb)=izb
-      zone_id(2,izb)=1
-      zone_id(3,izb)=1
+      zone_id(:,izb) = [izb,1,1,0]
     EndDo
 
     If ( itsout > 0 ) Then
@@ -273,23 +265,8 @@ Program net
           If ( itsout >= 1 ) Then
             bin_file = trim(bin_file_base)
             Call name_ordered(bin_file,izone,nzone)
-            Open(newunit=lun_ts(izb), file=bin_file, form='unformatted', action='write')
-
-            ! Write Control Parameters to ts file
-            Write(lun_ts(izb)) (descript(i),i=1,3),data_desc
-            Write(lun_ts(izb)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
-
-            ! Write abundance description to ts file
-            Write(lun_ts(izb)) inab_file(izone),abund_desc(izb)
-
-            ! Write thermo description to ts file
-            Write(lun_ts(izb)) thermo_file(izone),thermo_desc(izb)
-
-            ! Write species identifiers to ts file
-            Write(lun_ts(izb)) ny,zz,aa
-
-            ! Write flux identifiers to ts file
-            Write(lun_ts(izb)) mflx,ifl_orig,ifl_term
+            Call open_ts_file(izb,bin_file,data_desc,inab_file(izone),abund_desc(izb), &
+              & thermo_file(izone),thermo_desc(izb),status='unknown')
           EndIf
 
           ! Open the evolution file
@@ -298,13 +275,7 @@ Program net
             Call name_ordered(ev_file,izone,nzone)
             If ( idiag >= 0 ) Write(lun_diag,"(a,i5,7es10.3)") trim(ev_file), &
               & nh(izb),th(nh(izb),izb),t9h(nh(izb),izb),rhoh(nh(izb),izb),tstart(izb),tstop(izb)
-            Open(newunit=lun_ev(izb), file=ev_file, action='write')
-
-            ! Write evolution file header
-            ev_header_format = '(a4,a15,5a10,a4)'
-            If ( nnucout > 0 ) ev_header_format = '(a4,a15,5a10,'//Trim(nnucout_string)//'a9,a4)'
-            Write(lun_ev(izb),ev_header_format) &
-              & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout), ' It '
+            Call open_ev_file(izb,ev_file,status='unknown')
           EndIf
         EndIf
       EndDo
@@ -342,12 +313,7 @@ Program net
     EndIf
 
     ! Close zone output files
-    Do izb = zb_lo, zb_hi
-      If ( lzactive(izb) ) Then
-        If (itsout >= 2 ) Close(lun_ev(izb))
-        If (itsout >= 1 ) Close(lun_ts(izb))
-      EndIf
-    EndDo
+    Call close_output_files
   EndDo
   !$omp end do
 
@@ -358,14 +324,13 @@ Program net
 #endif
 
   !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-  !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
-  !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
-  !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
-  !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-  !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
   !XDIR XDELETE(denu)
 
   !XDIR XWAIT(gpu_queue)
+
+  Call nnu_finalize
+  Call abundances_finalize
+  Call conditions_finalize
 
   Call gpu_finalize()
 

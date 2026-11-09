@@ -12,7 +12,7 @@
 #include "xnet_macros.fh"
 
 Module xnet_gpu
-  Use, Intrinsic :: iso_c_binding, Only: C_Associated, C_INT, C_LOC, C_LONG_LONG, C_NULL_PTR, &
+  Use, Intrinsic :: iso_c_binding, Only: c_associated, C_INT, c_loc, C_LONG_LONG, C_NULL_PTR, &
     & C_PTR, C_SIZE_T
   Use xnet_controls, Only: gpu_queue, lun_stdout, myid, tid
   Use xnet_types, Only: dp
@@ -125,7 +125,7 @@ Module xnet_gpu
   !-------------------------------------------------------------------------------------------------
   Integer(C_INT), Public :: deviceCount = 0
   Integer, Public :: mydevice = -1            ! Nonnegative while any thread still holds resources
-  Type(C_PTR), Pointer, Public :: stream => Null()
+  Type(C_PTR), Pointer, Public :: stream => null()
 
   ! Application-supplied GPU context for borrowing or creating streams and vendor handles.
   ! Fields unused by the active backend are ignored and never modified.
@@ -207,6 +207,7 @@ Contains
     ! - When gpu_context is present (embedded API mode): verifies the active application device,
     !   borrows any supplied stream/handles after checking stream consistency, and creates only the
     !   missing resources required by the active backend.
+    ! CPU builds create no GPU resources, ignore gpu_context, and return success.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -234,7 +235,7 @@ Contains
       Return
     EndIf
 
-    If ( Present(gpu_context) ) Then
+    If ( present(gpu_context) ) Then
       Call validate_embedded_device(gpu_context,device,init_status,init_message)
     Else
       Call select_standalone_device(device,init_status,init_message)
@@ -246,7 +247,7 @@ Contains
     EndIf
 
 #ifdef XNET_OMP
-    !$omp parallel if(.not. Present(gpu_context)) default(shared)
+    !$omp parallel if(.not. present(gpu_context)) default(shared)
 #endif
     Call init_thread_resources(device,gpu_context,init_status,init_message)
 #ifdef XNET_OMP
@@ -257,13 +258,10 @@ Contains
     If ( init_status /= 0 ) Then
       ! Roll back after the team joins; failed handles retain their stream and ownership.
       Call gpu_finalize(cleanup_status,cleanup_message)
-      If ( cleanup_status /= 0 ) init_message = Trim(init_message)//'; '//Trim(cleanup_message)
+      If ( cleanup_status /= 0 ) init_message = trim(init_message)//'; '//trim(cleanup_message)
     EndIf
 #else
-    If ( Present(gpu_context) ) Then
-      init_status = 3
-      init_message = 'GPU resources require a GPU-enabled build'
-    Else
+    If ( .not. present(gpu_context) ) Then
       mydevice = -1
       deviceCount = 0
 #ifdef XNET_OMP
@@ -286,6 +284,7 @@ Contains
     ! Synchronize the active stream and release XNet-owned GPU handles and streams.
     ! Borrowed application handles and streams are preserved untouched. If any vendor destructor
     ! fails, surviving state remains marked initialized so the caller can retry gpu_finalize.
+    ! CPU builds have no GPU resources to release and return success.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -334,6 +333,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Verify that GPU resources are initialized on the calling thread and that both the vendor
     ! runtime and directive runtime still select the device recorded at initialization.
+    ! CPU builds have no GPU device state to check and return success.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -344,6 +344,7 @@ Contains
     ! Local variables
     Integer :: device
 
+#if defined(XNET_GPU)
     ierr = 2
     message = ' '
     If ( .not. gpu_initialized ) Then
@@ -356,6 +357,10 @@ Contains
       ierr = 1
       message = 'The GPU device changed while XNet was initialized'
     EndIf
+#else
+    ierr = 0
+    message = ' '
+#endif
 
     Return
   End Subroutine gpu_check_device
@@ -442,9 +447,9 @@ Contains
     ierr = cudaStreamSynchronize(stream)
 #elif defined(XNET_HIP)
     ierr = hipStreamSynchronize(stream)
-    If ( .not. Present(ierr_out) ) Call hipCheck(ierr)
+    If ( .not. present(ierr_out) ) Call hipCheck(ierr)
 #endif
-    If ( Present(ierr_out) ) ierr_out = ierr
+    If ( present(ierr_out) ) ierr_out = ierr
 
     Return
   End Subroutine stream_sync
@@ -457,11 +462,11 @@ Contains
     Integer, Target, Intent(in) :: a
 
 #if defined(XNET_OMP_OL)
-    dev_ptr_int = omp_get_mapped_ptr(C_LOC(a),omp_get_default_device())
+    dev_ptr_int = omp_get_mapped_ptr(c_loc(a),omp_get_default_device())
 #else
     !XDIR XHOST_DATA &
     !XDIR XDEV_PTR(a)
-    dev_ptr_int = C_LOC(a)
+    dev_ptr_int = c_loc(a)
     !XDIR XEND_HOST_DATA
 #endif
 
@@ -476,11 +481,11 @@ Contains
     Real(dp), Target, Intent(in) :: a
 
 #if defined(XNET_OMP_OL)
-    dev_ptr_dp = omp_get_mapped_ptr(C_LOC(a),omp_get_default_device())
+    dev_ptr_dp = omp_get_mapped_ptr(c_loc(a),omp_get_default_device())
 #else
     !XDIR XHOST_DATA &
     !XDIR XDEV_PTR(a)
-    dev_ptr_dp = C_LOC(a)
+    dev_ptr_dp = c_loc(a)
     !XDIR XEND_HOST_DATA
 #endif
 
@@ -495,11 +500,11 @@ Contains
     Type(C_PTR), Target, Intent(in) :: a
 
 #if defined(XNET_OMP_OL)
-    dev_ptr_cptr = omp_get_mapped_ptr(C_LOC(a),omp_get_default_device())
+    dev_ptr_cptr = omp_get_mapped_ptr(c_loc(a),omp_get_default_device())
 #else
     !XDIR XHOST_DATA &
     !XDIR XDEV_PTR(a)
-    dev_ptr_cptr = C_LOC(a)
+    dev_ptr_cptr = c_loc(a)
     !XDIR XEND_HOST_DATA
 #endif
 
@@ -524,9 +529,9 @@ Contains
     Integer, Optional, Intent(out) :: ierr
     Character(*), Optional, Intent(out) :: message
 
-    If ( Present(ierr) ) ierr = status_in
-    If ( Present(message) ) message = message_in
-    If ( status_in /= 0 .and. .not. Present(ierr) ) Call xnet_terminate(Trim(message_in),status_in)
+    If ( present(ierr) ) ierr = status_in
+    If ( present(message) ) message = message_in
+    If ( status_in /= 0 .and. .not. present(ierr) ) Call xnet_terminate(trim(message_in),status_in)
 
     Return
   End Subroutine report_gpu_status
@@ -583,10 +588,10 @@ Contains
     Implicit None
     Type(C_PTR), Intent(in) :: ptr_a, ptr_b
 
-    If ( C_Associated(ptr_a) .and. C_Associated(ptr_b) ) Then
-      same_c_ptr = C_Associated(ptr_a,ptr_b)
+    If ( c_associated(ptr_a) .and. c_associated(ptr_b) ) Then
+      same_c_ptr = c_associated(ptr_a,ptr_b)
     Else
-      same_c_ptr = ( .not. C_Associated(ptr_a) .and. .not. C_Associated(ptr_b) )
+      same_c_ptr = ( .not. c_associated(ptr_a) .and. .not. c_associated(ptr_b) )
     EndIf
 
     Return
@@ -654,11 +659,11 @@ Contains
       message = 'No GPU found'
       Return
     EndIf
-    device = Mod(myid,deviceCount)
+    device = mod(myid,deviceCount)
 #if defined(XNET_CUDA)
-    status = cudaSetDevice(Int(device,C_INT))
+    status = cudaSetDevice(int(device,C_INT))
 #elif defined(XNET_HIP)
-    status = hipSetDevice(Int(device,C_INT))
+    status = hipSetDevice(int(device,C_INT))
 #endif
     If ( status /= 0 ) Then
       ierr = 1
@@ -700,10 +705,10 @@ Contains
 
     thread_status = 0
     thread_message = ' '
-    If ( .not. C_Associated(handle) ) Return
+    If ( .not. c_associated(handle) ) Return
     If ( query_status /= 0 ) Then
       thread_status = 1
-      Write(thread_message,'(A,I0)') 'Cannot query the supplied '//Trim(label)//' stream, status ',query_status
+      Write(thread_message,'(A,I0)') 'Cannot query the supplied '//trim(label)//' stream, status ',query_status
       Return
     EndIf
     If ( .not. stream_known ) Then
@@ -712,7 +717,7 @@ Contains
     EndIf
     If ( .not. same_c_ptr(handle_stream,work_stream) ) Then
       thread_status = 1
-      thread_message = 'Supplied '//Trim(label)//' handle and GPU stream do not match'
+      thread_message = 'Supplied '//trim(label)//' handle and GPU stream do not match'
     EndIf
 
     Return
@@ -783,10 +788,10 @@ Contains
         Exit setup
       EndIf
 
-      If ( Present(gpu_context) ) Then
+      If ( present(gpu_context) ) Then
         queue = gpu_context%queue
         work_stream = gpu_context%stream
-        stream_known = C_Associated(work_stream)
+        stream_known = c_associated(work_stream)
 #if defined(XNET_CUDA)
         work_cublas = gpu_context%cublas_handle
         work_cusolver = gpu_context%cusolver_handle
@@ -798,9 +803,9 @@ Contains
       Else
         ! Vendor device selection is per host thread; all standalone threads use the rank device.
 #if defined(XNET_CUDA)
-        status = cudaSetDevice(Int(device,C_INT))
+        status = cudaSetDevice(int(device,C_INT))
 #elif defined(XNET_HIP)
-        status = hipSetDevice(Int(device,C_INT))
+        status = hipSetDevice(int(device,C_INT))
 #endif
         If ( status /= 0 ) Then
           thread_status = 1
@@ -808,19 +813,19 @@ Contains
           Exit setup
         EndIf
 #if defined(XNET_OACC)
-        Call acc_set_device_num(Int(device,C_INT),acc_device_default)
+        Call acc_set_device_num(int(device,C_INT),acc_device_default)
 #elif defined(XNET_OMP_OL)
         Call omp_set_default_device(device)
 #endif
       EndIf
 
 #if defined(XNET_OACC)
-      If ( queue < Int(acc_async_sync) ) Then
+      If ( queue < int(acc_async_sync) ) Then
         thread_status = 1
         thread_message = 'Invalid OpenACC queue'
         Exit setup
       EndIf
-      handle_stream = acc_get_cuda_stream(Int(queue,C_LONG_LONG))
+      handle_stream = acc_get_cuda_stream(int(queue,C_LONG_LONG))
       If ( stream_known ) Then
         If ( .not. same_c_ptr(handle_stream,work_stream) ) Then
           thread_status = 1
@@ -835,32 +840,32 @@ Contains
       ! Validate every supplied handle before allocating any XNet resources.
       ! Without an explicit OpenMP stream, the first supplied handle supplies its stream.
 #if defined(XNET_CUDA)
-      If ( C_Associated(work_cublas) ) Then
+      If ( c_associated(work_cublas) ) Then
         status = cublasGetStream_v2(work_cublas,handle_stream)
         Call check_handle_stream(work_cublas,status,handle_stream,'cuBLAS', &
           & work_stream,stream_known,thread_status,thread_message)
         If ( thread_status /= 0 ) Exit setup
       EndIf
-      If ( C_Associated(work_cusolver) ) Then
+      If ( c_associated(work_cusolver) ) Then
         status = cusolverDnGetStream(work_cusolver,handle_stream)
         Call check_handle_stream(work_cusolver,status,handle_stream,'cuSOLVER', &
           & work_stream,stream_known,thread_status,thread_message)
         If ( thread_status /= 0 ) Exit setup
       EndIf
 #elif defined(XNET_HIP)
-      If ( C_Associated(work_hipblas) ) Then
+      If ( c_associated(work_hipblas) ) Then
         status = hipblasGetStream(work_hipblas,handle_stream)
         Call check_handle_stream(work_hipblas,status,handle_stream,'hipBLAS', &
           & work_stream,stream_known,thread_status,thread_message)
         If ( thread_status /= 0 ) Exit setup
       EndIf
-      If ( C_Associated(work_rocblas) ) Then
+      If ( c_associated(work_rocblas) ) Then
         status = rocblas_get_stream(work_rocblas,handle_stream)
         Call check_handle_stream(work_rocblas,status,handle_stream,'rocBLAS', &
           & work_stream,stream_known,thread_status,thread_message)
         If ( thread_status /= 0 ) Exit setup
       EndIf
-      If ( C_Associated(work_rocsolver) ) Then
+      If ( c_associated(work_rocsolver) ) Then
         status = rocblas_get_stream(work_rocsolver,handle_stream)
         Call check_handle_stream(work_rocsolver,status,handle_stream,'rocSOLVER', &
           & work_stream,stream_known,thread_status,thread_message)
@@ -885,7 +890,7 @@ Contains
 
       ! Create and bind any missing vendor library handles.
 #if defined(XNET_CUDA)
-      If ( .not. C_Associated(work_cublas) ) Then
+      If ( .not. c_associated(work_cublas) ) Then
         status = cublasCreate_v2(work_cublas)
         If ( status /= 0 ) Then
           thread_status = 1
@@ -900,7 +905,7 @@ Contains
           Exit setup
         EndIf
       EndIf
-      If ( .not. C_Associated(work_cusolver) ) Then
+      If ( .not. c_associated(work_cusolver) ) Then
         status = cusolverDnCreate(work_cusolver)
         If ( status /= 0 ) Then
           thread_status = 1
@@ -916,7 +921,7 @@ Contains
         EndIf
       EndIf
 #elif defined(XNET_HIP)
-      If ( .not. C_Associated(work_hipblas) ) Then
+      If ( .not. c_associated(work_hipblas) ) Then
         status = hipblasCreate(work_hipblas)
         If ( status /= 0 ) Then
           thread_status = 1
@@ -931,7 +936,7 @@ Contains
           Exit setup
         EndIf
       EndIf
-      If ( .not. C_Associated(work_rocblas) ) Then
+      If ( .not. c_associated(work_rocblas) ) Then
         status = rocblas_create_handle(work_rocblas)
         If ( status /= 0 ) Then
           thread_status = 1
@@ -947,12 +952,12 @@ Contains
         EndIf
       EndIf
       ! rocSOLVER accepts a rocBLAS handle; the default alias shares rocblas_handle without a separate destroy.
-      If ( .not. C_Associated(work_rocsolver) ) work_rocsolver = work_rocblas
+      If ( .not. c_associated(work_rocsolver) ) work_rocsolver = work_rocblas
 #endif
 
 #if defined(XNET_LA_MAGMA)
-      Call magma_queue_create_from_cuda(Int(device,C_INT),work_stream,work_cublas,C_NULL_PTR,work_magma_queue)
-      If ( .not. C_Associated(work_magma_queue) ) Then
+      Call magma_queue_create_from_cuda(int(device,C_INT),work_stream,work_cublas,C_NULL_PTR,work_magma_queue)
+      If ( .not. c_associated(work_magma_queue) ) Then
         thread_status = 1
         thread_message = 'Cannot create the XNet MAGMA queue'
         Exit setup
@@ -1002,9 +1007,9 @@ Contains
       owns_rocblas = create_rocblas
 #endif
 #if defined(XNET_OACC)
-      If ( init_status == 0 .and. .not. Present(gpu_context) ) Then
-        acc_queue = Int(queue,C_LONG_LONG)
-        Call acc_set_cuda_stream(Int(acc_async_sync,C_LONG_LONG),work_stream)
+      If ( init_status == 0 .and. .not. present(gpu_context) ) Then
+        acc_queue = int(queue,C_LONG_LONG)
+        Call acc_set_cuda_stream(int(acc_async_sync,C_LONG_LONG),work_stream)
       EndIf
 #endif
 #if defined(XNET_LA_MAGMA)
@@ -1088,7 +1093,7 @@ Contains
         ! Compare local C pointers so CCE 20 does not reject direct comparison of imported handles.
         work_rocblas = rocblas_handle
         work_rocsolver = rocsolver_handle
-        If ( C_Associated(work_rocsolver,work_rocblas) ) rocsolver_handle = C_NULL_PTR
+        If ( c_associated(work_rocsolver,work_rocblas) ) rocsolver_handle = C_NULL_PTR
         rocblas_handle = C_NULL_PTR
         owns_rocblas = .false.
       Else

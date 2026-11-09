@@ -10,19 +10,19 @@ Module xnet_timers
   Use xnet_types, Only: dp
   Implicit None
   Real(dp) :: timer_burner = 0.0  ! Total burner execution time
-  Real(dp) :: timer_xnet   = 0.0  ! Total XNet execution time
+  Real(dp) :: timer_xnet   = 0.0  ! Evolution interval in full_net, before final_output
   Real(dp) :: timer_setup  = 0.0  ! Data loading or preprocessing time
   Real(dp) :: timer_csect  = 0.0  ! Cross section calculation time
   Real(dp) :: timer_deriv  = 0.0  ! Derivative calculation time
   Real(dp) :: timer_jacob  = 0.0  ! Jacobian building time
   Real(dp) :: timer_decmp  = 0.0  ! LU Decomposition time
   Real(dp) :: timer_bksub  = 0.0  ! Backsubstitution time
-  Real(dp) :: timer_nraph  = 0.0  ! Newton Raphson iteration timer
-  Real(dp) :: timer_tstep  = 0.0  ! Time integration step timer
+  Real(dp) :: timer_nraph  = 0.0  ! Newton iteration work within implicit solves
+  Real(dp) :: timer_tstep  = 0.0  ! Implicit timestep solves and retries
   Real(dp) :: timer_solve  = 0.0  ! Solution time
-  Real(dp) :: timer_scrn   = 0.0  ! Screening and EOS time
-  Real(dp) :: timer_prescrn = 0.0  ! Screening and EOS time
-  Real(dp) :: timer_eos    = 0.0  ! Screening and EOS time
+  Real(dp) :: timer_scrn   = 0.0  ! Screening factors, after plasma-state preparation
+  Real(dp) :: timer_prescrn = 0.0  ! Plasma-state preparation through eos_screen
+  Real(dp) :: timer_eos    = 0.0  ! Thermodynamic updates through update_eos
   Real(dp) :: timer_nse    = 0.0  ! NSE timer
   Real(dp) :: timer_nseinit= 0.0  ! NSE init timer
   Real(dp) :: timer_nsesolv= 0.0  ! NSE solver timer
@@ -30,9 +30,9 @@ Module xnet_timers
   Real(dp) :: timer_nsels  = 0.0  ! NSE line search timer
   Real(dp) :: timer_nseeval= 0.0  ! NSE function evaluation timer
   Real(dp) :: timer_nsescrn= 0.0  ! NSE screening timer
-  Real(dp) :: timer_output = 0.0  ! Output time
-  Real(dp) :: start_timer  = 0.0  ! cpu time at the beginning of the timer block
-  Real(dp) :: stop_timer   = 0.0  ! cpu time at the end of the timer block
+  Real(dp) :: timer_output = 0.0  ! Timed sections of ts_output and final_output
+  Real(dp) :: start_timer  = 0.0  ! Wall-clock timestamp at the beginning of the timer block
+  Real(dp) :: stop_timer   = 0.0  ! Wall-clock timestamp at the end of the timer block
 #ifdef XNET_OMP
   !$omp threadprivate(timer_burner,timer_xnet,timer_setup,timer_csect,timer_deriv,timer_jacob,timer_decmp, &
   !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_prescrn,timer_eos,timer_output, &

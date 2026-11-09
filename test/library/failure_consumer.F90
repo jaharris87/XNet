@@ -10,21 +10,18 @@ Program failure_consumer
   Type(xnet_controls_t) :: controls
   Type(xnet_network_t) :: network
   Type(xnet_timing_t) :: timing
-  Integer :: ierr, solver, nids, expected, ids(4,lanes), counters(5,lanes), max_steps_taken
+  Integer :: ierr, solver, expected, ids(4,lanes), counters(5,lanes), max_steps_taken
   Character(80) :: data_dir, argument, mode
   Character(512) :: message
   Logical :: active(lanes)
   Real(dp) :: density(lanes), temperature(lanes), ye(lanes), restart(lanes), loss(lanes)
-  Real(dp) :: aux_x(lanes), aux_a(lanes), aux_z(lanes), times(6)
+  Real(dp) :: aux_x(lanes), aux_a(lanes), aux_z(lanes), times(13)
   Real(dp), Allocatable :: x(:,:)
 
   Call Get_Command_Argument(1,data_dir)
   Call Get_Command_Argument(2,argument)
   Read(argument,*) solver
   Call Get_Command_Argument(3,mode)
-  Call Get_Command_Argument(4,argument)
-  Read(argument,*) nids
-  Call check(nids == 3 .or. nids == 4,'identifier count')
   Call set_xnet_controls_defaults(controls)
   controls%data_dir = data_dir
   controls%nzbatchmx = lanes+1
@@ -62,22 +59,23 @@ Program failure_consumer
   ids = 0
   ids(:,2) = [101,-7,9001,42]
   max_steps_taken = -1
-  Call xnet_burn_batch(0.1_dp,active,ids(:nids,:),density,temperature,ye,x,restart, &
+  Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart, &
     & loss,counters,timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken)
   Write(*,'(a,i0,2a)') 'BURN_STATUS ',ierr,' ',Trim(message)
   Call check(ierr == expected,'expected numerical failure returned to host')
   Call check(max_steps_taken == 0,'numerical failure clears accepted step count')
-  Call check(Index(message,'Zone 2, zone IDs [101 -7 9001') == 1,'submitted active zone and original IDs')
-  If ( nids == 4 ) Call check(Index(message,'9001 42]') > 0,'fourth original ID')
+  Call check(Index(message,'Zone 2, zone_id [i,j,k,block] = [101 -7 9001 42]') == 1,'submitted active zone and original IDs')
   Call check(Index(message,'host must terminate') > 0,'fatal host policy')
   Call check(All(counters(:,2) > 0),'attempted active counters')
   Call check(All(counters(:,1) == 0) .and. All(counters(:,3) == 0),'inactive counters')
   If ( mode == 'integrator' ) Call check(counters(1,2) > 1,'internal timestep retries exercised')
-  times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
+  times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening, &
+    & timing%timestep,timing%newton,timing%decomposition,timing%backsubstitution, &
+    & timing%prescreening,timing%eos,timing%output]
   Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),'completed attempted timing')
   Call check(timing%evolve > 0.0_dp,'evolution timer closed')
   Write(*,'(a,5(1x,i0))') 'ATTEMPTED_COUNTERS',counters(:,2)
-  Write(*,'(a,6(1x,es26.17e3))') 'ATTEMPTED_TIMING',times
+  Write(*,'(a,13(1x,es26.17e3))') 'ATTEMPTED_TIMING',times
   ! Do not inspect physical outputs, retry, or reuse this failed library instance.
   Deallocate (x)
   Write(*,'(a)') 'HOST_RECEIVED_FATAL_BURN'

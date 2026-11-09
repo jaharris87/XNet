@@ -48,8 +48,11 @@ Module xnet_conditions
 Contains
 
   Subroutine conditions_initialize(history_capacity)
+    !-----------------------------------------------------------------------------------------------
     ! The standalone driver needs full histories; constant-condition callers need two endpoints.
-    Use xnet_controls, Only: nzevolve
+    ! Allocate and initialize condition storage, then establish its persistent device mappings.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: nzevolve, gpu_queue
     Implicit None
     Integer, Intent(in) :: history_capacity
     Allocate (tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
@@ -73,6 +76,13 @@ Contains
     nstart = 0 ; tstart = 0.0 ; tstop = 0.0 ; tdelstart = 0.0
     t9start = 0.0 ; rhostart = 0.0 ; yestart = 0.0 ; nh = 0
     th = 0.0 ; t9h = 0.0 ; rhoh = 0.0 ; yeh = 0.0
+
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
+    !XDIR XCOPYIN(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
+    !XDIR XCOPYIN(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
+    !XDIR XCOPYIN(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
+    !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh)
+    !XDIR XWAIT(gpu_queue)
     Return
   End Subroutine conditions_initialize
 
@@ -182,44 +192,55 @@ Contains
   End Subroutine t9rhofind_vector
 
   Subroutine conditions_finalize
-    ! Release XNet-owned CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Release persistent device mappings before their owning CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: gpu_queue
     Implicit None
-    If ( Allocated(t) ) Deallocate (t)
-    If ( Allocated(tt) ) Deallocate (tt)
-    If ( Allocated(to) ) Deallocate (to)
-    If ( Allocated(tdel) ) Deallocate (tdel)
-    If ( Allocated(tdel_next) ) Deallocate (tdel_next)
-    If ( Allocated(tdel_old) ) Deallocate (tdel_old)
-    If ( Allocated(t9t) ) Deallocate (t9t)
-    If ( Allocated(rhot) ) Deallocate (rhot)
-    If ( Allocated(yet) ) Deallocate (yet)
-    If ( Allocated(t9) ) Deallocate (t9)
-    If ( Allocated(rho) ) Deallocate (rho)
-    If ( Allocated(ye) ) Deallocate (ye)
-    If ( Allocated(t9o) ) Deallocate (t9o)
-    If ( Allocated(rhoo) ) Deallocate (rhoo)
-    If ( Allocated(yeo) ) Deallocate (yeo)
-    If ( Allocated(t9dot) ) Deallocate (t9dot)
-    If ( Allocated(cv) ) Deallocate (cv)
-    If ( Allocated(etae) ) Deallocate (etae)
-    If ( Allocated(detaedt9) ) Deallocate (detaedt9)
-    If ( Allocated(nt) ) Deallocate (nt)
-    If ( Allocated(ntt) ) Deallocate (ntt)
-    If ( Allocated(nto) ) Deallocate (nto)
-    If ( Allocated(ints) ) Deallocate (ints)
-    If ( Allocated(intso) ) Deallocate (intso)
-    If ( Allocated(nh) ) Deallocate (nh)
-    If ( Allocated(nstart) ) Deallocate (nstart)
-    If ( Allocated(tstart) ) Deallocate (tstart)
-    If ( Allocated(tstop) ) Deallocate (tstop)
-    If ( Allocated(tdelstart) ) Deallocate (tdelstart)
-    If ( Allocated(t9start) ) Deallocate (t9start)
-    If ( Allocated(rhostart) ) Deallocate (rhostart)
-    If ( Allocated(yestart) ) Deallocate (yestart)
-    If ( Allocated(th) ) Deallocate (th)
-    If ( Allocated(t9h) ) Deallocate (t9h)
-    If ( Allocated(rhoh) ) Deallocate (rhoh)
-    If ( Allocated(yeh) ) Deallocate (yeh)
+    If ( allocated(t) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
+      !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
+      !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
+      !XDIR XDELETE(nh,th,t9h,rhoh,yeh)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    If ( allocated(t) ) Deallocate (t)
+    If ( allocated(tt) ) Deallocate (tt)
+    If ( allocated(to) ) Deallocate (to)
+    If ( allocated(tdel) ) Deallocate (tdel)
+    If ( allocated(tdel_next) ) Deallocate (tdel_next)
+    If ( allocated(tdel_old) ) Deallocate (tdel_old)
+    If ( allocated(t9t) ) Deallocate (t9t)
+    If ( allocated(rhot) ) Deallocate (rhot)
+    If ( allocated(yet) ) Deallocate (yet)
+    If ( allocated(t9) ) Deallocate (t9)
+    If ( allocated(rho) ) Deallocate (rho)
+    If ( allocated(ye) ) Deallocate (ye)
+    If ( allocated(t9o) ) Deallocate (t9o)
+    If ( allocated(rhoo) ) Deallocate (rhoo)
+    If ( allocated(yeo) ) Deallocate (yeo)
+    If ( allocated(t9dot) ) Deallocate (t9dot)
+    If ( allocated(cv) ) Deallocate (cv)
+    If ( allocated(etae) ) Deallocate (etae)
+    If ( allocated(detaedt9) ) Deallocate (detaedt9)
+    If ( allocated(nt) ) Deallocate (nt)
+    If ( allocated(ntt) ) Deallocate (ntt)
+    If ( allocated(nto) ) Deallocate (nto)
+    If ( allocated(ints) ) Deallocate (ints)
+    If ( allocated(intso) ) Deallocate (intso)
+    If ( allocated(nh) ) Deallocate (nh)
+    If ( allocated(nstart) ) Deallocate (nstart)
+    If ( allocated(tstart) ) Deallocate (tstart)
+    If ( allocated(tstop) ) Deallocate (tstop)
+    If ( allocated(tdelstart) ) Deallocate (tdelstart)
+    If ( allocated(t9start) ) Deallocate (t9start)
+    If ( allocated(rhostart) ) Deallocate (rhostart)
+    If ( allocated(yestart) ) Deallocate (yestart)
+    If ( allocated(th) ) Deallocate (th)
+    If ( allocated(t9h) ) Deallocate (t9h)
+    If ( allocated(rhoh) ) Deallocate (rhoh)
+    If ( allocated(yeh) ) Deallocate (yeh)
     Return
   End Subroutine conditions_finalize
 

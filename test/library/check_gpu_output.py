@@ -121,7 +121,7 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
             trace = binary(directory / filename)
             require(trace["a"] == a and trace["z"] == z and trace["ny"] == len(names),
                     f"nuclear metadata mismatch: {filename}")
-            zone_id = (101, 7, 11) if label.endswith("_short_allocation") else (lane, 7, 11)
+            zone_id = (101, 7, 11, 0) if label.endswith("_short_allocation") else (lane, 7, 11, 0)
             require(trace.get("zone_id") == zone_id, f"zone ID/lane mismatch: {filename}")
             require(trace["controls"][-2:] == (heat, solver) and
                     b"Mass fractions in XNet species order" in trace["headers"][2] and

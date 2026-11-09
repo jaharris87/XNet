@@ -39,6 +39,23 @@ Module xnet_nnu
 
 Contains
 
+  Subroutine nnu_initialize(history_capacity)
+    !-----------------------------------------------------------------------------------------------
+    ! Allocate and zero neutrino histories, then establish their persistent device mappings.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: nzevolve, gpu_queue
+    Implicit None
+    Integer, Intent(in) :: history_capacity
+
+    Allocate (tmevnu(history_capacity,nnuspec,nzevolve),fluxcms(history_capacity,nnuspec,nzevolve))
+    tmevnu = 0.0_dp
+    fluxcms = 0.0_dp
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
+    !XDIR XCOPYIN(tmevnu,fluxcms)
+    !XDIR XWAIT(gpu_queue)
+    Return
+  End Subroutine nnu_initialize
+
   Subroutine read_nnu_data(nnnu,data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads the neutrino cross sections [in units of 10^-42 cm^2]
@@ -317,26 +334,32 @@ Contains
   End Subroutine nnu_rate
 
   Subroutine nnu_finalize
-    ! Release mappings established by nnu_match and read_reaction_data.
+    !-----------------------------------------------------------------------------------------------
+    ! Release persistent history and reaction-data mappings before their CPU allocations.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
-    If ( Allocated(irl) ) Then
+    If ( allocated(tmevnu) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(tmevnu,fluxcms)
+    EndIf
+    If ( allocated(irl) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(irl,nuspec)
     EndIf
-    If ( Allocated(sigmanu) ) Then
+    If ( allocated(sigmanu) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(sigmanu,ltnu,fluxnu,rnnu)
     EndIf
     !XDIR XWAIT(gpu_queue)
-    If ( Allocated(tmevnu) ) Deallocate (tmevnu)
-    If ( Allocated(fluxcms) ) Deallocate (fluxcms)
-    If ( Allocated(ltnu) ) Deallocate (ltnu)
-    If ( Allocated(fluxnu) ) Deallocate (fluxnu)
-    If ( Allocated(irl) ) Deallocate (irl)
-    If ( Allocated(nuspec) ) Deallocate (nuspec)
-    If ( Allocated(sigmanu) ) Deallocate (sigmanu)
-    If ( Allocated(rnnu) ) Deallocate (rnnu)
+    If ( allocated(tmevnu) ) Deallocate (tmevnu)
+    If ( allocated(fluxcms) ) Deallocate (fluxcms)
+    If ( allocated(ltnu) ) Deallocate (ltnu)
+    If ( allocated(fluxnu) ) Deallocate (fluxnu)
+    If ( allocated(irl) ) Deallocate (irl)
+    If ( allocated(nuspec) ) Deallocate (nuspec)
+    If ( allocated(sigmanu) ) Deallocate (sigmanu)
+    If ( allocated(rnnu) ) Deallocate (rnnu)
     Return
   End Subroutine nnu_finalize
 

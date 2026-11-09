@@ -20,6 +20,11 @@ provide no replacement solver, EOS, or provider routines. The first configuratio
 GNU Fortran with `EOS=STARKILLER`, `MATRIX_SOLVER=dense`, and MPI, OpenMP, and
 GPU disabled. Other configurations require their own evidence.
 
+Input-validation checks include nonfinite values, primary/auxiliary error
+precedence, and the first invalid active zone. The native GPU consumer also
+checks resident auxiliary NaNs and primary errors preceding auxiliary NaNs
+while keeping their host mirrors valid.
+
 An opt-in application OpenMP check runs real SN160 burns, NSE queries and two
 initialization/finalization cycles between application parallel regions. It
 checks actual two- and four-thread teams and verifies that XNet preserves the
@@ -108,8 +113,9 @@ Five cases exercise alpha BE with and without self-heating, alpha BDF without
 self-heating, and SN160 BE/BDF with self-heating and weak-reaction neutrino
 loss. Each runs a four-lane mask containing a hole, repeats the burn using
 its outputs, calls a short three-lane batch, and calls an all-inactive batch.
-It then omits optional auxiliaries and uses four-component diagnostic zone
-IDs; the earlier calls use three-component IDs. Positive and zero restart
+It then omits optional auxiliaries. Every call uses a four-component
+`[i,j,k,block]` diagnostic location; three- and five-component arrays are
+rejected by the validation checks. Positive and zero restart
 hints are supplied. The public caller finalizes twice, checks burns outside
 the initialized lifetime, reinitializes, and repeats its first burn.
 
@@ -157,7 +163,7 @@ changed. The step-limit cases use `kstmx=1`. These use the real integrators,
 not injected failure flags or replacement solvers.
 
 Each failure call uses a short batch with inactive holes, checks the returned
-reason and original three/four-component IDs for active zone two, and requires
+reason and original `[i,j,k,block]` location for active zone two, and requires
 attempted counters and finite completed timing. The process ends after the
 host receives the fatal error, without inspecting physical results or making
 another library call. The runner requires no successful final output or

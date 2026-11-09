@@ -1,6 +1,6 @@
 ! Only the resource calls are replaced; initialization and teardown use real XNet modules.
 Module xnet_gpu
-  Use, Intrinsic :: iso_c_binding, Only: C_PTR, C_SIZE_T, C_LOC
+  Use, Intrinsic :: iso_c_binding, Only: C_PTR, C_SIZE_T, C_LOC, C_NULL_PTR
   Use, Intrinsic :: iso_fortran_env, Only: real64
   Implicit None
   Type :: xnet_gpu_t
@@ -8,7 +8,13 @@ Module xnet_gpu
   End Type
   Integer :: mydevice = -1, init_calls = 0, finalize_calls = 0, failures_left = 0, init_failures_left = 0
   Logical :: active = .false., pending_on_init_failure = .true.
+  Type(C_PTR) :: stream = C_NULL_PTR
 Contains
+  Subroutine stream_sync(stream,ierr_out)
+    Type(C_PTR), Intent(in) :: stream
+    Integer, Optional, Intent(out) :: ierr_out
+    Error Stop 'Stream synchronization is not part of this host cleanup test'
+  End Subroutine
   Type(C_PTR) Function dev_ptr_int(a)
     Integer, Target, Intent(in) :: a
     dev_ptr_int = C_LOC(a)

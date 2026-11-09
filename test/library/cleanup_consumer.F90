@@ -9,7 +9,7 @@ Program cleanup_consumer
   Type(xnet_controls_t) :: controls
   Type(xnet_network_t) :: network, rejected_network
   Type(xnet_timing_t) :: timing
-  Integer :: ierr, ids(3,1), counters(5,1), calls
+  Integer :: ierr, ids(4,1), counters(5,1), calls
   Character(512) :: message
   Logical :: active(1)
   Real(dp) :: density(1), temperature(1), ye(1), restart(1), loss(1)

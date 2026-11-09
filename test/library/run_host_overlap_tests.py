@@ -17,11 +17,14 @@ from run_host_batch_openmp_tests import comparable, check_owners, differences, d
 
 def serialize_api(source: Path, destination: Path) -> None:
     text = source.read_text()
-    call = "    Call full_net(kstep,loss_work,evolve_status,failed_zone)"
-    require(text.splitlines().count(call) == 1,
+    calls = [line for line in text.splitlines()
+             if line.strip() == "Call full_net(kstep,loss_work,evolve_status,failed_zone)"]
+    require(len(calls) == 1,
             "serialization control requires exactly one preprocessed CPU full_net call")
-    destination.write_text(text.replace(call, "    !$omp critical(xnet_test_serialize_evolution)\n" + call +
-                                       "\n    !$omp end critical(xnet_test_serialize_evolution)"))
+    call = calls[0]
+    indent = call[:len(call) - len(call.lstrip())]
+    destination.write_text(text.replace(call, indent + "!$omp critical(xnet_test_serialize_evolution)\n" + call +
+                                       "\n" + indent + "!$omp end critical(xnet_test_serialize_evolution)"))
 
 
 def run_logged(argv: list[str], cwd: Path, log: Path, commands: list[dict], *, threads: int,

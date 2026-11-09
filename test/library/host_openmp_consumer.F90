@@ -12,7 +12,7 @@ Program host_openmp_consumer
   Type(xnet_network_t) :: network
   Type(xnet_timing_t) :: timing
   Integer :: expected_threads, ierr, cycle, j, max_steps_taken
-  Integer :: ids(3,lanes), counters(5,lanes), first_counters(5,lanes)
+  Integer :: ids(4,lanes), counters(5,lanes), first_counters(5,lanes)
   Character(80) :: data_dir
   Character(512) :: message
   Logical :: active(lanes)
@@ -36,7 +36,7 @@ Program host_openmp_consumer
   controls%t9nse = 11.0_dp
   controls%idiag = -2
   Do j = 1, lanes
-    ids(:,j) = (/ j,7,11 /)
+    ids(:,j) = [j,7,11,0]
   EndDo
 
   Do cycle = 1, 2

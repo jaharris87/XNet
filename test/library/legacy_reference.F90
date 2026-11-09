@@ -105,10 +105,11 @@ Program legacy_reference
     changemxt = 1.0e10_dp
   EndIf
 
-  Allocate(zone_id(3,nzevolve),lzactive(nzevolve),iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
+  Allocate(zone_id(4,nzevolve),lzactive(nzevolve),iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
   Allocate(kmon(5,nzevolve),ktot(5,nzevolve),inab_file(nzone),thermo_file(nzone))
   Allocate(output_nuc(nnucout),inucout(nnucout))
   zone_id = 1
+  zone_id(4,:) = 0
   lzactive = .false.
   iweak = iweak0
   lun_ev = 0
@@ -221,7 +222,7 @@ Contains
         aext(j) = auxiliary_a(j)
         zext(j) = auxiliary_z(j)
         iaux(j) = 1
-        zone_id(:,j) = [j,1,1]
+        zone_id(:,j) = [j,1,1,0]
         tstart(j) = 0.0_dp
         tstop(j) = duration
         tdelstart(j) = -restart(j)

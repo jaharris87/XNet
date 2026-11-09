@@ -143,9 +143,11 @@ Program host_batch_openmp_consumer
         & b,c,results(c,b)%owner,results(c,b)%team,results(c,b)%n,results(c,b)%nids,results(c,b)%dt,results(c,b)%active
       Write(*,'(a,1x,a,1x,i0)') 'STATUS',Trim(label),results(c,b)%status
       Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),results(c,b)%steps
-      Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),results(c,b)%timing%evolve, &
+      Write(*,'(a,1x,a,13(1x,es26.17e3))') 'TIMING',Trim(label),results(c,b)%timing%evolve, &
         & results(c,b)%timing%solve,results(c,b)%timing%jacobian,results(c,b)%timing%derivative, &
-        & results(c,b)%timing%rates,results(c,b)%timing%screening
+        & results(c,b)%timing%rates,results(c,b)%timing%screening,results(c,b)%timing%timestep, &
+        & results(c,b)%timing%newton,results(c,b)%timing%decomposition,results(c,b)%timing%backsubstitution, &
+        & results(c,b)%timing%prescreening,results(c,b)%timing%eos,results(c,b)%timing%output
       Write(*,'(a,1x,a,1x,a)') 'MESSAGE',Trim(label),Trim(results(c,b)%message)
       Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),results(c,b)%density
       Call write_state('input_'//Trim(label),results(c,b)%input_temperature,results(c,b)%input_ye, &
@@ -299,7 +301,7 @@ Contains
     Integer :: ids(4,lanes), counts(5,lanes), steps
     Real(dp) :: d(lanes), temp(lanes), ey(lanes), hint(lanes), loss(lanes), ax(lanes), aa(lanes), az(lanes)
     Real(dp), Allocatable :: x(:,:), saved_x(:,:), nse(:)
-    Real(dp) :: saved_temperature(lanes), saved_ye(lanes), saved_restart(lanes), times(6)
+    Real(dp) :: saved_temperature(lanes), saved_ye(lanes), saved_restart(lanes), times(13)
     Allocate(x(Size(network%names),lanes),saved_x(Size(network%names),lanes),nse(Size(network%names)))
     Call fixture_state(network%names,d,temp,ey,x,hint,ax,aa,az)
     saved_x = x
@@ -316,7 +318,10 @@ Contains
     r%level = omp_get_level()
     Call xnet_burn_batch(0.001_dp,active,ids,d,temp,ey,x,hint,loss,counts,probe_timing, &
       & r%burn_status,r%burn_message,ax,aa,az,steps)
-    times = [probe_timing%evolve,probe_timing%solve,probe_timing%jacobian,probe_timing%derivative,probe_timing%rates,probe_timing%screening]
+    times = [probe_timing%evolve,probe_timing%solve,probe_timing%jacobian,probe_timing%derivative, &
+      & probe_timing%rates,probe_timing%screening,probe_timing%timestep,probe_timing%newton, &
+      & probe_timing%decomposition,probe_timing%backsubstitution,probe_timing%prescreening, &
+      & probe_timing%eos,probe_timing%output]
     r%unchanged = All(x == saved_x) .and. All(temp == saved_temperature) .and. All(ey == saved_ye) .and. All(hint == saved_restart)
     r%cleared = All(loss == 0.0_dp) .and. All(counts == 0) .and. steps == 0 .and. All(times == 0.0_dp)
     nse = -777.0_dp
@@ -369,7 +374,7 @@ Contains
   Subroutine execute_batch(batch)
     Implicit None
     Integer, Intent(in) :: batch
-    Integer :: call_number, lane, n, nids
+    Integer :: call_number, lane, n
     Integer :: ids(4,lanes)
     Logical :: active(lanes)
     Real(dp) :: d(lanes), temp(lanes), ey(lanes), hint(lanes), loss(lanes), ax(lanes), aa(lanes), az(lanes)
@@ -384,7 +389,6 @@ Contains
     EndDo
     Do call_number = 1, Merge(1,calls,failure)
       n = lanes
-      nids = Merge(3,4,Mod(batch+call_number,2) == 0)
       active = .true.
       Select Case (call_number)
       Case (2)
@@ -401,7 +405,6 @@ Contains
       results(call_number,batch)%owner = omp_get_thread_num()
       results(call_number,batch)%team = omp_get_num_threads()
       results(call_number,batch)%n = n
-      results(call_number,batch)%nids = nids
       results(call_number,batch)%ids = ids
       results(call_number,batch)%active = active
       results(call_number,batch)%dt = 0.02_dp*(1.0_dp+0.01_dp*Real(batch,dp))/Real(call_number,dp)
@@ -415,7 +418,7 @@ Contains
       results(call_number,batch)%input_x = x
       results(call_number,batch)%loss = -777.0_dp
       results(call_number,batch)%counters = -777
-      Call xnet_burn_batch(results(call_number,batch)%dt,active(:n),ids(:nids,:n), &
+      Call xnet_burn_batch(results(call_number,batch)%dt,active(:n),ids(:,:n), &
         & results(call_number,batch)%density(:n),temp(:n),ey(:n),x(:,:n),hint(:n), &
         & results(call_number,batch)%loss(:n),results(call_number,batch)%counters(:,:n), &
         & results(call_number,batch)%timing,results(call_number,batch)%status,results(call_number,batch)%message, &
@@ -435,7 +438,7 @@ Contains
     Type(result_t), Intent(in) :: r
     Integer, Intent(in) :: batch, call_number
     Integer :: lane, expected
-    Real(dp) :: times(6)
+    Real(dp) :: times(13)
     Character(160) :: prefix
     Character(32) :: component
     If ( parallel_calls ) Then
@@ -443,12 +446,14 @@ Contains
     Else
       Call check(r%owner == 0 .and. r%team == 1,'serial call executes outside an application parallel region')
     EndIf
-    times = [r%timing%evolve,r%timing%solve,r%timing%jacobian,r%timing%derivative,r%timing%rates,r%timing%screening]
+    times = [r%timing%evolve,r%timing%solve,r%timing%jacobian,r%timing%derivative,r%timing%rates,r%timing%screening, &
+      & r%timing%timestep,r%timing%newton,r%timing%decomposition,r%timing%backsubstitution, &
+      & r%timing%prescreening,r%timing%eos,r%timing%output]
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),'finite nonnegative per-call timings')
     If ( failure ) Then
       expected = Merge(xnet_step_limit,xnet_integrator_failure,Index(mode,'step') > 0)
       Call check(r%status == expected,'returned worker failure: '//Trim(r%message))
-      prefix = 'Zone 2, zone IDs ['
+      prefix = 'Zone 2, zone_id [i,j,k,block] = ['
       Do lane = 1, r%nids
         Write(component,'(i0)') r%ids(lane,2)
         ! Concatenation must retain the separating space before the next integer.

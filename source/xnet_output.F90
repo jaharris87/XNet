@@ -1,7 +1,6 @@
 !***************************************************************************************************
 ! xnet_output.f90 10/18/17
-! This file contains the ts_output routine, which controls the information output at the end of each
-! timestep, and the final_output routine, which controls the output at the end of the evolution.
+! Shared output-file setup and teardown, per-timestep and final diagnostics, and input-file writers.
 !***************************************************************************************************
 
 #include "xnet_macros.fh"
@@ -18,6 +17,107 @@ Module xnet_output
   end interface write_xnet_th
 
 Contains
+
+  Subroutine open_ts_file(izb,filename,data_description,abundance_source,abundance_description, &
+    & thermo_source,thermo_description,status,ierr)
+    !-----------------------------------------------------------------------------------------------
+    ! Open one binary time-series file and write its six header records.
+    ! Metadata fields retain their existing 80-character widths. The caller chooses the filename
+    ! and OPEN status. Optional ierr reports open failures; without it, runtime error handling applies.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny, zz, aa
+    Use xnet_controls, Only: lun_ts, descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, &
+      & yacc, ymin, tdel_maxmult, iheat, isolv
+    Use xnet_flux, Only: ifl_orig, ifl_term
+    Use xnet_match, Only: mflx
+    Implicit None
+
+    ! Input arguments
+    Integer, Intent(in) :: izb
+    Character(*), Intent(in) :: filename, status
+    Character(80), Intent(in) :: data_description, abundance_source, abundance_description
+    Character(80), Intent(in) :: thermo_source, thermo_description
+
+    ! Optional output argument
+    Integer, Optional, Intent(out) :: ierr
+
+    ! Local variables
+    Integer :: output_unit
+
+    If ( present(ierr) ) Then
+      Open(newunit=output_unit,file=trim(filename),status=status,form='unformatted',action='write',iostat=ierr)
+      If ( ierr /= 0 ) Return
+    Else
+      Open(newunit=output_unit,file=trim(filename),status=status,form='unformatted',action='write')
+    EndIf
+    lun_ts(izb) = output_unit
+
+    Write(output_unit) descript,data_description
+    Write(output_unit) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
+    Write(output_unit) abundance_source,abundance_description
+    Write(output_unit) thermo_source,thermo_description
+    Write(output_unit) ny,zz,aa
+    Write(output_unit) mflx,ifl_orig,ifl_term
+
+    Return
+  End Subroutine open_ts_file
+
+  Subroutine open_ev_file(izb,filename,status,ierr)
+    !-----------------------------------------------------------------------------------------------
+    ! Open one ASCII evolution file and write its column header using the selected output nuclei.
+    ! The caller chooses the filename and OPEN status. Optional ierr reports open failures.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: nname
+    Use xnet_controls, Only: lun_ev, nnucout, nnucout_string, inucout
+    Implicit None
+
+    ! Input arguments
+    Integer, Intent(in) :: izb
+    Character(*), Intent(in) :: filename, status
+
+    ! Optional output argument
+    Integer, Optional, Intent(out) :: ierr
+
+    ! Local variables
+    Character(40) :: header_format
+    Integer :: output_unit, i
+
+    If ( present(ierr) ) Then
+      Open(newunit=output_unit,file=trim(filename),status=status,action='write',iostat=ierr)
+      If ( ierr /= 0 ) Return
+    Else
+      Open(newunit=output_unit,file=trim(filename),status=status,action='write')
+    EndIf
+    lun_ev(izb) = output_unit
+
+    header_format = '(a4,a15,5a10,a4)'
+    If ( nnucout > 0 ) header_format = '(a4,a15,5a10,'//trim(nnucout_string)//'a9,a4)'
+    Write(output_unit,header_format) &
+      & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout),' It '
+
+    Return
+  End Subroutine open_ev_file
+
+  Subroutine close_output_files
+    !-----------------------------------------------------------------------------------------------
+    ! Close binary and ASCII time-series units in the current worker bank, including partial setup.
+    ! Zero marks an unopened slot; valid NEWUNIT values may be negative. Clear slots after closing.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: lun_ts, lun_ev, zb_lo, zb_hi
+    Implicit None
+
+    ! Local variables
+    Integer :: izb
+
+    Do izb = zb_lo, zb_hi
+      If ( lun_ts(izb) /= 0 ) Close(lun_ts(izb))
+      If ( lun_ev(izb) /= 0 ) Close(lun_ev(izb))
+      lun_ts(izb) = 0
+      lun_ev(izb) = 0
+    EndDo
+
+    Return
+  End Subroutine close_output_files
 
   Subroutine ts_output(kstep,enuc,edot,sqnu,mask_in)
     !-----------------------------------------------------------------------------------------------

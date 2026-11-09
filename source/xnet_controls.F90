@@ -79,21 +79,21 @@ Module xnet_controls
   ! Job Controls
   Integer              :: szone        ! Starting zone
   Integer              :: nzone        ! Number of zones
-  Integer, Allocatable :: zone_id(:,:) ! Current zone index map (index, batch)
+  Integer, Allocatable :: zone_id(:,:) ! Diagnostic location [i,j,k,block] for each workspace zone
   Integer, Allocatable :: iweak(:)     ! Per-zone weak-reaction flag
   Integer              :: iweak0       ! Input weak-reaction flag
   Integer              :: iscrn        ! If =0, screening is ignored
   Integer              :: iprocess     ! If >0, process nuclear data at run time
 
   ! Zone Batching Controls
-  Integer :: nzevolve                 ! Number of zones evolved concurrently
+  Integer :: nzevolve                 ! Total zone-workspace capacity across workers
   Integer :: nzbatchmx                ! Maximum number of zones in a batch
-  Integer :: nzbatch                  ! Active number of zones in a batch
-  Integer :: szbatch                  ! Starting zone for a batch
-  Integer :: zb_offset                ! Zone-batch offset in nzevolve
-  Integer :: zb_lo                    ! Lower zone-batch extent in nzevolve
-  Integer :: zb_hi                    ! Upper zone-batch extent in nzevolve
-  Logical, Allocatable, Target :: lzactive(:) ! Active-zone mask
+  Integer :: nzbatch                  ! Number of active zones in the current worker batch
+  Integer :: szbatch                  ! Input-zone ordinal corresponding to zb_lo
+  Integer :: zb_offset                ! Workspace offset for this worker: zb_lo-1
+  Integer :: zb_lo                    ! First workspace zone for this worker
+  Integer :: zb_hi                    ! Last workspace zone for this worker
+  Logical, Allocatable, Target :: lzactive(:) ! Active-zone mask indexed by workspace zone
 #ifdef XNET_OMP
   !$omp threadprivate(nzbatch,szbatch,zb_offset,zb_lo,zb_hi)
 #endif
@@ -145,7 +145,7 @@ Module xnet_controls
   Character(80), Allocatable :: inab_file(:)        ! Per-zone initial-abundance files
   Character(80), Allocatable :: thermo_file(:)      ! Per-zone thermodynamic histories
   Integer :: lun_th, lun_ab                         ! Input logical units
-  Integer, Allocatable :: iaux(:)                   ! Auxiliary-nucleus logical units
+  Integer, Allocatable :: iaux(:)                   ! Allow auxiliary nuclei when reading abundance files
 #ifdef XNET_OMP
   !$omp threadprivate(lun_th,lun_ab)
 #endif
@@ -938,9 +938,8 @@ Contains
       changemxt = 1.0e10_dp
     EndIf
 
-
     nzevolve = nzbatchmx*nthread
-    Allocate(zone_id(3,nzevolve),lzactive(nzevolve),iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve),iaux(nzevolve))
+    Allocate(zone_id(4,nzevolve),lzactive(nzevolve),iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve),iaux(nzevolve))
     Allocate(kmon(5,nzevolve),ktot(5,nzevolve),output_nuc(nnucout),inucout(nnucout))
     zone_id = 0
     lzactive = .false.

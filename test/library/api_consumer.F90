@@ -1,7 +1,7 @@
 Program api_consumer
   ! This external caller imports no XNet implementation module.
   Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite, ieee_value, ieee_quiet_nan, ieee_positive_inf
-  Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, &
+  Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, xnet_gpu_t, &
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize, &
     & xnet_success, xnet_invalid, xnet_lifecycle_error, xnet_unsupported
   Use consumer_fixture, Only: fixture_state, write_state, check
@@ -11,8 +11,9 @@ Program api_consumer
   Type(xnet_controls_t) :: controls, bad_controls
   Type(xnet_network_t) :: network, rejected_network
   Type(xnet_timing_t) :: timing
+  Type(xnet_gpu_t) :: gpu_context
   Integer :: ierr, isolv, iheat, i, max_steps_taken
-  Integer :: ids(3,lanes), ids4(4,lanes), counters(5,lanes)
+  Integer :: ids(4,lanes), counters(5,lanes)
   Character(80) :: data_dir, arg
   Character(512) :: message
   Logical :: active(lanes), test_nse
@@ -60,6 +61,10 @@ Program api_consumer
   Call xnet_initialize(bad_controls,rejected_network,ierr,message)
   Call expect(xnet_invalid,'missing network data')
 
+  Call xnet_initialize(controls,rejected_network,ierr,message,gpu_context=gpu_context)
+  Call expect(xnet_unsupported,'GPU context rejected by CPU build')
+  Call check(.not. allocated(rejected_network%names),'rejected GPU context returns no network')
+
   Call xnet_initialize(controls,network,ierr,message)
   Call expect(xnet_success,'initialize')
   Call check(Allocated(network%names),'metadata names allocated')
@@ -82,8 +87,7 @@ Program api_consumer
   Allocate(nse_first(Size(network%names)),nse_current(Size(network%names)))
   Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
   Do i = 1, lanes
-    ids(:,i) = (/ i,7,11 /)
-    ids4(:,i) = (/ i,7,11,13 /)
+    ids(:,i) = [i,7,11,13]
   EndDo
   active = (/ .True.,.False.,.True.,.True. /)
 
@@ -207,12 +211,23 @@ Contains
 
   Subroutine invalid_requests()
     Implicit None
-    Integer :: bad_ids(2,lanes), bad_counters(4,lanes)
-    Real(dp) :: value
+    Integer :: bad_ids(2,lanes), three_ids(3,lanes), five_ids(5,lanes), bad_counters(4,lanes)
+    Real(dp) :: value, aux_value
+    Logical :: saved_active(lanes)
 
     nan_value = ieee_value(0.0_dp,ieee_quiet_nan)
     inf_value = ieee_value(0.0_dp,ieee_positive_inf)
     Call remember_state()
+    max_steps_taken = -1
+    Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
+      & max_steps_taken=max_steps_taken,data_on_device=.true.)
+    Call expect(xnet_unsupported,'device arrays rejected by CPU build')
+    Call check(max_steps_taken == 0 .and. all(loss == 0.0_dp) .and. all(counters == 0), &
+      & 'rejected device-array burn clears diagnostic outputs')
+    Call unchanged_state('device arrays rejected by CPU build')
+    Call xnet_burn_batch(0.1_dp,active(:0),ids(:,:0),density(:0),temperature(:0),ye(:0),x(:,:0), &
+      & restart(:0),loss(:0),counters(:,:0),timing,ierr,message,data_on_device=.true.)
+    Call expect(xnet_unsupported,'empty device arrays rejected by CPU build')
     max_steps_taken = -1
     Call xnet_burn_batch(-0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
       & max_steps_taken=max_steps_taken)
@@ -222,8 +237,24 @@ Contains
     Call xnet_burn_batch(nan_value,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
     Call expect(xnet_invalid,'nonfinite burn interval')
     bad_ids = 1
+    saved_active = active
+    active = .false.
+    Call xnet_burn_batch(-0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+    Call expect(xnet_invalid,'all-inactive calls still check duration')
+    Call xnet_burn_batch(0.1_dp,active,bad_ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+    Call expect(xnet_invalid,'all-inactive calls still check extents')
+    active = saved_active
     Call xnet_burn_batch(0.1_dp,active,bad_ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
     Call expect(xnet_invalid,'zone identifier shape')
+    three_ids = 1
+    five_ids = 1
+    Call xnet_burn_batch(0.1_dp,active,three_ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+    Call expect(xnet_invalid,'three-component zone identifiers are rejected')
+    Call check(index(message,'zone_id must have shape (4,nz)') == 1,'fixed zone identifier shape diagnostic')
+    Call unchanged_state('three-component zone identifiers')
+    Call xnet_burn_batch(0.1_dp,active,five_ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+    Call expect(xnet_invalid,'five-component zone identifiers are rejected')
+    Call unchanged_state('five-component zone identifiers')
     Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,bad_counters,timing,ierr,message)
     Call expect(xnet_invalid,'counter shape')
     Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x(:Size(x,1)-1,:),restart, &
@@ -267,6 +298,33 @@ Contains
     Call expect(xnet_invalid,'auxiliary mass number')
     Call check(max_steps_taken == 0,'invalid auxiliary input clears accepted step count')
     aux_a(1) = 56.0_dp
+
+    value = density(1)
+    aux_value = aux_x(1)
+    density(1) = -1.0_dp
+    aux_x(1) = nan_value
+    Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
+      & aux_x,aux_a,aux_z)
+    Call expect(xnet_invalid,'primary range before auxiliary NaN')
+    Call check(trim(message) == 'Invalid active-zone density, temperature, Ye, composition or restart timestep', &
+      & 'primary-state errors take precedence')
+    density(1) = value
+    Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
+      & aux_x,aux_a,aux_z)
+    Call expect(xnet_invalid,'auxiliary NaN')
+    Call check(trim(message) == 'Active-zone auxiliary inputs must be finite','auxiliary nonfinite diagnostic')
+
+    value = density(3)
+    density(3) = nan_value
+    x(:,1) = 0.0_dp
+    aux_x(1) = 0.0_dp
+    Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
+      & aux_x,aux_a,aux_z)
+    Call expect(xnet_invalid,'first invalid zone before later NaN')
+    Call check(trim(message) == 'Active-zone composition must contain positive mass','first invalid zone wins')
+    density(3) = value
+    x = saved_x
+    aux_x(1) = aux_value
     Call unchanged_state('invalid calls')
     Return
   End Subroutine invalid_requests
@@ -313,7 +371,7 @@ Contains
     Character(*), Intent(in) :: label
     Integer, Intent(in) :: n
     Integer :: j
-    Real(dp) :: times(6)
+    Real(dp) :: times(13)
 
     Call remember_state()
     loss = -1.0_dp
@@ -324,7 +382,7 @@ Contains
       Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
         & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,aux_x(:n),aux_a(:n),aux_z(:n))
     ElseIf ( label == 'no_aux' ) Then
-      Call xnet_burn_batch(0.1_dp,active(:n),ids4(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
+      Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
         & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,max_steps_taken=max_steps_taken)
     Else
       Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
@@ -339,9 +397,12 @@ Contains
       EndIf
       Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),max_steps_taken
     EndIf
-    times = (/ timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening /)
+    times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening, &
+      & timing%timestep,timing%newton,timing%decomposition,timing%backsubstitution, &
+      & timing%prescreening,timing%eos,timing%output]
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),label//' timing')
-    Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times
+    If ( label == 'first' ) Call check(all(times(7:12) > 0.0_dp),label//' measured dense CPU integration stages')
+    Write(*,'(a,1x,a,13(1x,es26.17e3))') 'TIMING',Trim(label),times
     Do j = 1, n
       If ( active(j) ) Then
         Call check(All(ieee_is_finite(x(:,j))) .and. All(x(:,j) >= 0.0_dp),label//' composition')

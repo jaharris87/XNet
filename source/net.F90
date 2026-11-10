@@ -48,9 +48,14 @@ Program net
   ! Local variables
   Integer :: i, k, izone, izb, ibatch, batch_count
   Integer :: diag_ierr, ierr, inuc, kstep
+  ! Reaction fluxes and neutrino energy losses
   Real(dp), Allocatable :: dyf(:), flx_diff(:), denu(:)
+
+  ! Input Data descriptions
   Character(80) :: data_desc, data_dir
   Character(80), Allocatable :: abund_desc(:), thermo_desc(:)
+
+  ! Filenames
   Character(80) :: ev_file, bin_file, diag_file
   Character(80), Parameter :: diag_file_base = 'net_diag'
 
@@ -155,6 +160,7 @@ Program net
 
   !XDIR XENTER_DATA XASYNC(gpu_queue) &
   !XDIR XCOPYIN(denu)
+
   !XDIR XWAIT(gpu_queue)
 
   stop_timer = xnet_wtime()
@@ -173,7 +179,9 @@ Program net
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
+
   Allocate (dyf(0:ny),flx_diff(ny))
+
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
@@ -183,9 +191,11 @@ Program net
     start_timer = xnet_wtime()
     timer_setup = timer_setup - start_timer
 
-    ! Determine active zones in this worker batch
+    ! Determine active zones in this batch
     szbatch = szone + (ibatch - 1) * nzbatchmx
     nzbatch = min(nzone - szbatch + 1, nzbatchmx)
+
+    ! Active zone mask
     Do izb = zb_lo, zb_hi
       lzactive(izb) = ( izb <= zb_offset + nzbatch )
     EndDo
@@ -284,6 +294,7 @@ Program net
   !-------------------------------------------------------------------------------------------------
   !XDIR XEXIT_DATA XASYNC(gpu_queue) &
   !XDIR XDELETE(denu)
+
   !XDIR XWAIT(gpu_queue)
 
   Deallocate (abund_desc,thermo_desc,denu)

@@ -268,6 +268,7 @@ Contains
       !XDIR XHOST(lzoutput,lzsolve)
       Call ts_output(kstep,delta_en,edot,sqnu,mask_in = lzoutput)
 
+      ! Test if all zones have stopped
       If ( .not. any(lzsolve) ) Exit
     EndDo
 

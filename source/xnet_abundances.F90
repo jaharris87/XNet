@@ -152,7 +152,7 @@ Contains
 
   Subroutine y_moment_vector(y,ye,ytot,abar,zbar,z2bar,zibar,xext,aext,zext,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! Batched interface for evaluating composition moments across the zone bank of the calling worker.
+    ! Batched interface for evaluating composition moments across the active zones.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, zz, zz2, zzi
     Use xnet_constants, Only: thbim1

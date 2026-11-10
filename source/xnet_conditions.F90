@@ -3,8 +3,8 @@
 ! Thermodynamic state, timestep bookkeeping, trajectory history storage, and interpolation.
 !
 ! Manages per-zone time, timestep, temperature (T9 [GK]), density (rho [g/cm^3]), electron
-! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories across the active worker
-! banks (1:nzevolve). The standalone driver allocates full trajectories (history_capacity = nhmx),
+! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories across the active
+! zones (1:nzevolve). The standalone driver allocates full trajectories (history_capacity = nhmx),
 ! whereas constant-condition library burns allocate two-point endpoint histories (history_capacity = 2).
 !***************************************************************************************************
 
@@ -243,7 +243,7 @@ Contains
 
   Subroutine t9rhofind_vector(kstep,tf,nf,t9f,rhof,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! Batched trajectory interpolation across the zone bank of the calling worker (zb_lo:zb_hi).
+    ! Batched trajectory interpolation across the active zones (zb_lo:zb_hi).
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: zb_lo, zb_hi, lzactive, gpu_queue
     Use xnet_types, Only: dp

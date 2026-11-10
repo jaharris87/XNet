@@ -2,7 +2,7 @@
 ! model_input_ascii.F90
 ! ASCII thermodynamic-trajectory and initial-abundance readers for the standalone XNet driver.
 !
-! Provides three routines used by net.F90 (and unit contract tests):
+! Contains
 ! - read_thermo_file: Reads per-zone thermodynamic trajectories (tstart, tstop, tdelstart, and
 !   tab/space-delimited time series of t, T9, rho, optional Ye, and optional neutrino fluxes
 !   and temperatures).
@@ -26,8 +26,8 @@ Contains
 
   Subroutine read_thermo_file(thermo_file,thermo_desc,ierr,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! Read ASCII thermodynamic trajectory files for active zones in the current worker bank.
-    ! Each file begins with a description line and scalar records for tstart, tstop, and tdelstart,
+    ! Read ASCII thermodynamic trajectory files for active zones.
+    ! Each file begins with a description line and scalar values for tstart, tstop, and tdelstart,
     ! followed by up to nhmx whitespace-delimited history lines:
     !   th(n)  t9h(n)  rhoh(n)  [yeh(n)  [fluxcms(n,1:nnuspec)  [tmevnu(n,1:nnuspec)]]]
     !-----------------------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ Contains
           Call xnet_terminate('Failed to open input file: '//trim(thermo_file(izone)))
         EndIf
 
-        ! Header: description, start time, stop time, initial timestep.
+        ! Header: 1-line description, start time, stop time, initial timestep.
         Read(lun_th,"(a)",iostat=ierr) thermo_desc(izb)
         If ( ierr == 0 ) Read(lun_th,*,iostat=ierr) tstart(izb)
         If ( ierr == 0 ) Read(lun_th,*,iostat=ierr) tstop(izb)
@@ -122,8 +122,8 @@ Contains
         !$omp end critical(th_read)
         ierr = 0
 
-        ! Ignore positive initial-timestep hints in standalone trajectory files; negative values
-        ! retain their historical startup-hint encoding in timestep().
+        ! Ignore positive initial-timestep hints in standalone trajectory files;
+        ! negative values retain their historical startup-hint in timestep().
         tdelstart(izb) = min(0.0_dp,tdelstart(izb))
 
         If ( idiag >= 0 ) Write(lun_diag,"(a5,i5,2a)") &

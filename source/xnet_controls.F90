@@ -36,8 +36,7 @@ Module xnet_controls
   !-------------------------------------------------------------------------------------------------
   ! Caller-facing configuration structure
   !-------------------------------------------------------------------------------------------------
-  ! Component initializers are intentionally invalid sentinels so an uninitialized structure
-  ! cannot silently pass validation. Always call set_xnet_controls_defaults(controls) first.
+  ! The initial values below are intentionally invalid.  Use set_xnet_controls_defaults before use.
   Type :: xnet_controls_t
     ! Output levels (cumulative; each level includes the ones below it):
     !   idiag  <= -2: suppress normal diagnostics
@@ -185,7 +184,7 @@ Module xnet_controls
   Character(80) :: thermo_file_base    ! Legacy thermodynamic-trajectory filename prefix
   Character(80), Allocatable :: inab_file(:)   ! Per-zone initial-abundance filenames (1:nzone)
   Character(80), Allocatable :: thermo_file(:) ! Per-zone thermodynamic-trajectory filenames (1:nzone)
-  Integer, Allocatable :: iaux(:)      ! Per-zone auxiliary-nucleus retention flag (1:nzevolve)
+  Integer, Allocatable :: iaux(:)      ! Allow auxiliary nuclei when reading abundance files (1:nzevolve)
   Integer :: lun_th, lun_ab            ! Per-thread temporary input logical units
 #ifdef XNET_OMP
   !$omp threadprivate(lun_th,lun_ab)

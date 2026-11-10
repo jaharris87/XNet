@@ -186,15 +186,15 @@ Contains
     Integer :: i, j, k, izb, izone
     Logical, Pointer :: mask(:)
 
-    start_timer = xnet_wtime()
-    timer_output = timer_output - start_timer
-
     If ( present(mask_in) ) Then
       mask(zb_lo:) => mask_in
     Else
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+
+    start_timer = xnet_wtime()
+    timer_output = timer_output - start_timer
 
     ! Evaluate reaction fluxes (kstep = 0 records zero initial flux before rates are evaluated)
     If ( itsout >= 1 .or. idiag >= 1 ) Then
@@ -234,7 +234,7 @@ Contains
             & (nname(i),aa(i)*y(i,izb),i=1,ny)
 
           ! itsout >= 5: instantaneous reaction fluxes to diagnostic log
-          If ( itsout >= 5 .and. idiag >= 0 ) Write(lun_diag,"(i5,10a5,i5,es11.3)") &
+          If ( itsout >= 5 .and. idiag >= 0 ) Write(lun_diag,"(i5,9a5,i5,es11.3)") &
             & (k,(nname(nflx(j,k)),j=1,4),' <-> ',(nname(nflx(j,k)),j=5,8),iwflx(k),flx(k,izb),k=1,mflx)
         EndIf
       EndDo
@@ -468,7 +468,9 @@ Contains
     Integer, Intent(out) :: ierr
 
     ! Local variables
-    Integer :: lun_th
+    Integer, Parameter :: npoint = 2
+    Real(dp), Parameter :: initial_timestep_fraction = 1.0e-4_dp
+    Integer :: lun_th, i
     Integer :: tmp_ierr(4)
 
     ierr = 0
@@ -483,7 +485,7 @@ Contains
     Write(lun_th,'(a)',iostat=tmp_ierr(1)) trim(header)
     Write(lun_th,'(es23.15,a)',iostat=tmp_ierr(2)) tstart,' start time'
     Write(lun_th,'(es23.15,a)',iostat=tmp_ierr(3)) tstop,' stop time'
-    Write(lun_th,'(es23.15,a)',iostat=tmp_ierr(4)) (tstop - tstart) * 1.0e-4_dp,' initial timestep'
+    Write(lun_th,'(es23.15,a)',iostat=tmp_ierr(4)) (tstop - tstart) * initial_timestep_fraction,' initial timestep'
     If ( any(tmp_ierr /= 0) ) Then
       ierr = maxval(tmp_ierr)
       Write(lun_stderr,'(a,i3,a)') '[write_xnet_th] ERROR: Problem writing header (',ierr,')'
@@ -491,8 +493,10 @@ Contains
       Return
     EndIf
 
-    Write(lun_th,'(4es23.15)',iostat=ierr) tstop,t9,rho,ye
-    Write(lun_th,'(4es23.15)',iostat=ierr) tstop,t9,rho,ye
+    Do i = 1, npoint
+      Write(lun_th,'(4es23.15)',iostat=ierr) tstop,t9,rho,ye
+      If ( ierr /= 0 ) Exit
+    EndDo
     If ( ierr /= 0 ) Then
       Write(lun_stderr,'(a,i3,a)') '[write_xnet_th] ERROR: Problem writing data (',ierr,')'
       Close(lun_th)

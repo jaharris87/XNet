@@ -75,10 +75,14 @@ Contains
           Call xnet_terminate('Failed to open input file: '//trim(thermo_file(izone)))
         EndIf
 
-        Read(lun_th,"(a)") thermo_desc(izb)
-        Read(lun_th,*) tstart(izb)
-        Read(lun_th,*) tstop(izb)
-        Read(lun_th,*) tdelstart(izb)
+        ! Header: description, start time, stop time, initial timestep.
+        Read(lun_th,"(a)",iostat=ierr) thermo_desc(izb)
+        If ( ierr == 0 ) Read(lun_th,*,iostat=ierr) tstart(izb)
+        If ( ierr == 0 ) Read(lun_th,*,iostat=ierr) tstop(izb)
+        If ( ierr == 0 ) Read(lun_th,*,iostat=ierr) tdelstart(izb)
+        If ( ierr /= 0 ) Then
+          Call xnet_terminate('Failed to read the header of input file: '//trim(thermo_file(izone)),ierr)
+        EndIf
 
         Do n = 1, nhmx
           line = ' '
@@ -116,6 +120,7 @@ Contains
         nh(izb) = n - 1
         Close(lun_th)
         !$omp end critical(th_read)
+        ierr = 0
 
         ! Ignore positive initial-timestep hints in standalone trajectory files; negative values
         ! retain their historical startup-hint encoding in timestep().

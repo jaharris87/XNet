@@ -35,8 +35,7 @@ def check_fatal_burns(failure_exe: Path, xnet_exe: Path, data: Path, table: Path
             case.mkdir()
             (case / data.name).symlink_to(data, target_is_directory=True)
             (case / table.name).symlink_to(table)
-            nids = 3 if mode == "step_limit" else 4
-            public_output = run([str(failure_exe), data.name, str(solver), mode, str(nids)],
+            public_output = run([str(failure_exe), data.name, str(solver), mode],
                                 case, case / "api.log")
             if "HOST_RECEIVED_FATAL_BURN" not in public_output:
                 raise RuntimeError(f"API did not return the intended failure; see {case / 'api.log'}")
@@ -245,7 +244,7 @@ def main() -> None:
         public_states, legacy_states = states(public_output), states(legacy_output)
         timings = [line.split() for line in public_output.splitlines() if line.startswith("TIMING ")]
         if len(timings) != 6 or any(
-            len(row) != 8 or any(not math.isfinite(float(v)) or float(v) < 0 for v in row[2:])
+            len(row) != 15 or any(not math.isfinite(float(v)) or float(v) < 0 for v in row[2:])
             for row in timings
         ):
             raise RuntimeError(f"invalid per-call timings; see {case / 'api.log'}")

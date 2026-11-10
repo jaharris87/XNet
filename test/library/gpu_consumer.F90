@@ -57,7 +57,7 @@ Program gpu_consumer
   Integer(C_INT) :: status, device_count, current_device
   Integer :: ierr, device, isolv, iheat, i, ownership, path, phase, n, steps
   Integer :: output_level = 0, output_call = 0, requested_threads = 0, host_max_threads = 1
-  Integer :: ids(3,lanes), counters(5,lanes)
+  Integer :: ids(4,lanes), counters(5,lanes)
   Character(1024) :: data_dir
   Character(80) :: argument, label, prefix
   Character(512) :: message
@@ -68,7 +68,7 @@ Program gpu_consumer
   Real(dp), Allocatable :: before_x(:,:), input_x(:,:,:)
   Real(dp) :: input_density(lanes,phases), input_temperature(lanes,phases), input_ye(lanes,phases)
   Real(dp) :: input_restart(lanes,phases), input_aux_x(lanes,phases), input_aux_a(lanes,phases), input_aux_z(lanes,phases)
-  Real(dp) :: before_temperature(lanes), before_ye(lanes), before_restart(lanes), times(6)
+  Real(dp) :: before_temperature(lanes), before_ye(lanes), before_restart(lanes), times(13)
   Real(dp) :: before_density(lanes)
 
   Call check(Command_Argument_Count() >= 3 .and. Command_Argument_Count() <= 6, &
@@ -159,7 +159,7 @@ Program gpu_consumer
     controls%ymin = 1.0e-99_dp
   EndIf
   Do i = 1, lanes
-    ids(:,i) = [i,7,11]
+    ids(:,i) = [i,7,11,0]
   EndDo
 
   Do ownership = 1, 2
@@ -180,7 +180,7 @@ Program gpu_consumer
       resources%hipblas_handle = host_handle
 #endif
       resources%queue = host_queue
-      Call xnet_initialize(controls,network,ierr,message,gpu_resources=resources)
+      Call xnet_initialize(controls,network,ierr,message,gpu_context=resources)
     EndIf
     Call api_ok(Trim(prefix)//' initialize')
     Call selected_device_unchanged()
@@ -252,7 +252,7 @@ Program gpu_consumer
       Call producer_burn(.true.)
       Call producer_burn(.false.)
     EndIf
-    Call invalid_device_density()
+    Call invalid_device_inputs()
     Call xnet_finalize(ierr,message)
     Call api_ok(Trim(prefix)//' finalize')
     Call selected_device_unchanged()
@@ -418,7 +418,9 @@ Contains
     If ( .not. resident ) Call check_host_device_poison()
     Call check(All(active .eqv. submitted_active),Trim(label)//' unchanged active mask')
     Call selected_device_unchanged()
-    times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
+    times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening, &
+      & timing%timestep,timing%newton,timing%decomposition,timing%backsubstitution, &
+      & timing%prescreening,timing%eos,timing%output]
     Call check(All(ieee_is_finite(times)) .and. All(times >= 0.0_dp),Trim(label)//' timing')
     Call check((Any(active(:n)) .and. steps > 0) .or. (.not. Any(active(:n)) .and. steps == 0), &
       & Trim(label)//' accepted step count')
@@ -452,7 +454,7 @@ Contains
     EndIf
     ! Print valid results before comparison so a failed comparison can be diagnosed.
     Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),steps
-    Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),times
+    Write(*,'(a,1x,a,13(1x,es26.17e3))') 'TIMING',Trim(label),times
     Call write_state(label,temperature(:n),ye(:n),x(:,:n),restart(:n),loss(:n),counters(:,:n))
     If ( .not. compare_outputs ) Then
       ! Observe evolution from the consumed state, not agreement across different histories.
@@ -515,8 +517,8 @@ Contains
     Real(dp), Allocatable, Target :: aux_x(:), aux_a(:), aux_z(:)
     Real(dp), Allocatable :: saved_x(:,:)
     Real(dp) :: saved_density(n_short), saved_temperature(n_short), saved_ye(n_short), saved_restart(n_short)
-    Real(dp) :: saved_aux_x(n_short), saved_aux_a(n_short), saved_aux_z(n_short), short_times(6)
-    Integer :: short_ids(3,n_short), short_counters(5,n_short), short_steps
+    Real(dp) :: saved_aux_x(n_short), saved_aux_a(n_short), saved_aux_z(n_short), short_times(13)
+    Integer :: short_ids(4,n_short), short_counters(5,n_short), short_steps
     Logical :: short_active(n_short)
     Type(xnet_timing_t) :: short_timing
 
@@ -536,13 +538,14 @@ Contains
     saved_aux_z = aux_z
     Call check(All(aux_x > 0.0_dp) .and. All(aux_a > 0.0_dp) .and. All(aux_z > 0.0_dp), &
       & Trim(label)//' nonzero auxiliary input')
-    short_ids(:,1) = [101,7,11]
+    short_ids(:,1) = [101,7,11,0]
     short_active = .true.
     loss = -1.0_dp
     short_counters = -1
     short_steps = -1
     short_timing = xnet_timing_t(evolve=-1.0_dp,solve=-1.0_dp,jacobian=-1.0_dp, &
-      & derivative=-1.0_dp,rates=-1.0_dp,screening=-1.0_dp)
+      & derivative=-1.0_dp,rates=-1.0_dp,screening=-1.0_dp,timestep=-1.0_dp,newton=-1.0_dp, &
+      & decomposition=-1.0_dp,backsubstitution=-1.0_dp,prescreening=-1.0_dp,eos=-1.0_dp,output=-1.0_dp)
     Write(*,'(a,1x,a,2(1x,i0))') 'GPU_SHORT_ALLOCATION',Trim(label),Size(density),controls%nzbatchmx
     ! Map each complete allocation, then make the unconsumed host scientific inputs wrong.
     !XDIR XENTER_DATA XCOPYIN(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
@@ -564,7 +567,9 @@ Contains
     Call check(All(short_active),Trim(label)//' unchanged active mask')
     Call selected_device_unchanged()
     short_times = [short_timing%evolve,short_timing%solve,short_timing%jacobian, &
-      & short_timing%derivative,short_timing%rates,short_timing%screening]
+      & short_timing%derivative,short_timing%rates,short_timing%screening,short_timing%timestep, &
+      & short_timing%newton,short_timing%decomposition,short_timing%backsubstitution, &
+      & short_timing%prescreening,short_timing%eos,short_timing%output]
     Call check(All(ieee_is_finite(short_times)) .and. All(short_times >= 0.0_dp),Trim(label)//' timing')
     Call check(short_steps > 0,Trim(label)//' accepted step count')
     Call check(All(ieee_is_finite(x)) .and. All(x >= 0.0_dp),Trim(label)//' composition')
@@ -585,7 +590,7 @@ Contains
       Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),saved_density
     EndIf
     Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),short_steps
-    Write(*,'(a,1x,a,6(1x,es26.17e3))') 'TIMING',Trim(label),short_times
+    Write(*,'(a,1x,a,13(1x,es26.17e3))') 'TIMING',Trim(label),short_times
     Call write_state(label,temperature,ye,x,restart,loss,short_counters)
     ! Compare lane one with the existing same-input first burn using the current GPU limits.
     Call check(All(Abs(x-expected(1)%x(:,:n_short)) <= &
@@ -614,45 +619,60 @@ Contains
     Return
   End Subroutine short_allocation_burn
 
-  Subroutine invalid_device_density()
-    ! Reject nonfinite resident input before integration; inspect only host diagnostics.
+  Subroutine invalid_device_inputs()
+    ! Reject invalid resident input before integration; inspect only host diagnostics.
     Implicit None
-    Real(dp) :: invalid_density(2)
+    Character(160) :: expected_message
     Integer :: invalid_case
 
-    invalid_density = [ieee_value(0.0_dp,ieee_quiet_nan),ieee_value(0.0_dp,ieee_positive_inf)]
-    Do invalid_case = 1, Size(invalid_density)
+    Do invalid_case = 1, 4
       Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
-      density(1) = invalid_density(invalid_case)
+      expected_message = 'Active-zone inputs must be finite'
+      Select Case (invalid_case)
+      Case (1)
+        density(1) = ieee_value(0.0_dp,ieee_quiet_nan)
+        label = trim(prefix)//'_device_nan'
+      Case (2)
+        density(1) = ieee_value(0.0_dp,ieee_positive_inf)
+        label = trim(prefix)//'_device_inf'
+      Case (3)
+        aux_x(1) = ieee_value(0.0_dp,ieee_quiet_nan)
+        expected_message = 'Active-zone auxiliary inputs must be finite'
+        label = trim(prefix)//'_device_aux_nan'
+      Case (4)
+        density(1) = -1.0_dp
+        aux_x(1) = ieee_value(0.0_dp,ieee_quiet_nan)
+        expected_message = 'Invalid active-zone density, temperature, Ye, composition or restart timestep'
+        label = trim(prefix)//'_device_primary_before_aux'
+      End Select
       active = .true.
       loss = -1.0_dp
       counters = -1
       steps = -1
       timing = xnet_timing_t(evolve=-1.0_dp,solve=-1.0_dp,jacobian=-1.0_dp, &
-        & derivative=-1.0_dp,rates=-1.0_dp,screening=-1.0_dp)
+        & derivative=-1.0_dp,rates=-1.0_dp,screening=-1.0_dp,timestep=-1.0_dp,newton=-1.0_dp, &
+        & decomposition=-1.0_dp,backsubstitution=-1.0_dp,prescreening=-1.0_dp,eos=-1.0_dp,output=-1.0_dp)
       !XDIR XENTER_DATA XCOPYIN(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
       ! Keep the host mirror finite so the required rejection must read device data.
       density(1) = density(2)
+      aux_x(1) = aux_x(2)
       Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters, &
         & timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken=steps,data_on_device=.true.)
       ! Release the mappings without copying or inspecting rejected scientific results.
       !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
-      If ( invalid_case == 1 ) Then
-        label = Trim(prefix)//'_device_nan'
-      Else
-        label = Trim(prefix)//'_device_inf'
-      EndIf
       If ( ierr /= xnet_invalid ) Write(*,'(a,i0,2a)') 'Unexpected status ',ierr,': ',Trim(message)
       Call check(ierr == xnet_invalid,Trim(label)//' invalid status')
-      Call check(Trim(message) == 'Active-zone inputs must be finite',Trim(label)//' finite-input diagnostic')
+      Call check(trim(message) == trim(expected_message),trim(label)//' input diagnostic')
       Call check(All(counters == 0) .and. steps == 0,Trim(label)//' zero counters and accepted steps')
-      times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening]
+      times = [timing%evolve,timing%solve,timing%jacobian,timing%derivative,timing%rates,timing%screening, &
+        & timing%timestep,timing%newton,timing%decomposition,timing%backsubstitution, &
+        & timing%prescreening,timing%eos,timing%output]
       Call check(All(times == 0.0_dp),Trim(label)//' zero timing')
       Call selected_device_unchanged()
       Write(*,'(a,1x,a)') 'INVALID_DEVICE_INPUT_REJECTED',Trim(label)
     EndDo
     Return
-  End Subroutine invalid_device_density
+  End Subroutine invalid_device_inputs
 
   Subroutine producer_burn(synchronize)
     ! Keep the queued GEMM inputs mapped through the subsequent resident burn.
@@ -782,7 +802,7 @@ Contains
     resources%rocsolver_handle = solver_handle
 #endif
     Call runtime_ok('host solver stream selection')
-    Call xnet_initialize(controls,network,ierr,message,gpu_resources=resources)
+    Call xnet_initialize(controls,network,ierr,message,gpu_context=resources)
     Call api_ok('solver-only borrowing initialize')
     Call xnet_finalize(ierr,message)
     Call api_ok('solver-only borrowing finalize')

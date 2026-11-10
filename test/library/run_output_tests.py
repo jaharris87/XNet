@@ -68,11 +68,11 @@ def binary(path: Path, *, allow_header_only: bool = False) -> dict:
             f"six-header layout/Character(80) widths changed: {path}")
     # Older standalone/API files keep their input label; the new API label identifies the caller zone.
     zone_label = rows[2][:80].rstrip(b" ")
-    zone_prefix = b"XNet API zone_id:"
+    zone_prefix = b"XNet API zone_id [i,j,k,block]:"
     zone_id = None
     if zone_label.startswith(zone_prefix):
         components = zone_label[len(zone_prefix):].split()
-        require(len(components) in (3, 4) and all(re.fullmatch(rb"-?\d+", value) for value in components),
+        require(len(components) == 4 and all(re.fullmatch(rb"-?\d+", value) for value in components),
                 f"malformed API zone label: {path}")
         zone_id = tuple(map(int, components))
     controls = struct.unpack(endian + "5i6d2i", rows[1])
@@ -185,9 +185,9 @@ def check_case(case: Path, log: dict, level: int, solver: int, heat: int, select
                 f"network description lost: {name}")
         require(trace["controls"][-2:] == (heat, solver) and trace["controls"][0] == 9999,
                 f"integration controls/header order mismatch: {name}")
-        # The consumer changes its three/four-component tuples and reorders lanes between calls.
+        # The consumer reorders zones between calls; every location has four components.
         ids = (101, 0, -3, 0) if sequence in (1, 2) and lane == 3 else (-2147483647, -7, 9001, 42)
-        expected_ids = ids[:3] if sequence in (1, 4) else ids
+        expected_ids = ids
         require(trace["zone_id"] == expected_ids, f"API zone IDs differ: {name}")
         require(b"Mass fractions in XNet species order" in trace["headers"][2] and
                 b"Constant conditions; local time 0..dt seconds" in trace["headers"][3],
@@ -322,26 +322,33 @@ def main() -> None:
             require(any(step["sqnu"] != 0 for trace in enabled[1].values() for step in trace["steps"]), "SN160 loss output unexercised")
         print(f"PASS {network} solver={solver} heat={heat}: itsout=0/1/2/3 physical equality; full records equal direct full_net; ASCII 0/1/3 species/masks/retention", flush=True)
 
-    for mode in ("open_failure", "collision"):
+    for mode in ("open_failure", "ascii_open_failure", "collision"):
         case = new_case(f"alpha-{mode}", "alpha")
         text = run([consumer, "Data_alpha", "1", "0", "2", mode], case, case / "consumer.log")
         require("OUTPUT_OPEN_CHECKS_PASSED" in text, f"open-failure checks incomplete: {case}")
-        sentinel = case / ("ts_call1_lane3" if mode == "open_failure" else "ts_call1_lane1")
+        sentinel_name = {"open_failure": "ts_call1_lane3", "ascii_open_failure": "ev_call1_lane3",
+                         "collision": "ts_call1_lane1"}[mode]
+        sentinel = case / sentinel_name
         require(sentinel.read_bytes() == b"DO NOT CLOBBER\n", f"existing output clobbered: {sentinel}")
-        if mode == "open_failure":
+        if mode != "collision":
             partial = binary(case / "ts_call1_lane1", allow_header_only=True)
             require(not partial["steps"], f"rejected open wrote evolution records: {case}")
-        expected_binary = {sentinel.name, "ts_call2_lane1", "ts_call2_lane3"}
+        expected_binary = {"ts_call2_lane1", "ts_call2_lane3"}
         expected_ascii = {"ev_call2_lane1", "ev_call2_lane3"}
-        if mode == "open_failure":
+        (expected_binary if sentinel.name.startswith("ts") else expected_ascii).add(sentinel.name)
+        if mode != "collision":
             expected_binary.add("ts_call1_lane1")
             expected_ascii.add("ev_call1_lane1")
+        if mode == "ascii_open_failure":
+            expected_binary.add("ts_call1_lane3")
+            partial = binary(case / "ts_call1_lane3", allow_header_only=True)
+            require(not partial["steps"], f"rejected ASCII open wrote evolution records: {case}")
         require({p.name for p in case.glob("ts*")} == expected_binary and
                 {p.name for p in case.glob("ev*")} == expected_ascii, f"wrong partial-open inventory: {case}")
         for lane in (1, 3):
             binary(case / f"ts_call2_lane{lane}")
         require(not list(case.glob("fort.*")), f"implicit output on open failure: {case}")
-    print("PASS checked partial-open failure/collision: existing files preserved; units closed; next burn uses next sequence", flush=True)
+    print("PASS binary/ASCII partial-open failures and collision: files preserved; units closed; next burn uses next sequence", flush=True)
 
     for solver in (1, 3):
         for mode in ("step_limit", "integrator"):

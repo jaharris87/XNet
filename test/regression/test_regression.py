@@ -561,3 +561,38 @@ def test_tnsn_torch47(
         tmp_path,
         tnsn_torch47_case(REPOSITORY_ROOT),
     )
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["", "description\n", "description\nbad start\n",
+     "description\n0.0\nbad stop\n", "description\n0.0\n1.0\nbad timestep\n"],
+)
+def test_trajectory_header_failure_names_the_input(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path, header: str
+) -> None:
+    work = _prepared_configuration_work_directory(tmp_path, "bad-trajectory-header")
+    (work / "bad-thermo").write_text(header)
+    config = (work / "controls.nml").read_text()
+    pos = config.rindex("\n/")
+    config = config[:pos] + "\n thermo_files(1) = 'bad-thermo'," + config[pos:]
+    (work / "controls.nml").write_text(config)
+    result = _run_raw_configuration(xnet_executable, work, xnet_timeout)
+    assert result.returncode != 0
+    assert "Failed to read the header of input file: bad-thermo" in result.stdout + result.stderr
+
+
+def test_highest_timestep_output_level_completes(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path
+) -> None:
+    work = _prepared_configuration_work_directory(tmp_path, "flux-output")
+    config = (work / "controls.nml").read_text()
+    pos = config.rindex("\n/")
+    config = config[:pos] + "\n idiag = 3, itsout = 5," + config[pos:]
+    (work / "controls.nml").write_text(config)
+    result = _run_raw_configuration(xnet_executable, work, xnet_timeout)
+    assert result.returncode == 0, result.stdout + result.stderr
+    diagnostic = (work / "net_diag01").read_text()
+    assert " <-> " in diagnostic
+    assert "End     " in diagnostic
+    assert "Counters:" in diagnostic

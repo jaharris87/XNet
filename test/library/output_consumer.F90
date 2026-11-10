@@ -79,10 +79,10 @@ Program output_consumer
 
   If ( mode == 'step_limit' .or. mode == 'integrator' ) Then
     active = [.false.,.true.,.false.,.false.]
-    Call burn('failed',lanes,4,0.1_dp)
+    Call burn('failed',lanes,0.1_dp)
     If ( mode == 'step_limit' ) Call check(ierr == xnet_step_limit,'reported step-limit failure')
     If ( mode == 'integrator' ) Call check(ierr == xnet_integrator_failure,'reported integrator failure')
-    Call check(Index(message,'Zone 2, zone IDs [') == 1,'failure preserves original lane/IDs')
+    Call check(Index(message,'Zone 2, zone_id [i,j,k,block] = [') == 1,'failure preserves original lane/IDs')
     Call check(Index(message,'host must terminate') > 0,'failure requires host termination')
     Call check(steps == 0,'failed burn does not report successful completion')
     Call assert_closed('ts_call1_lane2')
@@ -92,8 +92,9 @@ Program output_consumer
     Stop
   EndIf
 
-  If ( mode == 'open_failure' .or. mode == 'collision' ) Then
+  If ( mode == 'open_failure' .or. mode == 'ascii_open_failure' .or. mode == 'collision' ) Then
     filename = 'ts_call1_lane3'
+    If ( mode == 'ascii_open_failure' ) filename = 'ev_call1_lane3'
     If ( mode == 'collision' ) filename = 'ts_call1_lane1'
     Open(newunit=unit,file=Trim(filename),status='new',action='write')
     Write(unit,'(a)') 'DO NOT CLOBBER'
@@ -101,14 +102,15 @@ Program output_consumer
     active = [.true.,.false.,.true.,.false.]
     saved_x = x
     saved_temperature = temperature
-    Call burn('rejected_open',lanes,3,0.1_dp)
+    Call burn('rejected_open',lanes,0.1_dp)
     Call check(ierr == xnet_invalid,'existing output path is a checked error')
     Call check(Index(message,Trim(filename)) > 0,'open error identifies concrete filename')
     Call check(All(x == saved_x) .and. All(temperature == saved_temperature),'open error preserves caller state')
     Call assert_closed('ts_call1_lane1')
+    Call assert_closed('ts_call1_lane3')
     Call assert_closed('ev_call1_lane1')
     Call assert_closed(Trim(filename))
-    Call burn('after_open_error',lanes,4,0.02_dp)
+    Call burn('after_open_error',lanes,0.02_dp)
     Call check(ierr == xnet_success,'valid burn after checked open failure')
     Call finish
     Write(*,'(a)') 'OUTPUT_OPEN_CHECKS_PASSED'
@@ -116,38 +118,38 @@ Program output_consumer
   EndIf
 
   active = [.true.,.false.,.true.,.true.]
-  Call burn('first',lanes,3,0.1_dp)
+  Call burn('first',lanes,0.1_dp)
   Call check(ierr == xnet_success,'first output burn')
   active = .true.
   ! Repeated duplicate identifiers do not imply persistent host-zone identity or absolute time.
   density = density*1.25_dp
   temperature = temperature + 1.0e7_dp
   restart = 0.0_dp
-  Call burn('repeat',lanes,4,0.025_dp)
+  Call burn('repeat',lanes,0.025_dp)
   Call check(ierr == xnet_success,'repeat output burn')
   ids = ids(:,[4,3,1,2])
   active = [.true.,.false.,.true.,.false.]
-  Call burn('short',3,4,0.01_dp)
+  Call burn('short',3,0.01_dp)
   Call check(ierr == xnet_success,'short batch with active lane beyond Count(active)')
   active = .false.
   density(2) = -1.0_dp
-  Call burn('inactive',lanes,3,0.1_dp)
+  Call burn('inactive',lanes,0.1_dp)
   Call check(ierr == xnet_success .and. steps == 0,'all-inactive call ignores inactive scientific values')
-  Call burn('empty',0,3,0.1_dp)
+  Call burn('empty',0,0.1_dp)
   Call check(ierr == xnet_success .and. steps == 0,'empty call')
   If ( .not. direct ) Then
     active(2) = .true.
-    Call burn('invalid',lanes,4,0.1_dp)
+    Call burn('invalid',lanes,0.1_dp)
     Call check(ierr == xnet_invalid .and. steps == 0,'active invalid density is rejected before output')
   EndIf
   density(2) = 1.25e7_dp
   active = [.false.,.false.,.false.,.true.]
-  Call burn('after_invalid',lanes,3,0.005_dp)
+  Call burn('after_invalid',lanes,0.005_dp)
   Call check(ierr == xnet_success,'tail-only burn after rejected/inactive calls')
   Call finish
   Call initialize
   Call reset_fixture
-  Call burn('reinitialize',lanes,4,0.01_dp)
+  Call burn('reinitialize',lanes,0.01_dp)
   Call check(ierr == xnet_success,'output burn after finalize/reinitialize')
   Call finish
   Write(*,'(a)') 'OUTPUT_CHECKS_PASSED'
@@ -159,8 +161,25 @@ Contains
     Call xnet_initialize(controls,network,ierr,message)
     If ( ierr /= xnet_success ) Write(*,'(a)') Trim(message)
     Call check(ierr == xnet_success,'output initialization')
+    Call check_empty_output_mask
     Return
   End Subroutine initialize
+
+  Subroutine check_empty_output_mask
+    Use xnet_controls, Only: zb_lo, zb_hi
+    Use xnet_output, Only: ts_output
+    Use xnet_timers, Only: timer_output
+    Implicit None
+    Real(dp) :: zeros(zb_lo:zb_hi), before
+    Logical :: empty_mask(zb_lo:zb_hi)
+
+    zeros = 0.0_dp
+    empty_mask = .false.
+    before = timer_output
+    Call ts_output(0,zeros,zeros,zeros,mask_in=empty_mask)
+    Call check(timer_output == before,'empty output mask leaves the timer unchanged')
+    Return
+  End Subroutine check_empty_output_mask
 
   Subroutine reset_fixture
     Implicit None
@@ -185,11 +204,13 @@ Contains
     Return
   End Subroutine assert_closed
 
-  Subroutine burn(label,n,nids,duration)
+  Subroutine burn(label,n,duration)
+    Use xnet_timers, Only: timer_eos, timer_output
     Implicit None
     Character(*), Intent(in) :: label
-    Integer, Intent(in) :: n, nids
+    Integer, Intent(in) :: n
     Real(dp), Intent(in) :: duration
+    Real(dp) :: eos_before, output_before
     Integer :: j
     loss = 0.0_dp
     counters = 0
@@ -201,8 +222,14 @@ Contains
     If ( direct ) Then
       Call reference_burn(n,duration)
     Else
-      Call xnet_burn_batch(duration,active(:n),ids(:nids,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
+      eos_before = timer_eos
+      output_before = timer_output
+      Call xnet_burn_batch(duration,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
         & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,aux_x(:n),aux_a(:n),aux_z(:n),steps)
+      If ( any(active(:n)) .and. ierr == xnet_success ) Then
+        Call check(timing%eos == timer_eos-eos_before,'EOS timing is a per-call difference')
+        Call check(timing%output == timer_output-output_before,'output timing includes the completed call')
+      EndIf
     EndIf
     Write(*,'(a,1x,a,1x,i0)') 'STATUS',label,ierr
     Write(*,'(a,1x,a,1x,i0)') 'STEPS',label,steps

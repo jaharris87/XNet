@@ -74,9 +74,33 @@ finalization stay outside the fixed worker team. GPU host calls remain
 serialized. CPU and GPU paths share control application,
 network preprocessing and abundance/condition allocation with the standalone
 driver. API burns can write separate per-call timestep histories through the
-existing output routines; the driver retains its general input histories and
-standalone filename policy. See
+existing output routines. Both drivers use `xnet_output` to open binary and ASCII
+files, write their headers, and close the current worker's files. Each driver
+chooses its filenames and file-creation policy; the standalone driver retains
+its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
+
+## Reading the driver and library source
+
+For an application integration, start with [embedding.md](embedding.md) and
+`source/xnet_api.F90`. For a trajectory calculation, start with the six stages
+in `source/net.F90`. The following files explain the state shared by both paths:
+
+| Question | Where to look |
+| --- | --- |
+| Which controls can I set, and in what units? | `xnet_controls_t` and its output-level table in `source/xnet_controls.F90`; call `set_xnet_controls_defaults` before overriding fields |
+| How do controls reach the runtime arrays? | `validate_xnet_controls`, `apply_xnet_controls`, and `controls_finalize` in the same module; standalone namelist reading follows them |
+| What happens during a burn? | The six stages in `full_net` in `source/xnet_evolve.F90`, including solve/output masks and the separate caller-handled and standalone failure paths |
+| Who owns composition and trajectory storage? | Initialization/finalization routines at the top of `source/xnet_abundances.F90` and `source/xnet_conditions.F90`, including their persistent device mappings |
+| What is in the input/output files? | Reader headers in `source/model_input_ascii.F90` and file lifecycle, timestep output, and reproducer sections in `source/xnet_output.F90` |
+| What do the timers measure? | Accumulator comments in `source/xnet_timers.F90` and the scope of `xnet_timing_t` in `source/xnet_api.F90`; nested timings are not additive |
+
+Keep the two composition conventions distinct: standalone abundance files and
+internal arrays use molar abundances `Y = X/A`; `xnet_burn_batch` accepts mass
+fractions `X`. Workspace index `izb` selects a slot in the current worker bank
+`zb_lo:zb_hi`. The corresponding input-zone ordinal is
+`izone = izb + szbatch - zb_lo`; diagnostic mesh labels are the separate
+`zone_id(:,izb)` tuple.
 
 ## Per-timestep flow
 

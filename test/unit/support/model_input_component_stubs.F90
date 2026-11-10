@@ -99,10 +99,10 @@ Module xnet_conditions
   Real(dp) :: tstart(1) = 0.0_dp
   Real(dp) :: tstop(1) = 0.0_dp
   Real(dp) :: tdelstart(1) = 0.0_dp
-  Real(dp) :: th(1,1) = 0.0_dp
-  Real(dp) :: t9h(1,1) = 0.0_dp
-  Real(dp) :: rhoh(1,1) = 0.0_dp
-  Real(dp) :: yeh(1,1) = 0.5_dp
+  Real(dp) :: th(2,1) = 0.0_dp
+  Real(dp) :: t9h(2,1) = 0.0_dp
+  Real(dp) :: rhoh(2,1) = 0.0_dp
+  Real(dp) :: yeh(2,1) = 0.5_dp
   Real(dp) :: yestart(1) = 0.0_dp
 End Module xnet_conditions
 

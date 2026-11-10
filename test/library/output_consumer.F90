@@ -161,8 +161,25 @@ Contains
     Call xnet_initialize(controls,network,ierr,message)
     If ( ierr /= xnet_success ) Write(*,'(a)') Trim(message)
     Call check(ierr == xnet_success,'output initialization')
+    Call check_empty_output_mask
     Return
   End Subroutine initialize
+
+  Subroutine check_empty_output_mask
+    Use xnet_controls, Only: zb_lo, zb_hi
+    Use xnet_output, Only: ts_output
+    Use xnet_timers, Only: timer_output
+    Implicit None
+    Real(dp) :: zeros(zb_lo:zb_hi), before
+    Logical :: empty_mask(zb_lo:zb_hi)
+
+    zeros = 0.0_dp
+    empty_mask = .false.
+    before = timer_output
+    Call ts_output(0,zeros,zeros,zeros,mask_in=empty_mask)
+    Call check(timer_output == before,'empty output mask leaves the timer unchanged')
+    Return
+  End Subroutine check_empty_output_mask
 
   Subroutine reset_fixture
     Implicit None

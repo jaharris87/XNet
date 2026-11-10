@@ -15,7 +15,9 @@ Contains
 
     testsuite = [ &
       & new_unittest('initial abundance reader missing file outputs', test_missing_file_outputs), &
-      & new_unittest('initial abundance reader valid file', test_valid_file) ]
+      & new_unittest('initial abundance reader valid file', test_valid_file), &
+      & new_unittest('partial final abundance record', test_partial_record), &
+      & new_unittest('trajectory reader normal EOF status', test_thermo_eof) ]
 
     Return
   End Subroutine collect_model_input_contracts
@@ -106,6 +108,77 @@ Contains
 
     Return
   End Subroutine test_valid_file
+
+  Subroutine test_partial_record(error)
+    Use model_input_ascii, Only: read_inab_file
+    Use nuclear_data, Only: initialize_nuclear_fixture
+    Implicit None
+    Type(error_type), Allocatable, Intent(out) :: error
+    Character(80) :: description
+    Real(dp) :: yein, yin(2), xext, aext, zext, xnet
+    Integer :: ierr, lun
+
+    Call initialize_nuclear_fixture
+    Open(newunit=lun,file='model-input-partial',status='replace')
+    Write(lun,'(a)') 'partial final record'
+    Write(lun,'(a)') 'h1 0.25 he4 0.0625 ye 0.5 h1 0.5'
+    Write(lun,'(a)') 'he4 0.125'
+    Close(lun)
+    Call read_inab_file('model-input-partial',description,yein,yin,xext,aext,zext,xnet,ierr)
+    Open(newunit=lun,file='model-input-partial',status='old')
+    Close(lun,status='delete')
+
+    Call check(error,ierr,0)
+    If ( allocated(error) ) Return
+    Call check(error,yin(1),0.5_dp)
+    If ( allocated(error) ) Return
+    Call check(error,yin(2),0.125_dp)
+    If ( allocated(error) ) Return
+    Call check(error,yein,0.5_dp)
+    Return
+  End Subroutine test_partial_record
+
+  Subroutine test_thermo_eof(error)
+    Use model_input_ascii, Only: read_thermo_file
+    Use xnet_controls, Only: initialize_controls_fixture
+    Use xnet_conditions, Only: nhmx, nh, tstart, tstop, tdelstart, t9h, rhoh, yeh
+    Implicit None
+    Type(error_type), Allocatable, Intent(out) :: error
+    Character(80) :: files(1), description(1)
+    Integer :: ierr, lun
+
+    Call initialize_controls_fixture
+    ! One history row followed by normal EOF, with room for another row in the fixture.
+    nhmx = 2
+    files = 'model-input-trajectory'
+    Open(newunit=lun,file=files(1),status='replace')
+    Write(lun,'(a)') 'trajectory','0.0','1.0','-0.001','0.0 2.0 3.0 0.5'
+    Close(lun)
+    ierr = 99
+    Call read_thermo_file(files,description,ierr)
+    nhmx = 1
+    Open(newunit=lun,file=files(1),status='old')
+    Close(lun,status='delete')
+
+    Call check(error,ierr,0)
+    If ( allocated(error) ) Return
+    Call check(error,nh(1),1)
+    If ( allocated(error) ) Return
+    Call check(error,trim(description(1)),'trajectory')
+    If ( allocated(error) ) Return
+    Call check(error,tstart(1),0.0_dp)
+    If ( allocated(error) ) Return
+    Call check(error,tstop(1),1.0_dp)
+    If ( allocated(error) ) Return
+    Call check(error,tdelstart(1),-0.001_dp)
+    If ( allocated(error) ) Return
+    Call check(error,t9h(1,1),2.0_dp)
+    If ( allocated(error) ) Return
+    Call check(error,rhoh(1,1),3.0_dp)
+    If ( allocated(error) ) Return
+    Call check(error,yeh(1,1),0.5_dp)
+    Return
+  End Subroutine test_thermo_eof
 
 End Module test_model_input_contracts
 

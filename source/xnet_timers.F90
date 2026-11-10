@@ -1,38 +1,39 @@
 !***************************************************************************************************
-! xnet_timers.f90 10/18/17
-! This file contains modules and subroutines for internal XNet timers
+! xnet_timers.F90
+! Per-thread wall-clock accumulators and summary reporting for XNet execution stages.
 !***************************************************************************************************
 
 Module xnet_timers
-  !-------------------------------------------------------------------------------------------------
-  ! This module contains the performance timers for XNet.
-  !-------------------------------------------------------------------------------------------------
   Use xnet_types, Only: dp
   Implicit None
-  Real(dp) :: timer_burner = 0.0  ! Total burner execution time
-  Real(dp) :: timer_xnet   = 0.0  ! Evolution interval in full_net, before final_output
-  Real(dp) :: timer_setup  = 0.0  ! Data loading or preprocessing time
-  Real(dp) :: timer_csect  = 0.0  ! Cross section calculation time
-  Real(dp) :: timer_deriv  = 0.0  ! Derivative calculation time
-  Real(dp) :: timer_jacob  = 0.0  ! Jacobian building time
-  Real(dp) :: timer_decmp  = 0.0  ! LU Decomposition time
-  Real(dp) :: timer_bksub  = 0.0  ! Backsubstitution time
-  Real(dp) :: timer_nraph  = 0.0  ! Newton iteration work within implicit solves
-  Real(dp) :: timer_tstep  = 0.0  ! Implicit timestep solves and retries
-  Real(dp) :: timer_solve  = 0.0  ! Solution time
-  Real(dp) :: timer_scrn   = 0.0  ! Screening factors, after plasma-state preparation
-  Real(dp) :: timer_prescrn = 0.0  ! Plasma-state preparation through eos_screen
-  Real(dp) :: timer_eos    = 0.0  ! Thermodynamic updates through update_eos
-  Real(dp) :: timer_nse    = 0.0  ! NSE timer
-  Real(dp) :: timer_nseinit= 0.0  ! NSE init timer
-  Real(dp) :: timer_nsesolv= 0.0  ! NSE solver timer
-  Real(dp) :: timer_nsenrap= 0.0  ! NSE Newton Raphson timer
-  Real(dp) :: timer_nsels  = 0.0  ! NSE line search timer
-  Real(dp) :: timer_nseeval= 0.0  ! NSE function evaluation timer
-  Real(dp) :: timer_nsescrn= 0.0  ! NSE screening timer
-  Real(dp) :: timer_output = 0.0  ! Timed sections of ts_output and final_output
-  Real(dp) :: start_timer  = 0.0  ! Wall-clock timestamp at the beginning of the timer block
-  Real(dp) :: stop_timer   = 0.0  ! Wall-clock timestamp at the end of the timer block
+
+  !-------------------------------------------------------------------------------------------------
+  ! Per-thread cumulative wall-clock timers [s]
+  !-------------------------------------------------------------------------------------------------
+  Real(dp) :: timer_burner  = 0.0_dp ! Total burner execution time
+  Real(dp) :: timer_xnet    = 0.0_dp ! Evolution interval in full_net, before final_output
+  Real(dp) :: timer_setup   = 0.0_dp ! Data loading or preprocessing time
+  Real(dp) :: timer_csect   = 0.0_dp ! Reaction cross-section / rate evaluation time
+  Real(dp) :: timer_deriv   = 0.0_dp ! ODE right-hand side derivative evaluation time
+  Real(dp) :: timer_jacob   = 0.0_dp ! Jacobian construction time
+  Real(dp) :: timer_decmp   = 0.0_dp ! LU decomposition time
+  Real(dp) :: timer_bksub   = 0.0_dp ! LU backsubstitution time
+  Real(dp) :: timer_nraph   = 0.0_dp ! Newton-Raphson iteration work within implicit solves
+  Real(dp) :: timer_tstep   = 0.0_dp ! Implicit timestep solves and retries
+  Real(dp) :: timer_solve   = 0.0_dp ! Linear system solution time
+  Real(dp) :: timer_scrn    = 0.0_dp ! Screening factors, after plasma-state preparation
+  Real(dp) :: timer_prescrn = 0.0_dp ! Plasma-state preparation through eos_screen
+  Real(dp) :: timer_eos     = 0.0_dp ! Thermodynamic updates through update_eos
+  Real(dp) :: timer_nse     = 0.0_dp ! Total NSE solver time
+  Real(dp) :: timer_nseinit = 0.0_dp ! NSE initialization time
+  Real(dp) :: timer_nsesolv = 0.0_dp ! NSE root-finding time
+  Real(dp) :: timer_nsenrap = 0.0_dp ! NSE Newton-Raphson iteration time
+  Real(dp) :: timer_nsels   = 0.0_dp ! NSE line-search time
+  Real(dp) :: timer_nseeval = 0.0_dp ! NSE residual evaluation time
+  Real(dp) :: timer_nsescrn = 0.0_dp ! NSE screening evaluation time
+  Real(dp) :: timer_output  = 0.0_dp ! Timed sections of ts_output and final_output
+  Real(dp) :: start_timer   = 0.0_dp ! Scratch timestamp at the beginning of a timed interval
+  Real(dp) :: stop_timer    = 0.0_dp ! Scratch timestamp at the end of a timed interval
 #ifdef XNET_OMP
   !$omp threadprivate(timer_burner,timer_xnet,timer_setup,timer_csect,timer_deriv,timer_jacob,timer_decmp, &
   !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_prescrn,timer_eos,timer_output, &
@@ -44,18 +45,16 @@ Contains
 
   Function xnet_wtime()
     !-----------------------------------------------------------------------------------------------
-    ! This function returns the wall time in a manner akin to omp_get_wtime().
+    ! Return the current wall-clock time in seconds from the intrinsic system_clock.
     !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: i8
     Implicit None
 
-    ! Function variable
+    ! Function result
     Real(dp) :: xnet_wtime
 
     ! Local variables
-    Integer(i8) :: clock_read
-    Integer(i8) :: clock_rate
-    Integer(i8) :: clock_max
+    Integer(i8) :: clock_read, clock_rate, clock_max
 
     Call system_clock(clock_read,clock_rate,clock_max)
     xnet_wtime = real(clock_read,dp) / real(clock_rate,dp)
@@ -65,41 +64,43 @@ Contains
 
   Subroutine reset_timers
     !-----------------------------------------------------------------------------------------------
-    ! This routine resets timers for zone-independent timing.
+    ! Reset evolution, setup and NSE timers on the calling thread.
+    ! The outer burner timer and output timer retain their current totals.
     !-----------------------------------------------------------------------------------------------
     Implicit None
-    timer_xnet  = 0.0
-    timer_setup = 0.0
-    timer_csect = 0.0
-    timer_deriv = 0.0
-    timer_jacob = 0.0
-    timer_decmp = 0.0
-    timer_bksub = 0.0
-    timer_nraph = 0.0
-    timer_tstep = 0.0
-    timer_solve = 0.0
-    timer_scrn  = 0.0
-    timer_prescrn = 0.0
-    timer_eos   = 0.0
-    timer_nse    = 0.0
-    timer_nseinit= 0.0
-    timer_nsesolv= 0.0
-    timer_nsenrap= 0.0
-    timer_nsels  = 0.0
-    timer_nseeval= 0.0
-    timer_nsescrn= 0.0
+
+    timer_xnet    = 0.0_dp
+    timer_setup   = 0.0_dp
+    timer_csect   = 0.0_dp
+    timer_deriv   = 0.0_dp
+    timer_jacob   = 0.0_dp
+    timer_decmp   = 0.0_dp
+    timer_bksub   = 0.0_dp
+    timer_nraph   = 0.0_dp
+    timer_tstep   = 0.0_dp
+    timer_solve   = 0.0_dp
+    timer_scrn    = 0.0_dp
+    timer_prescrn = 0.0_dp
+    timer_eos     = 0.0_dp
+    timer_nse     = 0.0_dp
+    timer_nseinit = 0.0_dp
+    timer_nsesolv = 0.0_dp
+    timer_nsenrap = 0.0_dp
+    timer_nsels   = 0.0_dp
+    timer_nseeval = 0.0_dp
+    timer_nsescrn = 0.0_dp
 
     Return
   End Subroutine reset_timers
 
   Subroutine write_timers_summary(lun_out)
     !-----------------------------------------------------------------------------------------------
-    ! This routine write a summary of internal timers to the diagnostic output
+    ! Write a summary table of cumulative XNet timers to logical unit lun_out.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
-    ! Input variables
-    Integer, Intent(in) :: lun_out ! The logical unit for diagnostic output
+    ! Input arguments
+    Integer, Intent(in) :: lun_out
 
     ! Local variables
     Integer, Parameter :: ntimer_write = 14
@@ -118,6 +119,7 @@ Contains
     Write(lun_out,"(a)") 'Timers Summary: '
     Write(lun_out,"(8x,a10,es10.3)") (timer_desc(i),timer_write(i),i=1,ntimer_write)
 
+    Return
   End Subroutine write_timers_summary
 
 End Module xnet_timers

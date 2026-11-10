@@ -130,17 +130,19 @@ Program test_xnet_controls
     Error Stop 'HDF5 controls validation accepted an overlong file list'
   EndIf
 
-  Call check_controls_round_trip
+  Call check_controls_round_trip(1)
+  Call check_controls_round_trip(3)
   Write(*,'(a)') 'xnet_controls defaults, validation and round-trip checks passed'
 
 Contains
 
-  Subroutine check_controls_round_trip
+  Subroutine check_controls_round_trip(solver)
     Implicit None
 
     ! write_controls must emit, and read_xnet_controls must restore, every control.  Give each
-    ! field a distinct non-default value so that a field missing from a copy list is detected.
+    ! field a non-default value in at least one solver case to detect missing copy-list entries.
     ! Add new controls here (and to controls.defaults) when they are added to xnet_controls_t.
+    Integer, Intent(in) :: solver
     Type(xnet_controls_t) :: original, restored
     Character(80) :: data_dir
     Character(*), Parameter :: filename = 'xnet_controls_round_trip.nml'
@@ -154,7 +156,7 @@ Contains
     original%iscrn = 0
     original%iprocess = 1
     original%nzbatchmx = 2
-    original%isolv = 1
+    original%isolv = solver
     original%kstmx = 123
     original%kitmx = 7
     original%ijac = 3
@@ -186,6 +188,11 @@ Contains
     nthread = 1
     tid = 1
     Call apply_standalone_controls(original,data_dir)
+    ! The resolved namelist records runtime values; BDF disables the BE change limits.
+    If ( solver == 3 ) Then
+      original%changemx = 1.0e10_dp
+      original%changemxt = 1.0e10_dp
+    EndIf
     Open(newunit=lun,file=filename,status='replace',action='write')
     Call write_controls(lun,data_dir)
     Close(lun)

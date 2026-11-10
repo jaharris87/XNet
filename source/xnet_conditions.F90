@@ -3,8 +3,8 @@
 ! Thermodynamic state, timestep bookkeeping, trajectory history storage, and interpolation.
 !
 ! Manages per-zone time, timestep, temperature (T9 [GK]), density (rho [g/cm^3]), electron
-! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories across the active
-! zones (1:nzevolve). The standalone driver allocates full trajectories (history_capacity = nhmx),
+! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories in the zone workspace
+! (1:nzevolve). The standalone driver allocates full trajectories (history_capacity = nhmx),
 ! whereas constant-condition library burns allocate two-point endpoint histories (history_capacity = 2).
 !***************************************************************************************************
 

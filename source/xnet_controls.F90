@@ -106,7 +106,7 @@ Module xnet_controls
   End Type xnet_controls_t
 
   ! When adding a control, update controls.defaults, validation, runtime application,
-  ! namelist reading/writing, and bcast_xnet_controls. Extend test_xnet_controls accordingly.
+  ! namelist reading/writing, and broadcast_xnet_controls. Extend test_xnet_controls accordingly.
 
   !-------------------------------------------------------------------------------------------------
   ! Runtime Control State and Worker Workspace Bookkeeping
@@ -702,7 +702,7 @@ Contains
   End Subroutine broadcast_xnet_controls
 
   !=================================================================================================
-  ! Private Namelist Layering, Normalization, and Parsing Helpers
+  ! Namelist Layering, Normalization, and Parsing Helpers
   !=================================================================================================
 
   Recursive Subroutine read_controls_file(controls,filename,depth,ancestor_paths,message)

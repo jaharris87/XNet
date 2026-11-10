@@ -65,6 +65,9 @@ PRODUCTION_XNET_EXE := $(ROOT_DIR)/build/$(PRODUCTION_BUILD_NAME)/bin/xnet
 MODEL_INPUT_BUILD_DIR := $(BUILD_DIR)/model-input
 MODEL_INPUT_MODULE_FLAGS := -J$(MODEL_INPUT_BUILD_DIR) -I$(MODEL_INPUT_BUILD_DIR) -I$(XNET_DIR)
 MODEL_INPUT_TEST_EXE := $(MODEL_INPUT_BUILD_DIR)/model_input_contract_tests
+SCREENING_BUILD_DIR := $(BUILD_DIR)/screening
+SCREENING_TEST_EXE := $(SCREENING_BUILD_DIR)/screening_tests
+SCREENING_MODULE_FLAGS := -J$(SCREENING_BUILD_DIR) -I$(SCREENING_BUILD_DIR) -I$(XNET_DIR)
 
 OBJECTS := \
   $(BUILD_DIR)/testdrive.o \
@@ -145,10 +148,10 @@ BUILD_NET_OBJECTS := \
 
 .DEFAULT_GOAL := test
 
-.PHONY: test eos-test real-ma48-test real-pardiso-mkl-test clean production-xnet model-input-test \
+.PHONY: test eos-test screening-test real-ma48-test real-pardiso-mkl-test clean production-xnet model-input-test \
   surrogate-underflow-trap-test surrogate-verifier
 
-test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
+test: eos-test screening-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
     $(CONTROLS_TEST_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
     $(SURROGATE_UNDERFLOW_TEST) \
     $(SPARSE_DATA_EXE) \
@@ -178,6 +181,42 @@ test: eos-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPRO
 model-input-test: $(MODEL_INPUT_TEST_EXE)
 
 	@bash run_model_input_contracts.sh $(MODEL_INPUT_BUILD_DIR) $(MODEL_INPUT_TEST_EXE)
+
+screening-test: $(SCREENING_TEST_EXE)
+	@$(SCREENING_TEST_EXE)
+
+$(SCREENING_BUILD_DIR):
+	mkdir -p $@
+
+$(SCREENING_BUILD_DIR)/xnet_types.o: $(XNET_DIR)/xnet_types.F90 | $(SCREENING_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
+
+$(SCREENING_BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(SCREENING_BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
+
+$(SCREENING_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 $(SCREENING_BUILD_DIR)/xnet_types.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
+
+$(SCREENING_BUILD_DIR)/screening_test_stubs.o: support/screening_test_stubs.F90 $(SCREENING_BUILD_DIR)/xnet_types.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
+
+$(SCREENING_BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 $(SCREENING_BUILD_DIR)/xnet_types.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
+
+$(SCREENING_BUILD_DIR)/xnet_screening.o: $(XNET_DIR)/xnet_screening.F90 $(XNET_DIR)/xnet_macros.fh \
+    $(SCREENING_BUILD_DIR)/xnet_constants.o $(SCREENING_BUILD_DIR)/screening_test_stubs.o \
+    $(SCREENING_BUILD_DIR)/xnet_timers.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
+
+$(SCREENING_BUILD_DIR)/test_xnet_screening.o: test_xnet_screening.F90 \
+    $(SCREENING_BUILD_DIR)/testdrive.o $(SCREENING_BUILD_DIR)/xnet_screening.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
+
+$(SCREENING_TEST_EXE): $(SCREENING_BUILD_DIR)/testdrive.o $(SCREENING_BUILD_DIR)/xnet_types.o \
+    $(SCREENING_BUILD_DIR)/xnet_constants.o $(SCREENING_BUILD_DIR)/screening_test_stubs.o \
+    $(SCREENING_BUILD_DIR)/xnet_timers.o $(SCREENING_BUILD_DIR)/xnet_screening.o \
+    $(SCREENING_BUILD_DIR)/test_xnet_screening.o
+	$(LDR) -o $@ $^ $(LDFLAGS)
 
 eos-test: $(EOS_CONTRACT_EXES)
 	@bash run_eos_contracts.sh $(EOS_WORK_DIR) $(abspath $(STARKILLER_EOS_EXE)) \

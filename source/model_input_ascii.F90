@@ -9,9 +9,9 @@
 ! - load_initial_abundances: Interpolates initial Ye from the trajectory, reads the initial
 !   abundance file when needed (t9start <= t9nse or invalid trajectory Ye), and initializes
 !   ystart either from the file or from Nuclear Statistical Equilibrium (when t9start > t9nse).
-! - read_inab_file: Parses an ASCII initial-abundance file (up to 4 species/molar-abundance pairs
-!   per line plus optional 'ye') and computes either auxiliary-nucleus moments (xext, aext, zext)
-!   for out-of-network species or normalized in-network abundances yin(1:ny).
+! - read_inab_file: Reads named molar abundances and optional Ye, preferably one pair per line,
+!   and computes auxiliary-nucleus moments (xext, aext, zext) for out-of-network species or
+!   normalized in-network abundances yin(1:ny).
 !***************************************************************************************************
 
 Module model_input_ascii
@@ -254,8 +254,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Read an ASCII initial-abundance file.
     ! Note: Unlike the library API (which takes mass fractions X_i), standalone initial-abundance
-    ! files store molar abundances Y_i = X_i / A_i, up to four (name, Y_i) pairs per line, plus an
-    ! optional ('ye', Ye) pair. Species absent from the active network are accumulated into yext:
+    ! files store molar abundances Y_i = X_i / A_i. Use one (name, Y_i) or ('ye', Ye) pair per line,
+    ! as write_xnet_inab does. Packed input is read four pairs at a time, including any 'ye' pair.
+    ! A read may span lines; unused fields on the line completing the group are discarded.
+    ! Species absent from the active network are accumulated into yext:
     ! - When yext > 0, xnet < 1, and znet < yein: out-of-network matter forms an auxiliary nucleus
     !   with xext = 1 - xnet, aext = xext / yext, and zext = (yein - znet) * aext / xext.
     ! - Otherwise: xext = 0 and in-network abundances yin(:) are normalized by xnet = sum(yin * aa).

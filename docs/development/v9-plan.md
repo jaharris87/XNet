@@ -25,9 +25,10 @@ for current implementation status.
 | --- | --- | --- |
 | [#128: configuration](https://github.com/jaharris87/XNet/issues/128) | Merged: validated `xnet_controls_t`, programmatic configuration, layered standalone namelists, and migrated maintained inputs | Use the existing representation in the application interface |
 | [#127: starting CPU measurements](https://github.com/jaharris87/XNet/issues/127) | Complete and accepted: serial dense CPU measurements for four network sizes on both facilities, with MA48 deferred | Preserve this starting point for resulting-code comparisons |
-| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: CPU API/archive (#158), fatal-shutdown reporting (#159), thin EOS adapters (#160), scalar NSE (#161), timestep output (#162), and the activity-named evolution timer (#166). Draft #164 adds GPU resources and concurrent application-side CPU batch calls | Diagnose the CCE CPU execution failure and complete remaining execution-mode checks; leave merges to the maintainer |
-| [#130: application integrations](https://github.com/jaharris87/XNet/issues/130) | Reviewed CPU prototypes and later one/two/four-worker checks for both consumers. Both CHIMERA GPU application attempts stopped in the CPU step | Review the private CHIMERA wrapper cleanup, diagnose the two separate facility failures, then validate required modes and ownership |
-| [#131: CPU/GPU and application performance](https://github.com/jaharris87/XNet/issues/131) | Stage A complete: four network sizes on both facilities; stage B remains open | Measure resulting-code and repeated application burns after the relevant #129/#130 work |
+| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: public lifecycle/archive, EOS/NSE/timestep/timing results, concurrent application-side CPU batch calls and GPU resource ownership (#164), followed by API/GPU readability work (#180) | Share standalone/API lifecycle code under #184, agree the #185 storage layout, and complete remaining execution-mode checks |
+| [#130: application integrations](https://github.com/jaharris87/XNet/issues/130) | Selected CHIMERA 17/160/350 and Flash-X 17/160 CPU comparisons are complete at their recorded sources. Flash-X 350 execution and application GPU checks remain | Reconcile wrappers with the current interface, check resulting code, and validate required modes and ownership; diagnose the two facility failures separately |
+| [#171](https://github.com/jaharris87/XNet/issues/171) / [#181: numerical corrections](https://github.com/jaharris87/XNet/issues/181) | Screening correction #175 is merged. Accepted-composition Ye correction #182 remains draft, refreshed against current development | Complete current-source native checks and resolve the NVIDIA CPU threaded-caller compiler failure in #183 |
+| [#131: CPU/GPU and application performance](https://github.com/jaharris87/XNet/issues/131) | Stage A complete: four network sizes on both facilities. Six application workloads selected for stage B; no stage B timings yet | Settle implementation and correctness checks before selecting the timing source and measuring repeated application burns |
 | [#132: release checks](https://github.com/jaharris87/XNet/issues/132) | Not yet a release candidate | Verify the final implementation, supported platforms, and documentation |
 
 The CPU results are in the
@@ -120,52 +121,74 @@ The merged CPU implementation builds a driver-free library, exercises
 repeated burns through its public procedures, preserves reusable setup, and
 compares results with the direct numerical path. Its build and calls are
 documented in [Fortran library API](embedding.md). The optional timestep result
-used by Flash-X is merged in #162. Both selected CPU application cases have
-run through the API and passed independent review, within the limits below.
+used by Flash-X is merged in #162. CPU cases from both applications have run
+through the API and passed independent review, within the limits below.
 Continue standalone tests and focused independently reviewed PRs; an external
 test caller does not replace required application checks.
 
-[PR #164](https://github.com/jaharris87/XNet/pull/164) remains draft and
-unmerged. It adds GPU resources and preserves the application-side CPU batch
-loop used by CHIMERA and Flash-X. In that PR, CPU `OPENMP_MODE=ON` lets each
-worker in a fixed, nonnested team call XNet for its own batch bank;
-initialization and finalization remain outside the team. External EOS routines must support
-concurrent evaluation. GPU library builds use `OPENMP_MODE=OFF` and serialize
-XNet calls; the application may use OpenMP elsewhere. The proposed library
-still uses dense solves, one instance and library MPI off. These pending
-changes do not alter the merged API's support claims.
+[PR #164](https://github.com/jaharris87/XNet/pull/164) is merged. It adds GPU
+resources and preserves the application-side CPU batch loop used by CHIMERA
+and Flash-X. CPU `OPENMP_MODE=ON` lets each worker in a fixed, nonnested team
+call XNet for its own batch bank; initialization and finalization remain
+outside the team. External EOS routines must support concurrent evaluation.
+GPU library builds use `OPENMP_MODE=OFF` and serialize
+XNet calls; the application may use OpenMP elsewhere. The library uses dense
+solves, one instance and library MPI off.
 
-The GPU direction uses one shared initializer/finalizer, vendor resources
+The GPU implementation uses one shared initializer/finalizer, vendor resources
 with independent ownership and partial borrowing, and optional
-`data_on_device` on the burn procedure. Selected
-[HIP/OpenMP-target](https://github.com/jaharris87/XNet/pull/164#issuecomment-6616346977)
-and [CUDA/OpenACC](https://github.com/jaharris87/XNet/pull/164#issuecomment-6634980583)
-library checks pass at their recorded sources. The separate
-[CCE CPU worker check](https://github.com/jaharris87/XNet/pull/164#issuecomment-6635481972)
-stopped in a serial SN160 caller; its cause remains unresolved. Compiler
-warnings also remain open. Successful library tests and application links
+`data_on_device` on the burn procedure. Merged
+[#180](https://github.com/jaharris87/XNet/pull/180) makes the API/GPU lifecycle
+easier to read, and merged [#188](https://github.com/jaharris87/XNet/pull/188)
+does the same for the driver, controls and I/O. Selected native CPU/GPU library
+checks pass at their recorded sources, including
+[CCE CPU execution at `5f87e4f3`](https://github.com/jaharris87/XNet/pull/164#issuecomment-6662814762)
+and [#180's HIP/OpenMP-target and CUDA/OpenACC checks at `4a455a2e`](https://github.com/jaharris87/XNet/pull/180#issuecomment-6748899829).
+Compiler warnings remain open. Successful library tests and application links
 do not establish application GPU execution, performance or release readiness.
-Use #129 and the PR for the current candidate, checks and remaining limits;
-older successful runs do not cover later source changes automatically.
+
+The [screening correction #175](https://github.com/jaharris87/XNet/pull/175)
+is merged. [Draft #182](https://github.com/jaharris87/XNet/pull/182) corrects
+Ye to describe accepted BE/BDF composition. Its refreshed `3f32d338` candidate
+passes [231 local regressions, library/batch/overlap checks and selected DEBUG cases](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779908945),
+with [fresh review passing](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779966537).
+The maintainer [accepted its November 6 native comparisons](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779556459)
+at the older `d8dc7efe` source; those results do not establish refreshed-source
+native behavior. The [NVIDIA CPU threaded-caller compiler ICE #183](https://github.com/jaharris87/XNet/issues/183)
+remains open; GPU-library success does not cover that caller.
+
+The remaining implementation has separate scopes. [#184](https://github.com/jaharris87/XNet/issues/184)
+plans common standalone/API initialization and cleanup underneath the two
+front ends. Standalone trajectories must keep their interpolation and
+integrator history rather than becoming repeated constant-condition burns.
+Important v9 worker/zone-storage work in [#185](https://github.com/jaharris87/XNet/issues/185)
+follows the lifecycle work and requires the maintainer's layout decision
+before implementation. Neither change is implemented.
+[#186](https://github.com/jaharris87/XNet/issues/186) requests arbitrary
+species-order preparation and fill-in assessment, with investigation first;
+priority and release gating remain for decision under #126. It has no
+implementation candidate or default-order change. Use #126 and the component
+records for changing status and source-specific checks.
 
 ## 3. Validate both consumers and measure repeated use
 
-Under #130, the first representative CPU sequences are complete: CHIMERA's
-finite one-rank table-EOS case reached cycle 6, including the delivered-copy
-repeat; Flash-X's Cellular/alpha case completed 114 steps on four host MPI
-ranks, including repaired batch-10 and batch-16 checks. Independent source and
-results reviews passed. These are limited integration comparisons, with
-cross-version differences reported descriptively; they do not establish broad
-scientific equivalence, performance, or all execution modes. See the
-[CHIMERA repeat](https://github.com/jaharris87/XNet/issues/130#issuecomment-6508231286)
-and [Flash-X repair/results](https://github.com/jaharris87/XNet/issues/130#issuecomment-6508937667).
+Under #130, the selected CHIMERA 17/160/350-species table-EOS CPU sequences
+complete through cycle 6 with one/two/four workers. The
+[approved CHIMERA summary](https://github.com/jaharris87/XNet/issues/130#issuecomment-6663354031)
+records the private 350-species capacity repair, independent source/output
+reviews and the maintainer's acceptance of the named thread-count
+differences. These nine comparisons keep their recorded source bindings and
+introduce no general tolerance or scientific reference.
 
-Later [application-side CPU worker checks](https://github.com/jaharris87/XNet/issues/130#issuecomment-6613806794)
-cover serial calls and concurrent two/four-worker burns, including CHIMERA's
-scalar NSE path. The maintainer
-[accepted the recorded CHIMERA radiation differences](https://github.com/jaharris87/XNet/issues/130#issuecomment-6614190688)
-for that six-cycle CPU comparison. This decision does not establish broader
-scientific or release acceptance.
+The selected Flash-X Cellular 17- and 160-species CPU sequences also complete
+at frozen public `5f87e4f3`, before #175. The
+[approved 160-species summary](https://github.com/jaharris87/XNet/issues/130#issuecomment-6690412335)
+covers four MPI ranks and one/two/four workers per rank, with complete
+checkpoint and history comparisons. Flash-X 350 application execution remains
+unattempted. Earlier alpha-network, restart and CPU-worker results remain
+separately identified in #130. Reconcile the wrappers with the current public
+interface and check the resulting code before timing; historical comparisons
+do not establish current merged-code behavior or application GPU execution.
 
 Complete the remaining checks against each intended support claim. Check
 species ordering, units, normalization, masks and partial batches,
@@ -178,17 +201,15 @@ Use #130's recorded results to distinguish checked restart, MPI, CPU worker
 and GPU configurations from the modes still requiring validation. Decide
 support and any named exceptions with the maintainer.
 
-The private CHIMERA wrapper cleanup remains under maintainer source review.
-Two finite CPU/GPU application pairs stopped before the GPU step: Frontier
-job 5796356 crashed in FFN interpolation during its first CPU burn; its cause
-remains unresolved. Perlmutter job 60526850 failed during MPI initialization
-with GPU-aware MPI enabled but no CUDA GTL in the CPU binary. A CPU-step-only
-launch correction is proposed and untested. Keep these failures separate;
-neither full GPU application ran. Both allocations are released and any
-retry requires fresh approval of a concrete resource request. See the
-[application failure record](https://github.com/jaharris87/XNet/issues/130#issuecomment-6514006239).
-The separate public CCE CPU failure in #164 does not diagnose either private
-application failure.
+Both private CHIMERA facility failures remain unresolved and separate:
+Frontier's CPU FFN interpolation failure and Perlmutter's CPU MPI/GTL startup
+failure. Neither reached application GPU execution. The public FFN repair
+does not establish the private failure's cause; Perlmutter's CPU launch
+correction remains untested. See the
+[application failure record](https://github.com/jaharris87/XNet/issues/130#issuecomment-6514006239)
+and #130's current status. Public standalone/library success does not diagnose
+either failure. New facility runs require approval of a concrete resource
+request; earlier allocation approvals are consumed.
 
 If access to an application or its workload is unavailable, report the
 specific limitation and ask the maintainer how it affects release scope.
@@ -196,22 +217,38 @@ Do not invent a representative workload or waive a required consumer.
 
 Stage B of #131 owns performance of the resulting implementation: reuse #127
 and stage A inputs for before/after standalone comparisons, and measure
-repeated calls from reviewed consumer samples. Separate one-time setup,
-per-call work, and batch evolution. Choose additional OpenMP, GPU batch,
-ranks/GPU, MA48, and self-heating points
-to answer concrete questions. The full documented matrix is not a Cartesian
+repeated calls from reviewed consumer samples. The maintainer selected six
+workloads: CHIMERA and Flash-X Cellular, each with 17/160/350 species, starting
+with one/two/four CPU workers. CHIMERA keeps its supplied inputs; Flash-X 350
+uses public XNet ECSN350. No stage B timings have been collected. Complete the
+relevant lifecycle/storage work and resulting-code correctness checks before
+selecting the timing source; decide #186's priority and release disposition
+without silently changing workload ordering. Keep the completed starting
+measurements and use the existing runner rather than restarting the abandoned
+benchmark framework.
+
+Separate one-time setup, per-call work, and batch evolution. Choose additional
+OpenMP, GPU batch, ranks/GPU, MA48, and self-heating points to answer concrete
+questions. The full documented matrix is not a Cartesian
 product or an automatic requirement to run every configuration.
 
 The merged `timing%evolve` field measures the interval inside `full_net`.
 Time around `xnet_burn_batch` in the application for full-call cost, and record
 one-time setup separately. Summed component durations from concurrent workers
-are not workload elapsed time. The maintainer selects the stage B application
-workloads and measurement scope in #131; correctness-run durations are not
-substitutes for those measurements.
+are not workload elapsed time. The maintainer selects the stage B measurement
+scope in #131; correctness-run durations are not substitutes for those
+measurements.
 
-Use measurements to decide whether an optimization is worthwhile. A proposed
-optimization, extra timing package, or provider layer needs a demonstrated
-need. Keep unrelated investigations, including #138's late-time C/O question
+The maintainer [approved five no-change dispositions for v9.0](https://github.com/jaharris87/XNet/issues/131#issuecomment-6692997969):
+retain synchronous OpenMP offload, pivoted ROCm solves and dense GPU solving;
+defer GPU sparse implementation and fTimer adoption, with follow-up patches
+after v9.0. #65 remains open. Deferred work is not a prerequisite for the first
+stage B timing series, and the decision supplies no performance result or
+release acceptance.
+
+Use measurements to decide whether a later optimization is worthwhile. A
+proposed optimization, extra timing package, or provider layer needs a
+demonstrated need. Keep unrelated investigations, including #138's late-time C/O question
 and #139's optional HDF5 input support, separate unless the maintainer makes
 one necessary for a real consumer.
 
@@ -226,6 +263,12 @@ changed afterward. Bind the release checks to the assembled candidate,
 executables, inputs and environments on both facilities, or obtain a named
 maintainer-approved exception. Performance measurements do not replace these
 correctness checks.
+
+Frontier maintenance is temporary unavailability, not a waiver of its checks.
+There is no final release candidate. Resolve or obtain maintainer dispositions
+for the remaining implementation, compiler, application and performance work
+before assembling #132's release checks; past comparisons retain their source
+limits.
 
 The product documentation should explain how to build and run standalone
 XNet, migrate inputs, link the library, call the public procedures, interpret

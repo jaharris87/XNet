@@ -217,9 +217,13 @@ def main() -> None:
     inputs = {name: digest(root / name) for name in source_files if name and (root / name).is_file()}
     inputs.update({str(path): digest(path) for path in (exe, archive, config, setup, root / "tools/starkiller-helmholtz/helm_table.dat",
                    Path(__file__), Path(__file__).with_name("host_batch_openmp_consumer.F90"), Path(__file__).with_name("Makefile"))})
-    compiler = subprocess.run(shlex.split(settings["XNET_FC"]) + ["--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+    compiler_command = shlex.split(settings["XNET_FC"]) + ["--version"]
+    if build_record.is_file() and "PE_ENV=NVIDIA" in build_record.read_text().splitlines():
+        # Query the NVIDIA driver directly; ftn --version is not a safe version query.
+        compiler_command = ["nvfortran", "-V"]
+    compiler = subprocess.run(compiler_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
     (work / "inputs.json").write_text(json.dumps({"git_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root).decode().strip(),
-        "platform": platform.platform(), "compiler_version": compiler.stdout, "compiler_version_status": compiler.returncode,
+        "platform": platform.platform(), "compiler_version_command": compiler_command, "compiler_version": compiler.stdout, "compiler_version_status": compiler.returncode,
         "exported_configuration": settings, "build_record": build_record.read_text() if build_record.is_file() else "missing",
         "sha256": inputs}, indent=2) + "\n")
     library_parser = load("library_parser", root / "test/library/run_library_tests.py")

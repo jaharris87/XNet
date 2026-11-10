@@ -1,6 +1,9 @@
 !***************************************************************************************************
 ! xnet_evolve.F90
-! Time-stepping reaction-network evolution across a worker batch of thermodynamic zones.
+! Shared network/workspace setup, cleanup, and time-stepping evolution for both XNet frontends.
+!
+! Lifecycle routines coordinate the existing module owners. The frontends retain controls,
+! input/output policy, MPI scheduling, GPU resource ownership, and the history capacity.
 !
 ! Called by both the standalone trajectory driver (net.F90) and the embedded library API
 ! (evolve_batch in xnet_api.F90). Advances active zones in the workspace bank of the calling
@@ -42,6 +45,103 @@ Module xnet_evolve
   Private :: terminate_on_zone_failure
 
 Contains
+
+  Subroutine read_network_data(data_dir,data_description)
+    ! Read species and reaction data before solver setup. Standalone writes the data description
+    ! between this phase and initialize_solver_and_physics, preserving diagnostic order.
+    Use nuclear_data, Only: read_nuclear_data
+    Use reaction_data, Only: read_reaction_data
+    Implicit None
+    Character(*), Intent(in) :: data_dir
+    Character(80), Intent(out) :: data_description
+
+    Call read_nuclear_data(data_dir,data_description)
+    Call read_reaction_data(data_dir)
+    Return
+  End Subroutine read_network_data
+
+  Subroutine initialize_solver_and_physics(data_dir)
+    ! Initialize long-lived solver and physics state after the network data have been read.
+    Use xnet_controls, Only: isolv
+    Use xnet_eos, Only: eos_initialize
+    Use xnet_flux, Only: flux_init
+    Use xnet_integrate_be, Only: be_init
+    Use xnet_integrate_bdf, Only: bdf_init
+    Use xnet_jacobian, Only: read_jacobian_data
+    Use xnet_match, Only: read_match_data
+    Use xnet_screening, Only: screening_init
+    Implicit None
+    Character(*), Intent(in) :: data_dir
+
+    Call read_jacobian_data(data_dir)
+    Call read_match_data(data_dir)
+    Call screening_init
+    Call flux_init
+    Call eos_initialize
+    If ( isolv == 1 ) Call be_init
+    If ( isolv == 3 ) Call bdf_init
+    Return
+  End Subroutine initialize_solver_and_physics
+
+  Subroutine initialize_zone_workspace(history_capacity)
+    ! Standalone retains complete trajectories; constant-condition API calls use two endpoints.
+    ! Each owning module allocates and maps its own arrays, once per initialized instance.
+    Use xnet_abundances, Only: abundances_initialize
+    Use xnet_conditions, Only: conditions_initialize
+    Use xnet_nnu, Only: nnu_initialize
+    Use xnet_nse, Only: nse_initialize
+    Implicit None
+    Integer, Intent(in) :: history_capacity
+
+    Call nse_initialize
+    Call abundances_initialize
+    Call conditions_initialize(history_capacity)
+    Call nnu_initialize(history_capacity)
+    Return
+  End Subroutine initialize_zone_workspace
+
+  Subroutine finalize_evolution_workspace
+    ! Release initialized integrator, NSE and EOS state before network storage or GPU resources.
+    Use xnet_eos, Only: eos_finalize
+    Use xnet_integrate_be, Only: be_finalize
+    Use xnet_integrate_bdf, Only: bdf_finalize
+    Use xnet_nse, Only: nse_finalize
+    Implicit None
+
+    Call be_finalize
+    Call bdf_finalize
+    Call nse_finalize
+    Call eos_finalize
+    Return
+  End Subroutine finalize_evolution_workspace
+
+  Subroutine finalize_network_workspace
+    ! Call after evolution cleanup and any frontend-specific Jacobian cleanup. Owners release
+    ! mappings before CPU allocations; controls stay available until the other owners finish.
+    Use nuclear_data, Only: nuclear_data_finalize
+    Use reaction_data, Only: reaction_data_finalize
+    Use xnet_abundances, Only: abundances_finalize
+    Use xnet_conditions, Only: conditions_finalize
+    Use xnet_controls, Only: controls_finalize
+    Use xnet_ffn, Only: ffn_finalize
+    Use xnet_flux, Only: flux_finalize
+    Use xnet_match, Only: match_finalize
+    Use xnet_nnu, Only: nnu_finalize
+    Use xnet_screening, Only: screening_finalize
+    Implicit None
+
+    Call screening_finalize
+    Call flux_finalize
+    Call match_finalize
+    Call ffn_finalize
+    Call nnu_finalize
+    Call reaction_data_finalize
+    Call nuclear_data_finalize
+    Call abundances_finalize
+    Call conditions_finalize
+    Call controls_finalize
+    Return
+  End Subroutine finalize_network_workspace
 
   Subroutine full_net(kstep,denu,ierr_out,failed_zone)
     !-----------------------------------------------------------------------------------------------

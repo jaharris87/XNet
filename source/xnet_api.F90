@@ -135,7 +135,9 @@ Contains
     ! Reader, allocation, EOS and solver failures can still terminate.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: apply_xnet_controls
+    Use xnet_evolve, Only: read_network_data, initialize_solver_and_physics, initialize_zone_workspace
     Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
+    Use xnet_output, Only: resolve_output_species
     Implicit None
 
     ! Required arguments
@@ -188,8 +190,10 @@ Contains
     EndIf
 
     ! Initialize the network and solver modules, then allocate and map persistent XNet workspace.
-    Call load_network(controls)
-    Call initialize_workspace
+    Call read_network_data(controls%data_dir,api_data_description)
+    Call initialize_solver_and_physics(controls%data_dir)
+    If ( controls%itsout > 0 ) Call resolve_output_species
+    Call initialize_zone_workspace(2)
     Call copy_network_data(network)
     api_state = api_ready
     ierr = xnet_success
@@ -398,7 +402,9 @@ Contains
     ! Call outside application parallel regions, with no work in flight and the initialized team.
     ! After successful cleanup, repeated calls succeed without repeating teardown.
     !-----------------------------------------------------------------------------------------------
+    Use xnet_evolve, Only: finalize_evolution_workspace, finalize_network_workspace
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
+    Use xnet_jacobian, Only: jacobian_finalize
     Implicit None
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
@@ -411,7 +417,9 @@ Contains
     If ( api_state == api_ready ) Then
       Call gpu_check_device(ierr,message)
       If ( ierr /= xnet_success ) Return
-      Call finalize_workspace
+      Call finalize_evolution_workspace
+      Call jacobian_finalize
+      Call finalize_network_workspace
       api_state = api_cleanup_pending
     EndIf
     ! A failed cleanup can be retried without touching the released workspaces.
@@ -570,24 +578,6 @@ Contains
     Return
   End Subroutine initialize_thread_state
 
-  Subroutine load_network(controls)
-    !-----------------------------------------------------------------------------------------------
-    ! Read nuclear, reaction, Jacobian and matching data for the selected network.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: read_nuclear_data
-    Use reaction_data, Only: read_reaction_data
-    Use xnet_jacobian, Only: read_jacobian_data
-    Use xnet_match, Only: read_match_data
-    Implicit None
-    Type(xnet_controls_t), Intent(in) :: controls
-
-    Call read_nuclear_data(controls%data_dir,api_data_description)
-    Call read_reaction_data(controls%data_dir)
-    Call read_jacobian_data(controls%data_dir)
-    Call read_match_data(controls%data_dir)
-    Return
-  End Subroutine load_network
-
   Subroutine copy_network_data(network)
     !-----------------------------------------------------------------------------------------------
     ! Copy species names, A/Z and nuclear energies into independent, caller-owned metadata arrays.
@@ -605,89 +595,6 @@ Contains
     network%mass_excess_mev = mex
     Return
   End Subroutine copy_network_data
-
-  Subroutine initialize_workspace
-    !-----------------------------------------------------------------------------------------------
-    ! Initialize physics and EOS providers, integrators, and reusable zone storage.
-    ! Each module owns the device mappings for the arrays it allocates.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, index_from_name
-    Use xnet_abundances, Only: abundances_initialize
-    Use xnet_conditions, Only: conditions_initialize
-    Use xnet_controls, Only: isolv, itsout, lun_stdout, nnucout, output_nuc, inucout
-    Use xnet_eos, Only: eos_initialize
-    Use xnet_flux, Only: flux_init
-    Use xnet_integrate_be, Only: be_init
-    Use xnet_integrate_bdf, Only: bdf_init
-    Use xnet_nnu, Only: nnu_initialize
-    Use xnet_nse, Only: nse_initialize
-    Use xnet_screening, Only: screening_init
-    Implicit None
-    Integer :: i, inuc
-
-    Call screening_init
-    Call flux_init
-    Call eos_initialize
-    If ( isolv == 1 ) Call be_init
-    If ( isolv == 3 ) Call bdf_init
-    ! Use the standalone species lookup and missing-name fallback for condensed output.
-    If ( itsout > 0 ) Then
-      Do i = 1, nnucout
-        Call index_from_name(output_nuc(i),inuc)
-        If ( inuc < 1 .or. inuc > ny ) Then
-          Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
-          inucout(i) = ny
-        Else
-          inucout(i) = inuc
-        EndIf
-      EndDo
-    EndIf
-
-    Call nse_initialize
-    Call abundances_initialize
-    Call conditions_initialize(2)
-    Call nnu_initialize(2)
-    Return
-  End Subroutine initialize_workspace
-
-  Subroutine finalize_workspace
-    !-----------------------------------------------------------------------------------------------
-    ! Finalize module state; each module releases its mappings before its CPU allocations.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: nuclear_data_finalize
-    Use reaction_data, Only: reaction_data_finalize
-    Use xnet_abundances, Only: abundances_finalize
-    Use xnet_conditions, Only: conditions_finalize
-    Use xnet_controls, Only: controls_finalize
-    Use xnet_eos, Only: eos_finalize
-    Use xnet_ffn, Only: ffn_finalize
-    Use xnet_flux, Only: flux_finalize
-    Use xnet_integrate_be, Only: be_finalize
-    Use xnet_integrate_bdf, Only: bdf_finalize
-    Use xnet_jacobian, Only: jacobian_finalize
-    Use xnet_match, Only: match_finalize
-    Use xnet_nnu, Only: nnu_finalize
-    Use xnet_nse, Only: nse_finalize
-    Use xnet_screening, Only: screening_finalize
-    Implicit None
-
-    Call be_finalize
-    Call bdf_finalize
-    Call nse_finalize
-    Call eos_finalize
-    Call jacobian_finalize
-    Call screening_finalize
-    Call flux_finalize
-    Call match_finalize
-    Call ffn_finalize
-    Call nnu_finalize
-    Call reaction_data_finalize
-    Call nuclear_data_finalize
-    Call abundances_finalize
-    Call conditions_finalize
-    Call controls_finalize
-    Return
-  End Subroutine finalize_workspace
 
   Subroutine check_finalize_team(ierr,message)
     !-----------------------------------------------------------------------------------------------

@@ -28,6 +28,7 @@ Module xnet_output
   Public :: open_ts_file
   Public :: open_ev_file
   Public :: close_output_files
+  Public :: resolve_output_species
   Public :: ts_output
   Public :: final_output
   Public :: write_xnet_inab
@@ -35,6 +36,25 @@ Module xnet_output
   Public :: write_xnet_th_history, write_xnet_th_point
 
 Contains
+
+  Subroutine resolve_output_species
+    ! Resolve condensed ASCII output names with the existing warning and last-species fallback.
+    Use nuclear_data, Only: ny, index_from_name
+    Use xnet_controls, Only: nnucout, output_nuc, inucout, lun_stdout
+    Implicit None
+    Integer :: i, inuc
+
+    Do i = 1, nnucout
+      Call index_from_name(output_nuc(i),inuc)
+      If ( inuc < 1 .or. inuc > ny ) Then
+        Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
+        inucout(i) = ny
+      Else
+        inucout(i) = inuc
+      EndIf
+    EndDo
+    Return
+  End Subroutine resolve_output_species
 
   !=================================================================================================
   ! Time-Series File Lifecycle

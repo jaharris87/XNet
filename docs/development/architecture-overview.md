@@ -60,7 +60,7 @@ these areas, especially through shared module state.
 5. reads thermodynamic histories and initial abundances through
    `model_input_ascii`;
 6. evolves assigned zones and writes diagnostic or timestep output;
-7. finalizes accelerator and parallel resources.
+7. releases non-Jacobian module storage, then accelerator and parallel resources.
 
 The exact order and conditional calls live in `source/net.F90`.
 `xnet_controls_t` is the validated configuration value shared with programmatic
@@ -79,6 +79,29 @@ files, write their headers, and close the current worker's files. Each driver
 chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
+
+Both frontends use lifecycle procedures in `xnet_evolve`:
+
+- `read_network_data` reads species and reactions. Standalone then writes the
+  data description before `initialize_solver_and_physics` sets up the
+  Jacobian, reaction matching, screening, fluxes, EOS and selected integrator.
+- `resolve_output_species` in `xnet_output` handles condensed-output species
+  lookup. Standalone always calls it; the API calls it when `itsout > 0`.
+- `initialize_zone_workspace` initializes NSE and module-owned abundance,
+  condition and neutrino storage. Standalone passes `nhmx` (50000 history
+  points); the constant-condition API passes 2.
+- `finalize_evolution_workspace` releases integrator, NSE and EOS state.
+  `finalize_network_workspace` releases the remaining non-Jacobian state,
+  with controls last. Each owner removes its device mappings before freeing
+  CPU arrays; GPU resources remain available until those calls finish.
+
+The API releases its dense Jacobian between the two shared cleanup phases.
+Standalone Jacobian storage remains allocated until process exit because
+some sparse providers lack a finalizer. Standalone teardown therefore does
+not establish a reusable standalone lifetime. The API keeps its checked
+lifecycle and retryable GPU cleanup in `xnet_api`; standalone keeps MPI,
+trajectory input, scheduling, filenames and rank-based device selection in
+`net.F90`. No setup is repeated for each batch.
 
 ## Reading the driver and library source
 

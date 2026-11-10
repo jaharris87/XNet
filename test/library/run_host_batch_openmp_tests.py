@@ -202,15 +202,30 @@ def main() -> None:
     commands = []
     def run(argv: list[str], cwd: Path, log: Path, *, threads: int = 1, stdin: str | None = None) -> str:
         environment = dict(os.environ, OMP_NUM_THREADS=str(threads), OMP_DYNAMIC="FALSE", OMP_MAX_ACTIVE_LEVELS="1")
-        completed = subprocess.run(argv, cwd=cwd, env=environment, input=stdin, stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT, text=True, timeout=240, check=False)
-        log.write_text(completed.stdout + f"\nPROCESS_EXIT_STATUS {completed.returncode}\n")
+        timeout_error = None
+        try:
+            completed = subprocess.run(argv, cwd=cwd, env=environment, input=stdin, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, text=True, timeout=240, check=False)
+            output, returncode = completed.stdout, completed.returncode
+            outcome = {"returncode": returncode}
+            marker = f"\nPROCESS_EXIT_STATUS {returncode}\n"
+        except subprocess.TimeoutExpired as error:
+            # TimeoutExpired.output can be bytes even with text=True. Preserve merged diagnostics
+            # and distinguish the timeout from a completed program's exit status.
+            timeout_error = error
+            output = error.output or ""
+            if isinstance(output, bytes):
+                output = output.decode(errors="replace")
+            outcome = {"returncode": None, "timeout_seconds": error.timeout}
+            marker = f"\nPROCESS_TIMEOUT_SECONDS {error.timeout}\n"
+        log.write_text(output + marker)
         commands.append({"argv": argv, "cwd": str(cwd), "OMP_NUM_THREADS": threads, "OMP_DYNAMIC": "FALSE",
-                         "OMP_MAX_ACTIVE_LEVELS": "1", "returncode": completed.returncode, "log": str(log),
-                         "log_sha256": digest(log)})
+                         "OMP_MAX_ACTIVE_LEVELS": "1", **outcome, "log": str(log), "log_sha256": digest(log)})
         (work / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
-        require(completed.returncode == 0, f"direct exit {completed.returncode}: {log}")
-        return completed.stdout
+        if timeout_error is not None:
+            raise timeout_error
+        require(returncode == 0, f"direct exit {returncode}: {log}")
+        return output
     source_files = subprocess.check_output(["git", "ls-files", "-z", "source", "make", "Makefile", "Makefile.opt", "Makefile.internal",
                                             "test/library/consumer_fixture.F90", "test/library/run_library_tests.py", "test/library/run_output_tests.py",
                                             "test/Data_alpha", "test/Data_SN160"], cwd=root).decode().split("\0")

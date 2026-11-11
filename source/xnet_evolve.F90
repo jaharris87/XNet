@@ -54,7 +54,7 @@ Contains
   !=================================================================================================
   ! Evolution Initialization and Finalization
   !
-  ! The frontends first call read_network_data (reaction_data in xnet_data.F90). Standalone logs
+  ! The frontends first call initialize_network_data (reaction_data in xnet_data.F90). Standalone logs
   ! its data description before initialize_evolve reads Jacobian/matching data and prepares the
   ! evolution engine. These calls run once per initialized instance, not once per batch.
   !

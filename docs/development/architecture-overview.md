@@ -80,7 +80,7 @@ chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
 
-Both frontends load tables with `read_network_data` in `reaction_data`
+Both frontends load tables with `initialize_network_data` in `reaction_data`
 (`source/xnet_data.F90`), then call `initialize_evolve(data_dir,nhistory,map_output)`
 in `xnet_evolve` once during initialization. The latter reads Jacobian and
 matching data, initializes screening, fluxes, EOS, the selected BE/BDF integrator

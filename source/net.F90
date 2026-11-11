@@ -16,7 +16,7 @@ Program net
   Use model_input_ascii, Only: load_initial_abundances, read_thermo_file
   Use nuclear_data, Only: ny, nname
 !$ Use omp_lib
-  Use reaction_data, Only: read_network_data, finalize_network_data
+  Use reaction_data, Only: initialize_network_data, finalize_network_data
   Use xnet_abundances, Only: ystart, y, xext, zext, aext
   Use xnet_conditions, Only: t, tdel, t9, rho, ye, nt, nstart, tstart, tstop, tdelstart, &
     & t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
@@ -121,7 +121,7 @@ Program net
   !-------------------------------------------------------------------------------------------------
   ! 4. Load network data and initialize the evolution engine
   !-------------------------------------------------------------------------------------------------
-  Call read_network_data(data_dir,data_desc)
+  Call initialize_network_data(data_dir,data_desc)
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
   Call initialize_evolve(data_dir,nhmx,map_output=.true.)
 

@@ -137,7 +137,7 @@ Contains
     ! Supplied GPU handles remain caller-owned.
     ! Reader, allocation, EOS and solver failures can still terminate.
     !-----------------------------------------------------------------------------------------------
-    Use reaction_data, Only: read_network_data
+    Use reaction_data, Only: initialize_network_data
     Use xnet_controls, Only: apply_xnet_controls
     Use xnet_evolve, Only: initialize_evolve
     Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
@@ -194,7 +194,7 @@ Contains
 
     ! Load nuclear/reaction tables and initialize the evolution engine with persistent
     ! zone workspace and two history endpoints (tstart and tstop).
-    Call read_network_data(controls%data_dir,api_data_description)
+    Call initialize_network_data(controls%data_dir,api_data_description)
     Call initialize_evolve(controls%data_dir,api_history_points,map_output=controls%itsout>0)
     Call copy_network_data(network)
 

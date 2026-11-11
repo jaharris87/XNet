@@ -645,7 +645,7 @@ $(SPARSE_OPENMP_EXES): LDFLAGS += $(HOST_OPENMP_FLAGS)
 
 sparse-lifecycle-openmp-test: $(SPARSE_OPENMP_EXES)
 	@set -e; for exe in $(abspath $(SPARSE_OPENMP_EXES)); do \
-	  for workers in 2 4; do \
+	  for workers in 1 2 4; do \
 	    work="$(SPARSE_WORK_DIR)/$$(basename $$(dirname $$exe))-$$workers"; \
 	    mkdir -p "$$work"; \
 	    (cd "$$work" && OMP_NUM_THREADS=$$workers OMP_DYNAMIC=FALSE "$$exe" workers .); \

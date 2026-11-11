@@ -700,6 +700,10 @@ Contains
     nworkers = omp_get_max_threads()
     Allocate (released(nworkers))
     released = .false.
+#if defined(TEST_PARDISO_MKL)
+    Call test_worker_solver_indices(error)
+    If ( allocated(error) ) Return
+#endif
     Call reset_solver_probe
     ! Give every worker/slot a distinct nonzero handle. The doubles record which ones are released.
     !$omp parallel default(shared) private(i)
@@ -737,6 +741,10 @@ Contains
 #endif
     Call jacobian_finalize
     Call read_jacobian_data(trim(component_data_dir))
+#if defined(TEST_PARDISO_MKL)
+    Call test_worker_solver_indices(error)
+    If ( allocated(error) ) Return
+#endif
     Call reset_solver_probe
     Call jacobian_finalize
     released = .false.
@@ -752,6 +760,82 @@ Contains
     Deallocate (released)
     Return
   End Subroutine test_worker_lifecycle
+
+#if defined(TEST_PARDISO_MKL)
+  Subroutine test_worker_solver_indices(error)
+    Use, Intrinsic :: iso_c_binding, Only: c_intptr_t
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Integer :: i, j, nworkers
+    Integer(c_intptr_t), Allocatable :: addresses(:,:)
+    Logical, Allocatable :: valid(:)
+
+    nworkers = omp_get_max_threads()
+    Allocate (addresses(3,nworkers),valid(nworkers))
+    valid = .false.
+    !$omp parallel default(shared)
+    valid(tid) = allocated(pb) .and. allocated(cidx) .and. allocated(perm)
+    If ( valid(tid) ) valid(tid) = size(pb) == 4 .and. size(cidx) == 7 .and. size(perm) == 3
+    !$omp end parallel
+    Call check(error,all(valid),'every PARDISO worker has allocated CRS and permutation arrays')
+    If ( allocated(error) ) Return
+
+    !$omp parallel default(shared)
+    valid(tid) = all(pb == (/ 1, 3, 6, 8 /)) .and. all(cidx == (/ 1, 2, 1, 2, 3, 2, 3 /)) .and. all(perm == 0)
+    addresses(1,tid) = integer_array_address(pb)
+    addresses(2,tid) = integer_array_address(cidx)
+    addresses(3,tid) = integer_array_address(perm)
+    !$omp end parallel
+    Call check(error,all(valid),'every PARDISO worker receives initial CRS and permutation contents')
+    If ( allocated(error) ) Return
+    Do i = 1, nworkers
+      Do j = i+1, nworkers
+        Call check(error,all(addresses(:,i) /= addresses(:,j)), &
+          & 'PARDISO workers own distinct CRS and permutation storage')
+        If ( allocated(error) ) Return
+      EndDo
+    EndDo
+
+    ! Model temporary index conversion during one worker's solver call. The other workers must
+    ! keep their one-based arrays while that worker's arrays contain the converted values.
+    !$omp parallel default(shared)
+    If ( tid == 1 ) Then
+      pb = pb - 1
+      cidx = cidx - 1
+      perm = 1
+    EndIf
+    !$omp barrier
+    If ( tid == 1 ) Then
+      valid(tid) = all(pb == (/ 0, 2, 5, 7 /)) .and. all(cidx == (/ 0, 1, 0, 1, 2, 1, 2 /)) .and. all(perm == 1)
+    Else
+      valid(tid) = all(pb == (/ 1, 3, 6, 8 /)) .and. all(cidx == (/ 1, 2, 1, 2, 3, 2, 3 /)) .and. all(perm == 0)
+    EndIf
+    !$omp barrier
+    If ( tid == 1 ) Then
+      pb = pb + 1
+      cidx = cidx + 1
+      perm = 0
+    EndIf
+    !$omp end parallel
+    Call check(error,all(valid),'temporary PARDISO index changes stay within one worker')
+    If ( allocated(error) ) Return
+
+    Deallocate (addresses,valid)
+    Return
+  End Subroutine test_worker_solver_indices
+
+  Function integer_array_address(values) Result(address)
+    Use, Intrinsic :: iso_c_binding, Only: c_intptr_t, c_loc
+    Implicit None
+
+    Integer, Target, Intent(in) :: values(*)
+    Integer(c_intptr_t) :: address
+
+    address = transfer(c_loc(values(1)),0_c_intptr_t)
+    Return
+  End Function integer_array_address
+#endif
 #endif
 
 #if defined(TEST_REAL_SOLVER)

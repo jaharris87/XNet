@@ -135,40 +135,8 @@ Program host_batch_openmp_consumer
   EndIf
   If ( test_nse ) Call nse_phase(2)
 
-  Do b = first_batch, last_batch
-    Do c = 1, Merge(1,calls,failure)
-      Write(label,'(a,i2.2,a,i2.2)') 'b',b,'_c',c
-      Call validate_result(results(c,b),b,c)
-      Write(*,'(a,1x,a,6(1x,i0),1x,es26.17e3,1x,4l1)') 'CALL',Trim(label), &
-        & b,c,results(c,b)%owner,results(c,b)%team,results(c,b)%n,results(c,b)%nids,results(c,b)%dt,results(c,b)%active
-      Write(*,'(a,1x,a,1x,i0)') 'STATUS',Trim(label),results(c,b)%status
-      Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),results(c,b)%steps
-      Write(*,'(a,1x,a,13(1x,es26.17e3))') 'TIMING',Trim(label),results(c,b)%timing%evolve, &
-        & results(c,b)%timing%solve,results(c,b)%timing%jacobian,results(c,b)%timing%derivative, &
-        & results(c,b)%timing%rates,results(c,b)%timing%screening,results(c,b)%timing%timestep, &
-        & results(c,b)%timing%newton,results(c,b)%timing%decomposition,results(c,b)%timing%backsubstitution, &
-        & results(c,b)%timing%prescreening,results(c,b)%timing%eos,results(c,b)%timing%output
-      Write(*,'(a,1x,a,1x,a)') 'MESSAGE',Trim(label),Trim(results(c,b)%message)
-      Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),results(c,b)%density
-      Call write_state('input_'//Trim(label),results(c,b)%input_temperature,results(c,b)%input_ye, &
-        & results(c,b)%input_x,results(c,b)%input_restart,Spread(0.0_dp,1,lanes),0*results(c,b)%counters)
-      If ( .not. failure ) Then
-        Call write_state(Trim(label),results(c,b)%temperature,results(c,b)%ye,results(c,b)%x, &
-          & results(c,b)%restart,results(c,b)%loss,results(c,b)%counters)
-      Else
-        ! Failed physical outputs have no supported meaning and are deliberately not read.
-        Write(*,'(a,1x,a,20(1x,i0))') 'ATTEMPTS',Trim(label),results(c,b)%counters
-      EndIf
-    EndDo
-    If ( test_nse ) Then
-      Do p = 1, 2
-        Call check(nse_results(p,b)%status == xnet_success,'NSE status: '//Trim(nse_results(p,b)%message))
-        Call check(All(ieee_is_finite(nse_results(p,b)%x)) .and. All(nse_results(p,b)%x >= 0.0_dp),'NSE composition')
-        Write(*,'(a,4(1x,i0),*(1x,es26.17e3))') 'HOST_NSE',b,p,nse_results(p,b)%owner,nse_results(p,b)%team, &
-          & nse_results(p,b)%x
-      EndDo
-    EndIf
-  EndDo
+  Call report_results()
+
   If ( failure ) Then
     Write(*,'(a,1x,a,1x,i0)') 'HOST_RECEIVED_CONCURRENT_FATAL_BURNS',Trim(mode),expected_threads
     ! Each worker made exactly one call; never retry or finalize a failed simulation instance.
@@ -180,6 +148,46 @@ Program host_batch_openmp_consumer
   Write(*,'(a,1x,a,1x,i0)') 'HOST_BATCH_OPENMP_CHECKS_PASSED',Trim(mode),expected_threads
 
 Contains
+
+  Subroutine report_results()
+    ! Write collected results after the application workers have joined.
+    Implicit None
+
+    Do b = first_batch, last_batch
+      Do c = 1, Merge(1,calls,failure)
+        Write(label,'(a,i2.2,a,i2.2)') 'b',b,'_c',c
+        Call validate_result(results(c,b),b,c)
+        Write(*,'(a,1x,a,6(1x,i0),1x,es26.17e3,1x,4l1)') 'CALL',Trim(label), &
+          & b,c,results(c,b)%owner,results(c,b)%team,results(c,b)%n,results(c,b)%nids,results(c,b)%dt,results(c,b)%active
+        Write(*,'(a,1x,a,1x,i0)') 'STATUS',Trim(label),results(c,b)%status
+        Write(*,'(a,1x,a,1x,i0)') 'STEPS',Trim(label),results(c,b)%steps
+        Write(*,'(a,1x,a,13(1x,es26.17e3))') 'TIMING',Trim(label),results(c,b)%timing%evolve, &
+          & results(c,b)%timing%solve,results(c,b)%timing%jacobian,results(c,b)%timing%derivative, &
+          & results(c,b)%timing%rates,results(c,b)%timing%screening,results(c,b)%timing%timestep, &
+          & results(c,b)%timing%newton,results(c,b)%timing%decomposition,results(c,b)%timing%backsubstitution, &
+          & results(c,b)%timing%prescreening,results(c,b)%timing%eos,results(c,b)%timing%output
+        Write(*,'(a,1x,a,1x,a)') 'MESSAGE',Trim(label),Trim(results(c,b)%message)
+        Write(*,'(a,1x,a,*(1x,es26.17e3))') 'DENSITY',Trim(label),results(c,b)%density
+        Call write_state('input_'//Trim(label),results(c,b)%input_temperature,results(c,b)%input_ye, &
+          & results(c,b)%input_x,results(c,b)%input_restart,Spread(0.0_dp,1,lanes),0*results(c,b)%counters)
+        If ( .not. failure ) Then
+          Call write_state(Trim(label),results(c,b)%temperature,results(c,b)%ye,results(c,b)%x, &
+            & results(c,b)%restart,results(c,b)%loss,results(c,b)%counters)
+        Else
+          ! Failed physical outputs have no supported meaning and are deliberately not read.
+          Write(*,'(a,1x,a,20(1x,i0))') 'ATTEMPTS',Trim(label),results(c,b)%counters
+        EndIf
+      EndDo
+      If ( test_nse ) Then
+        Do p = 1, 2
+          Call check(nse_results(p,b)%status == xnet_success,'NSE status: '//Trim(nse_results(p,b)%message))
+          Call check(All(ieee_is_finite(nse_results(p,b)%x)) .and. All(nse_results(p,b)%x >= 0.0_dp),'NSE composition')
+          Write(*,'(a,4(1x,i0),*(1x,es26.17e3))') 'HOST_NSE',b,p,nse_results(p,b)%owner,nse_results(p,b)%team, &
+            & nse_results(p,b)%x
+        EndDo
+      EndIf
+    EndDo
+  End Subroutine report_results
 
   Subroutine topology_checks()
     ! Rejected calls must leave the initialized fixed-team instance usable.

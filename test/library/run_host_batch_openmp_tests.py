@@ -202,24 +202,43 @@ def main() -> None:
     commands = []
     def run(argv: list[str], cwd: Path, log: Path, *, threads: int = 1, stdin: str | None = None) -> str:
         environment = dict(os.environ, OMP_NUM_THREADS=str(threads), OMP_DYNAMIC="FALSE", OMP_MAX_ACTIVE_LEVELS="1")
-        completed = subprocess.run(argv, cwd=cwd, env=environment, input=stdin, stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT, text=True, timeout=240, check=False)
-        log.write_text(completed.stdout + f"\nPROCESS_EXIT_STATUS {completed.returncode}\n")
+        timeout_error = None
+        try:
+            completed = subprocess.run(argv, cwd=cwd, env=environment, input=stdin, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, text=True, timeout=240, check=False)
+            output, returncode = completed.stdout, completed.returncode
+            outcome = {"returncode": returncode}
+            marker = f"\nPROCESS_EXIT_STATUS {returncode}\n"
+        except subprocess.TimeoutExpired as error:
+            # TimeoutExpired.output can be bytes even with text=True. Preserve merged diagnostics
+            # and distinguish the timeout from a completed program's exit status.
+            timeout_error = error
+            output = error.output or ""
+            if isinstance(output, bytes):
+                output = output.decode(errors="replace")
+            outcome = {"returncode": None, "timeout_seconds": error.timeout}
+            marker = f"\nPROCESS_TIMEOUT_SECONDS {error.timeout}\n"
+        log.write_text(output + marker)
         commands.append({"argv": argv, "cwd": str(cwd), "OMP_NUM_THREADS": threads, "OMP_DYNAMIC": "FALSE",
-                         "OMP_MAX_ACTIVE_LEVELS": "1", "returncode": completed.returncode, "log": str(log),
-                         "log_sha256": digest(log)})
+                         "OMP_MAX_ACTIVE_LEVELS": "1", **outcome, "log": str(log), "log_sha256": digest(log)})
         (work / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
-        require(completed.returncode == 0, f"direct exit {completed.returncode}: {log}")
-        return completed.stdout
+        if timeout_error is not None:
+            raise timeout_error
+        require(returncode == 0, f"direct exit {returncode}: {log}")
+        return output
     source_files = subprocess.check_output(["git", "ls-files", "-z", "source", "make", "Makefile", "Makefile.opt", "Makefile.internal",
                                             "test/library/consumer_fixture.F90", "test/library/run_library_tests.py", "test/library/run_output_tests.py",
                                             "test/Data_alpha", "test/Data_SN160"], cwd=root).decode().split("\0")
     inputs = {name: digest(root / name) for name in source_files if name and (root / name).is_file()}
     inputs.update({str(path): digest(path) for path in (exe, archive, config, setup, root / "tools/starkiller-helmholtz/helm_table.dat",
                    Path(__file__), Path(__file__).with_name("host_batch_openmp_consumer.F90"), Path(__file__).with_name("Makefile"))})
-    compiler = subprocess.run(shlex.split(settings["XNET_FC"]) + ["--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+    compiler_command = shlex.split(settings["XNET_FC"]) + ["--version"]
+    if build_record.is_file() and "PE_ENV=NVIDIA" in build_record.read_text().splitlines():
+        # Query the NVIDIA driver directly; ftn --version is not a safe version query.
+        compiler_command = ["nvfortran", "-V"]
+    compiler = subprocess.run(compiler_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
     (work / "inputs.json").write_text(json.dumps({"git_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root).decode().strip(),
-        "platform": platform.platform(), "compiler_version": compiler.stdout, "compiler_version_status": compiler.returncode,
+        "platform": platform.platform(), "compiler_version_command": compiler_command, "compiler_version": compiler.stdout, "compiler_version_status": compiler.returncode,
         "exported_configuration": settings, "build_record": build_record.read_text() if build_record.is_file() else "missing",
         "sha256": inputs}, indent=2) + "\n")
     library_parser = load("library_parser", root / "test/library/run_library_tests.py")

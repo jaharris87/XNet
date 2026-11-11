@@ -14,48 +14,42 @@
 
 Program net
   Use model_input_ascii, Only: load_initial_abundances, read_thermo_file
-  Use nuclear_data, Only: ny, nname, index_from_name, read_nuclear_data
+  Use nuclear_data, Only: ny, nname
 !$ Use omp_lib
-  Use reaction_data, Only: read_reaction_data
-  Use xnet_abundances, Only: ystart, y, xext, zext, aext, abundances_initialize, abundances_finalize
+  Use reaction_data, Only: initialize_network_data, finalize_network_data
+  Use xnet_abundances, Only: ystart, y, xext, zext, aext
   Use xnet_conditions, Only: t, tdel, t9, rho, ye, nt, nstart, tstart, tstop, tdelstart, &
-    & t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind, &
-    & conditions_initialize, conditions_finalize
-  Use xnet_controls, Only: idiag, inucout, iprocess, isolv, itsout, nnucout, output_nuc, &
+    & t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
+  Use xnet_controls, Only: idiag, iprocess, itsout, &
     & szone, nzone, zone_id, kstmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
     & lun_diag, lun_stdout, tid, gpu_queue, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
-    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls
-  Use xnet_eos, Only: eos_initialize
-  Use xnet_evolve, Only: full_net
-  Use xnet_flux, Only: flx_int, flux_init
+    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls, controls_finalize
+  Use xnet_evolve, Only: full_net, initialize_evolve, finalize_evolve
+  Use xnet_flux, Only: flx_int
   Use xnet_gpu, Only: gpu_init, gpu_finalize
-  Use xnet_integrate_bdf, Only: bdf_init
-  Use xnet_integrate_be, Only: be_init
-  Use xnet_jacobian, Only: read_jacobian_data
-  Use xnet_match, Only: mflx, nflx, read_match_data
-  Use xnet_nnu, Only: tmevnu, fluxcms, nnu_initialize, nnu_finalize
-  Use xnet_nse, Only: nse_initialize
+  Use xnet_match, Only: mflx, nflx
+  Use xnet_nnu, Only: tmevnu, fluxcms
   Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, &
     & parallel_nprocs, parallel_IOProcessor
   Use xnet_preprocess, Only: net_preprocess
-  Use xnet_screening, Only: screening_init
   Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_setup
   Use xnet_types, Only: dp
   Use xnet_util, Only: getNewUnit, name_ordered, xnet_terminate
   Implicit None
 
   ! Local variables
-  Integer :: i, k, izone, izb, ibatch, batch_count
-  Integer :: diag_ierr, ierr, inuc, kstep
-  ! Reaction fluxes and neutrino energy losses
+  Integer :: k, izone, izb, ibatch, batch_count
+  Integer :: diag_ierr, ierr, kstep
+
+  ! Reaction flux check and neutrino energy loss workspaces
   Real(dp), Allocatable :: dyf(:), flx_diff(:), denu(:)
 
-  ! Input Data descriptions
+  ! Input data and trajectory descriptions
   Character(80) :: data_desc, data_dir
   Character(80), Allocatable :: abund_desc(:), thermo_desc(:)
 
-  ! Filenames
+  ! Output filenames
   Character(80) :: ev_file, bin_file, diag_file
   Character(80), Parameter :: diag_file_base = 'net_diag'
 
@@ -125,42 +119,17 @@ Program net
 #endif
 
   !-------------------------------------------------------------------------------------------------
-  ! 4. Load network data and initialize physics, solver, and zone workspaces
+  ! 4. Load network data and initialize the evolution engine
   !-------------------------------------------------------------------------------------------------
-  Call read_nuclear_data(data_dir,data_desc)
-  Call read_reaction_data(data_dir)
+  Call initialize_network_data(data_dir,data_desc)
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
-  Call read_jacobian_data(data_dir)
-  Call read_match_data(data_dir)
-
-  Call screening_init
-  Call flux_init
-  Call eos_initialize
-  If ( isolv == 1 ) Call be_init
-  If ( isolv == 3 ) Call bdf_init
-
-  ! Resolve condensed ASCII output species names to network indices
-  Do i = 1, nnucout
-    Call index_from_name(output_nuc(i),inuc)
-    If ( inuc < 1 .or. inuc > ny ) Then
-      Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
-      inucout(i) = ny
-    Else
-      inucout(i) = inuc
-    EndIf
-  EndDo
-
-  Call nse_initialize
-  Call abundances_initialize
-  Call conditions_initialize(nhmx)
-  Call nnu_initialize(nhmx)
+  Call initialize_evolve(data_dir,nhmx)
 
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve),denu(nzevolve))
   denu = 0.0_dp
 
   !XDIR XENTER_DATA XASYNC(gpu_queue) &
   !XDIR XCOPYIN(denu)
-
   !XDIR XWAIT(gpu_queue)
 
   stop_timer = xnet_wtime()
@@ -179,9 +148,7 @@ Program net
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
-
   Allocate (dyf(0:ny),flx_diff(ny))
-
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
@@ -294,14 +261,14 @@ Program net
   !-------------------------------------------------------------------------------------------------
   !XDIR XEXIT_DATA XASYNC(gpu_queue) &
   !XDIR XDELETE(denu)
-
   !XDIR XWAIT(gpu_queue)
 
   Deallocate (abund_desc,thermo_desc,denu)
 
-  Call nnu_finalize
-  Call abundances_finalize
-  Call conditions_finalize
+  ! Release the shared zone, solver and network state before controls and GPU/MPI shutdown.
+  Call finalize_evolve
+  Call finalize_network_data
+  Call controls_finalize
   Call gpu_finalize()
   Call parallel_finalize()
 

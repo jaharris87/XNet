@@ -21,6 +21,24 @@ column index because its default pivot perturbation accepts a numerically zero
 matrix. The result perturbation is applied only to the test's observed result
 after the real solver returns.
 
+The component fixture also finalizes and reinitializes the production Jacobian
+module, repeats the known-system solve, and checks that every Fortran allocation
+is released. PARDISO cleanup uses `phase = -1` before releasing XNet's arrays:
+once per worker handle in standalone PARDISO, and once per used batch-slot
+handle in oneMKL. See the [oneMKL Fortran reference](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-fortran/2023-0/pardiso.html)
+and the [standalone PARDISO manual](https://pardiso-project.org/manual/manual.pdf).
+
+The following separate target tests two- and four-worker cleanup with solver
+doubles, including MA48 private factors and resize temporaries, distinct PARDISO
+handles, repeated cleanup and unused/reinitialized storage:
+
+```bash
+make -C test/unit CMODE=DEBUG -j sparse-lifecycle-openmp-test
+```
+
+This target tests XNet's ownership and release calls. It does not qualify the
+real libraries, their threading behavior or their numerical results.
+
 The complete-executable check builds dense and sparse executables from one Git
 revision, runs the existing six-zone `heat_sn160` self-heating case in separate
 work directories, and reanchors the existing `xnet-comparison-v1` tolerances to

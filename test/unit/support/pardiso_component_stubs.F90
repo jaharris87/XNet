@@ -6,6 +6,7 @@ Module solver_probe
   Integer :: call_count = 0
   Integer :: init_abi = 0
   Integer :: init_calls = 0
+  Integer :: handle_history(max_calls) = 0
   Integer :: mnum_history(max_calls) = 0
   Integer :: phase_history(max_calls) = 0
   Logical :: index_base_valid = .True.
@@ -18,6 +19,7 @@ Contains
     Implicit None
 
     call_count = 0
+    handle_history = 0
     mnum_history = 0
     phase_history = 0
     index_base_valid = .True.
@@ -119,7 +121,7 @@ End Subroutine pardisoinit
 
 Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b,x,error,dparm)
   Use solver_probe, Only: call_count, failure_is, index_base_valid, max_calls, mnum_history, &
-    & mutation_is, options_valid, phase_history, saved_solution, solve_crs
+    & mutation_is, options_valid, phase_history, saved_solution, solve_crs, handle_history
   Use xnet_types, Only: dp, i8
   Implicit None
 
@@ -131,12 +133,22 @@ Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b
   Real(dp), Intent(out) :: x(n,nrhs)
   Integer, Intent(out) :: error
 
+  !$omp critical(pardiso_probe)
   call_count = call_count + 1
   If ( call_count <= max_calls ) Then
+    handle_history(call_count) = int(pt(1))
     phase_history(call_count) = phase
     If ( mutation_is('incorrect_phase') ) phase_history(call_count) = phase + 1
     mnum_history(call_count) = mnum
   EndIf
+  !$omp end critical(pardiso_probe)
+  If ( phase == -1 ) Then
+    error = 0
+    If ( failure_is('pardiso_release') ) error = -8
+    If ( error == 0 ) pt = 0_i8
+    Return
+  EndIf
+  pt(1) = call_count
   index_base_valid = index_base_valid .and. ia(1) == 1 .and. ia(n+1) > ia(1)
   options_valid = options_valid .and. maxfct == 2 .and. mnum >= 1 .and. mnum <= 2 .and. &
     & mtype == 11 .and. nrhs == 1 .and. iparm(3) == 1 .and. &

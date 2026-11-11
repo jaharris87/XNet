@@ -265,6 +265,56 @@ Contains
     Return
   End Subroutine read_jacobian_data
 
+  Subroutine jacobian_finalize
+    !-----------------------------------------------------------------------------------------------
+    ! MA48 keeps its factors in caller-owned arrays. Release each worker's private factors and
+    ! scratch, then the shared Jacobian/layout arrays. Call outside parallel regions with the
+    ! same worker team used by read_jacobian_data.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( allocated(vals) ) Deallocate (vals)
+    If ( allocated(jcn) ) Deallocate (jcn)
+    If ( allocated(irn) ) Deallocate (irn)
+    If ( allocated(keep) ) Deallocate (keep)
+    If ( allocated(wB) ) Deallocate (wB)
+    If ( allocated(wC) ) Deallocate (wC)
+    If ( allocated(iwA) ) Deallocate (iwA)
+    If ( allocated(iwB) ) Deallocate (iwB)
+    If ( allocated(iwC) ) Deallocate (iwC)
+    If ( allocated(vals0) ) Deallocate (vals0)
+    If ( allocated(jcn0) ) Deallocate (jcn0)
+    If ( allocated(irn0) ) Deallocate (irn0)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
+    If ( allocated(dydotdy) ) Deallocate (dydotdy)
+    If ( allocated(tvals) ) Deallocate (tvals)
+    If ( allocated(jobA) ) Deallocate (jobA)
+    If ( allocated(jobB) ) Deallocate (jobB)
+    If ( allocated(jobC) ) Deallocate (jobC)
+    If ( allocated(ridx) ) Deallocate (ridx)
+    If ( allocated(cidx) ) Deallocate (cidx)
+    If ( allocated(sident) ) Deallocate (sident)
+    If ( allocated(pb) ) Deallocate (pb)
+    If ( allocated(ns11) ) Deallocate (ns11)
+    If ( allocated(ns21) ) Deallocate (ns21)
+    If ( allocated(ns22) ) Deallocate (ns22)
+    If ( allocated(ns31) ) Deallocate (ns31)
+    If ( allocated(ns32) ) Deallocate (ns32)
+    If ( allocated(ns33) ) Deallocate (ns33)
+    If ( allocated(ns41) ) Deallocate (ns41)
+    If ( allocated(ns42) ) Deallocate (ns42)
+    If ( allocated(ns43) ) Deallocate (ns43)
+    If ( allocated(ns44) ) Deallocate (ns44)
+
+    Return
+  End Subroutine jacobian_finalize
+
   Subroutine jacobian_scale(diag,mult,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! This augments a previously calculation Jacobian matrix by multiplying all elements by mult and

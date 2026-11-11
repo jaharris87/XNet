@@ -25,9 +25,9 @@ for current implementation status.
 | --- | --- | --- |
 | [#128: configuration](https://github.com/jaharris87/XNet/issues/128) | Merged: validated `xnet_controls_t`, programmatic configuration, layered standalone namelists, and migrated maintained inputs | Use the existing representation in the application interface |
 | [#127: starting CPU measurements](https://github.com/jaharris87/XNet/issues/127) | Complete and accepted: serial dense CPU measurements for four network sizes on both facilities, with MA48 deferred | Preserve this starting point for resulting-code comparisons |
-| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: public lifecycle/archive, EOS/NSE/timestep/timing results, concurrent application-side CPU batch calls and GPU resource ownership (#164), followed by API/GPU readability work (#180) | Finish #184's shared lifecycle checks, implement the selected #185 worker storage, and complete remaining execution-mode checks |
+| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: public lifecycle/archive, EOS/NSE/timestep/timing results, concurrent application-side CPU batch calls and GPU resource ownership (#164), followed by API/GPU readability work (#180) and shared initialization/cleanup (#191) | Implement the selected #185 worker storage and complete remaining execution-mode checks |
 | [#130: application integrations](https://github.com/jaharris87/XNet/issues/130) | Selected CHIMERA 17/160/350 and Flash-X 17/160 CPU comparisons are complete at their recorded sources. Flash-X 350 execution and application GPU checks remain | Reconcile wrappers with the current interface, check resulting code, and validate required modes and ownership; diagnose the two facility failures separately |
-| [#171](https://github.com/jaharris87/XNet/issues/171) / [#181: numerical corrections](https://github.com/jaharris87/XNet/issues/181) | Screening correction #175 is merged. Accepted-composition Ye correction #182 remains draft, refreshed against current development | Complete current-source native checks and NVIDIA CPU worker runtime coverage under #183/#192 |
+| [#171](https://github.com/jaharris87/XNet/issues/171) / [#181: numerical corrections](https://github.com/jaharris87/XNet/issues/181) | Screening correction #175 is merged. Accepted-composition Ye correction #182 remains draft at its recorded source | Reconcile #182 with the lifecycle merge and complete candidate-specific native checks |
 | [#131: CPU/GPU and application performance](https://github.com/jaharris87/XNet/issues/131) | Stage A complete: four network sizes on both facilities. Six application workloads selected for stage B; no stage B timings yet | Settle implementation and correctness checks before selecting the timing source and measuring repeated application burns |
 | [#132: release checks](https://github.com/jaharris87/XNet/issues/132) | Not yet a release candidate | Verify the final implementation, supported platforms, and documentation |
 
@@ -154,21 +154,30 @@ passes [231 local regressions, library/batch/overlap checks and selected DEBUG c
 with [fresh review passing](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779966537).
 The maintainer [accepted its November 6 native comparisons](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779556459)
 at the older `d8dc7efe` source; those results do not establish refreshed-source
-native behavior. [Draft #190](https://github.com/jaharris87/XNet/pull/190)
-provides a compile workaround for the
-[NVIDIA CPU threaded-caller issue #183](https://github.com/jaharris87/XNet/issues/183),
-but runtime coverage remains incomplete: a four-worker SN160 case timed out,
-and a separately approved debugger run stopped on SIGSEGV inside LibSci.
-The cause remains under investigation. GPU-library success does not cover
-that CPU caller. [#192](https://github.com/jaharris87/XNet/issues/192) tracks
-the runtime investigation separately from the compile workaround.
+native behavior. It still needs reconciliation with the later lifecycle merge.
+The [#190](https://github.com/jaharris87/XNet/pull/190) compile workaround for the
+[NVIDIA CPU threaded-caller issue #183](https://github.com/jaharris87/XNet/issues/183)
+and [#195](https://github.com/jaharris87/XNet/pull/195) caller-output flush are
+merged. The latter's [native suite](https://github.com/jaharris87/XNet/pull/195#issuecomment-6786074563)
+completed all 28 commands with diagnostic `OMP_STACKSIZE=16M`. This does not
+adopt a supported minimum or default. The original timeout/LibSci fault,
+IEEE warnings and large affinity report remain under
+[#192](https://github.com/jaharris87/XNet/issues/192); GPU-library success does
+not cover the CPU caller or explain those failures.
 
 The remaining implementation has separate scopes. [#184](https://github.com/jaharris87/XNet/issues/184)
-has a shared-lifecycle implementation in
-[draft #191](https://github.com/jaharris87/XNet/pull/191), using existing modules
-for common standalone/API setup and non-Jacobian cleanup. Local CPU checks
-and fresh source/test reviews pass; native GPU lifecycle and remaining
-provider checks are pending. Standalone trajectories keep their interpolation
+is implemented by merged [#191](https://github.com/jaharris87/XNet/pull/191):
+common standalone/API initialization and cleanup stay in their existing
+modules, including provider-specific Jacobian finalization. Its checks retain
+the source and configuration limits stated in the PR. Real concurrent oneMKL
+PARDISO exposed a separate failure under
+[#193](https://github.com/jaharris87/XNet/issues/193). A
+[hardware watchpoint](https://github.com/jaharris87/XNet/issues/193#issuecomment-6799611340)
+identifies oneMKL writing a shared CSR row pointer in one observed call;
+[draft #196](https://github.com/jaharris87/XNet/pull/196) investigates worker
+ownership. This is not yet a demonstrated threaded repair or support expansion.
+The application library remains dense-only.
+Standalone trajectories keep their interpolation
 and integrator history rather than becoming repeated constant-condition burns.
 Important v9 worker/zone-storage work in [#185](https://github.com/jaharris87/XNet/issues/185)
 follows the lifecycle work. The maintainer
@@ -274,7 +283,7 @@ executables, inputs and environments on both facilities, or obtain a named
 maintainer-approved exception. Performance measurements do not replace these
 correctness checks.
 
-Frontier maintenance is temporary unavailability, not a waiver of its checks.
+Temporary facility unavailability does not waive the corresponding checks.
 There is no final release candidate. Resolve or obtain maintainer dispositions
 for the remaining implementation, compiler, application and performance work
 before assembling #132's release checks; past comparisons retain their source

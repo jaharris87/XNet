@@ -52,6 +52,9 @@ Module xnet_controls
   Integer :: gpu_queue = 1
   Integer :: zb_hi = 1
   Integer :: zb_lo = 1
+#ifdef XNET_OMP
+  !$omp threadprivate(tid,szbatch,zb_lo,zb_hi)
+#endif
   Integer, Allocatable :: kmon(:,:), ktot(:,:)
   Logical, Allocatable, Target :: lzactive(:)
 End Module xnet_controls

@@ -4,8 +4,8 @@
 !
 ! Manages per-zone time, timestep, temperature (T9 [GK]), density (rho [g/cm^3]), electron
 ! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories in the zone workspace
-! (1:nzevolve). The standalone driver allocates full trajectories (history_capacity = nhmx),
-! whereas constant-condition library burns allocate two-point endpoint histories (history_capacity = 2).
+! (1:nzevolve). The standalone driver allocates full trajectories (nhistory = nhmx),
+! whereas constant-condition library burns allocate two-point endpoint histories (nhistory = 2).
 !***************************************************************************************************
 
 #include "xnet_macros.fh"
@@ -40,7 +40,7 @@ Module xnet_conditions
   Integer, Allocatable :: intso(:)     ! Species index governing the previous timestep
 
   !-------------------------------------------------------------------------------------------------
-  ! Thermodynamic trajectory histories (history_capacity, nzevolve)
+  ! Thermodynamic trajectory histories (nhistory, nzevolve)
   !-------------------------------------------------------------------------------------------------
   Integer, Parameter    :: nhmx = 50000 ! Maximum trajectory history points for standalone runs
   Integer, Allocatable  :: nh(:)        ! Number of populated trajectory points per zone
@@ -60,7 +60,7 @@ Contains
   ! Workspace Lifecycle
   !=================================================================================================
 
-  Subroutine conditions_initialize(history_capacity)
+  Subroutine conditions_initialize(nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Allocate and zero thermodynamic state and trajectory history arrays for 1:nzevolve zones,
     ! then establish persistent device mappings.
@@ -69,7 +69,7 @@ Contains
     Implicit None
 
     ! Input arguments
-    Integer, Intent(in) :: history_capacity
+    Integer, Intent(in) :: nhistory ! Allocated history points per zone
 
     Allocate (tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
       & t(nzevolve),tt(nzevolve),to(nzevolve), &
@@ -105,8 +105,8 @@ Contains
 
     Allocate (nstart(nzevolve),tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
       & t9start(nzevolve),rhostart(nzevolve),yestart(nzevolve),nh(nzevolve), &
-      & th(history_capacity,nzevolve),t9h(history_capacity,nzevolve), &
-      & rhoh(history_capacity,nzevolve),yeh(history_capacity,nzevolve))
+      & th(nhistory,nzevolve),t9h(nhistory,nzevolve), &
+      & rhoh(nhistory,nzevolve),yeh(nhistory,nzevolve))
     nstart    = 0
     tstart    = 0.0_dp
     tstop     = 0.0_dp

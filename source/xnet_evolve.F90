@@ -1,11 +1,11 @@
 !***************************************************************************************************
 ! xnet_evolve.F90
-! Time-stepping reaction-network evolution across a worker batch of thermodynamic zones.
+! Shared evolution initialization, finalization, and batch reaction-network evolution for XNet.
 !
-! Called by both the standalone trajectory driver (net.F90) and the embedded library API
-! (evolve_batch in xnet_api.F90). Advances active zones in the workspace bank of the calling
-! worker (zb_lo:zb_hi) from tstart to tstop using either Backward Euler (isolv = 1) or Gear BDF
-! (isolv = 3), tracking nuclear energy generation and weak-reaction neutrino energy losses.
+! Shared by the standalone driver (net.F90) and the embedded library API (xnet_api.F90).
+! Initialization and finalization appear first; full_net advances active zones from tstart to tstop using
+! Backward Euler (isolv = 1) or Gear BDF (isolv = 3), tracking nuclear energy generation and
+! weak-reaction neutrino losses.
 !
 ! Per-zone integration status its(izb):
 !   -1  Inactive zone, or active zone that has already reached tstop(izb).
@@ -13,7 +13,7 @@
 !    1  Integrator failed to converge on the current step after internal retries.
 !    2  Active zone halted after an integrator convergence failure (standalone path).
 !
-! Failure handling:
+! Failure handling in full_net:
 ! - When optional ierr_out is present (library API): reports evolve_integrator_failure or
 !   evolve_step_limit (and the workspace index in failed_zone) to the caller without writing
 !   failure dump files or terminating the process.
@@ -25,23 +25,128 @@
 
 Module xnet_evolve
   Implicit None
+  Private
 
   !-------------------------------------------------------------------------------------------------
-  ! Evolution completion status codes
+  ! Public evolution completion status codes
   !-------------------------------------------------------------------------------------------------
-  Integer, Parameter :: evolve_success            = 0 ! All active zones reached tstop.
-  Integer, Parameter :: evolve_integrator_failure = 1 ! Integrator reported a convergence/timestep failure.
-  Integer, Parameter :: evolve_step_limit         = 2 ! Active zone exhausted kstmx steps before tstop.
+  Integer, Parameter, Public :: evolve_success            = 0 ! All active zones reached tstop.
+  Integer, Parameter, Public :: evolve_integrator_failure = 1 ! Integrator reported a convergence/timestep failure.
+  Integer, Parameter, Public :: evolve_step_limit         = 2 ! Active zone exhausted kstmx steps before tstop.
 
-  ! Integrator status values shared with solve_be and solve_bdf.
-  Integer, Parameter, Private :: zone_stopped     = -1 ! Inactive or at its stop time
-  Integer, Parameter, Private :: zone_converged   =  0 ! Current step succeeded
-  Integer, Parameter, Private :: zone_step_failed =  1 ! Integrator exhausted retries
-  Integer, Parameter, Private :: zone_failed      =  2 ! Failed zone removed from standalone solve
+  !-------------------------------------------------------------------------------------------------
+  ! Private per-zone integrator status values (shared with solve_be and solve_bdf)
+  !-------------------------------------------------------------------------------------------------
+  Integer, Parameter :: zone_stopped     = -1 ! Inactive or at its stop time
+  Integer, Parameter :: zone_converged   =  0 ! Current step succeeded
+  Integer, Parameter :: zone_step_failed =  1 ! Integrator exhausted retries
+  Integer, Parameter :: zone_failed      =  2 ! Failed zone removed from standalone solve
 
-  Private :: terminate_on_zone_failure
+  !-------------------------------------------------------------------------------------------------
+  ! Public procedures
+  !-------------------------------------------------------------------------------------------------
+  Public :: initialize_evolve
+  Public :: finalize_evolve
+  Public :: full_net
 
 Contains
+
+  !=================================================================================================
+  ! Evolution Initialization and Finalization
+  !
+  ! The frontends first call initialize_network_data (reaction_data in xnet_data.F90). Standalone logs
+  ! its data description before initialize_evolve reads Jacobian/matching data and prepares the
+  ! evolution engine. These calls run once per initialized instance, not once per batch.
+  !
+  ! finalize_evolve releases the engine, including the selected Jacobian provider. The frontends
+  ! then call finalize_network_data and controls_finalize. Network tables and controls outlive
+  ! the workspaces that use them; GPU resources remain available until all mappings are removed.
+  !=================================================================================================
+
+  Subroutine initialize_evolve(data_dir,nhistory)
+    !-----------------------------------------------------------------------------------------------
+    ! Read Jacobian/matching data and initialize rates, EOS, integrator, NSE and reusable zone
+    ! storage. Nuclear/reaction tables and controls must already be loaded. Each owner maps its
+    ! own arrays. Call outside parallel regions with the worker team configured by the frontend.
+    !
+    ! data_dir    Directory containing the preprocessed network.
+    ! nhistory    Allocated history points per zone: nhmx for standalone trajectories, or
+    !             api_history_points for the library's start/end conditions.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_abundances, Only: abundances_initialize
+    Use xnet_conditions, Only: conditions_initialize
+    Use xnet_controls, Only: isolv
+    Use xnet_eos, Only: eos_initialize
+    Use xnet_flux, Only: flux_init
+    Use xnet_integrate_be, Only: be_init
+    Use xnet_integrate_bdf, Only: bdf_init
+    Use xnet_jacobian, Only: read_jacobian_data
+    Use xnet_match, Only: read_match_data
+    Use xnet_nnu, Only: nnu_initialize
+    Use xnet_nse, Only: nse_initialize
+    Use xnet_output, Only: map_output_nuc
+    Use xnet_screening, Only: screening_init
+    Implicit None
+
+    ! Input arguments
+    Character(*), Intent(in) :: data_dir
+    Integer, Intent(in) :: nhistory
+
+    Call read_jacobian_data(data_dir)
+    Call read_match_data(data_dir)
+    Call screening_init
+    Call flux_init
+    Call eos_initialize
+    If ( isolv == 1 ) Call be_init
+    If ( isolv == 3 ) Call bdf_init
+    Call map_output_nuc
+    Call nse_initialize
+    Call abundances_initialize
+    Call conditions_initialize(nhistory)
+    Call nnu_initialize(nhistory)
+
+    Return
+  End Subroutine initialize_evolve
+
+  Subroutine finalize_evolve
+    !-----------------------------------------------------------------------------------------------
+    ! Release the evolution engine's integrator, NSE/EOS, Jacobian, rate-evaluation and zone
+    ! workspace. The selected Jacobian provider releases its own arrays and any library-owned
+    ! factors. Loaded network tables remain for finalize_network_data; controls and GPU resources
+    ! must remain available until both routines finish. Call outside parallel regions, after all
+    ! workers finish, with the same team used during initialization.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_abundances, Only: abundances_finalize
+    Use xnet_conditions, Only: conditions_finalize
+    Use xnet_eos, Only: eos_finalize
+    Use xnet_flux, Only: flux_finalize
+    Use xnet_integrate_be, Only: be_finalize
+    Use xnet_integrate_bdf, Only: bdf_finalize
+    Use xnet_jacobian, Only: jacobian_finalize
+    Use xnet_match, Only: match_finalize
+    Use xnet_nnu, Only: nnu_history_finalize
+    Use xnet_nse, Only: nse_finalize
+    Use xnet_screening, Only: screening_finalize
+    Implicit None
+
+    Call be_finalize
+    Call bdf_finalize
+    Call nse_finalize
+    Call eos_finalize
+    Call jacobian_finalize
+    Call screening_finalize
+    Call flux_finalize
+    Call match_finalize
+    Call nnu_history_finalize
+    Call abundances_finalize
+    Call conditions_finalize
+
+    Return
+  End Subroutine finalize_evolve
+
+  !=================================================================================================
+  ! Batch Reaction-Network Evolution
+  !=================================================================================================
 
   Subroutine full_net(kstep,denu,ierr_out,failed_zone)
     !-----------------------------------------------------------------------------------------------
@@ -106,9 +211,9 @@ Contains
     If ( present(ierr_out) )    ierr_out    = evolve_success
     If ( present(failed_zone) ) failed_zone = 0
 
-    zone_final_step  = 0
-    lzsolve  = lzactive(zb_lo:zb_hi)
-    lzoutput = lzsolve
+    zone_final_step = 0
+    lzsolve         = lzactive(zb_lo:zb_hi)
+    lzoutput        = lzsolve
     Do izb = zb_lo, zb_hi
       If ( lzsolve(izb) ) Then
         its(izb) = zone_converged
@@ -237,8 +342,8 @@ Contains
           ! Zone reached stop time: still emit ts_output for this final step, then stop solving
           If ( t(izb) >= tstop(izb) ) Then
             zone_final_step(izb) = kstep
-            its(izb)     = zone_stopped
-            lzsolve(izb) = .false.
+            its(izb)             = zone_stopped
+            lzsolve(izb)         = .false.
           EndIf
         ElseIf ( its(izb) == zone_step_failed ) Then
           its(izb)      = zone_failed

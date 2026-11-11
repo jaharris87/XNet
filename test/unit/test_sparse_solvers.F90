@@ -1,4 +1,7 @@
 Module sparse_component_fixture
+#ifdef XNET_OMP
+  Use omp_lib, Only: omp_get_max_threads, omp_get_thread_num
+#endif
   Use nuclear_data, Only: mex, nname, ny
   Use reaction_data, Only: a1, a2, a3, a4, b1, b2, b3, b4, dcsect1dt9, dcsect2dt9, &
     & dcsect3dt9, dcsect4dt9, la, le, mu1, mu2, mu3, mu4, n10, n11, n20, n21, &
@@ -6,11 +9,11 @@ Module sparse_component_fixture
   Use xnet_abundances, Only: yt
   Use xnet_conditions, Only: cv
   Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lzactive, lun_diag, &
-    & nzbatch, nzbatchmx, nzevolve, szbatch, zb_hi, zb_lo
+    & nzbatch, nzbatchmx, nzevolve, szbatch, zb_hi, zb_lo, tid
 #if defined(TEST_DENSE)
-  Use xnet_jacobian, Only: msize, read_jacobian_data
+  Use xnet_jacobian, Only: msize, read_jacobian_data, jacobian_finalize
 #else
-  Use xnet_jacobian, Only: cidx, msize, nnz, ns11, pb, read_jacobian_data
+  Use xnet_jacobian, Only: cidx, msize, nnz, ns11, pb, read_jacobian_data, jacobian_finalize
 #endif
   Use xnet_types, Only: dp
   Implicit None
@@ -18,11 +21,14 @@ Module sparse_component_fixture
 
   Logical :: heat_mode = .False.
   Logical :: tracked_controls = .False.
+  Logical, Public :: workers_mode = .false.
+  Character(256) :: component_data_dir
 
   Public :: expected_matrix
   Public :: heat_mode
   Public :: initialize_component
   Public :: tracked_controls
+  Public :: component_data_dir
 
 Contains
 
@@ -31,19 +37,35 @@ Contains
 
     Character(*), Intent(in) :: mode, data_dir
 
+    Call jacobian_finalize
+    component_data_dir = data_dir
     heat_mode = trim(mode) == 'heat'
-    If ( trim(mode) /= 'base' .and. trim(mode) /= 'failure' .and. .not. heat_mode ) Then
+#ifdef XNET_OMP
+    workers_mode = trim(mode) == 'workers'
+#endif
+    If ( trim(mode) /= 'base' .and. trim(mode) /= 'failure' .and. .not. heat_mode .and. .not. workers_mode ) Then
       Write(*,*) 'mode must be base, heat, or failure'
       Stop 1
     EndIf
 
     ny = 3
     nzevolve = 2
+#ifdef XNET_OMP
+    If ( workers_mode ) nzevolve = 2*omp_get_max_threads()
+#endif
     nzbatch = 2
     nzbatchmx = 2
     zb_lo = 1
     zb_hi = 2
     szbatch = 1
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+    tid = omp_get_thread_num()+1
+    zb_lo = (tid-1)*nzbatchmx+1
+    zb_hi = tid*nzbatchmx
+    szbatch = 1
+    !$omp end parallel
+#endif
     idiag = 5
     lun_diag = 77
     Open(unit=lun_diag,status='scratch',action='write')
@@ -265,7 +287,11 @@ Contains
 End Module sparse_component_fixture
 
 Module test_sparse_solvers
-  Use sparse_component_fixture, Only: expected_matrix, heat_mode, tracked_controls
+  Use sparse_component_fixture, Only: expected_matrix, heat_mode, tracked_controls, component_data_dir
+#ifdef XNET_OMP
+  Use omp_lib, Only: omp_get_max_threads
+  Use xnet_controls, Only: tid, zb_lo, zb_hi, nzevolve
+#endif
   Use testdrive, Only: check, error_type, new_unittest, unittest_type
   Use xnet_controls, Only: lun_diag
   Use xnet_jacobian
@@ -281,6 +307,9 @@ Module test_sparse_solvers
 
   Public :: collect_sparse_solver_tests
   Public :: run_real_failure_probe
+#ifdef XNET_OMP
+  Public :: test_worker_lifecycle
+#endif
 
 Contains
 
@@ -292,13 +321,15 @@ Contains
 #if defined(TEST_DENSE)
     testsuite = [ &
       & new_unittest('dense matrix storage',test_matrix_storage), &
-      & new_unittest('dense known-system solve',test_known_system_solve) ]
+      & new_unittest('dense known-system solve',test_known_system_solve), &
+      & new_unittest('Jacobian lifecycle',test_jacobian_lifecycle) ]
 #else
     testsuite = [ &
       & new_unittest('sparse structure and maps',test_sparse_structure), &
       & new_unittest('sparse matrix storage',test_matrix_storage), &
       & new_unittest('solver controls',test_solver_controls), &
-      & new_unittest('solver sequence and solve',test_known_system_solve) ]
+      & new_unittest('solver sequence and solve',test_known_system_solve), &
+      & new_unittest('Jacobian lifecycle',test_jacobian_lifecycle) ]
 #endif
 
     Return
@@ -581,6 +612,148 @@ Contains
     Return
   End Subroutine test_known_system_solve
 
+  Subroutine test_jacobian_lifecycle(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+
+    Call jacobian_finalize
+    Call check(error,jacobian_storage_released(),'all Jacobian allocations released')
+    If ( allocated(error) ) Return
+#if !defined(TEST_REAL_SOLVER)
+#if defined(TEST_PARDISO)
+    Call check(error,call_count == 9,'one release for the worker handle')
+    If ( allocated(error) ) Return
+    Call check(error,phase_history(9) == -1,'release all stored matrices')
+    If ( allocated(error) ) Return
+#elif defined(TEST_PARDISO_MKL)
+    Call check(error,call_count == 10,'one release for each used batch slot')
+    If ( allocated(error) ) Return
+    Call check(error,all(phase_history(9:10) == -1),'release all stored matrices')
+    If ( allocated(error) ) Return
+    Call check(error,all(handle_history(9:10) == (/ 7, 8 /)),'release both independent handles')
+    If ( allocated(error) ) Return
+#endif
+#endif
+    Call jacobian_finalize
+
+    ! An initialized but unused solver has no factors to release.
+    Call read_jacobian_data(trim(component_data_dir))
+#if !defined(TEST_DENSE) && !defined(TEST_REAL_SOLVER)
+    Call reset_solver_probe
+#endif
+    Call jacobian_finalize
+    Call check(error,jacobian_storage_released(),'unused Jacobian allocations released')
+    If ( allocated(error) ) Return
+#if !defined(TEST_REAL_SOLVER) && (defined(TEST_PARDISO) || defined(TEST_PARDISO_MKL))
+    Call check(error,call_count == 0,'no release of unused or already released handles')
+    If ( allocated(error) ) Return
+#endif
+
+    ! Reuse the numerical checks after a complete teardown and fresh initialization.
+    Call read_jacobian_data(trim(component_data_dir))
+    Call test_known_system_solve(error)
+    If ( allocated(error) ) Return
+    Call jacobian_finalize
+    Call check(error,jacobian_storage_released(),'reinitialized Jacobian allocations released')
+
+    Return
+  End Subroutine test_jacobian_lifecycle
+
+  Logical Function jacobian_storage_released()
+    Implicit None
+
+#if defined(TEST_DENSE)
+    jacobian_storage_released = .not. (allocated(diag0) .or. allocated(mult1) .or. allocated(pivot) .or. &
+      & allocated(dydotdy) .or. allocated(jac) .or. allocated(rhs) .or. allocated(indx) .or. allocated(info) .or. &
+      & allocated(hjac) .or. allocated(hrhs) .or. allocated(hindx) .or. allocated(djac) .or. &
+      & allocated(drhs) .or. allocated(dindx))
+#else
+    jacobian_storage_released = .not. (allocated(dydotdy) .or. allocated(tvals) .or. allocated(sident) .or. &
+      & allocated(ridx) .or. allocated(cidx) .or. allocated(pb) .or. allocated(ns11) .or. allocated(ns21) .or. &
+      & allocated(ns22) .or. allocated(ns31) .or. allocated(ns32) .or. allocated(ns33) .or. allocated(ns41) .or. &
+      & allocated(ns42) .or. allocated(ns43) .or. allocated(ns44))
+#if defined(TEST_MA48)
+    jacobian_storage_released = jacobian_storage_released .and. .not. ( &
+      & allocated(vals) .or. allocated(jcn) .or. allocated(irn) .or. allocated(keep) .or. allocated(wB) .or. &
+      & allocated(wC) .or. allocated(iwA) .or. allocated(iwB) .or. allocated(iwC) .or. allocated(jobA) .or. &
+      & allocated(jobB) .or. allocated(jobC) .or. allocated(vals0) .or. allocated(jcn0) .or. allocated(irn0))
+#else
+    jacobian_storage_released = jacobian_storage_released .and. .not. allocated(perm)
+#if defined(TEST_PARDISO_MKL)
+    jacobian_storage_released = jacobian_storage_released .and. .not. allocated(pt)
+#endif
+#endif
+#endif
+
+    Return
+  End Function jacobian_storage_released
+
+#ifdef XNET_OMP
+  Subroutine test_worker_lifecycle(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Integer :: i, nworkers, nrelease
+    Logical, Allocatable :: released(:)
+
+    nworkers = omp_get_max_threads()
+    Allocate (released(nworkers))
+    released = .false.
+    Call reset_solver_probe
+    ! Give every worker/slot a distinct nonzero handle. The doubles record which ones are released.
+    !$omp parallel default(shared) private(i)
+#if defined(TEST_MA48)
+    Allocate (vals0(1,zb_lo:zb_hi),jcn0(1,zb_lo:zb_hi),irn0(1,zb_lo:zb_hi))
+#elif defined(TEST_PARDISO)
+    pt = 0_i8
+    pt(1) = tid
+#else
+    Do i = zb_lo, zb_hi
+      pt(1,i) = i
+    EndDo
+#endif
+    !$omp end parallel
+
+    Call jacobian_finalize
+    !$omp parallel default(shared)
+    released(tid) = jacobian_storage_released()
+    !$omp end parallel
+    Call check(error,all(released),'every worker released its Jacobian allocations')
+    If ( allocated(error) ) Return
+#if !defined(TEST_MA48)
+    nrelease = nworkers
+#if defined(TEST_PARDISO_MKL)
+    nrelease = nzevolve
+#endif
+    Call check(error,call_count == nrelease,'one release for each worker/slot handle')
+    If ( allocated(error) ) Return
+    Call check(error,all(phase_history(1:nrelease) == -1),'release every stored factor')
+    If ( allocated(error) ) Return
+    Do i = 1, nrelease
+      Call check(error,count(handle_history(1:nrelease) == i) == 1,'each distinct handle released once')
+      If ( allocated(error) ) Return
+    EndDo
+#endif
+    Call jacobian_finalize
+    Call read_jacobian_data(trim(component_data_dir))
+    Call reset_solver_probe
+    Call jacobian_finalize
+    released = .false.
+    !$omp parallel default(shared)
+    released(tid) = jacobian_storage_released()
+    !$omp end parallel
+    Call check(error,all(released),'every worker released reinitialized unused storage')
+    If ( allocated(error) ) Return
+#if !defined(TEST_MA48)
+    Call check(error,call_count == 0,'unused handles need no release')
+#endif
+
+    Deallocate (released)
+    Return
+  End Subroutine test_worker_lifecycle
+#endif
+
 #if defined(TEST_REAL_SOLVER)
   Subroutine apply_real_result_mutation(actual)
     Implicit None
@@ -717,6 +890,10 @@ Program sparse_solver_test_runner
   Use sparse_component_fixture, Only: initialize_component
   Use test_sparse_solvers, Only: collect_sparse_solver_tests, run_real_failure_probe
   Use testdrive, Only: new_testsuite, run_testsuite, testsuite_type
+#ifdef XNET_OMP
+  Use testdrive, Only: error_type
+  Use test_sparse_solvers, Only: test_worker_lifecycle
+#endif
   Implicit None
 
   Character(16) :: mode
@@ -724,6 +901,9 @@ Program sparse_solver_test_runner
   Character(80) :: suite_name
   Integer :: stat
   Type(testsuite_type), Allocatable :: testsuites(:)
+#ifdef XNET_OMP
+  Type(error_type), Allocatable :: error
+#endif
 
   If ( command_argument_count() /= 2 ) Then
     Write(error_unit,*) 'usage: sparse solver test MODE DATA_DIR'
@@ -732,6 +912,19 @@ Program sparse_solver_test_runner
   Call get_command_argument(1,mode)
   Call get_command_argument(2,data_dir)
   Call initialize_component(trim(mode),trim(data_dir))
+#ifdef XNET_OMP
+  If ( trim(mode) == 'workers' ) Then
+    ! test-drive wraps even serial suites in an OpenMP region. Exercise the production lifecycle
+    ! directly here, since its callers must be outside application parallel regions.
+    Call test_worker_lifecycle(error)
+    If ( allocated(error) ) Then
+      Write(error_unit,'(a)') error%message
+      Stop 1
+    EndIf
+    Write(error_unit,'(a)') 'worker Jacobian lifecycle passed'
+    Stop
+  EndIf
+#endif
 #if defined(TEST_REAL_SOLVER)
   If ( trim(mode) == 'failure' ) Call run_real_failure_probe
 #endif

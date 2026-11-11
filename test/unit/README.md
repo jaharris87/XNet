@@ -117,6 +117,14 @@ The first requires maintainer-licensed HSL source outside the repository; the
 second requires an initialized oneMKL environment. Commands and evidence
 requirements are under `test/qualification/sparse_backends/`.
 
+`make -C test/unit real-pardiso-mkl-openmp-test LAPACK_VER=MKL` is a separate
+opt-in real-library check with one, two, and four fixed workers and two slots
+per worker, with and without self-heating. It checks the same residual limits
+on worker-specific systems, factor reuse for a new right-hand side, changed
+matrix refactorization, and teardown/reinitialization. It links no solver
+doubles. This target requires the real oneMKL installation; the local doubles
+checks do not establish that it passes.
+
 ## Surrogate-result checks
 
 The surrogate-result component checks numerical admissibility and selected

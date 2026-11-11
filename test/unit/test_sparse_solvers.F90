@@ -39,9 +39,9 @@ Contains
 
     Call jacobian_finalize
     component_data_dir = data_dir
-    heat_mode = trim(mode) == 'heat'
+    heat_mode = trim(mode) == 'heat' .or. trim(mode) == 'workers-heat'
 #ifdef XNET_OMP
-    workers_mode = trim(mode) == 'workers'
+    workers_mode = trim(mode) == 'workers' .or. trim(mode) == 'workers-heat'
 #endif
     If ( trim(mode) /= 'base' .and. trim(mode) /= 'failure' .and. .not. heat_mode .and. .not. workers_mode ) Then
       Write(*,*) 'mode must be base, heat, or failure'
@@ -290,10 +290,10 @@ Module test_sparse_solvers
   Use sparse_component_fixture, Only: expected_matrix, heat_mode, tracked_controls, component_data_dir
 #ifdef XNET_OMP
   Use omp_lib, Only: omp_get_max_threads
-  Use xnet_controls, Only: tid, zb_lo, zb_hi, nzevolve
+  Use xnet_controls, Only: tid, nzevolve
 #endif
   Use testdrive, Only: check, error_type, new_unittest, unittest_type
-  Use xnet_controls, Only: lun_diag
+  Use xnet_controls, Only: lun_diag, zb_lo, zb_hi
   Use xnet_jacobian
   Use xnet_types, Only: dp
 #if !defined(TEST_DENSE) && !defined(TEST_REAL_SOLVER)
@@ -534,10 +534,17 @@ Contains
     Real(dp) :: rhs(msize,2), solution(msize,2), t9rhs(2), yrhs(3,2)
 
     Call expected_matrix(matrix)
+#if defined(TEST_REAL_SOLVER) && defined(XNET_OMP)
+    ! Different worker systems expose accidental use of another worker's matrix or solution bank.
+    matrix = real(tid,dp)*matrix
+#endif
     diag = 0.0_dp
     mult = 1.0_dp
     Call install_matrix(matrix,diag,mult)
     Call set_solutions(solution)
+#if defined(TEST_REAL_SOLVER) && defined(XNET_OMP)
+    solution = solution + real(tid-1,dp)
+#endif
     Do zone = 1, 2
       rhs(:,zone) = matmul(matrix,solution(:,zone))
     EndDo
@@ -568,6 +575,35 @@ Contains
     If ( msize == 4 ) actual(4,:) = dt9
     Call check_solutions(error,matrix,rhs,solution,actual)
     If ( allocated(error) ) Return
+
+#if defined(TEST_REAL_SOLVER) && defined(TEST_PARDISO_MKL)
+    ! Reuse the existing factors for a new RHS, then refactor a changed matrix through the
+    ! separate decomposition/back-substitution entry points.
+    solution = 2.0_dp*solution
+    Do zone = 1, 2
+      rhs(:,zone) = matmul(matrix,solution(:,zone))
+    EndDo
+    yrhs = rhs(1:3,:)
+    If ( msize == 4 ) t9rhs = rhs(4,:)
+    Call jacobian_bksub(2,yrhs,dy,t9rhs,dt9)
+    actual(1:3,:) = dy
+    If ( msize == 4 ) actual(4,:) = dt9
+    Call check_solutions(error,matrix,rhs,solution,actual)
+    If ( allocated(error) ) Return
+    matrix = 1.5_dp*matrix
+    Call install_matrix(matrix,diag,mult)
+    Do zone = 1, 2
+      rhs(:,zone) = matmul(matrix,solution(:,zone))
+    EndDo
+    yrhs = rhs(1:3,:)
+    If ( msize == 4 ) t9rhs = rhs(4,:)
+    Call jacobian_decomp(2)
+    Call jacobian_bksub(2,yrhs,dy,t9rhs,dt9)
+    actual(1:3,:) = dy
+    If ( msize == 4 ) actual(4,:) = dt9
+    Call check_solutions(error,matrix,rhs,solution,actual)
+    If ( allocated(error) ) Return
+#endif
 
 #if !defined(TEST_REAL_SOLVER)
 #if defined(TEST_PARDISO) || defined(TEST_PARDISO_MKL)
@@ -704,6 +740,10 @@ Contains
     Call test_worker_solver_indices(error)
     If ( allocated(error) ) Return
 #endif
+#if defined(TEST_REAL_SOLVER)
+    Call test_worker_known_systems(error)
+    If ( allocated(error) ) Return
+#else
     Call reset_solver_probe
     ! Give every worker/slot a distinct nonzero handle. The doubles record which ones are released.
     !$omp parallel default(shared) private(i)
@@ -718,6 +758,7 @@ Contains
     EndDo
 #endif
     !$omp end parallel
+#endif
 
     Call jacobian_finalize
     !$omp parallel default(shared)
@@ -725,7 +766,7 @@ Contains
     !$omp end parallel
     Call check(error,all(released),'every worker released its Jacobian allocations')
     If ( allocated(error) ) Return
-#if !defined(TEST_MA48)
+#if !defined(TEST_MA48) && !defined(TEST_REAL_SOLVER)
     nrelease = nworkers
 #if defined(TEST_PARDISO_MKL)
     nrelease = nzevolve
@@ -745,7 +786,14 @@ Contains
     Call test_worker_solver_indices(error)
     If ( allocated(error) ) Return
 #endif
+#if defined(TEST_REAL_SOLVER)
+    Call test_worker_known_systems(error)
+    If ( allocated(error) ) Return
+    Call jacobian_finalize
+    Call read_jacobian_data(trim(component_data_dir))
+#else
     Call reset_solver_probe
+#endif
     Call jacobian_finalize
     released = .false.
     !$omp parallel default(shared)
@@ -753,13 +801,58 @@ Contains
     !$omp end parallel
     Call check(error,all(released),'every worker released reinitialized unused storage')
     If ( allocated(error) ) Return
-#if !defined(TEST_MA48)
+#if !defined(TEST_MA48) && !defined(TEST_REAL_SOLVER)
     Call check(error,call_count == 0,'unused handles need no release')
 #endif
 
     Deallocate (released)
     Return
   End Subroutine test_worker_lifecycle
+
+#if defined(TEST_REAL_SOLVER)
+  Subroutine test_worker_known_systems(error)
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Type(error_type), Allocatable :: worker_error
+    Logical, Allocatable :: valid(:)
+    Character(256), Allocatable :: messages(:)
+    Integer :: i, slot
+
+    Allocate (valid(omp_get_max_threads()),messages(omp_get_max_threads()))
+    valid = .false.
+    messages = ''
+    !$omp parallel default(shared) private(worker_error,slot)
+    Call test_sparse_structure(worker_error)
+    If ( .not. allocated(worker_error) ) Call test_solver_controls(worker_error)
+    !$omp critical(real_pardiso_record)
+    Write(*,'(a,i0,a,2(i0,1x),a,64(i0,1x))') 'real PARDISO worker=',tid,' slots=',zb_lo,zb_hi,' iparm=',iparm
+    !$omp end critical(real_pardiso_record)
+    !$omp barrier
+    If ( .not. allocated(worker_error) ) Call test_known_system_solve(worker_error)
+    If ( .not. allocated(worker_error) ) Call test_sparse_structure(worker_error)
+    If ( .not. allocated(worker_error) ) Call check(worker_error,all(any(pt(:,zb_lo:zb_hi) /= 0_i8,dim=1)), &
+      & 'each used real PARDISO slot has a live handle before release')
+    !$omp critical(real_pardiso_record)
+    Do slot = zb_lo, zb_hi
+      Write(*,'(a,i0,a,i0,a,64(i0,1x))') 'real PARDISO worker=',tid,' slot=',slot,' handle=',pt(:,slot)
+    EndDo
+    !$omp end critical(real_pardiso_record)
+    valid(tid) = .not. allocated(worker_error)
+    If ( allocated(worker_error) ) Then
+      messages(tid) = worker_error%message
+      Deallocate (worker_error)
+    EndIf
+    !$omp end parallel
+    Do i = 1, size(valid)
+      Call check(error,valid(i),'real PARDISO worker known-system check: '//trim(messages(i)))
+      If ( allocated(error) ) Return
+    EndDo
+
+    Deallocate (valid,messages)
+    Return
+  End Subroutine test_worker_known_systems
+#endif
 
 #if defined(TEST_PARDISO_MKL)
   Subroutine test_worker_solver_indices(error)
@@ -768,27 +861,41 @@ Contains
 
     Type(error_type), Allocatable, Intent(out) :: error
     Integer :: i, j, nworkers
+    Integer, Allocatable :: expected_pb(:), expected_cidx(:)
     Integer(c_intptr_t), Allocatable :: addresses(:,:)
     Logical, Allocatable :: valid(:)
 
     nworkers = omp_get_max_threads()
+    If ( heat_mode ) Then
+      expected_pb = (/ 1, 4, 8, 11, 15 /)
+      expected_cidx = (/ 1, 2, 4, 1, 2, 3, 4, 2, 3, 4, 1, 2, 3, 4 /)
+    Else
+      expected_pb = (/ 1, 3, 6, 8 /)
+      expected_cidx = (/ 1, 2, 1, 2, 3, 2, 3 /)
+    EndIf
     Allocate (addresses(3,nworkers),valid(nworkers))
     valid = .false.
     !$omp parallel default(shared)
     valid(tid) = allocated(pb) .and. allocated(cidx) .and. allocated(perm)
-    If ( valid(tid) ) valid(tid) = size(pb) == 4 .and. size(cidx) == 7 .and. size(perm) == 3
+    If ( valid(tid) ) valid(tid) = size(pb) == size(expected_pb) .and. &
+      & size(cidx) == size(expected_cidx) .and. size(perm) == msize
     !$omp end parallel
     Call check(error,all(valid),'every PARDISO worker has allocated CRS and permutation arrays')
     If ( allocated(error) ) Return
 
     !$omp parallel default(shared)
-    valid(tid) = all(pb == (/ 1, 3, 6, 8 /)) .and. all(cidx == (/ 1, 2, 1, 2, 3, 2, 3 /)) .and. all(perm == 0)
+    valid(tid) = all(pb == expected_pb) .and. all(cidx == expected_cidx) .and. all(perm == 0)
     addresses(1,tid) = integer_array_address(pb)
     addresses(2,tid) = integer_array_address(cidx)
     addresses(3,tid) = integer_array_address(perm)
     !$omp end parallel
     Call check(error,all(valid),'every PARDISO worker receives initial CRS and permutation contents')
     If ( allocated(error) ) Return
+#if defined(TEST_REAL_SOLVER)
+    Do i = 1, nworkers
+      Write(*,'(a,i0,a,3(z16.16,1x))') 'real PARDISO worker=',i,' pb/cidx/perm addresses=',addresses(:,i)
+    EndDo
+#endif
     Do i = 1, nworkers
       Do j = i+1, nworkers
         Call check(error,all(addresses(:,i) /= addresses(:,j)), &
@@ -807,9 +914,9 @@ Contains
     EndIf
     !$omp barrier
     If ( tid == 1 ) Then
-      valid(tid) = all(pb == (/ 0, 2, 5, 7 /)) .and. all(cidx == (/ 0, 1, 0, 1, 2, 1, 2 /)) .and. all(perm == 1)
+      valid(tid) = all(pb == expected_pb-1) .and. all(cidx == expected_cidx-1) .and. all(perm == 1)
     Else
-      valid(tid) = all(pb == (/ 1, 3, 6, 8 /)) .and. all(cidx == (/ 1, 2, 1, 2, 3, 2, 3 /)) .and. all(perm == 0)
+      valid(tid) = all(pb == expected_pb) .and. all(cidx == expected_cidx) .and. all(perm == 0)
     EndIf
     !$omp barrier
     If ( tid == 1 ) Then
@@ -821,7 +928,7 @@ Contains
     Call check(error,all(valid),'temporary PARDISO index changes stay within one worker')
     If ( allocated(error) ) Return
 
-    Deallocate (addresses,valid)
+    Deallocate (addresses,valid,expected_pb,expected_cidx)
     Return
   End Subroutine test_worker_solver_indices
 
@@ -887,16 +994,16 @@ Contains
   Subroutine install_matrix(matrix,diag,mult)
     Implicit None
 
-    Real(dp), Intent(in) :: matrix(msize,msize), diag(2), mult(2)
+    Real(dp), Intent(in) :: matrix(msize,msize), diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
 
     Integer :: entry, zone
 
 #if defined(TEST_DENSE)
-    Do zone = 1, 2
+    Do zone = zb_lo, zb_hi
       dydotdy(:,:,zone) = transpose(matrix)
     EndDo
 #else
-    Do zone = 1, 2
+    Do zone = zb_lo, zb_hi
       Do entry = 1, nnz
         dydotdy(entry,zone) = matrix(ridx(entry),cidx(entry))
       EndDo
@@ -916,11 +1023,11 @@ Contains
     Integer :: entry
 
 #if defined(TEST_DENSE)
-    matrix = jac(:,:,zone)
+    matrix = jac(:,:,zb_lo+zone-1)
 #else
     matrix = 0.0_dp
     Do entry = 1, nnz
-      matrix(ridx(entry),cidx(entry)) = tvals(entry,zone)
+      matrix(ridx(entry),cidx(entry)) = tvals(entry,zb_lo+zone-1)
     EndDo
 #endif
 
@@ -961,7 +1068,11 @@ Contains
       If ( allocated(error) ) Return
     EndDo
 #if defined(TEST_REAL_SOLVER)
+#ifdef XNET_OMP
+    Write(*,'(a,i0,a,es12.5)') 'worker=',tid,' maximum real-solver residual=',maximum_residual
+#else
     Write(*,'(a,es12.5)') 'maximum real-solver residual=',maximum_residual
+#endif
 #endif
 
     Return
@@ -997,7 +1108,7 @@ Program sparse_solver_test_runner
   Call get_command_argument(2,data_dir)
   Call initialize_component(trim(mode),trim(data_dir))
 #ifdef XNET_OMP
-  If ( trim(mode) == 'workers' ) Then
+  If ( trim(mode) == 'workers' .or. trim(mode) == 'workers-heat' ) Then
     ! test-drive wraps even serial suites in an OpenMP region. Exercise the production lifecycle
     ! directly here, since its callers must be outside application parallel regions.
     Call test_worker_lifecycle(error)

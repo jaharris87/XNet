@@ -28,7 +28,7 @@ once per worker handle in standalone PARDISO, and once per used batch-slot
 handle in oneMKL. See the [oneMKL Fortran reference](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-fortran/2023-0/pardiso.html)
 and the [standalone PARDISO manual](https://pardiso-project.org/manual/manual.pdf).
 
-The following separate target tests two- and four-worker cleanup with solver
+The following separate target tests one-, two- and four-worker cleanup with solver
 doubles, including MA48 private factors and resize temporaries, distinct PARDISO
 handles, repeated cleanup and unused/reinitialized storage:
 
@@ -100,6 +100,13 @@ source /path/to/oneapi/setvars.sh
 
 make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
 
+# Separate real-library fixed-worker known systems and lifecycle checks.
+# Use a fresh BUILD_DIR for each configuration, rather than cleaning a live build.
+make -C test/unit BUILD_DIR=build/mkl-omp-opt LAPACK_VER=MKL \
+  -j real-pardiso-mkl-openmp-test
+make -C test/unit BUILD_DIR=build/mkl-omp-debug CMODE=DEBUG LAPACK_VER=MKL \
+  -j real-pardiso-mkl-openmp-test
+
 make BUILD_NAME=pardiso-mkl-dense MATRIX_SOLVER=dense LAPACK_VER=MKL -j xnet
 make BUILD_NAME=pardiso-mkl-sparse MATRIX_SOLVER=PARDISO_MKL LAPACK_VER=MKL -j xnet
 
@@ -115,6 +122,15 @@ python3 test/qualification/sparse_backends/compare_heat_sn160.py \
 `$MKLROOT/bin/mkl_link_tool` location. Record the emitted compile/link lines so
 the selected interface, sequential threading layer, and library version remain
 reviewable.
+
+The OpenMP component target runs base and self-heating known systems with
+`OMP_NUM_THREADS=1,2,4`, dynamic teams disabled, and `MKL_NUM_THREADS=1`.
+Every worker has two slots and distinct matrix/solution values. It checks
+initial CRS copies, disjoint index storage, mutation isolation, the residual
+bound above after initial solve, refactorization and factor reuse, restored
+CRS contents after calls, and repeated finalization/reinitialization. The real
+path uses real handles and links no solver doubles. Its existence does not
+qualify threaded oneMKL; record actual results and limitations separately.
 
 ## Standalone PARDISO support
 

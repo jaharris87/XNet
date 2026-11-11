@@ -51,6 +51,7 @@ REAL_SPARSE_BUILD_DIR := $(BUILD_DIR)/real-sparse
 REAL_SPARSE_WORK_DIR := $(abspath $(BUILD_DIR)/real-sparse-work)
 REAL_MA48_COMPONENT_EXE := $(REAL_SPARSE_BUILD_DIR)/ma48/sparse_component_tests
 REAL_PARDISO_MKL_COMPONENT_EXE := $(REAL_SPARSE_BUILD_DIR)/pardiso_mkl/sparse_component_tests
+REAL_PARDISO_MKL_OPENMP_EXE := $(REAL_SPARSE_BUILD_DIR)/pardiso-mkl-omp/sparse_component_tests
 HSL_MA48_SOURCE ?= $(MA48_DIR)/MA48.f
 REAL_MA48_OBJECT := $(REAL_SPARSE_BUILD_DIR)/ma48/MA48.o
 EOS_BUILD_DIR := $(BUILD_DIR)/eos
@@ -151,7 +152,7 @@ BUILD_NET_OBJECTS := \
 .DEFAULT_GOAL := test
 
 .PHONY: test eos-test screening-test real-ma48-test real-pardiso-mkl-test clean production-xnet model-input-test \
-  surrogate-underflow-trap-test surrogate-verifier sparse-lifecycle-openmp-test
+  surrogate-underflow-trap-test surrogate-verifier sparse-lifecycle-openmp-test real-pardiso-mkl-openmp-test
 
 test: eos-test screening-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
     $(CONTROLS_TEST_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
@@ -231,6 +232,17 @@ real-ma48-test: $(REAL_MA48_COMPONENT_EXE)
 real-pardiso-mkl-test: $(REAL_PARDISO_MKL_COMPONENT_EXE)
 	@bash run_real_sparse_solver_tests.sh pardiso-mkl $(REAL_SPARSE_WORK_DIR)/pardiso-mkl \
 	  $(abspath $(REAL_PARDISO_MKL_COMPONENT_EXE)) $(abspath $(XNET_DIR)/sparse_controls.nml)
+
+real-pardiso-mkl-openmp-test: $(REAL_PARDISO_MKL_OPENMP_EXE)
+	@set -e; for workers in 1 2 4; do \
+	  for mode in workers workers-heat; do \
+	    echo "real PARDISO worker check: workers=$$workers mode=$$mode"; \
+	    work="$(REAL_SPARSE_WORK_DIR)/pardiso-mkl-omp-$$workers-$$mode"; \
+	    mkdir -p "$$work"; \
+	    (cd "$$work" && OMP_NUM_THREADS=$$workers OMP_DYNAMIC=FALSE OMP_MAX_ACTIVE_LEVELS=1 \
+	      MKL_NUM_THREADS=1 "$(abspath $(REAL_PARDISO_MKL_OPENMP_EXE))" $$mode .); \
+	  done; \
+	done
 
 $(TEST_EXE): $(OBJECTS)
 	$(LDR) -o $@ $(OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
@@ -645,7 +657,7 @@ $(SPARSE_OPENMP_EXES): LDFLAGS += $(HOST_OPENMP_FLAGS)
 
 sparse-lifecycle-openmp-test: $(SPARSE_OPENMP_EXES)
 	@set -e; for exe in $(abspath $(SPARSE_OPENMP_EXES)); do \
-	  for workers in 2 4; do \
+	  for workers in 1 2 4; do \
 	    work="$(SPARSE_WORK_DIR)/$$(basename $$(dirname $$exe))-$$workers"; \
 	    mkdir -p "$$work"; \
 	    (cd "$$work" && OMP_NUM_THREADS=$$workers OMP_DYNAMIC=FALSE "$$exe" workers .); \
@@ -711,6 +723,10 @@ $(REAL_MA48_OBJECT): $(HSL_MA48_SOURCE) | $(REAL_SPARSE_BUILD_DIR)/ma48
 
 $(eval $(call real_sparse_component_rules,ma48,$(XNET_DIR)/xnet_jacobian_MA48.F90,TEST_MA48,$(REAL_MA48_OBJECT)))
 $(eval $(call real_sparse_component_rules,pardiso_mkl,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL,))
+$(eval $(call real_sparse_component_rules,pardiso-mkl-omp,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL,))
+$(REAL_PARDISO_MKL_OPENMP_EXE): FFLAGS += $(HOST_OPENMP_FLAGS)
+$(REAL_PARDISO_MKL_OPENMP_EXE): F90FLAGS += -DXNET_OMP
+$(REAL_PARDISO_MKL_OPENMP_EXE): LDFLAGS += $(HOST_OPENMP_FLAGS)
 
 define eos_provider_rules
 $(EOS_BUILD_DIR)/$(1):

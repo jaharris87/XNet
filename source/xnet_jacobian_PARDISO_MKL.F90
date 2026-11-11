@@ -51,7 +51,7 @@ Module xnet_jacobian
   Integer     :: msglvl            ! Verbosity of PARDISO diagnostics
   Integer     :: maxfct            ! Number of factors stored by each PARDISO handle
 #ifdef XNET_OMP
-  !$omp threadprivate(iparm,dparm,phase)
+  !$omp threadprivate(iparm,dparm,phase,pb,cidx,perm)
 #endif
   Namelist /pardiso_controls/ iparm, dparm
 
@@ -283,12 +283,13 @@ Contains
 
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))
 
-    ! The permutation array is shared; only the solver controls are worker-private.
+    ! oneMKL can temporarily modify the index arrays during a call. Each worker needs its own
+    ! storage, including the permutation vector; allocatable COPYIN copies the initial contents.
     Allocate (perm(msize))
     perm = 0
 
 #ifdef XNET_OMP
-    !$omp parallel default(shared) copyin(iparm,dparm)
+    !$omp parallel default(shared) copyin(iparm,dparm,pb,cidx,perm)
     !$omp end parallel
 #endif
 
@@ -322,11 +323,12 @@ Contains
       If ( ierr /= 0 ) Call xnet_terminate('oneMKL PARDISO memory release failed',ierr)
     EndDo
     Deallocate (b,x)
+    Deallocate (pb,cidx,perm)
 #ifdef XNET_OMP
     !$omp end parallel
 #endif
 
-    Deallocate (pt,dydotdy,tvals,perm,ridx,cidx,sident,pb)
+    Deallocate (pt,dydotdy,tvals,ridx,sident)
     Deallocate (ns11,ns21,ns22,ns31,ns32,ns33,ns41,ns42,ns43,ns44)
 
     Return

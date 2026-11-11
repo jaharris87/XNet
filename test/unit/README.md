@@ -99,6 +99,13 @@ construction, controls, status handling, and result association; they do not
 qualify the external solver libraries. Standalone PARDISO remains unsupported
 for production builds.
 
+`make -C test/unit sparse-lifecycle-openmp-test` runs one-, two-, and four-worker
+setup/finalize checks with solver doubles. For oneMKL PARDISO, it also checks
+that every worker receives allocated CRS and permutation arrays with the
+initial contents and distinct storage, and that temporary index changes on
+one worker leave the other workers' arrays unchanged. The checks repeat after
+finalization and reinitialization. They do not exercise real oneMKL calls.
+
 Real-library checks are available when the external software is installed:
 
 ```text
@@ -109,6 +116,14 @@ make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
 The first requires maintainer-licensed HSL source outside the repository; the
 second requires an initialized oneMKL environment. Commands and evidence
 requirements are under `test/qualification/sparse_backends/`.
+
+`make -C test/unit real-pardiso-mkl-openmp-test LAPACK_VER=MKL` is a separate
+opt-in real-library check with one, two, and four fixed workers and two slots
+per worker, with and without self-heating. Every slot has a different matrix.
+It checks the same residual limits, factor reuse for a new right-hand side, changed
+matrix refactorization, and teardown/reinitialization. It links no solver
+doubles. This target requires the real oneMKL installation; the local doubles
+checks do not establish that it passes.
 
 ## Surrogate-result checks
 

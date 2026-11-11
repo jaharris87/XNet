@@ -11,6 +11,7 @@ Program host_batch_openmp_consumer
   Implicit None
 
   Integer, Parameter :: lanes = 4, batches = 8, calls = 6
+  Character(5), Parameter :: output_names(2) = [Character(5) :: 'c12','o16']
   Type :: result_t
     Integer :: owner = -1, team = 0, n = lanes, nids = 4, status = -1, steps = -1
     Integer :: ids(4,lanes), counters(5,lanes)
@@ -80,8 +81,12 @@ Program host_batch_openmp_consumer
   controls%bin_file_base = 'ts'
   controls%ev_file_base = 'ev'
   controls%description = [Character(80) :: 'Application outer OpenMP batch test', 'constant conditions', 'public C/O fixture']
-  controls%nnucout = 2
-  controls%output_nuclei = [Character(5) :: 'c12', 'o16']
+  controls%nnucout = Size(output_names)
+  controls%output_nuclei = output_names
+  Call check(Size(controls%output_nuclei) == Size(output_names),'output species array size')
+  ! Check NUL bytes independently of the name constant used for assignment and comparison.
+  Call check(All(Index(controls%output_nuclei,Achar(0)) == 0),'output species contain no NUL bytes')
+  Call check(All(controls%output_nuclei == output_names),'output species initialization')
   controls%t9nse = 11.0_dp
   If ( Trim(data_dir) == 'Data_SN160' ) controls%iscrn = 1
   If ( solver == 3 ) Then

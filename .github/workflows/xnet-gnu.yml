@@ -172,6 +172,11 @@ jobs:
           test -x "$xnet_executable"
           ls -l "$xnet_executable" | tee -a xnet-gnu-logs/unit-components.log
 
+      - name: Run DEBUG EOS and screening components
+        shell: bash
+        run: |
+          make -C test/unit CMODE=DEBUG eos-test screening-test 2>&1 | tee xnet-gnu-logs/unit-components-debug.log
+
       - name: Record final job measurements
         if: ${{ always() }}
         shell: bash
@@ -311,6 +316,9 @@ jobs:
             printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
             printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
             uname -a
+            printf 'online_cpus='
+            getconf _NPROCESSORS_ONLN
+            lscpu
             sed -n '1,8p' /etc/os-release
             report_version git git --version
             report_version gfortran gfortran --version
@@ -340,6 +348,32 @@ jobs:
             --xnse-executable="$XNSE_EXECUTABLE" \
             --basetemp="$RUNNER_TEMP/xnet-regression" \
             2>&1 | tee xnet-gnu-logs/serial-regression.log
+
+      - name: Build serial library and preprocessor
+        shell: bash
+        run: |
+          make BUILD_NAME=ci-gnu -j2 libxnet net_setup \
+            2>&1 | tee xnet-gnu-logs/library-serial-build.log
+
+      - name: Run serial library and guide quickstart checks
+        shell: bash
+        run: |
+          make -C test/library XNET_CONFIG=../../build/ci-gnu/xnet-config.mk \
+            BUILD_DIR=build-ci-serial test 2>&1 | tee xnet-gnu-logs/library-serial.log
+
+      - name: Build CPU OpenMP library and preprocessor
+        shell: bash
+        run: |
+          make BUILD_NAME=ci-library-openmp CMODE=OPT PE_ENV=GNU MPI_MODE=OFF \
+            OPENMP_MODE=ON GPU_MODE=OFF MATRIX_SOLVER=dense EOS=STARKILLER \
+            -j2 libxnet net_setup 2>&1 | tee xnet-gnu-logs/library-openmp-build.log
+
+      - name: Run CPU OpenMP batch checks
+        shell: bash
+        run: |
+          make -C test/library XNET_CONFIG=../../build/ci-library-openmp/xnet-config.mk \
+            BUILD_DIR=build-ci-openmp host-batch-openmp-test \
+            2>&1 | tee xnet-gnu-logs/library-openmp.log
 
       - name: Record final job measurements
         if: ${{ always() }}
@@ -425,6 +459,49 @@ jobs:
           du -sh "$FAILURE_ROOT" | tee -a xnet-gnu-logs/failure-collection.log
           find "$FAILURE_ROOT" -type f | wc -l | tee -a xnet-gnu-logs/failure-collection.log
 
+      - name: Collect failing library logs and summaries
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          LIBRARY_FAILURE_ROOT: ${{ runner.temp }}/xnet-library-failures
+        run: |
+          python3 - <<'PYLOGS' 2>&1 | tee xnet-gnu-logs/library-failure-collection.log
+          import os
+          from pathlib import Path
+
+          destination = Path(os.environ["LIBRARY_FAILURE_ROOT"])
+          destination.mkdir(parents=True, exist_ok=True)
+          records = []
+          remaining = 10 * 1024 * 1024
+          # These caller roots contain copied networks: collect only logs/JSON,
+          # capped at 1 MiB per file and 10 MiB overall, with no staged symlinks.
+          for name in ("build-ci-openmp", "build-ci-serial"):
+              root = Path("test/library") / name
+              if not root.is_dir() or root.is_symlink():
+                  continue
+              candidates = [p for p in root.rglob("*") if p.suffix in (".log", ".json")
+                            and not p.is_symlink() and p.is_file()]
+              # The last command's output takes priority if the cap is reached.
+              for source in sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True):
+                  if root.resolve() not in source.resolve().parents:
+                      raise SystemExit(f"refusing library log outside {root}: {source}")
+                  relative = Path(name) / source.relative_to(root)
+                  count = min(source.stat().st_size, 1024 * 1024, remaining)
+                  if count == 0:
+                      records.append(f"omitted {relative} (empty or collection limit)")
+                      continue
+                  target = destination / relative
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  with source.open("rb") as stream:
+                      stream.seek(-count, 2)
+                      target.write_bytes(stream.read(count))
+                  remaining -= count
+                  records.append(f"{relative}: copied last {count} of {source.stat().st_size} bytes")
+          manifest = destination / "MANIFEST.txt"
+          manifest.write_text("\n".join(records or ["No library logs or summaries were created."]) + "\n")
+          print(manifest.read_text(), end="")
+          PYLOGS
+
       - name: Upload failure evidence
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -433,5 +510,6 @@ jobs:
           path: |
             xnet-gnu-logs
             ${{ runner.temp }}/xnet-regression-failures
+            ${{ runner.temp }}/xnet-library-failures
           retention-days: 7
           if-no-files-found: error

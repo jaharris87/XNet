@@ -25,9 +25,9 @@ for current implementation status.
 | --- | --- | --- |
 | [#128: configuration](https://github.com/jaharris87/XNet/issues/128) | Merged: validated `xnet_controls_t`, programmatic configuration, layered standalone namelists, and migrated maintained inputs | Use the existing representation in the application interface |
 | [#127: starting CPU measurements](https://github.com/jaharris87/XNet/issues/127) | Complete and accepted: serial dense CPU measurements for four network sizes on both facilities, with MA48 deferred | Preserve this starting point for resulting-code comparisons |
-| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: public lifecycle/archive, EOS/NSE/timestep/timing results, concurrent application-side CPU batch calls and GPU resource ownership (#164), followed by API/GPU readability work (#180) | Share standalone/API lifecycle code under #184, agree the #185 storage layout, and complete remaining execution-mode checks |
+| [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: public lifecycle/archive, EOS/NSE/timestep/timing results, concurrent application-side CPU batch calls and GPU resource ownership (#164), followed by API/GPU readability work (#180) | Finish #184's shared lifecycle checks, implement the selected #185 worker storage, and complete remaining execution-mode checks |
 | [#130: application integrations](https://github.com/jaharris87/XNet/issues/130) | Selected CHIMERA 17/160/350 and Flash-X 17/160 CPU comparisons are complete at their recorded sources. Flash-X 350 execution and application GPU checks remain | Reconcile wrappers with the current interface, check resulting code, and validate required modes and ownership; diagnose the two facility failures separately |
-| [#171](https://github.com/jaharris87/XNet/issues/171) / [#181: numerical corrections](https://github.com/jaharris87/XNet/issues/181) | Screening correction #175 is merged. Accepted-composition Ye correction #182 remains draft, refreshed against current development | Complete current-source native checks and resolve the NVIDIA CPU threaded-caller compiler failure in #183 |
+| [#171](https://github.com/jaharris87/XNet/issues/171) / [#181: numerical corrections](https://github.com/jaharris87/XNet/issues/181) | Screening correction #175 is merged. Accepted-composition Ye correction #182 remains draft, refreshed against current development | Complete current-source native checks and NVIDIA CPU worker runtime coverage under #183/#192 |
 | [#131: CPU/GPU and application performance](https://github.com/jaharris87/XNet/issues/131) | Stage A complete: four network sizes on both facilities. Six application workloads selected for stage B; no stage B timings yet | Settle implementation and correctness checks before selecting the timing source and measuring repeated application burns |
 | [#132: release checks](https://github.com/jaharris87/XNet/issues/132) | Not yet a release candidate | Verify the final implementation, supported platforms, and documentation |
 
@@ -160,7 +160,8 @@ provides a compile workaround for the
 but runtime coverage remains incomplete: a four-worker SN160 case timed out,
 and a separately approved debugger run stopped on SIGSEGV inside LibSci.
 The cause remains under investigation. GPU-library success does not cover
-that CPU caller.
+that CPU caller. [#192](https://github.com/jaharris87/XNet/issues/192) tracks
+the runtime investigation separately from the compile workaround.
 
 The remaining implementation has separate scopes. [#184](https://github.com/jaharris87/XNet/issues/184)
 has a shared-lifecycle implementation in

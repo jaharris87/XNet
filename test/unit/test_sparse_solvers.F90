@@ -322,6 +322,7 @@ Contains
     testsuite = [ &
       & new_unittest('dense matrix storage',test_matrix_storage), &
       & new_unittest('dense known-system solve',test_known_system_solve), &
+      & new_unittest('solver result finiteness',test_solution_finiteness), &
       & new_unittest('Jacobian lifecycle',test_jacobian_lifecycle) ]
 #else
     testsuite = [ &
@@ -329,6 +330,7 @@ Contains
       & new_unittest('sparse matrix storage',test_matrix_storage), &
       & new_unittest('solver controls',test_solver_controls), &
       & new_unittest('solver sequence and solve',test_known_system_solve), &
+      & new_unittest('solver result finiteness',test_solution_finiteness), &
       & new_unittest('Jacobian lifecycle',test_jacobian_lifecycle) ]
 #endif
 
@@ -438,7 +440,7 @@ Contains
     Call expected_matrix(matrix)
     diag = 0.25_dp
     mult = 2.0_dp
-    Call install_matrix(matrix,diag,mult)
+    Call install_matrix(spread(matrix,dim=3,ncopies=2),diag,mult)
     expected = 2.0_dp*matrix
     Do zone = 1, msize
       expected(zone,zone) = expected(zone,zone) + 0.25_dp
@@ -530,14 +532,16 @@ Contains
 
     Type(error_type), Allocatable, Intent(out) :: error
     Integer :: zone
-    Real(dp) :: actual(msize,2), diag(2), dt9(2), dy(3,2), matrix(msize,msize), mult(2)
+    Real(dp) :: actual(msize,2), diag(2), dt9(2), dy(3,2), matrix(msize,msize,2), mult(2)
     Real(dp) :: rhs(msize,2), solution(msize,2), t9rhs(2), yrhs(3,2)
 
-    Call expected_matrix(matrix)
-#if defined(TEST_REAL_SOLVER) && defined(XNET_OMP)
-    ! Different worker systems expose accidental use of another worker's matrix or solution bank.
-    matrix = real(tid,dp)*matrix
+    Do zone = 1, 2
+      Call expected_matrix(matrix(:,:,zone))
+#if defined(TEST_REAL_SOLVER) && defined(TEST_PARDISO_MKL)
+      ! Every slot has a distinct matrix, including the two slots owned by the same worker.
+      matrix(:,:,zone) = real(zb_lo+zone-1,dp)*matrix(:,:,zone)
 #endif
+    EndDo
     diag = 0.0_dp
     mult = 1.0_dp
     Call install_matrix(matrix,diag,mult)
@@ -546,7 +550,7 @@ Contains
     solution = solution + real(tid-1,dp)
 #endif
     Do zone = 1, 2
-      rhs(:,zone) = matmul(matrix,solution(:,zone))
+      rhs(:,zone) = matmul(matrix(:,:,zone),solution(:,zone))
     EndDo
     yrhs = rhs(1:3,:)
     t9rhs = 0.0_dp
@@ -566,7 +570,7 @@ Contains
 
     solution = -0.5_dp*solution
     Do zone = 1, 2
-      rhs(:,zone) = matmul(matrix,solution(:,zone))
+      rhs(:,zone) = matmul(matrix(:,:,zone),solution(:,zone))
     EndDo
     yrhs = rhs(1:3,:)
     If ( msize == 4 ) t9rhs = rhs(4,:)
@@ -581,7 +585,7 @@ Contains
     ! separate decomposition/back-substitution entry points.
     solution = 2.0_dp*solution
     Do zone = 1, 2
-      rhs(:,zone) = matmul(matrix,solution(:,zone))
+      rhs(:,zone) = matmul(matrix(:,:,zone),solution(:,zone))
     EndDo
     yrhs = rhs(1:3,:)
     If ( msize == 4 ) t9rhs = rhs(4,:)
@@ -593,7 +597,7 @@ Contains
     matrix = 1.5_dp*matrix
     Call install_matrix(matrix,diag,mult)
     Do zone = 1, 2
-      rhs(:,zone) = matmul(matrix,solution(:,zone))
+      rhs(:,zone) = matmul(matrix(:,:,zone),solution(:,zone))
     EndDo
     yrhs = rhs(1:3,:)
     If ( msize == 4 ) t9rhs = rhs(4,:)
@@ -841,6 +845,7 @@ Contains
     valid(tid) = .not. allocated(worker_error)
     If ( allocated(worker_error) ) Then
       messages(tid) = worker_error%message
+      worker_error%stat = 0
       Deallocate (worker_error)
     EndIf
     !$omp end parallel
@@ -947,19 +952,29 @@ Contains
 
 #if defined(TEST_REAL_SOLVER)
   Subroutine apply_real_result_mutation(actual)
+    Use xnet_types, Only: i8
     Implicit None
 
     Real(dp), Intent(inout) :: actual(msize,2)
 
     Character(80) :: mutation
     Integer :: length, status
+    Integer(i8), Parameter :: exponent_bits = int(z'7ff0000000000000',i8)
 
     mutation = ''
     Call get_environment_variable('XNET_SPARSE_REAL_MUTATION',mutation, &
       & length=length,status=status)
-    If ( status == 0 .and. mutation(1:length) == 'excessive_residual' ) Then
+    If ( status /= 0 ) Return
+    Select Case (mutation(1:length))
+    Case ('excessive_residual')
       actual(1,1) = actual(1,1) + 1.0e-11_dp
-    EndIf
+    Case ('nan_result')
+      actual(1,1) = transfer(ibset(exponent_bits,51),0.0_dp)
+    Case ('positive_infinity_result')
+      actual(1,1) = transfer(exponent_bits,0.0_dp)
+    Case ('negative_infinity_result')
+      actual(1,1) = transfer(ibset(exponent_bits,63),0.0_dp)
+    End Select
 
     Return
   End Subroutine apply_real_result_mutation
@@ -981,7 +996,7 @@ Contains
     mult = 1.0_dp
     yrhs = 1.0_dp
     t9rhs = 1.0_dp
-    Call install_matrix(matrix,diag,mult)
+    Call install_matrix(spread(matrix,dim=3,ncopies=2),diag,mult)
 #if defined(TEST_PARDISO_MKL)
     cidx(1) = 0
     iparm(27) = 1
@@ -994,18 +1009,18 @@ Contains
   Subroutine install_matrix(matrix,diag,mult)
     Implicit None
 
-    Real(dp), Intent(in) :: matrix(msize,msize), diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: matrix(msize,msize,2), diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
 
     Integer :: entry, zone
 
 #if defined(TEST_DENSE)
     Do zone = zb_lo, zb_hi
-      dydotdy(:,:,zone) = transpose(matrix)
+      dydotdy(:,:,zone) = transpose(matrix(:,:,zone-zb_lo+1))
     EndDo
 #else
     Do zone = zb_lo, zb_hi
       Do entry = 1, nnz
-        dydotdy(entry,zone) = matrix(ridx(entry),cidx(entry))
+        dydotdy(entry,zone) = matrix(ridx(entry),cidx(entry),zone-zb_lo+1)
       EndDo
     EndDo
 #endif
@@ -1048,23 +1063,40 @@ Contains
   End Subroutine set_solutions
 
   Subroutine check_solutions(error,matrix,rhs,expected,actual)
+    Use xnet_types, Only: i8
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Real(dp), Intent(in) :: matrix(msize,msize), rhs(msize,2)
+    Real(dp), Intent(in) :: matrix(msize,msize,2), rhs(msize,2)
     Real(dp), Intent(in) :: expected(msize,2), actual(msize,2)
 
     Integer :: zone
+    Integer(i8), Parameter :: exponent_bits = int(z'7ff0000000000000',i8)
     Real(dp) :: maximum_residual, residual
 
+    ! Inspect binary64 exponent bits before arithmetic: -Ofast may assume that real operands
+    ! are finite and remove floating-point finiteness tests or accept a NaN comparison.
+    Call check(error,all(iand(transfer(matrix,(/0_i8/),size(matrix)),exponent_bits) /= exponent_bits), &
+      & 'nonfinite solver matrix')
+    If ( allocated(error) ) Return
+    Call check(error,all(iand(transfer(rhs,(/0_i8/),size(rhs)),exponent_bits) /= exponent_bits), &
+      & 'nonfinite solver RHS')
+    If ( allocated(error) ) Return
+    Call check(error,all(iand(transfer(expected,(/0_i8/),size(expected)),exponent_bits) /= exponent_bits), &
+      & 'nonfinite expected solution')
+    If ( allocated(error) ) Return
+    Call check(error,all(iand(transfer(actual,(/0_i8/),size(actual)),exponent_bits) /= exponent_bits), &
+      & 'nonfinite solver result')
+    If ( allocated(error) ) Return
+
     ! Keep the copy-back association check independent of the stricter residual check.
-    Call check(error,all(abs(actual-expected) <= association_tolerance))
+    Call check(error,all(abs(actual-expected) <= association_tolerance),'solver solution association differs')
     If ( allocated(error) ) Return
     maximum_residual = 0.0_dp
     Do zone = 1, 2
-      residual = maxval(abs(matmul(matrix,actual(:,zone))-rhs(:,zone)))
+      residual = maxval(abs(matmul(matrix(:,:,zone),actual(:,zone))-rhs(:,zone)))
       maximum_residual = max(maximum_residual,residual)
-      Call check(error,residual <= tolerance*(1.0_dp+maxval(abs(rhs(:,zone)))))
+      Call check(error,residual <= tolerance*(1.0_dp+maxval(abs(rhs(:,zone)))),'solver residual exceeds limit')
       If ( allocated(error) ) Return
     EndDo
 #if defined(TEST_REAL_SOLVER)
@@ -1077,6 +1109,75 @@ Contains
 
     Return
   End Subroutine check_solutions
+
+  Subroutine test_solution_finiteness(error)
+    Use xnet_types, Only: i8
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Type(error_type), Allocatable :: rejected
+    Real(dp) :: matrix(msize,msize,2), rhs(msize,2), expected(msize,2), actual(msize,2)
+    Integer(i8) :: bits(3)
+    Integer :: kind, operand
+    Character(32) :: diagnostic
+
+    bits(1) = int(z'7ff8000000000000',i8)
+    bits(2) = int(z'7ff0000000000000',i8)
+    bits(3) = ibset(bits(2),63)
+    Call expected_matrix(matrix(:,:,1))
+    matrix(:,:,2) = matrix(:,:,1)
+    Call set_solutions(expected)
+    rhs = matmul(matrix(:,:,1),expected)
+    actual = expected
+    Call check_solutions(error,matrix,rhs,expected,actual)
+    If ( allocated(error) ) Return
+
+    Do operand = 1, 4
+      Do kind = 1, size(bits)
+        Call expected_matrix(matrix(:,:,1))
+        matrix(:,:,2) = matrix(:,:,1)
+        Call set_solutions(expected)
+        rhs = matmul(matrix(:,:,1),expected)
+        actual = expected
+        Select Case (operand)
+        Case (1)
+          matrix(1,1,1) = transfer(bits(kind),0.0_dp)
+          diagnostic = 'nonfinite solver matrix'
+        Case (2)
+          rhs(1,1) = transfer(bits(kind),0.0_dp)
+          diagnostic = 'nonfinite solver RHS'
+        Case (3)
+          expected(1,1) = transfer(bits(kind),0.0_dp)
+          diagnostic = 'nonfinite expected solution'
+        Case (4)
+          actual(1,1) = transfer(bits(kind),0.0_dp)
+          diagnostic = 'nonfinite solver result'
+        End Select
+        Call check_solutions(rejected,matrix,rhs,expected,actual)
+        Call check(error,allocated(rejected),'solver checker accepted a nonfinite operand')
+        If ( allocated(error) ) Return
+        Call check(error,rejected%message == trim(diagnostic),'nonfinite operand rejected for its intended reason')
+        rejected%stat = 0
+        Deallocate (rejected)
+        If ( allocated(error) ) Return
+      EndDo
+    EndDo
+
+    Call expected_matrix(matrix(:,:,1))
+    matrix(:,:,2) = matrix(:,:,1)
+    Call set_solutions(expected)
+    rhs = matmul(matrix(:,:,1),expected)
+    actual = expected
+    actual(1,1) = actual(1,1) + 1.0e-11_dp
+    Call check_solutions(rejected,matrix,rhs,expected,actual)
+    Call check(error,allocated(rejected),'solver checker accepted a finite excessive residual')
+    If ( allocated(error) ) Return
+    Call check(error,rejected%message == 'solver residual exceeds limit','finite perturbation rejected for its residual')
+    rejected%stat = 0
+    Deallocate (rejected)
+
+    Return
+  End Subroutine test_solution_finiteness
 
 End Module test_sparse_solvers
 

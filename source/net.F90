@@ -123,7 +123,7 @@ Program net
   !-------------------------------------------------------------------------------------------------
   Call initialize_network_data(data_dir,data_desc)
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
-  Call initialize_evolve(data_dir,nhmx,map_output=.true.)
+  Call initialize_evolve(data_dir,nhmx)
 
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve),denu(nzevolve))
   denu = 0.0_dp

@@ -276,6 +276,8 @@ def main() -> None:
             case = new_case(label, network)
             text = run([consumer, f"Data_{network}", str(solver), str(heat), str(level), mode], case, case / "consumer.log")
             require("OUTPUT_CHECKS_PASSED" in text, f"consumer did not finish: {case}")
+            require(any("Output Nuc:" in line and "badxx" in line and "not found" in line
+                        for line in text.splitlines()), f"missing output-species warning at itsout={level}: {case}")
             log = parsed_log(text)
             iterations = (1, 2) if network == "alpha" else (3,)
             require(all(preprocess_metadata[i] == log["metadata"] for i in iterations),

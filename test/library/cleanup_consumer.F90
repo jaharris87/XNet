@@ -102,7 +102,7 @@ Contains
     Call check(allocated(aa) .and. allocated(sigmanu),'network and reaction tables survive evolution cleanup')
     Call check(sum(sigmanu) == rate_sum,'reaction tables unchanged by evolution cleanup')
     Call check(.not. allocated(ytot) .and. .not. allocated(dydotdy),'EOS and Jacobian workspace released')
-    Call initialize_evolve('Data_alpha',2,map_output=.false.)
+    Call initialize_evolve('Data_alpha',2)
     Call check(allocated(y) .and. allocated(t) .and. allocated(ynse),'zone workspace reinitialized')
     Call check(size(tmevnu,1) == 2 .and. size(fluxcms,1) == 2,'history shape restored')
     Return

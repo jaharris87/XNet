@@ -195,7 +195,7 @@ Contains
     ! Load nuclear/reaction tables and initialize the evolution engine with persistent
     ! zone workspace and two history endpoints (tstart and tstop).
     Call initialize_network_data(controls%data_dir,api_data_description)
-    Call initialize_evolve(controls%data_dir,api_history_points,map_output=controls%itsout>0)
+    Call initialize_evolve(controls%data_dir,api_history_points)
     Call copy_network_data(network)
 
     api_state = api_ready

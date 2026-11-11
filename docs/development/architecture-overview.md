@@ -81,7 +81,7 @@ its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
 
 Both frontends load tables with `initialize_network_data` in `reaction_data`
-(`source/xnet_data.F90`), then call `initialize_evolve(data_dir,nhistory,map_output)`
+(`source/xnet_data.F90`), then call `initialize_evolve(data_dir,nhistory)`
 in `xnet_evolve` once during initialization. The latter reads Jacobian and
 matching data, initializes screening, fluxes, EOS, the selected BE/BDF integrator
 and NSE, and allocates reusable composition, condition and neutrino-history
@@ -89,11 +89,10 @@ storage for all worker batches. Each owning module maps its own arrays.
 
 `nhistory` counts allocated history points per zone: standalone passes `nhmx`;
 the API passes `api_history_points` for the start and end of a constant-condition
-burn. `map_output` preserves the frontends' condensed-output policy: standalone
-always maps names through `map_output_nuc`; the API maps them only when
-`itsout > 0`. Lookup remains between integrator and NSE initialization, preserving
-its warning order. Standalone logs the network description before the
-reaction-matching diagnostics.
+burn. Both frontends map configured output species through `map_output_nuc`,
+regardless of `itsout`; an empty selection requires no work. Lookup remains
+between integrator and NSE initialization. Standalone logs the network
+description before the reaction-matching diagnostics.
 
 Cleanup uses `finalize_evolve`, then `finalize_network_data`, then
 `controls_finalize`. The engine finalizer releases integrator, NSE/EOS,

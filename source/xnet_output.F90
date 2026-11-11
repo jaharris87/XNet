@@ -47,6 +47,7 @@ Contains
     ! Map the configured condensed ASCII output species names (output_nuc(1:nnucout)) to active
     ! network indices in inucout(1:nnucout). Any species name not present in the loaded network
     ! logs a warning to lun_stdout and falls back to the final network species (ny).
+    ! An empty selection (nnucout = 0) requires no work, regardless of the output level.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, index_from_name
     Use xnet_controls, Only: nnucout, output_nuc, inucout, lun_stdout

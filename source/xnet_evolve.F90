@@ -63,7 +63,7 @@ Contains
   ! the workspaces that use them; GPU resources remain available until all mappings are removed.
   !=================================================================================================
 
-  Subroutine initialize_evolve(data_dir,nhistory,map_output)
+  Subroutine initialize_evolve(data_dir,nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Read Jacobian/matching data and initialize rates, EOS, integrator, NSE and reusable zone
     ! storage. Nuclear/reaction tables and controls must already be loaded. Each owner maps its
@@ -72,8 +72,6 @@ Contains
     ! data_dir    Directory containing the preprocessed network.
     ! nhistory    Allocated history points per zone: nhmx for standalone trajectories, or
     !             api_history_points for the library's start/end conditions.
-    ! map_output  Map configured condensed-output species: always in standalone, and only when
-    !             histories are enabled in the API. Lookup precedes NSE diagnostics as before.
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_initialize
     Use xnet_conditions, Only: conditions_initialize
@@ -93,7 +91,6 @@ Contains
     ! Input arguments
     Character(*), Intent(in) :: data_dir
     Integer, Intent(in) :: nhistory
-    Logical, Intent(in) :: map_output
 
     Call read_jacobian_data(data_dir)
     Call read_match_data(data_dir)
@@ -102,7 +99,7 @@ Contains
     Call eos_initialize
     If ( isolv == 1 ) Call be_init
     If ( isolv == 3 ) Call bdf_init
-    If ( map_output ) Call map_output_nuc
+    Call map_output_nuc
     Call nse_initialize
     Call abundances_initialize
     Call conditions_initialize(nhistory)

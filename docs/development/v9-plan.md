@@ -154,16 +154,25 @@ passes [231 local regressions, library/batch/overlap checks and selected DEBUG c
 with [fresh review passing](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779966537).
 The maintainer [accepted its November 6 native comparisons](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779556459)
 at the older `d8dc7efe` source; those results do not establish refreshed-source
-native behavior. The [NVIDIA CPU threaded-caller compiler ICE #183](https://github.com/jaharris87/XNet/issues/183)
-remains open; GPU-library success does not cover that caller.
+native behavior. [Draft #190](https://github.com/jaharris87/XNet/pull/190)
+provides a compile workaround for the
+[NVIDIA CPU threaded-caller issue #183](https://github.com/jaharris87/XNet/issues/183),
+but runtime coverage remains incomplete: a four-worker SN160 case timed out,
+and a separately approved debugger run stopped on SIGSEGV inside LibSci.
+The cause remains under investigation. GPU-library success does not cover
+that CPU caller.
 
 The remaining implementation has separate scopes. [#184](https://github.com/jaharris87/XNet/issues/184)
-plans common standalone/API initialization and cleanup underneath the two
-front ends. Standalone trajectories must keep their interpolation and
-integrator history rather than becoming repeated constant-condition burns.
+has a shared-lifecycle implementation in
+[draft #191](https://github.com/jaharris87/XNet/pull/191), using existing modules
+for common standalone/API setup and non-Jacobian cleanup. Local CPU checks
+and fresh source/test reviews pass; native GPU lifecycle and remaining
+provider checks are pending. Standalone trajectories keep their interpolation
+and integrator history rather than becoming repeated constant-condition burns.
 Important v9 worker/zone-storage work in [#185](https://github.com/jaharris87/XNet/issues/185)
-follows the lifecycle work and requires the maintainer's layout decision
-before implementation. Neither change is implemented.
+follows the lifecycle work. The maintainer
+[selected per-worker plain allocations with conditional OpenMP THREADPRIVATE ownership](https://github.com/jaharris87/XNet/issues/185#issuecomment-6781708708);
+the storage rewrite has not started.
 [#186](https://github.com/jaharris87/XNet/issues/186) requests arbitrary
 species-order preparation and fill-in assessment, with investigation first;
 priority and release gating remain for decision under #126. It has no

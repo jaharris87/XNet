@@ -124,6 +124,9 @@ Module xnet_timers
   Real(dp) :: timer_decmp = 0.0_dp
   Real(dp) :: timer_jacob = 0.0_dp
   Real(dp) :: timer_solve = 0.0_dp
+#ifdef XNET_OMP
+  !$omp threadprivate(start_timer,stop_timer,timer_bksub,timer_decmp,timer_jacob,timer_solve)
+#endif
 
 Contains
 

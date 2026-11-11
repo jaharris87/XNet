@@ -83,28 +83,38 @@ expect_solver_failure() {
   echo "$solver controlled-failure process status=$status diagnostic='$failure_diagnostic'"
 }
 
-expect_residual_mutation_failure() {
-  local work_dir="$work_root/residual-mutation"
+expect_result_mutation_failure() {
+  local mutation=$1
+  local diagnostic=$2
+  local work_dir="$work_root/result-mutation-$mutation"
   local log_file="$work_dir/output.log"
   local status
 
   mkdir -p "$work_dir"
   if (
     cd "$work_dir"
-    XNET_SPARSE_REAL_MUTATION=excessive_residual "$executable" base .
+    XNET_SPARSE_REAL_MUTATION="$mutation" "$executable" base .
   ) >"$log_file" 2>&1; then
-    echo "$solver residual check accepted a controlled result perturbation" >&2
+    echo "$solver result check accepted mutation $mutation" >&2
     exit 1
   else
     status=$?
   fi
-  echo "$solver residual-mutation process status=$status"
+  if ! grep -Fq "$diagnostic" "$log_file"; then
+    echo "$solver result mutation $mutation did not fail for its intended reason" >&2
+    cat "$log_file" >&2
+    exit 1
+  fi
+  echo "$solver result-mutation=$mutation process status=$status diagnostic='$diagnostic'"
 }
 
 run_case base
 run_case heat
 run_tracked_controls
 expect_solver_failure
-expect_residual_mutation_failure
+expect_result_mutation_failure excessive_residual 'solver residual exceeds limit'
+expect_result_mutation_failure nan_result 'nonfinite solver result'
+expect_result_mutation_failure positive_infinity_result 'nonfinite solver result'
+expect_result_mutation_failure negative_infinity_result 'nonfinite solver result'
 
 echo "$solver real-library sparse solver tests passed"

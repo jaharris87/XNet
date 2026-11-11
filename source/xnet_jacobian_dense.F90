@@ -119,8 +119,14 @@ Contains
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
+    !-----------------------------------------------------------------------------------------------
+    ! Remove device mappings before releasing dense matrix and solver workspace. Call after the
+    ! worker team has finished, while controls and GPU resources are still available.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
+
+    If ( .not. allocated(dydotdy) ) Return
 
     !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)

@@ -106,11 +106,19 @@ Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b
   Real(dp), Intent(out) :: x(*)
   Integer, Intent(out) :: error
 
+  !$omp critical(pardiso_probe)
   call_count = call_count + 1
   If ( call_count <= max_calls ) Then
     handle_history(call_count) = pt(1)
     phase_history(call_count) = phase
     mnum_history(call_count) = mnum
+  EndIf
+  !$omp end critical(pardiso_probe)
+  If ( phase == -1 ) Then
+    error = 0
+    If ( failure_is('pardiso_release') ) error = -8
+    If ( error == 0 ) pt(1:64) = 0_i8
+    Return
   EndIf
   pt(1) = call_count
   index_base_valid = index_base_valid .and. ia(1) == 1 .and. ia(n+1) > ia(1)

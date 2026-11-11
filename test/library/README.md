@@ -20,6 +20,11 @@ provide no replacement solver, EOS, or provider routines. The first configuratio
 GNU Fortran with `EOS=STARKILLER`, `MATRIX_SOLVER=dense`, and MPI, OpenMP, and
 GPU disabled. Other configurations require their own evidence.
 
+The batch runner preserves failed-command output and records a timeout with
+`returncode: null` and `timeout_seconds`, without claiming a program exit
+status. Its focused runner checks use the regression suite's pytest dependency:
+`python3 -m pytest -q test/library/test_host_batch_runner.py`.
+
 Input-validation checks include nonfinite values, primary/auxiliary error
 precedence, and the first invalid active zone. The native GPU consumer also
 checks resident auxiliary NaNs and primary errors preceding auxiliary NaNs

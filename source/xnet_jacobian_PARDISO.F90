@@ -243,6 +243,7 @@ Contains
     EndWhere
 
     ! Read and broadcast user-defined PARDISO controls
+    pt = 0_i8
     If ( parallel_IOProcessor() ) Then
 
       Call xnet_pardisoinit(ierr)
@@ -278,16 +279,48 @@ Contains
 
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))
 
-    !$omp parallel default(shared) copyin(pt,iparm,dparm)
-
-    ! Initialize work arrays
+    ! The permutation array is shared; only the solver handle and controls are worker-private.
     Allocate (perm(msize))
     perm = 0
 
+    !$omp parallel default(shared) copyin(pt,iparm,dparm)
     !$omp end parallel
 
     Return
   End Subroutine read_jacobian_data
+
+  Subroutine jacobian_finalize
+    !-----------------------------------------------------------------------------------------------
+    ! Release all stored factors in each worker's PARDISO handle before freeing XNet arrays.
+    ! PHASE = -1 releases every matrix in that handle, not just MNUM = 1. Call outside parallel
+    ! regions with the initialized worker team; network tables and controls must still exist.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: zb_lo
+    Use xnet_util, Only: xnet_terminate
+    Implicit None
+
+    Integer :: ierr
+    Real(dp), Allocatable :: b(:), x(:)
+
+    If ( .not. allocated(dydotdy) ) Return
+
+    !$omp parallel default(shared) private(ierr,b,x)
+    If ( any(pt /= 0_i8) ) Then
+      phase = -1
+      Allocate (b(msize),x(msize))
+      b = 0.0_dp
+      Call xnet_pardiso(1,tvals(:,zb_lo),b,x,ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('PARDISO memory release failed',ierr)
+      pt = 0_i8
+      Deallocate (b,x)
+    EndIf
+    !$omp end parallel
+
+    Deallocate (dydotdy,tvals,perm,ridx,cidx,sident,pb)
+    Deallocate (ns11,ns21,ns22,ns31,ns32,ns33,ns41,ns42,ns43,ns44)
+
+    Return
+  End Subroutine jacobian_finalize
 
   Subroutine jacobian_scale(diag,mult,mask_in)
     !-----------------------------------------------------------------------------------------------

@@ -977,13 +977,10 @@ Abundance, condition and neutrino-history storage is allocated and mapped by
 its own module initializer, then unmapped and deallocated by its finalizer.
 The standalone and library drivers call the same routines; neither repeats
 those modules' mapping lists.
-Shared setup and cleanup remain below the frontends: the API keeps validation,
-resource borrowing and checked statuses, while standalone keeps complete
-trajectories, MPI scheduling and its output policy. Standalone uses 50000
-history points and releases non-Jacobian state before GPU/MPI shutdown; its
-Jacobian storage is released at process exit. See the
-[architecture overview](architecture-overview.md#program-setup) for lifecycle
-procedure ordering and the standalone cleanup limit.
+The standalone driver and the API share the setup and cleanup routines in
+`xnet_evolve`; the [architecture overview](architecture-overview.md#program-setup)
+gives their order and what differs between the two. The API keeps validation,
+borrowed resources and status codes.
 
 `validate_inputs` uses per-call verdict and mass-sum buffers in either memory
 space. For resident inputs, the verdict buffer carries the host active mask

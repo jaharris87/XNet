@@ -91,6 +91,9 @@ Module xnet_api
   Real(dp), Parameter :: inactive_rho = 1.0_dp
   Real(dp), Parameter :: inactive_ye  = 0.5_dp
 
+  ! Constant-condition histories contain a start point and an end point.
+  Integer, Parameter :: api_history_points = 2
+
   !-------------------------------------------------------------------------------------------------
   ! Internal API lifecycle state
   !-------------------------------------------------------------------------------------------------
@@ -189,12 +192,15 @@ Contains
       Return
     EndIf
 
-    ! Initialize the network and solver modules, then allocate and map persistent XNet workspace.
+    ! Load nuclear/reaction data, initialize solver and physics state, and allocate/map persistent
+    ! zone workspaces with two history endpoints (tstart and tstop).
     Call read_network_data(controls%data_dir,api_data_description)
     Call initialize_solver_and_physics(controls%data_dir)
+    ! Output species names are used only when histories are requested.
     If ( controls%itsout > 0 ) Call resolve_output_species
-    Call initialize_zone_workspace(2)
+    Call initialize_zone_workspace(api_history_points)
     Call copy_network_data(network)
+
     api_state = api_ready
     ierr = xnet_success
     Return
@@ -406,14 +412,18 @@ Contains
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
     Use xnet_jacobian, Only: jacobian_finalize
     Implicit None
+
+    ! Output arguments
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message
 
     ierr = xnet_success
     message = ' '
     If ( api_state == api_uninitialized ) Return
+
     Call check_finalize_team(ierr,message)
     If ( ierr /= xnet_success ) Return
+
     If ( api_state == api_ready ) Then
       Call gpu_check_device(ierr,message)
       If ( ierr /= xnet_success ) Return
@@ -422,15 +432,17 @@ Contains
       Call finalize_network_workspace
       api_state = api_cleanup_pending
     EndIf
-    ! A failed cleanup can be retried without touching the released workspaces.
+
+    ! A failed GPU handle/stream cleanup can be retried without touching the released workspaces.
     Call gpu_finalize(ierr,message)
     If ( ierr /= xnet_success ) Return
     api_state = api_uninitialized
+
     Return
   End Subroutine xnet_finalize
 
   !=================================================================================================
-  ! Private Initialization and Workspace Helpers
+  ! Private Initialization and Lifecycle Helpers
   !=================================================================================================
 
   Subroutine check_initializable(controls,gpu_requested,ierr,message)

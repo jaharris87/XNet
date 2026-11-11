@@ -29,7 +29,7 @@ Program net
   Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_match, Only: mflx, nflx
   Use xnet_nnu, Only: tmevnu, fluxcms
-  Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files, resolve_output_species
+  Use xnet_output, Only: resolve_output_species, open_ts_file, open_ev_file, close_output_files
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, &
     & parallel_nprocs, parallel_IOProcessor
   Use xnet_preprocess, Only: net_preprocess
@@ -41,14 +41,15 @@ Program net
   ! Local variables
   Integer :: k, izone, izb, ibatch, batch_count
   Integer :: diag_ierr, ierr, kstep
-  ! Reaction fluxes and neutrino energy losses
+
+  ! Reaction flux check and neutrino energy loss workspaces
   Real(dp), Allocatable :: dyf(:), flx_diff(:), denu(:)
 
-  ! Input Data descriptions
+  ! Input data and trajectory descriptions
   Character(80) :: data_desc, data_dir
   Character(80), Allocatable :: abund_desc(:), thermo_desc(:)
 
-  ! Filenames
+  ! Output filenames
   Character(80) :: ev_file, bin_file, diag_file
   Character(80), Parameter :: diag_file_base = 'net_diag'
 
@@ -131,7 +132,6 @@ Program net
 
   !XDIR XENTER_DATA XASYNC(gpu_queue) &
   !XDIR XCOPYIN(denu)
-
   !XDIR XWAIT(gpu_queue)
 
   stop_timer = xnet_wtime()
@@ -150,9 +150,7 @@ Program net
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
-
   Allocate (dyf(0:ny),flx_diff(ny))
-
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
@@ -265,13 +263,13 @@ Program net
   !-------------------------------------------------------------------------------------------------
   !XDIR XEXIT_DATA XASYNC(gpu_queue) &
   !XDIR XDELETE(denu)
-
   !XDIR XWAIT(gpu_queue)
 
   Deallocate (abund_desc,thermo_desc,denu)
 
+  ! Release shared evolution and network workspaces (sparse Jacobian backends have no finalizer
+  ! and release their solver storage at process exit).
   Call finalize_evolution_workspace
-  ! Standalone Jacobian providers still release their storage at process exit.
   Call finalize_network_workspace
   Call gpu_finalize()
   Call parallel_finalize()

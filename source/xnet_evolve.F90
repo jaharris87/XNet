@@ -1,14 +1,11 @@
 !***************************************************************************************************
 ! xnet_evolve.F90
-! Shared network/workspace setup, cleanup, and time-stepping evolution for both XNet frontends.
+! Shared network/workspace lifecycle and batch reaction-network evolution for XNet.
 !
-! Lifecycle routines coordinate the existing module owners. The frontends retain controls,
-! input/output policy, MPI scheduling, GPU resource ownership, and the history capacity.
-!
-! Called by both the standalone trajectory driver (net.F90) and the embedded library API
-! (evolve_batch in xnet_api.F90). Advances active zones in the workspace bank of the calling
-! worker (zb_lo:zb_hi) from tstart to tstop using either Backward Euler (isolv = 1) or Gear BDF
-! (isolv = 3), tracking nuclear energy generation and weak-reaction neutrino energy losses.
+! Shared by the standalone driver (net.F90) and the embedded library API (xnet_api.F90).
+! Setup and cleanup appear first; full_net advances active zones from tstart to tstop using
+! Backward Euler (isolv = 1) or Gear BDF (isolv = 3), tracking nuclear energy generation and
+! weak-reaction neutrino losses.
 !
 ! Per-zone integration status its(izb):
 !   -1  Inactive zone, or active zone that has already reached tstop(izb).
@@ -16,7 +13,7 @@
 !    1  Integrator failed to converge on the current step after internal retries.
 !    2  Active zone halted after an integrator convergence failure (standalone path).
 !
-! Failure handling:
+! Failure handling in full_net:
 ! - When optional ierr_out is present (library API): reports evolve_integrator_failure or
 !   evolve_step_limit (and the workspace index in failed_zone) to the caller without writing
 !   failure dump files or terminating the process.
@@ -28,40 +25,78 @@
 
 Module xnet_evolve
   Implicit None
+  Private
 
   !-------------------------------------------------------------------------------------------------
-  ! Evolution completion status codes
+  ! Public evolution completion status codes
   !-------------------------------------------------------------------------------------------------
-  Integer, Parameter :: evolve_success            = 0 ! All active zones reached tstop.
-  Integer, Parameter :: evolve_integrator_failure = 1 ! Integrator reported a convergence/timestep failure.
-  Integer, Parameter :: evolve_step_limit         = 2 ! Active zone exhausted kstmx steps before tstop.
+  Integer, Parameter, Public :: evolve_success            = 0 ! All active zones reached tstop.
+  Integer, Parameter, Public :: evolve_integrator_failure = 1 ! Integrator reported a convergence/timestep failure.
+  Integer, Parameter, Public :: evolve_step_limit         = 2 ! Active zone exhausted kstmx steps before tstop.
 
-  ! Integrator status values shared with solve_be and solve_bdf.
-  Integer, Parameter, Private :: zone_stopped     = -1 ! Inactive or at its stop time
-  Integer, Parameter, Private :: zone_converged   =  0 ! Current step succeeded
-  Integer, Parameter, Private :: zone_step_failed =  1 ! Integrator exhausted retries
-  Integer, Parameter, Private :: zone_failed      =  2 ! Failed zone removed from standalone solve
+  !-------------------------------------------------------------------------------------------------
+  ! Private per-zone integrator status values (shared with solve_be and solve_bdf)
+  !-------------------------------------------------------------------------------------------------
+  Integer, Parameter :: zone_stopped     = -1 ! Inactive or at its stop time
+  Integer, Parameter :: zone_converged   =  0 ! Current step succeeded
+  Integer, Parameter :: zone_step_failed =  1 ! Integrator exhausted retries
+  Integer, Parameter :: zone_failed      =  2 ! Failed zone removed from standalone solve
 
-  Private :: terminate_on_zone_failure
+  !-------------------------------------------------------------------------------------------------
+  ! Public procedures
+  !-------------------------------------------------------------------------------------------------
+  Public :: read_network_data
+  Public :: initialize_solver_and_physics
+  Public :: initialize_zone_workspace
+  Public :: finalize_evolution_workspace
+  Public :: finalize_network_workspace
+  Public :: full_net
 
 Contains
 
+  !=================================================================================================
+  ! Shared Network and Workspace Lifecycle
+  !
+  ! Setup (once per initialized instance):
+  !   read_network_data -> initialize_solver_and_physics -> initialize_zone_workspace
+  ! Standalone logs the data description after the first read, before reaction-matching output.
+  ! Output-species lookup is handled by xnet_output between solver and workspace setup.
+  !
+  ! Cleanup:
+  !   finalize_evolution_workspace -> API Jacobian cleanup -> finalize_network_workspace
+  ! Standalone Jacobian storage lasts until process exit; some sparse providers have no finalizer.
+  ! Owners unmap their arrays before freeing host storage. Controls stay available until the last
+  ! owner finishes, and GPU resources outlive both cleanup phases.
+  !=================================================================================================
+
   Subroutine read_network_data(data_dir,data_description)
-    ! Read species and reaction data before solver setup. Standalone writes the data description
-    ! between this phase and initialize_solver_and_physics, preserving diagnostic order.
+    !-----------------------------------------------------------------------------------------------
+    ! Read nuclear species metadata (sunet, netwinv) and reaction rate data (nets3, nets4, netweak,
+    ! netneutr) from data_dir. Separated from initialize_solver_and_physics so the standalone
+    ! driver can log data_description to lun_diag before read_match_data writes its summary.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: read_nuclear_data
     Use reaction_data, Only: read_reaction_data
     Implicit None
+
+    ! Input arguments
     Character(*), Intent(in) :: data_dir
+
+    ! Output arguments
     Character(80), Intent(out) :: data_description
 
     Call read_nuclear_data(data_dir,data_description)
     Call read_reaction_data(data_dir)
+
     Return
   End Subroutine read_network_data
 
   Subroutine initialize_solver_and_physics(data_dir)
-    ! Initialize long-lived solver and physics state after the network data have been read.
+    !-----------------------------------------------------------------------------------------------
+    ! Initialize Jacobian sparsity/layout data, reaction flux matching, plasma screening, flux
+    ! tracking, equation-of-state state, and the selected implicit time integrator (isolv = 1 or 3)
+    ! after nuclear and reaction data have been loaded.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: isolv
     Use xnet_eos, Only: eos_initialize
     Use xnet_flux, Only: flux_init
@@ -71,6 +106,8 @@ Contains
     Use xnet_match, Only: read_match_data
     Use xnet_screening, Only: screening_init
     Implicit None
+
+    ! Input arguments
     Character(*), Intent(in) :: data_dir
 
     Call read_jacobian_data(data_dir)
@@ -80,28 +117,38 @@ Contains
     Call eos_initialize
     If ( isolv == 1 ) Call be_init
     If ( isolv == 3 ) Call bdf_init
+
     Return
   End Subroutine initialize_solver_and_physics
 
   Subroutine initialize_zone_workspace(history_capacity)
-    ! Standalone retains complete trajectories; constant-condition API calls use two endpoints.
-    ! Each owning module allocates and maps its own arrays, once per initialized instance.
+    !-----------------------------------------------------------------------------------------------
+    ! Allocate and map persistent per-zone workspaces for NSE, abundances, thermodynamic conditions,
+    ! and neutrino histories. The standalone driver passes nhmx (full trajectory buffer); the
+    ! constant-condition library API passes 2 (start and stop endpoints).
+    !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_initialize
     Use xnet_conditions, Only: conditions_initialize
     Use xnet_nnu, Only: nnu_initialize
     Use xnet_nse, Only: nse_initialize
     Implicit None
+
+    ! Input arguments
     Integer, Intent(in) :: history_capacity
 
     Call nse_initialize
     Call abundances_initialize
     Call conditions_initialize(history_capacity)
     Call nnu_initialize(history_capacity)
+
     Return
   End Subroutine initialize_zone_workspace
 
   Subroutine finalize_evolution_workspace
-    ! Release initialized integrator, NSE and EOS state before network storage or GPU resources.
+    !-----------------------------------------------------------------------------------------------
+    ! Release time-integrator (BE and BDF), NSE, and EOS workspaces. Call before Jacobian teardown
+    ! and finalize_network_workspace while nuclear_data and xnet_controls remain allocated.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_eos, Only: eos_finalize
     Use xnet_integrate_be, Only: be_finalize
     Use xnet_integrate_bdf, Only: bdf_finalize
@@ -112,12 +159,17 @@ Contains
     Call bdf_finalize
     Call nse_finalize
     Call eos_finalize
+
     Return
   End Subroutine finalize_evolution_workspace
 
   Subroutine finalize_network_workspace
-    ! Call after evolution cleanup and any frontend-specific Jacobian cleanup. Owners release
-    ! mappings before CPU allocations; controls stay available until the other owners finish.
+    !-----------------------------------------------------------------------------------------------
+    ! Release screening, flux, reaction-matching, weak/neutrino rate, reaction, nuclear, abundance,
+    ! thermodynamic condition, and control workspaces. Each module removes its device mappings
+    ! before deallocating host arrays; controls_finalize runs last because earlier finalizers
+    ! reference gpu_queue and control flags.
+    !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: nuclear_data_finalize
     Use reaction_data, Only: reaction_data_finalize
     Use xnet_abundances, Only: abundances_finalize
@@ -140,8 +192,13 @@ Contains
     Call abundances_finalize
     Call conditions_finalize
     Call controls_finalize
+
     Return
   End Subroutine finalize_network_workspace
+
+  !=================================================================================================
+  ! Batch Reaction-Network Evolution
+  !=================================================================================================
 
   Subroutine full_net(kstep,denu,ierr_out,failed_zone)
     !-----------------------------------------------------------------------------------------------
@@ -206,9 +263,9 @@ Contains
     If ( present(ierr_out) )    ierr_out    = evolve_success
     If ( present(failed_zone) ) failed_zone = 0
 
-    zone_final_step  = 0
-    lzsolve  = lzactive(zb_lo:zb_hi)
-    lzoutput = lzsolve
+    zone_final_step = 0
+    lzsolve         = lzactive(zb_lo:zb_hi)
+    lzoutput        = lzsolve
     Do izb = zb_lo, zb_hi
       If ( lzsolve(izb) ) Then
         its(izb) = zone_converged
@@ -337,8 +394,8 @@ Contains
           ! Zone reached stop time: still emit ts_output for this final step, then stop solving
           If ( t(izb) >= tstop(izb) ) Then
             zone_final_step(izb) = kstep
-            its(izb)     = zone_stopped
-            lzsolve(izb) = .false.
+            its(izb)             = zone_stopped
+            lzsolve(izb)         = .false.
           EndIf
         ElseIf ( its(izb) == zone_step_failed ) Then
           its(izb)      = zone_failed

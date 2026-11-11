@@ -1,4 +1,5 @@
 Program host_batch_openmp_consumer
+  Use, Intrinsic :: iso_fortran_env, Only: output_unit
   ! Only public XNet API declarations are imported by this application caller.
   Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
   Use omp_lib, Only: omp_get_num_threads, omp_get_thread_num, omp_get_max_threads, omp_get_level, &
@@ -101,6 +102,7 @@ Program host_batch_openmp_consumer
   EndIf
   If ( Trim(mode) == 'topology' ) Then
     Call topology_checks()
+    Flush(output_unit)
     Stop
   EndIf
   Call xnet_initialize(controls,network,ierr,message)
@@ -140,12 +142,15 @@ Program host_batch_openmp_consumer
   If ( failure ) Then
     Write(*,'(a,1x,a,1x,i0)') 'HOST_RECEIVED_CONCURRENT_FATAL_BURNS',Trim(mode),expected_threads
     ! Each worker made exactly one call; never retry or finalize a failed simulation instance.
+    ! Finish stdout records before the runtime writes termination diagnostics to stderr.
+    Flush(output_unit)
     Stop
   EndIf
   Call xnet_finalize(ierr,message)
   Call check(ierr == xnet_success,'finalization')
   Call check(omp_get_max_threads() == expected_threads,'finalization preserves application team setting')
   Write(*,'(a,1x,a,1x,i0)') 'HOST_BATCH_OPENMP_CHECKS_PASSED',Trim(mode),expected_threads
+  Flush(output_unit)
 
 Contains
 

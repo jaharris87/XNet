@@ -184,9 +184,10 @@ follows the lifecycle work. The maintainer
 [selected per-worker plain allocations with conditional OpenMP THREADPRIVATE ownership](https://github.com/jaharris87/XNet/issues/185#issuecomment-6781708708);
 the storage rewrite has not started.
 [#186](https://github.com/jaharris87/XNet/issues/186) requests arbitrary
-species-order preparation and fill-in assessment, with investigation first;
-priority and release gating remain for decision under #126. It has no
-implementation candidate or default-order change. Use #126 and the component
+species-order preparation and fill-in assessment. The maintainer
+[deferred it until after v9.0](https://github.com/jaharris87/XNet/issues/186#issuecomment-6800308199);
+it is not a v9.0 release requirement. It has no implementation candidate or
+default-order change. Use #126 and the component
 records for changing status and source-specific checks.
 
 ## 3. Validate both consumers and measure repeated use
@@ -241,8 +242,8 @@ workloads: CHIMERA and Flash-X Cellular, each with 17/160/350 species, starting
 with one/two/four CPU workers. CHIMERA keeps its supplied inputs; Flash-X 350
 uses public XNet ECSN350. No stage B timings have been collected. Complete the
 relevant lifecycle/storage work and resulting-code correctness checks before
-selecting the timing source; decide #186's priority and release disposition
-without silently changing workload ordering. Keep the completed starting
+selecting the timing source. Deferred #186 does not change the selected
+workloads or their species ordering. Keep the completed starting
 measurements and use the existing runner rather than restarting the abandoned
 benchmark framework.
 

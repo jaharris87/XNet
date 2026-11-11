@@ -3,10 +3,11 @@
 ! Time-series file management, evolution diagnostics, and standalone input-file writers for XNet.
 !
 ! Provides three groups of routines:
-! 1. Time-Series File Lifecycle (open_ts_file, open_ev_file, close_output_files):
-!    Shared by the standalone driver (net.F90) and the library API (xnet_api.F90) to open per-zone
-!    unformatted binary (itsout >= 1) and condensed ASCII (itsout >= 2) output files, write their
-!    header records, and close open units across the batch bank of the calling worker (zb_lo:zb_hi).
+! 1. Time-Series File Lifecycle (map_output_nuc, open_ts_file, open_ev_file, close_output_files):
+!    Shared by the standalone driver (net.F90) and the library API (xnet_api.F90) to map configured
+!    ASCII output species names to network indices, open per-zone unformatted binary (itsout >= 1)
+!    and condensed ASCII (itsout >= 2) output files, write their header records, and close open
+!    units across the batch bank of the calling worker (zb_lo:zb_hi).
 ! 2. Per-Timestep and Final Evolution Output (ts_output, final_output):
 !    Called by full_net to evaluate reaction fluxes, record binary and ASCII time-series snapshots,
 !    and write integrated flux, final abundance, work-counter, and timing summaries to lun_diag.
@@ -25,6 +26,7 @@ Module xnet_output
     Module Procedure write_xnet_th_point
   End Interface write_xnet_th
 
+  Public :: map_output_nuc
   Public :: open_ts_file
   Public :: open_ev_file
   Public :: close_output_files
@@ -39,6 +41,33 @@ Contains
   !=================================================================================================
   ! Time-Series File Lifecycle
   !=================================================================================================
+
+  Subroutine map_output_nuc
+    !-----------------------------------------------------------------------------------------------
+    ! Map the configured condensed ASCII output species names (output_nuc(1:nnucout)) to active
+    ! network indices in inucout(1:nnucout). Any species name not present in the loaded network
+    ! logs a warning to lun_stdout and falls back to the final network species (ny).
+    ! An empty selection (nnucout = 0) requires no work, regardless of the output level.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny, index_from_name
+    Use xnet_controls, Only: nnucout, output_nuc, inucout, lun_stdout
+    Implicit None
+
+    ! Local variables
+    Integer :: i, inuc
+
+    Do i = 1, nnucout
+      Call index_from_name(output_nuc(i),inuc)
+      If ( inuc < 1 .or. inuc > ny ) Then
+        Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
+        inucout(i) = ny
+      Else
+        inucout(i) = inuc
+      EndIf
+    EndDo
+
+    Return
+  End Subroutine map_output_nuc
 
   Subroutine open_ts_file(izb,filename,data_description,abundance_source,abundance_description, &
     & thermo_source,thermo_description,status,ierr)

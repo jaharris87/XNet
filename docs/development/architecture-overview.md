@@ -60,7 +60,7 @@ these areas, especially through shared module state.
 5. reads thermodynamic histories and initial abundances through
    `model_input_ascii`;
 6. evolves assigned zones and writes diagnostic or timestep output;
-7. finalizes accelerator and parallel resources.
+7. releases module and solver storage, then accelerator and parallel resources.
 
 The exact order and conditional calls live in `source/net.F90`.
 `xnet_controls_t` is the validated configuration value shared with programmatic
@@ -79,6 +79,38 @@ files, write their headers, and close the current worker's files. Each driver
 chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
+
+Both frontends load tables with `initialize_network_data` in `reaction_data`
+(`source/xnet_data.F90`), then call `initialize_evolve(data_dir,nhistory)`
+in `xnet_evolve` once during initialization. The latter reads Jacobian and
+matching data, initializes screening, fluxes, EOS, the selected BE/BDF integrator
+and NSE, and allocates reusable composition, condition and neutrino-history
+storage for all worker batches. Each owning module maps its own arrays.
+
+`nhistory` counts allocated history points per zone: standalone passes `nhmx`;
+the API passes `api_history_points` for the start and end of a constant-condition
+burn. Both frontends map configured output species through `map_output_nuc`,
+regardless of `itsout`; an empty selection requires no work. Lookup remains
+between integrator and NSE initialization. Standalone logs the network
+description before the reaction-matching diagnostics.
+
+Cleanup uses `finalize_evolve`, then `finalize_network_data`, then
+`controls_finalize`. The engine finalizer releases integrator, NSE/EOS,
+Jacobian, rate-evaluation and zone/history workspace. Each Jacobian provider
+releases its own arrays; PARDISO providers release library-owned factors first.
+Network tables remain available until the engine's cleanup is complete.
+`finalize_network_data` then releases weak/neutrino reaction tables and
+nuclear/reaction data. GPU resources remain available until every owner has
+removed its device mappings and freed host storage.
+
+Neutrino histories have a separate `nnu_history_finalize` because they belong
+to the engine workspace, while neutrino reaction tables belong to the loaded
+network. The existing `nnu_finalize` still releases all neutrino state.
+
+The API keeps its checked lifecycle and retryable GPU cleanup in `xnet_api`.
+Standalone keeps MPI, trajectory input, scheduling, filenames and rank-based
+device selection in `net.F90`. The setup/cleanup banner in `xnet_evolve` gives
+the ordering at the call sites.
 
 ## Reading the driver and library source
 

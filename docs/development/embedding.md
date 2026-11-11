@@ -601,7 +601,7 @@ the API or selected solver; for example, BDF does not permit a nonpositive
 | `ev_file_base` | `Character(80)`, `'ev_'` | ASCII output filename base; choose a distinct binary base and rank/run prefix. |
 | `bin_file_base` | `Character(80)`, `'ts_'` | Binary output filename base. Existing output files cause a checked open failure. |
 | `nnucout` | Integer, `0` | Nonnegative number of selected ASCII species, no greater than `size(output_nuclei)`. |
-| `output_nuclei` | Allocatable `Character(5)(:)`, length zero | Must be allocated; selected names must be nonblank. Names use existing lookup; a missing name prints a warning and selects the final network species rather than rejecting initialization. |
+| `output_nuclei` | Allocatable `Character(5)(:)`, length zero | Must be allocated; selected names must be nonblank. Names are mapped during initialization regardless of `itsout`; a missing name prints a warning and selects the final network species rather than rejecting initialization. |
 | `data_dir` | `Character(80)`, blank | Required network directory; keep paths within the field length. Preprocessing writes here when requested. |
 | `inab_files` | Allocatable `Character(80)(:)`, length zero | Must remain allocated for common validation; contents ignored by API burns. |
 | `thermo_files` | Allocatable `Character(80)(:)`, length zero | Must remain allocated for common validation; contents ignored by API burns. |
@@ -966,17 +966,22 @@ them follow the same sequence:
 
 | Part of a call | Where to read |
 | --- | --- |
-| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. `load_network` reads data; `initialize_workspace` initializes physics, EOS, integrators and reusable storage. `copy_network_data` returns copied metadata. |
+| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. `initialize_network_data` in `reaction_data` loads species and reactions. `initialize_evolve` in `xnet_evolve` prepares the engine and reusable zone storage with two history endpoints, mapping any requested output species regardless of the output level. `copy_network_data` returns copied metadata. |
 | Worker checks | `check_worker` checks the fixed team and initialized worker scratch. `apply_xnet_controls` assigns each worker's bank during initialization. Workspace loops use `izb` in `zb_lo:zb_hi`, with `izone = izb + szbatch - zb_lo` as in standalone. The API sets `szbatch=1`, so `izone` indexes caller arrays. |
 | Batch evolution | `xnet_burn_batch` checks lifecycle, mappings, dimensions and scientific values before workspace setup. `evolve_batch` then prepares the workspace, calls `full_net` and extracts results; conditional offload selects current host or device values. |
 | Validation and failures | One `validate_inputs` shares range and mass checks between host and device execution. Its temporary verdict buffer carries the host active mask, independently of the worker workspace. Host IEEE classification stays outside device loops. `zone_error_message` translates verdicts; `format_burn_failure` translates numerical failures and the caller's diagnostic tuple. |
 | Histories and timing | `open_burn_output` reserves API filenames; shared `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` handle files and headers for both drivers. `get_timing`/`get_timing_since` report differences in the worker timers. |
-| Finalization | `finalize_workspace` calls module finalizers, each releasing its device mappings before CPU storage. `xnet_finalize` then releases GPU resources; pending GPU cleanup skips the completed storage teardown on retry. |
+| Finalization | `finalize_evolve` releases integrator, NSE/EOS, Jacobian, rate-evaluation and zone/history workspace. `finalize_network_data` releases loaded tables, then `controls_finalize` releases bookkeeping before GPU cleanup. Pending GPU cleanup skips all completed data teardown on retry. |
 
 Abundance, condition and neutrino-history storage is allocated and mapped by
 its own module initializer, then unmapped and deallocated by its finalizer.
 The standalone and library drivers call the same routines; neither repeats
 those modules' mapping lists.
+The standalone driver and API share data reads in `reaction_data`, setup/cleanup
+in `xnet_evolve`, and output-name mapping in `xnet_output`. The
+[architecture overview](architecture-overview.md#program-setup) gives their order
+and the differences between the two frontends. The API keeps validation,
+borrowed resources and status codes.
 
 `validate_inputs` uses per-call verdict and mass-sum buffers in either memory
 space. For resident inputs, the verdict buffer carries the host active mask

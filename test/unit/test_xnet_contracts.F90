@@ -26,6 +26,7 @@ Contains
       & new_unittest('abundance scalar moment', test_y_moment_scalar), &
       & new_unittest('abundance vector mask', test_y_moment_vector), &
       & new_unittest('neutrino interpolation', test_nnu_flux), &
+      & new_unittest('neutrino history and rate lifetimes', test_nnu_lifetimes), &
       & new_unittest('NSE unscreened states', test_nse_unscreened), &
       & new_unittest('NSE supplied guess repeatability', test_nse_repeatability), &
       & new_unittest('NSE screened behavior', test_nse_screened) ]
@@ -300,6 +301,46 @@ Contains
 
     Return
   End Subroutine test_y_moment_vector
+
+  Subroutine test_nnu_lifetimes(error)
+    Use xnet_controls, Only: nzevolve
+    Use xnet_nnu, Only: nnu_initialize, nnu_history_finalize, nnu_finalize, &
+      & tmevnu, fluxcms, sigmanu, ntnu
+    Implicit None
+
+    Type(error_type), Allocatable, Intent(out) :: error
+    Integer :: saved_nzevolve
+    Logical :: histories_released, rates_preserved, histories_recreated, all_released
+
+    saved_nzevolve = nzevolve
+    nzevolve = 2
+    Call nnu_finalize
+    Allocate (sigmanu(1,ntnu))
+    sigmanu = 7.0_dp
+    Call nnu_initialize(3)
+    Call nnu_history_finalize
+
+    histories_released = .not. allocated(tmevnu) .and. .not. allocated(fluxcms)
+    rates_preserved = .false.
+    If ( allocated(sigmanu) ) rates_preserved = all(sigmanu == 7.0_dp)
+
+    Call nnu_initialize(2)
+    histories_recreated = size(tmevnu,1) == 2 .and. size(fluxcms,1) == 2
+    Call nnu_finalize
+    all_released = .not. allocated(tmevnu) .and. .not. allocated(fluxcms) .and. .not. allocated(sigmanu)
+    Call nnu_finalize
+    nzevolve = saved_nzevolve
+
+    Call check(error,histories_released)
+    If ( allocated(error) ) Return
+    Call check(error,rates_preserved)
+    If ( allocated(error) ) Return
+    Call check(error,histories_recreated)
+    If ( allocated(error) ) Return
+    Call check(error,all_released)
+
+    Return
+  End Subroutine test_nnu_lifetimes
 
   Subroutine test_nnu_flux(error)
     Use xnet_nnu, Only: nnuspec, nnu_flux

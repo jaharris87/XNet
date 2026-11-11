@@ -39,15 +39,15 @@ Module xnet_nnu
 
 Contains
 
-  Subroutine nnu_initialize(history_capacity)
+  Subroutine nnu_initialize(nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Allocate and zero neutrino histories, then establish their persistent device mappings.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzevolve, gpu_queue
     Implicit None
-    Integer, Intent(in) :: history_capacity
+    Integer, Intent(in) :: nhistory ! Allocated history points per zone
 
-    Allocate (tmevnu(history_capacity,nnuspec,nzevolve),fluxcms(history_capacity,nnuspec,nzevolve))
+    Allocate (tmevnu(nhistory,nnuspec,nzevolve),fluxcms(nhistory,nnuspec,nzevolve))
     tmevnu = 0.0_dp
     fluxcms = 0.0_dp
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
@@ -55,6 +55,25 @@ Contains
     !XDIR XWAIT(gpu_queue)
     Return
   End Subroutine nnu_initialize
+
+  Subroutine nnu_history_finalize
+    !-----------------------------------------------------------------------------------------------
+    ! Release the histories allocated by nnu_initialize. Reaction tables remain available until
+    ! nnu_finalize releases the network data.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: gpu_queue
+    Implicit None
+
+    If ( allocated(tmevnu) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(tmevnu,fluxcms)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    If ( allocated(tmevnu) ) Deallocate (tmevnu)
+    If ( allocated(fluxcms) ) Deallocate (fluxcms)
+
+    Return
+  End Subroutine nnu_history_finalize
 
   Subroutine read_nnu_data(nnnu,data_dir)
     !-----------------------------------------------------------------------------------------------
@@ -339,10 +358,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
-    If ( allocated(tmevnu) ) Then
-      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(tmevnu,fluxcms)
-    EndIf
+    Call nnu_history_finalize
     If ( allocated(irl) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(irl,nuspec)
@@ -352,8 +368,6 @@ Contains
       !XDIR XDELETE(sigmanu,ltnu,fluxnu,rnnu)
     EndIf
     !XDIR XWAIT(gpu_queue)
-    If ( allocated(tmevnu) ) Deallocate (tmevnu)
-    If ( allocated(fluxcms) ) Deallocate (fluxcms)
     If ( allocated(ltnu) ) Deallocate (ltnu)
     If ( allocated(fluxnu) ) Deallocate (fluxnu)
     If ( allocated(irl) ) Deallocate (irl)

@@ -264,9 +264,11 @@ generated results, or comparison data before changing them.
 
 ## Legacy shell test drivers
 
-The older shell drivers remain useful for investigation and historical problem
-runs, but they are secondary to the maintained pytest suite and have unreliable
-pass/fail reporting.
+The older shell drivers are historical recipe producers: they assemble
+positional `control` files, which the current executable does not read. Use the
+[offline converter](runtime-configuration.md#converting-v8-ascii-controls) to
+migrate an assembled input; conversion alone does not validate a physical run.
+The drivers also have unreliable pass/fail reporting.
 
 `test/test_xnet.sh`:
 

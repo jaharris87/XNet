@@ -80,26 +80,32 @@ chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
 
-Both frontends call the same setup and cleanup routines in `xnet_evolve`; the
-comment above `read_network_data` shows the order. Setup reads the species and
-reaction data (`read_network_data`), reads the Jacobian and matching data and
-initializes screening, fluxes, the EOS and the integrator
-(`initialize_solver_and_physics`), and allocates the per-zone abundance,
-condition and neutrino storage (`initialize_zone_workspace`). Standalone XNet
-stores whole trajectories (`nhmx` history points per zone); the API stores the
-start and end points of a constant-condition burn. Condensed ASCII output
-species are looked up by `resolve_output_species` in `xnet_output`, which
-standalone always calls and the API calls only when `itsout > 0`.
+Both frontends use the same setup sequence:
 
-Cleanup runs `finalize_evolution_workspace` (integrators, NSE, EOS), then the
-Jacobian release, then `finalize_network_workspace` (everything else, with the
-controls last). Every owner unmaps its accelerator arrays before it frees the
-CPU arrays, and GPU resources outlive all of these calls. The API releases the
-Jacobian between the two cleanup calls. Standalone XNet does not release it,
-because some sparse providers have no finalizer; the storage lasts until the
-program exits. The API's checked lifecycle and retryable GPU cleanup stay in
-`xnet_api`. MPI, trajectory input, batch scheduling, file names and device
-selection by rank stay in `net.F90`.
+1. `read_network_data` in `reaction_data` (`source/xnet_data.F90`) reads species
+   and reaction tables. Standalone then logs the data description before the
+   reaction-matching diagnostics produced by the next step.
+2. `initialize_evolve` in `xnet_evolve` reads Jacobian and matching data and
+   initializes screening, fluxes, EOS and the selected BE/BDF integrator.
+3. `map_output_nuc` in `xnet_output` maps condensed-output names to network
+   indices. Standalone always calls it; the API calls it when `itsout > 0`.
+4. `initialize_evolve_batch(nhistory)` initializes NSE and reusable composition,
+   condition and neutrino storage for all worker batches. `nhistory` counts
+   allocated history points per zone: standalone passes `nhmx`; the API passes
+   `api_history_points` for the start and end of a constant-condition burn.
+
+These calls run once during initialization. Cleanup has two shared phases:
+`finalize_evolve_solver` releases integrator, NSE and EOS state; the API then
+releases its dense Jacobian; `finalize_evolve_data` releases remaining network
+and zone storage, with controls last. Every owner removes device mappings
+before freeing host arrays. GPU resources remain available until cleanup ends.
+Standalone Jacobian storage lasts until process exit because some sparse
+providers have no finalizer.
+
+The API keeps its checked lifecycle and retryable GPU cleanup in `xnet_api`.
+Standalone keeps MPI, trajectory input, scheduling, filenames and rank-based
+device selection in `net.F90`. The setup/cleanup banner in `xnet_evolve` gives
+the ordering at the call sites.
 
 ## Reading the driver and library source
 

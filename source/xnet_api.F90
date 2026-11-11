@@ -137,10 +137,11 @@ Contains
     ! Supplied GPU handles remain caller-owned.
     ! Reader, allocation, EOS and solver failures can still terminate.
     !-----------------------------------------------------------------------------------------------
+    Use reaction_data, Only: read_network_data
     Use xnet_controls, Only: apply_xnet_controls
-    Use xnet_evolve, Only: read_network_data, initialize_solver_and_physics, initialize_zone_workspace
+    Use xnet_evolve, Only: initialize_evolve, initialize_evolve_batch
     Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
-    Use xnet_output, Only: resolve_output_species
+    Use xnet_output, Only: map_output_nuc
     Implicit None
 
     ! Required arguments
@@ -195,10 +196,10 @@ Contains
     ! Load nuclear/reaction data, initialize solver and physics state, and allocate/map persistent
     ! zone workspaces with two history endpoints (tstart and tstop).
     Call read_network_data(controls%data_dir,api_data_description)
-    Call initialize_solver_and_physics(controls%data_dir)
+    Call initialize_evolve(controls%data_dir)
     ! Output species names are used only when histories are requested.
-    If ( controls%itsout > 0 ) Call resolve_output_species
-    Call initialize_zone_workspace(api_history_points)
+    If ( controls%itsout > 0 ) Call map_output_nuc
+    Call initialize_evolve_batch(api_history_points)
     Call copy_network_data(network)
 
     api_state = api_ready
@@ -408,7 +409,7 @@ Contains
     ! Call outside application parallel regions, with no work in flight and the initialized team.
     ! After successful cleanup, repeated calls succeed without repeating teardown.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_evolve, Only: finalize_evolution_workspace, finalize_network_workspace
+    Use xnet_evolve, Only: finalize_evolve_solver, finalize_evolve_data
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
     Use xnet_jacobian, Only: jacobian_finalize
     Implicit None
@@ -427,9 +428,9 @@ Contains
     If ( api_state == api_ready ) Then
       Call gpu_check_device(ierr,message)
       If ( ierr /= xnet_success ) Return
-      Call finalize_evolution_workspace
+      Call finalize_evolve_solver
       Call jacobian_finalize
-      Call finalize_network_workspace
+      Call finalize_evolve_data
       api_state = api_cleanup_pending
     EndIf
 

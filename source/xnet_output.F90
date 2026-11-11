@@ -3,7 +3,7 @@
 ! Time-series file management, evolution diagnostics, and standalone input-file writers for XNet.
 !
 ! Provides three groups of routines:
-! 1. Time-Series File Lifecycle (resolve_output_species, open_ts_file, open_ev_file, close_output_files):
+! 1. Time-Series File Lifecycle (map_output_nuc, open_ts_file, open_ev_file, close_output_files):
 !    Shared by the standalone driver (net.F90) and the library API (xnet_api.F90) to map configured
 !    ASCII output species names to network indices, open per-zone unformatted binary (itsout >= 1)
 !    and condensed ASCII (itsout >= 2) output files, write their header records, and close open
@@ -26,7 +26,7 @@ Module xnet_output
     Module Procedure write_xnet_th_point
   End Interface write_xnet_th
 
-  Public :: resolve_output_species
+  Public :: map_output_nuc
   Public :: open_ts_file
   Public :: open_ev_file
   Public :: close_output_files
@@ -42,7 +42,7 @@ Contains
   ! Time-Series File Lifecycle
   !=================================================================================================
 
-  Subroutine resolve_output_species
+  Subroutine map_output_nuc
     !-----------------------------------------------------------------------------------------------
     ! Map the configured condensed ASCII output species names (output_nuc(1:nnucout)) to active
     ! network indices in inucout(1:nnucout). Any species name not present in the loaded network
@@ -66,7 +66,7 @@ Contains
     EndDo
 
     Return
-  End Subroutine resolve_output_species
+  End Subroutine map_output_nuc
 
   Subroutine open_ts_file(izb,filename,data_description,abundance_source,abundance_description, &
     & thermo_source,thermo_description,status,ierr)

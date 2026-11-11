@@ -966,20 +966,21 @@ them follow the same sequence:
 
 | Part of a call | Where to read |
 | --- | --- |
-| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. Shared `xnet_evolve` routines read network data, initialize solver/physics state and allocate reusable zone storage with two history endpoints. `resolve_output_species` handles condensed output; `copy_network_data` returns copied metadata. |
+| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. `read_network_data` in `reaction_data` loads species and reactions; `initialize_evolve` and `initialize_evolve_batch` in `xnet_evolve` prepare the solver and reusable zone storage with two history endpoints. `map_output_nuc` handles condensed output; `copy_network_data` returns copied metadata. |
 | Worker checks | `check_worker` checks the fixed team and initialized worker scratch. `apply_xnet_controls` assigns each worker's bank during initialization. Workspace loops use `izb` in `zb_lo:zb_hi`, with `izone = izb + szbatch - zb_lo` as in standalone. The API sets `szbatch=1`, so `izone` indexes caller arrays. |
 | Batch evolution | `xnet_burn_batch` checks lifecycle, mappings, dimensions and scientific values before workspace setup. `evolve_batch` then prepares the workspace, calls `full_net` and extracts results; conditional offload selects current host or device values. |
 | Validation and failures | One `validate_inputs` shares range and mass checks between host and device execution. Its temporary verdict buffer carries the host active mask, independently of the worker workspace. Host IEEE classification stays outside device loops. `zone_error_message` translates verdicts; `format_burn_failure` translates numerical failures and the caller's diagnostic tuple. |
 | Histories and timing | `open_burn_output` reserves API filenames; shared `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` handle files and headers for both drivers. `get_timing`/`get_timing_since` report differences in the worker timers. |
-| Finalization | Shared `finalize_evolution_workspace` releases integrator/NSE/EOS state; the API releases its dense Jacobian, then calls shared `finalize_network_workspace` for the remaining storage. `xnet_finalize` then releases GPU resources; pending GPU cleanup skips the completed storage teardown on retry. |
+| Finalization | Shared `finalize_evolve_solver` releases integrator/NSE/EOS state; the API releases its dense Jacobian, then calls shared `finalize_evolve_data` for the remaining storage. `xnet_finalize` then releases GPU resources; pending GPU cleanup skips the completed storage teardown on retry. |
 
 Abundance, condition and neutrino-history storage is allocated and mapped by
 its own module initializer, then unmapped and deallocated by its finalizer.
 The standalone and library drivers call the same routines; neither repeats
 those modules' mapping lists.
-The standalone driver and the API share the setup and cleanup routines in
-`xnet_evolve`; the [architecture overview](architecture-overview.md#program-setup)
-gives their order and what differs between the two. The API keeps validation,
+The standalone driver and API share data reads in `reaction_data`, setup/cleanup
+in `xnet_evolve`, and output-name mapping in `xnet_output`. The
+[architecture overview](architecture-overview.md#program-setup) gives their order
+and the differences between the two frontends. The API keeps validation,
 borrowed resources and status codes.
 
 `validate_inputs` uses per-call verdict and mass-sum buffers in either memory

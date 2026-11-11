@@ -16,6 +16,7 @@ Program net
   Use model_input_ascii, Only: load_initial_abundances, read_thermo_file
   Use nuclear_data, Only: ny, nname
 !$ Use omp_lib
+  Use reaction_data, Only: read_network_data
   Use xnet_abundances, Only: ystart, y, xext, zext, aext
   Use xnet_conditions, Only: t, tdel, t9, rho, ye, nt, nstart, tstart, tstop, tdelstart, &
     & t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
@@ -23,13 +24,13 @@ Program net
     & szone, nzone, zone_id, kstmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
     & lun_diag, lun_stdout, tid, gpu_queue, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
     & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls
-  Use xnet_evolve, Only: full_net, read_network_data, initialize_solver_and_physics, &
-    & initialize_zone_workspace, finalize_evolution_workspace, finalize_network_workspace
+  Use xnet_evolve, Only: full_net, initialize_evolve, initialize_evolve_batch, &
+    & finalize_evolve_solver, finalize_evolve_data
   Use xnet_flux, Only: flx_int
   Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_match, Only: mflx, nflx
   Use xnet_nnu, Only: tmevnu, fluxcms
-  Use xnet_output, Only: resolve_output_species, open_ts_file, open_ev_file, close_output_files
+  Use xnet_output, Only: map_output_nuc, open_ts_file, open_ev_file, close_output_files
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, &
     & parallel_nprocs, parallel_IOProcessor
   Use xnet_preprocess, Only: net_preprocess
@@ -123,9 +124,9 @@ Program net
   !-------------------------------------------------------------------------------------------------
   Call read_network_data(data_dir,data_desc)
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
-  Call initialize_solver_and_physics(data_dir)
-  Call resolve_output_species
-  Call initialize_zone_workspace(nhmx)
+  Call initialize_evolve(data_dir)
+  Call map_output_nuc
+  Call initialize_evolve_batch(nhmx)
 
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve),denu(nzevolve))
   denu = 0.0_dp
@@ -269,8 +270,8 @@ Program net
 
   ! Release shared evolution and network workspaces (sparse Jacobian backends have no finalizer
   ! and release their solver storage at process exit).
-  Call finalize_evolution_workspace
-  Call finalize_network_workspace
+  Call finalize_evolve_solver
+  Call finalize_evolve_data
   Call gpu_finalize()
   Call parallel_finalize()
 

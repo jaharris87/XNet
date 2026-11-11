@@ -1,6 +1,6 @@
 !***************************************************************************************************
 ! xnet_evolve.F90
-! Shared network/workspace lifecycle and batch reaction-network evolution for XNet.
+! Shared evolution setup, cleanup, and batch reaction-network evolution for XNet.
 !
 ! Shared by the standalone driver (net.F90) and the embedded library API (xnet_api.F90).
 ! Setup and cleanup appear first; full_net advances active zones from tstart to tstop using
@@ -45,53 +45,30 @@ Module xnet_evolve
   !-------------------------------------------------------------------------------------------------
   ! Public procedures
   !-------------------------------------------------------------------------------------------------
-  Public :: read_network_data
-  Public :: initialize_solver_and_physics
-  Public :: initialize_zone_workspace
-  Public :: finalize_evolution_workspace
-  Public :: finalize_network_workspace
+  Public :: initialize_evolve
+  Public :: initialize_evolve_batch
+  Public :: finalize_evolve_solver
+  Public :: finalize_evolve_data
   Public :: full_net
 
 Contains
 
   !=================================================================================================
-  ! Shared Network and Workspace Lifecycle
+  ! Evolution Setup and Cleanup
   !
   ! Setup (once per initialized instance):
-  !   read_network_data -> initialize_solver_and_physics -> initialize_zone_workspace
-  ! Standalone logs the data description after the first read, before reaction-matching output.
+  !   read_network_data (reaction_data) -> initialize_evolve -> initialize_evolve_batch
+  ! Standalone logs the data description after the data read, before reaction-matching output.
   ! Output-species lookup is handled by xnet_output between solver and workspace setup.
   !
   ! Cleanup:
-  !   finalize_evolution_workspace -> API Jacobian cleanup -> finalize_network_workspace
+  !   finalize_evolve_solver -> API Jacobian cleanup -> finalize_evolve_data
   ! Standalone Jacobian storage lasts until process exit; some sparse providers have no finalizer.
   ! Owners unmap their arrays before freeing host storage. Controls stay available until the last
   ! owner finishes, and GPU resources outlive both cleanup phases.
   !=================================================================================================
 
-  Subroutine read_network_data(data_dir,data_description)
-    !-----------------------------------------------------------------------------------------------
-    ! Read nuclear species metadata (sunet, netwinv) and reaction rate data (nets3, nets4, netweak,
-    ! netneutr) from data_dir. Separated from initialize_solver_and_physics so the standalone
-    ! driver can log data_description to lun_diag before read_match_data writes its summary.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: read_nuclear_data
-    Use reaction_data, Only: read_reaction_data
-    Implicit None
-
-    ! Input arguments
-    Character(*), Intent(in) :: data_dir
-
-    ! Output arguments
-    Character(80), Intent(out) :: data_description
-
-    Call read_nuclear_data(data_dir,data_description)
-    Call read_reaction_data(data_dir)
-
-    Return
-  End Subroutine read_network_data
-
-  Subroutine initialize_solver_and_physics(data_dir)
+  Subroutine initialize_evolve(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! Initialize Jacobian sparsity/layout data, reaction flux matching, plasma screening, flux
     ! tracking, equation-of-state state, and the selected implicit time integrator (isolv = 1 or 3)
@@ -119,13 +96,14 @@ Contains
     If ( isolv == 3 ) Call bdf_init
 
     Return
-  End Subroutine initialize_solver_and_physics
+  End Subroutine initialize_evolve
 
-  Subroutine initialize_zone_workspace(history_capacity)
+  Subroutine initialize_evolve_batch(nhistory)
     !-----------------------------------------------------------------------------------------------
-    ! Allocate and map persistent per-zone workspaces for NSE, abundances, thermodynamic conditions,
-    ! and neutrino histories. The standalone driver passes nhmx (full trajectory buffer); the
-    ! constant-condition library API passes 2 (start and stop endpoints).
+    ! Once per initialized instance, initialize NSE and reusable storage for every worker batch:
+    ! abundances, thermodynamic conditions and neutrino histories. Each module maps its own arrays.
+    ! nhistory is the number of history points allocated per zone: nhmx for standalone trajectories,
+    ! or api_history_points for the start/end conditions supplied by the library API.
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_initialize
     Use xnet_conditions, Only: conditions_initialize
@@ -134,20 +112,20 @@ Contains
     Implicit None
 
     ! Input arguments
-    Integer, Intent(in) :: history_capacity
+    Integer, Intent(in) :: nhistory
 
     Call nse_initialize
     Call abundances_initialize
-    Call conditions_initialize(history_capacity)
-    Call nnu_initialize(history_capacity)
+    Call conditions_initialize(nhistory)
+    Call nnu_initialize(nhistory)
 
     Return
-  End Subroutine initialize_zone_workspace
+  End Subroutine initialize_evolve_batch
 
-  Subroutine finalize_evolution_workspace
+  Subroutine finalize_evolve_solver
     !-----------------------------------------------------------------------------------------------
-    ! Release time-integrator (BE and BDF), NSE, and EOS workspaces. Call before Jacobian teardown
-    ! and finalize_network_workspace while nuclear_data and xnet_controls remain allocated.
+    ! Release time-integrator (BE and BDF), NSE, and EOS workspaces before Jacobian teardown.
+    ! Remaining network/zone storage and controls stay available until finalize_evolve_data.
     !-----------------------------------------------------------------------------------------------
     Use xnet_eos, Only: eos_finalize
     Use xnet_integrate_be, Only: be_finalize
@@ -161,9 +139,9 @@ Contains
     Call eos_finalize
 
     Return
-  End Subroutine finalize_evolution_workspace
+  End Subroutine finalize_evolve_solver
 
-  Subroutine finalize_network_workspace
+  Subroutine finalize_evolve_data
     !-----------------------------------------------------------------------------------------------
     ! Release screening, flux, reaction-matching, weak/neutrino rate, reaction, nuclear, abundance,
     ! thermodynamic condition, and control workspaces. Each module removes its device mappings
@@ -194,7 +172,7 @@ Contains
     Call controls_finalize
 
     Return
-  End Subroutine finalize_network_workspace
+  End Subroutine finalize_evolve_data
 
   !=================================================================================================
   ! Batch Reaction-Network Evolution

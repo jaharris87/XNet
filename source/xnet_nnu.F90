@@ -39,15 +39,15 @@ Module xnet_nnu
 
 Contains
 
-  Subroutine nnu_initialize(history_capacity)
+  Subroutine nnu_initialize(nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Allocate and zero neutrino histories, then establish their persistent device mappings.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzevolve, gpu_queue
     Implicit None
-    Integer, Intent(in) :: history_capacity
+    Integer, Intent(in) :: nhistory ! Allocated history points per zone
 
-    Allocate (tmevnu(history_capacity,nnuspec,nzevolve),fluxcms(history_capacity,nnuspec,nzevolve))
+    Allocate (tmevnu(nhistory,nnuspec,nzevolve),fluxcms(nhistory,nnuspec,nzevolve))
     tmevnu = 0.0_dp
     fluxcms = 0.0_dp
     !XDIR XENTER_DATA XASYNC(gpu_queue) &

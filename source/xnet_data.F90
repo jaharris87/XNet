@@ -754,6 +754,27 @@ Module reaction_data
 
 Contains
 
+  Subroutine read_network_data(data_dir,data_description)
+    !-----------------------------------------------------------------------------------------------
+    ! Read species metadata and reaction tables in that order. The frontends call this after
+    ! applying controls and before evolution setup. Standalone logs data_description before
+    ! initialize_evolve reads the reaction-matching data and writes its diagnostic summary.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: read_nuclear_data
+    Implicit None
+
+    ! Input arguments
+    Character(*), Intent(in) :: data_dir
+
+    ! Output arguments
+    Character(80), Intent(out) :: data_description
+
+    Call read_nuclear_data(data_dir,data_description)
+    Call read_reaction_data(data_dir)
+
+    Return
+  End Subroutine read_network_data
+
   Subroutine read_reaction_data(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads in the necessary reaction data.

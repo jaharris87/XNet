@@ -966,12 +966,12 @@ them follow the same sequence:
 
 | Part of a call | Where to read |
 | --- | --- |
-| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. `initialize_network_data` in `reaction_data` loads species and reactions; `initialize_rates_and_solver` and `initialize_zone_workspace` in `xnet_evolve` prepare the solver and reusable zone storage with two history endpoints. `map_output_nuc` handles condensed output; `copy_network_data` returns copied metadata. |
+| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. `read_network_data` in `reaction_data` loads species and reactions. `initialize_evolve` in `xnet_evolve` prepares the engine and reusable zone storage with two history endpoints, mapping output species when histories are enabled. `copy_network_data` returns copied metadata. |
 | Worker checks | `check_worker` checks the fixed team and initialized worker scratch. `apply_xnet_controls` assigns each worker's bank during initialization. Workspace loops use `izb` in `zb_lo:zb_hi`, with `izone = izb + szbatch - zb_lo` as in standalone. The API sets `szbatch=1`, so `izone` indexes caller arrays. |
 | Batch evolution | `xnet_burn_batch` checks lifecycle, mappings, dimensions and scientific values before workspace setup. `evolve_batch` then prepares the workspace, calls `full_net` and extracts results; conditional offload selects current host or device values. |
 | Validation and failures | One `validate_inputs` shares range and mass checks between host and device execution. Its temporary verdict buffer carries the host active mask, independently of the worker workspace. Host IEEE classification stays outside device loops. `zone_error_message` translates verdicts; `format_burn_failure` translates numerical failures and the caller's diagnostic tuple. |
 | Histories and timing | `open_burn_output` reserves API filenames; shared `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` handle files and headers for both drivers. `get_timing`/`get_timing_since` report differences in the worker timers. |
-| Finalization | `finalize_zone_workspace` releases NSE and zone/history arrays; `finalize_rates_and_solver` releases integrator, EOS, rate/matching and Jacobian workspace. The API calls `finalize_network_data` and `controls_finalize` before GPU cleanup. Pending GPU cleanup skips all completed data teardown on retry. |
+| Finalization | `finalize_evolve` releases integrator, NSE/EOS, Jacobian, rate-evaluation and zone/history workspace. `finalize_network_data` releases loaded tables, then `controls_finalize` releases bookkeeping before GPU cleanup. Pending GPU cleanup skips all completed data teardown on retry. |
 
 Abundance, condition and neutrino-history storage is allocated and mapped by
 its own module initializer, then unmapped and deallocated by its finalizer.

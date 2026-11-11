@@ -1,9 +1,9 @@
 !***************************************************************************************************
 ! xnet_evolve.F90
-! Shared evolution setup, cleanup, and batch reaction-network evolution for XNet.
+! Shared evolution initialization, finalization, and batch reaction-network evolution for XNet.
 !
 ! Shared by the standalone driver (net.F90) and the embedded library API (xnet_api.F90).
-! Setup and cleanup appear first; full_net advances active zones from tstart to tstop using
+! Initialization and finalization appear first; full_net advances active zones from tstart to tstop using
 ! Backward Euler (isolv = 1) or Gear BDF (isolv = 3), tracking nuclear energy generation and
 ! weak-reaction neutrino losses.
 !
@@ -45,36 +45,38 @@ Module xnet_evolve
   !-------------------------------------------------------------------------------------------------
   ! Public procedures
   !-------------------------------------------------------------------------------------------------
-  Public :: initialize_rates_and_solver
-  Public :: initialize_zone_workspace
-  Public :: finalize_zone_workspace
-  Public :: finalize_rates_and_solver
+  Public :: initialize_evolve
+  Public :: finalize_evolve
   Public :: full_net
 
 Contains
 
   !=================================================================================================
-  ! Evolution Setup and Cleanup
+  ! Evolution Initialization and Finalization
   !
-  ! Shared setup (once per initialized instance):
-  !   initialize_network_data       reaction_data in xnet_data.F90
-  !   initialize_rates_and_solver   Jacobian/matching data, rates, EOS and integrator
-  !   initialize_zone_workspace     NSE and reusable zone/history arrays
-  ! Standalone logs the data description after network initialization. Output-species lookup
-  ! stays in the frontends, between rates/solver setup and zone-workspace initialization.
+  ! The frontends first call read_network_data (reaction_data in xnet_data.F90). Standalone logs
+  ! its data description before initialize_evolve reads Jacobian/matching data and prepares the
+  ! evolution engine. These calls run once per initialized instance, not once per batch.
   !
-  ! Cleanup reverses these groups:
-  !   finalize_zone_workspace -> finalize_rates_and_solver -> finalize_network_data
-  ! Each owner unmaps arrays before freeing them. The frontends finalize controls last and keep
-  ! GPU resources alive until all workspace, solver and network cleanup is complete.
+  ! finalize_evolve releases the engine, including the selected Jacobian provider. The frontends
+  ! then call finalize_network_data and controls_finalize. Network tables and controls outlive
+  ! the workspaces that use them; GPU resources remain available until all mappings are removed.
   !=================================================================================================
 
-  Subroutine initialize_rates_and_solver(data_dir)
+  Subroutine initialize_evolve(data_dir,nhistory,map_output)
     !-----------------------------------------------------------------------------------------------
-    ! Initialize Jacobian sparsity/layout data, reaction flux matching, plasma screening, flux
-    ! tracking, equation-of-state state, and the selected implicit time integrator (isolv = 1 or 3)
-    ! after nuclear and reaction data have been loaded.
+    ! Read Jacobian/matching data and initialize rates, EOS, integrator, NSE and reusable zone
+    ! storage. Nuclear/reaction tables and controls must already be loaded. Each owner maps its
+    ! own arrays. Call outside parallel regions with the worker team configured by the frontend.
+    !
+    ! data_dir    Directory containing the preprocessed network.
+    ! nhistory    Allocated history points per zone: nhmx for standalone trajectories, or
+    !             api_history_points for the library's start/end conditions.
+    ! map_output  Map configured condensed-output species: always in standalone, and only when
+    !             histories are enabled in the API. Lookup precedes NSE diagnostics as before.
     !-----------------------------------------------------------------------------------------------
+    Use xnet_abundances, Only: abundances_initialize
+    Use xnet_conditions, Only: conditions_initialize
     Use xnet_controls, Only: isolv
     Use xnet_eos, Only: eos_initialize
     Use xnet_flux, Only: flux_init
@@ -82,11 +84,16 @@ Contains
     Use xnet_integrate_bdf, Only: bdf_init
     Use xnet_jacobian, Only: read_jacobian_data
     Use xnet_match, Only: read_match_data
+    Use xnet_nnu, Only: nnu_initialize
+    Use xnet_nse, Only: nse_initialize
+    Use xnet_output, Only: map_output_nuc
     Use xnet_screening, Only: screening_init
     Implicit None
 
     ! Input arguments
     Character(*), Intent(in) :: data_dir
+    Integer, Intent(in) :: nhistory
+    Logical, Intent(in) :: map_output
 
     Call read_jacobian_data(data_dir)
     Call read_match_data(data_dir)
@@ -95,77 +102,50 @@ Contains
     Call eos_initialize
     If ( isolv == 1 ) Call be_init
     If ( isolv == 3 ) Call bdf_init
-
-    Return
-  End Subroutine initialize_rates_and_solver
-
-  Subroutine initialize_zone_workspace(nhistory)
-    !-----------------------------------------------------------------------------------------------
-    ! Once per initialized instance, initialize NSE and reusable storage for every worker batch:
-    ! abundances, thermodynamic conditions and neutrino histories. Each module maps its own arrays.
-    ! nhistory is the number of history points allocated per zone: nhmx for standalone trajectories,
-    ! or api_history_points for the start/end conditions supplied by the library API.
-    !-----------------------------------------------------------------------------------------------
-    Use xnet_abundances, Only: abundances_initialize
-    Use xnet_conditions, Only: conditions_initialize
-    Use xnet_nnu, Only: nnu_initialize
-    Use xnet_nse, Only: nse_initialize
-    Implicit None
-
-    ! Input arguments
-    Integer, Intent(in) :: nhistory
-
+    If ( map_output ) Call map_output_nuc
     Call nse_initialize
     Call abundances_initialize
     Call conditions_initialize(nhistory)
     Call nnu_initialize(nhistory)
 
     Return
-  End Subroutine initialize_zone_workspace
+  End Subroutine initialize_evolve
 
-  Subroutine finalize_zone_workspace
+  Subroutine finalize_evolve
     !-----------------------------------------------------------------------------------------------
-    ! Release the NSE, abundance, condition and neutrino-history workspace initialized by
-    ! initialize_zone_workspace. Rates, solver state, network tables and controls remain available.
+    ! Release the evolution engine's integrator, NSE/EOS, Jacobian, rate-evaluation and zone
+    ! workspace. The selected Jacobian provider releases its own arrays and any library-owned
+    ! factors. Loaded network tables remain for finalize_network_data; controls and GPU resources
+    ! must remain available until both routines finish. Call outside parallel regions, after all
+    ! workers finish, with the same team used during initialization.
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_finalize
     Use xnet_conditions, Only: conditions_finalize
-    Use xnet_nnu, Only: nnu_history_finalize
-    Use xnet_nse, Only: nse_finalize
-    Implicit None
-
-    Call nse_finalize
-    Call nnu_history_finalize
-    Call abundances_finalize
-    Call conditions_finalize
-
-    Return
-  End Subroutine finalize_zone_workspace
-
-  Subroutine finalize_rates_and_solver
-    !-----------------------------------------------------------------------------------------------
-    ! Release the integrator, EOS, screening, flux, matching and Jacobian state initialized by
-    ! initialize_rates_and_solver. Keep network tables, controls and GPU resources alive.
-    !-----------------------------------------------------------------------------------------------
     Use xnet_eos, Only: eos_finalize
     Use xnet_flux, Only: flux_finalize
     Use xnet_integrate_be, Only: be_finalize
     Use xnet_integrate_bdf, Only: bdf_finalize
     Use xnet_jacobian, Only: jacobian_finalize
     Use xnet_match, Only: match_finalize
+    Use xnet_nnu, Only: nnu_history_finalize
+    Use xnet_nse, Only: nse_finalize
     Use xnet_screening, Only: screening_finalize
     Implicit None
 
     Call be_finalize
     Call bdf_finalize
+    Call nse_finalize
     Call eos_finalize
+    Call jacobian_finalize
     Call screening_finalize
     Call flux_finalize
     Call match_finalize
-    Call jacobian_finalize
+    Call nnu_history_finalize
+    Call abundances_finalize
+    Call conditions_finalize
 
     Return
-  End Subroutine finalize_rates_and_solver
+  End Subroutine finalize_evolve
 
   !=================================================================================================
   ! Batch Reaction-Network Evolution

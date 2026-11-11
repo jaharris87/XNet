@@ -16,7 +16,7 @@ Program net
   Use model_input_ascii, Only: load_initial_abundances, read_thermo_file
   Use nuclear_data, Only: ny, nname
 !$ Use omp_lib
-  Use reaction_data, Only: initialize_network_data, finalize_network_data
+  Use reaction_data, Only: read_network_data, finalize_network_data
   Use xnet_abundances, Only: ystart, y, xext, zext, aext
   Use xnet_conditions, Only: t, tdel, t9, rho, ye, nt, nstart, tstart, tstop, tdelstart, &
     & t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
@@ -24,13 +24,12 @@ Program net
     & szone, nzone, zone_id, kstmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
     & lun_diag, lun_stdout, tid, gpu_queue, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
     & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls, controls_finalize
-  Use xnet_evolve, Only: full_net, initialize_rates_and_solver, initialize_zone_workspace, &
-    & finalize_zone_workspace, finalize_rates_and_solver
+  Use xnet_evolve, Only: full_net, initialize_evolve, finalize_evolve
   Use xnet_flux, Only: flx_int
   Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_match, Only: mflx, nflx
   Use xnet_nnu, Only: tmevnu, fluxcms
-  Use xnet_output, Only: map_output_nuc, open_ts_file, open_ev_file, close_output_files
+  Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, &
     & parallel_nprocs, parallel_IOProcessor
   Use xnet_preprocess, Only: net_preprocess
@@ -120,13 +119,11 @@ Program net
 #endif
 
   !-------------------------------------------------------------------------------------------------
-  ! 4. Load network data and initialize physics, solver, and zone workspaces
+  ! 4. Load network data and initialize the evolution engine
   !-------------------------------------------------------------------------------------------------
-  Call initialize_network_data(data_dir,data_desc)
+  Call read_network_data(data_dir,data_desc)
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
-  Call initialize_rates_and_solver(data_dir)
-  Call map_output_nuc
-  Call initialize_zone_workspace(nhmx)
+  Call initialize_evolve(data_dir,nhmx,map_output=.true.)
 
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve),denu(nzevolve))
   denu = 0.0_dp
@@ -269,8 +266,7 @@ Program net
   Deallocate (abund_desc,thermo_desc,denu)
 
   ! Release the shared zone, solver and network state before controls and GPU/MPI shutdown.
-  Call finalize_zone_workspace
-  Call finalize_rates_and_solver
+  Call finalize_evolve
   Call finalize_network_data
   Call controls_finalize
   Call gpu_finalize()

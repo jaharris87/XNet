@@ -80,35 +80,33 @@ chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
 
-Both frontends use the same setup sequence:
+Both frontends load tables with `read_network_data` in `reaction_data`
+(`source/xnet_data.F90`), then call `initialize_evolve(data_dir,nhistory,map_output)`
+in `xnet_evolve` once during initialization. The latter reads Jacobian and
+matching data, initializes screening, fluxes, EOS, the selected BE/BDF integrator
+and NSE, and allocates reusable composition, condition and neutrino-history
+storage for all worker batches. Each owning module maps its own arrays.
 
-1. `initialize_network_data` in `reaction_data` (`source/xnet_data.F90`) reads species
-   and reaction tables. Standalone then logs the data description before the
-   reaction-matching diagnostics produced by the next step.
-2. `initialize_rates_and_solver` in `xnet_evolve` reads Jacobian and matching data and
-   initializes screening, fluxes, EOS and the selected BE/BDF integrator.
-3. `map_output_nuc` in `xnet_output` maps condensed-output names to network
-   indices. Standalone always calls it; the API calls it when `itsout > 0`.
-4. `initialize_zone_workspace(nhistory)` initializes NSE and reusable composition,
-   condition and neutrino storage for all worker batches. `nhistory` counts
-   allocated history points per zone: standalone passes `nhmx`; the API passes
-   `api_history_points` for the start and end of a constant-condition burn.
+`nhistory` counts allocated history points per zone: standalone passes `nhmx`;
+the API passes `api_history_points` for the start and end of a constant-condition
+burn. `map_output` preserves the frontends' condensed-output policy: standalone
+always maps names through `map_output_nuc`; the API maps them only when
+`itsout > 0`. Lookup remains between integrator and NSE initialization, preserving
+its warning order. Standalone logs the network description before the
+reaction-matching diagnostics.
 
-These calls run once during initialization. Cleanup reverses the three groups:
+Cleanup uses `finalize_evolve`, then `finalize_network_data`, then
+`controls_finalize`. The engine finalizer releases integrator, NSE/EOS,
+Jacobian, rate-evaluation and zone/history workspace. Each Jacobian provider
+releases its own arrays; PARDISO providers release library-owned factors first.
+Network tables remain available until the engine's cleanup is complete.
+`finalize_network_data` then releases weak/neutrino reaction tables and
+nuclear/reaction data. GPU resources remain available until every owner has
+removed its device mappings and freed host storage.
 
-1. `finalize_zone_workspace` releases NSE, abundance, condition and neutrino
-   histories, retaining reaction tables and solver state.
-2. `finalize_rates_and_solver` releases integrator, EOS, screening, flux,
-   matching and Jacobian state. Each Jacobian provider releases its own storage;
-   PARDISO providers release library-owned factors before their Fortran arrays.
-3. `finalize_network_data` in `reaction_data` releases weak/neutrino reaction
-   tables and the nuclear/reaction data. Each frontend calls `controls_finalize`
-   afterwards, then releases GPU resources.
-
-Each owning module removes device mappings before freeing host arrays.
 Neutrino histories have a separate `nnu_history_finalize` because they belong
-to the zone workspace, while the neutrino reaction tables belong to network
-initialization. The existing `nnu_finalize` still releases all neutrino state.
+to the engine workspace, while neutrino reaction tables belong to the loaded
+network. The existing `nnu_finalize` still releases all neutrino state.
 
 The API keeps its checked lifecycle and retryable GPU cleanup in `xnet_api`.
 Standalone keeps MPI, trajectory input, scheduling, filenames and rank-based

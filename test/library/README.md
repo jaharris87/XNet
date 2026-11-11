@@ -13,6 +13,23 @@ make -C test/library XNET_CONFIG=../../build/library-test/xnet-config.mk test
 Use a different caller `BUILD_DIR` when checking another production
 configuration, for example `BUILD_DIR=build-debug` for a debug archive.
 
+The normal `test` target also extracts `Program quickstart` from the Fortran
+fence in the [library guide](../../docs/development/embedding.md), compiles it
+with `xnet-config.mk`, and runs it with copies of the four documented alpha
+ASCII inputs. Missing, duplicate or incomplete examples fail selection. Its
+owned runs and process log are under `BUILD_DIR/quickstart-runs/`; the guide's
+source is the only implementation of the example. Run just this check with
+`make -C test/library XNET_CONFIG=... quickstart-test`.
+
+Both hosted GNU workflows reuse their serial build for this suite and build a
+separate GNU OPT dense/STARKILLER CPU `OPENMP_MODE=ON` archive for
+`host-batch-openmp-test`. Their component job keeps the full OPT suite, then
+runs the existing EOS and screening targets with `CMODE=DEBUG` in its separate
+mode directory. MPI, device execution, private providers and facility checks
+remain outside these jobs. Failure uploads add
+only library logs and JSON summaries from the two CI caller directories,
+capped at 1 MiB per file and 10 MiB overall, alongside the existing build logs.
+
 Python 3 is required; there are no additional Python packages. The production
 Starkiller EOS table must be present at its normal repository path. The tests
 use the real dense serial CPU archive and selected EOS; the numerical callers

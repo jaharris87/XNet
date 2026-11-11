@@ -5,7 +5,7 @@ include $(XNET_CONFIG)
 
 BUILD_DIR ?= build
 PROGRAMS := $(BUILD_DIR)/api_consumer $(BUILD_DIR)/legacy_reference $(BUILD_DIR)/failure_consumer
-PROGRAMS += $(BUILD_DIR)/output_consumer $(BUILD_DIR)/preprocess_consumer
+PROGRAMS += $(BUILD_DIR)/output_consumer $(BUILD_DIR)/preprocess_consumer $(BUILD_DIR)/quickstart
 XNET_CPP ?= cpp
 # This opt-in application caller defaults to GNU OpenMP flags.
 HOST_OPENMP_FLAGS ?= -fopenmp
@@ -16,12 +16,26 @@ PROGRAMS += $(BUILD_DIR)/cleanup/cleanup_consumer
 CLEANUP_TEST := --cleanup $(BUILD_DIR)/cleanup/cleanup_consumer
 endif
 
-.PHONY: all test host-openmp-test host-batch-openmp-test gpu_consumer
+.PHONY: all test quickstart-test host-openmp-test host-batch-openmp-test gpu_consumer
 all: $(PROGRAMS)
 gpu_consumer: $(BUILD_DIR)/gpu_consumer
 
 $(BUILD_DIR):
 	mkdir -p '$@'
+
+# Compile the guide's named program, rather than maintaining a second example.
+$(BUILD_DIR)/quickstart.f90: ../../docs/development/embedding.md extract_quickstart.py | $(BUILD_DIR)
+	python3 -B extract_quickstart.py '$<' '$@'
+
+$(BUILD_DIR)/quickstart.o: $(BUILD_DIR)/quickstart.f90 $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -c '$<' -o '$@'
+
+$(BUILD_DIR)/quickstart: $(BUILD_DIR)/quickstart.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+quickstart-test: $(BUILD_DIR)/quickstart
+	python3 -B -m unittest -v test_quickstart
+	python3 -B run_quickstart.py --executable $(BUILD_DIR)/quickstart --work-dir $(BUILD_DIR)/quickstart-runs
 
 $(BUILD_DIR)/consumer_fixture.o: consumer_fixture.F90 $(XNET_CONFIG) | $(BUILD_DIR)
 	cd '$(BUILD_DIR)' && $(XNET_FC) $(XNET_FFLAGS) -c '$(abspath $<)' -o '$(notdir $@)'
@@ -188,7 +202,7 @@ endif
 
 host-openmp-test: $(BUILD_DIR)/host_openmp_consumer
 
-test host-openmp-test: all
+test host-openmp-test: all quickstart-test
 	python3 run_library_tests.py --api $(BUILD_DIR)/api_consumer --reference $(BUILD_DIR)/legacy_reference \
 	  --failure $(BUILD_DIR)/failure_consumer --xnet $(dir $(XNET_ARCHIVE))../bin/xnet \
 	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/runs $(CLEANUP_TEST) \

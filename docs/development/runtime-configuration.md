@@ -105,17 +105,19 @@ Every consumed field is emitted, with explicit indices for array entries.
 | Job Controls | `szone`, `nzone`, `iweak0`, `iscrn`, `iprocess` | Error |
 | Zone Batching Controls | `nzbatchmx` | `1` |
 | Integration Controls | `isolv`, `kstmx`, `kitmx`, `ijac`, `iconvc`, `changemx`, `yacc`, `tolm`, `tolc`, `ymin`, `tdel_maxmult` | Error |
-| Self-heating Controls | `iheat`, `changemxt`, `tolt9` | `0`, default-real32 `1.0e-2` and `1.0e-4`, promoted to double precision |
+| Self-heating Controls | `iheat`, `changemxt`, `tolt9` | `0`, `1.0e-2`, `1.0e-4` |
 | NSE Initial Conditions | `t9nse` | `8.0` |
 | Neutrinos | `ineutrino` | `0` |
 | Output Controls | `idiag`, `itsout`, `ev_file_base`, `bin_file_base`, `nnucout`, `output_nuclei` | Error |
 | Input Controls | `data_dir`, alternating `inab_files`/`thermo_files` | Error |
 
-The two old self-heating defaults are emitted as `9.9999997764825821e-3` and
-`9.9999997473787516e-5`. These preserve the old default-real32 assignment;
-builds using nonstandard default-real compiler flags are outside this converter's
-scope. Supplied numeric tokens, including E/D exponents and integer flags, retain
-their spelling. Supplied BDF change limits remain in the file; XNet's existing
+The omitted self-heating defaults follow the tracked v8 GNU build:
+`source/Makefile.internal` uses `-fdefault-real-8 -fdefault-double-8`, so the
+default-real literals `1.0e-2` and `1.0e-4` have double precision. The current GNU
+build uses the same kind flags. For custom historical builds without this
+promotion, supply the effective defaults explicitly when migrating manually.
+Supplied numeric tokens, including E/D exponents and integer flags, retain their
+spelling. Supplied BDF change limits remain in the file; XNet's existing
 application step replaces them with its BDF limits.
 
 Block markers must occupy columns 1-2 (`##`). Titles are case-sensitive

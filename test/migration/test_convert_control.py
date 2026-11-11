@@ -89,6 +89,8 @@ class ConversionTests(unittest.TestCase):
         fields = assignments(namelist)
         self.assertEqual(fields["nzbatchmx"], "1")
         self.assertEqual(fields["iheat"], "0")
+        self.assertEqual(fields["changemxt"], "1.0e-2")
+        self.assertEqual(fields["tolt9"], "1.0e-4")
         self.assertEqual(fields["t9nse"], "8.0")
         self.assertEqual(fields["ineutrino"], "0")
         assert_values(self, resolved_values(namelist), EXPECTED["optional_defaults"])
@@ -238,7 +240,8 @@ class FortranReaderTests(unittest.TestCase):
         sources = [ROOT / "source" / f"{name}.F90" for name in (
             "xnet_types", "xnet_constants", "xnet_parallel_stubs", "xnet_util", "xnet_controls")]
         sources.append(Path(__file__).with_name("controls_probe.F90"))
-        command = compiler + ["-cpp", "-O0", "-g", "-fcheck=all", "-ffree-line-length-none",
+        command = compiler + ["-cpp", "-fdefault-real-8", "-fdefault-double-8",
+                              "-O0", "-g", "-fcheck=all", "-ffree-line-length-none",
                               "-I" + str(ROOT / "source"), *map(str, sources), "-o", "controls_probe"]
         subprocess.run(command, cwd=cls.work, capture_output=True, text=True, check=True)
 

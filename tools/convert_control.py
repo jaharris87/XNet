@@ -21,8 +21,8 @@ SCALARS = {
 }
 DEFAULTS = {
     "Zone Batching Controls": ("1",),
-    # The v8 literals had default-real kind before assignment to double precision.
-    "Self-heating Controls": ("0", "9.9999997764825821e-3", "9.9999997473787516e-5"),
+    # The tracked v8 GNU build promotes default real to eight bytes.
+    "Self-heating Controls": ("0", "1.0e-2", "1.0e-4"),
     "NSE Initial Conditions": ("8.0",),
     "Neutrinos": ("0",),
 }

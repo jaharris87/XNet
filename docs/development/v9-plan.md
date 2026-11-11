@@ -27,7 +27,7 @@ for current implementation status.
 | [#127: starting CPU measurements](https://github.com/jaharris87/XNet/issues/127) | Complete and accepted: serial dense CPU measurements for four network sizes on both facilities, with MA48 deferred | Preserve this starting point for resulting-code comparisons |
 | [#129: application interface and library](https://github.com/jaharris87/XNet/issues/129) | Merged: public lifecycle/archive, EOS/NSE/timestep/timing results, concurrent application-side CPU batch calls and GPU resource ownership (#164), followed by API/GPU readability work (#180) and shared initialization/cleanup (#191) | Implement the selected #185 worker storage and complete remaining execution-mode checks |
 | [#130: application integrations](https://github.com/jaharris87/XNet/issues/130) | Selected CHIMERA 17/160/350 and Flash-X 17/160 CPU comparisons are complete at their recorded sources. Flash-X 350 execution and application GPU checks remain | Reconcile wrappers with the current interface, check resulting code, and validate required modes and ownership; diagnose the two facility failures separately |
-| [#171](https://github.com/jaharris87/XNet/issues/171) / [#181: numerical corrections](https://github.com/jaharris87/XNet/issues/181) | Screening correction #175 is merged. Accepted-composition Ye correction #182 remains draft at its recorded source | Reconcile #182 with the lifecycle merge and complete candidate-specific native checks |
+| [#171](https://github.com/jaharris87/XNet/issues/171) / [#181: numerical corrections](https://github.com/jaharris87/XNet/issues/181) | Screening correction #175 is merged. Accepted-composition Ye correction #182 is reconciled with the lifecycle merge and remains draft | Complete candidate-specific native checks for #182 |
 | [#131: CPU/GPU and application performance](https://github.com/jaharris87/XNet/issues/131) | Stage A complete: four network sizes on both facilities. Six application workloads selected for stage B; no stage B timings yet | Settle implementation and correctness checks before selecting the timing source and measuring repeated application burns |
 | [#132: release checks](https://github.com/jaharris87/XNet/issues/132) | Not yet a release candidate | Verify the final implementation, supported platforms, and documentation |
 
@@ -149,12 +149,13 @@ do not establish application GPU execution, performance or release readiness.
 
 The [screening correction #175](https://github.com/jaharris87/XNet/pull/175)
 is merged. [Draft #182](https://github.com/jaharris87/XNet/pull/182) corrects
-Ye to describe accepted BE/BDF composition. Its refreshed `3f32d338` candidate
-passes [231 local regressions, library/batch/overlap checks and selected DEBUG cases](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779908945),
-with [fresh review passing](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779966537).
+Ye to describe accepted BE/BDF composition. Its `23fa7675` candidate merges the
+`64b1a2c6` lifecycle source and passes
+[231 local regressions, library/batch/overlap checks and ten DEBUG processes](https://github.com/jaharris87/XNet/pull/182#issuecomment-6801789870),
+with [fresh source/math and test/reference reviews passing](https://github.com/jaharris87/XNet/pull/182#issuecomment-6802006110).
 The maintainer [accepted its November 6 native comparisons](https://github.com/jaharris87/XNet/pull/182#issuecomment-6779556459)
 at the older `d8dc7efe` source; those results do not establish refreshed-source
-native behavior. It still needs reconciliation with the later lifecycle merge.
+native behavior. Current-candidate native compile and execution checks remain.
 The [#190](https://github.com/jaharris87/XNet/pull/190) compile workaround for the
 [NVIDIA CPU threaded-caller issue #183](https://github.com/jaharris87/XNet/issues/183)
 and [#195](https://github.com/jaharris87/XNet/pull/195) caller-output flush are
@@ -174,8 +175,11 @@ PARDISO exposed a separate failure under
 [#193](https://github.com/jaharris87/XNet/issues/193). A
 [hardware watchpoint](https://github.com/jaharris87/XNet/issues/193#issuecomment-6799611340)
 identifies oneMKL writing a shared CSR row pointer in one observed call;
-[draft #196](https://github.com/jaharris87/XNet/pull/196) investigates worker
-ownership. This is not yet a demonstrated threaded repair or support expansion.
+[PR #196](https://github.com/jaharris87/XNet/pull/196) gives each worker private
+solver indices. Its [native checks and independent result reviews](https://github.com/jaharris87/XNet/pull/196#issuecomment-6801417552)
+pass for GNU11.4/oneMKL2026.1 GNU LP64 with the sequential oneMKL layer,
+including one/two/four-worker component checks and standalone BE/BDF histories.
+These results do not expand support to other configurations.
 The application library remains dense-only.
 Standalone trajectories keep their interpolation
 and integrator history rather than becoming repeated constant-condition burns.

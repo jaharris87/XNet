@@ -754,11 +754,11 @@ Module reaction_data
 
 Contains
 
-  Subroutine read_network_data(data_dir,data_description)
+  Subroutine initialize_network_data(data_dir,data_description)
     !-----------------------------------------------------------------------------------------------
     ! Read species metadata and reaction tables in that order. The frontends call this after
     ! applying controls and before evolution setup. Standalone logs data_description before
-    ! initialize_evolve reads the reaction-matching data and writes its diagnostic summary.
+    ! initialize_rates_and_solver reads the reaction-matching data and writes its diagnostic summary.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: read_nuclear_data
     Implicit None
@@ -773,7 +773,26 @@ Contains
     Call read_reaction_data(data_dir)
 
     Return
-  End Subroutine read_network_data
+  End Subroutine initialize_network_data
+
+  Subroutine finalize_network_data
+    !-----------------------------------------------------------------------------------------------
+    ! Release the weak/neutrino rates, reaction tables and nuclear data initialized by
+    ! initialize_network_data. Zone and solver cleanup must finish first; controls and GPU
+    ! resources remain available until these data owners have removed their device mappings.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: nuclear_data_finalize
+    Use xnet_ffn, Only: ffn_finalize
+    Use xnet_nnu, Only: nnu_finalize
+    Implicit None
+
+    Call ffn_finalize
+    Call nnu_finalize
+    Call reaction_data_finalize
+    Call nuclear_data_finalize
+
+    Return
+  End Subroutine finalize_network_data
 
   Subroutine read_reaction_data(data_dir)
     !-----------------------------------------------------------------------------------------------

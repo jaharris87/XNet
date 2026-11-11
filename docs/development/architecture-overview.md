@@ -82,25 +82,34 @@ its general input histories. See
 
 Both frontends use the same setup sequence:
 
-1. `read_network_data` in `reaction_data` (`source/xnet_data.F90`) reads species
+1. `initialize_network_data` in `reaction_data` (`source/xnet_data.F90`) reads species
    and reaction tables. Standalone then logs the data description before the
    reaction-matching diagnostics produced by the next step.
-2. `initialize_evolve` in `xnet_evolve` reads Jacobian and matching data and
+2. `initialize_rates_and_solver` in `xnet_evolve` reads Jacobian and matching data and
    initializes screening, fluxes, EOS and the selected BE/BDF integrator.
 3. `map_output_nuc` in `xnet_output` maps condensed-output names to network
    indices. Standalone always calls it; the API calls it when `itsout > 0`.
-4. `initialize_evolve_batch(nhistory)` initializes NSE and reusable composition,
+4. `initialize_zone_workspace(nhistory)` initializes NSE and reusable composition,
    condition and neutrino storage for all worker batches. `nhistory` counts
    allocated history points per zone: standalone passes `nhmx`; the API passes
    `api_history_points` for the start and end of a constant-condition burn.
 
-These calls run once during initialization. Cleanup has two shared phases:
-`finalize_evolve_solver` releases integrator, NSE and EOS state; the API then
-releases its dense Jacobian; `finalize_evolve_data` releases remaining network
-and zone storage, with controls last. Every owner removes device mappings
-before freeing host arrays. GPU resources remain available until cleanup ends.
-Standalone Jacobian storage lasts until process exit because some sparse
-providers have no finalizer.
+These calls run once during initialization. Cleanup reverses the three groups:
+
+1. `finalize_zone_workspace` releases NSE, abundance, condition and neutrino
+   histories, retaining reaction tables and solver state.
+2. `finalize_rates_and_solver` releases integrator, EOS, screening, flux and
+   matching state. The API then releases its dense Jacobian. Standalone
+   Jacobian storage lasts until process exit because some sparse providers
+   lack finalizers.
+3. `finalize_network_data` in `reaction_data` releases weak/neutrino reaction
+   tables and the nuclear/reaction data. Each frontend calls `controls_finalize`
+   afterwards, then releases GPU resources.
+
+Each owning module removes device mappings before freeing host arrays.
+Neutrino histories have a separate `nnu_history_finalize` because they belong
+to the zone workspace, while the neutrino reaction tables belong to network
+initialization. The existing `nnu_finalize` still releases all neutrino state.
 
 The API keeps its checked lifecycle and retryable GPU cleanup in `xnet_api`.
 Standalone keeps MPI, trajectory input, scheduling, filenames and rank-based

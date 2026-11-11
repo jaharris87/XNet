@@ -45,10 +45,10 @@ Module xnet_evolve
   !-------------------------------------------------------------------------------------------------
   ! Public procedures
   !-------------------------------------------------------------------------------------------------
-  Public :: initialize_evolve
-  Public :: initialize_evolve_batch
-  Public :: finalize_evolve_solver
-  Public :: finalize_evolve_data
+  Public :: initialize_rates_and_solver
+  Public :: initialize_zone_workspace
+  Public :: finalize_zone_workspace
+  Public :: finalize_rates_and_solver
   Public :: full_net
 
 Contains
@@ -56,19 +56,22 @@ Contains
   !=================================================================================================
   ! Evolution Setup and Cleanup
   !
-  ! Setup (once per initialized instance):
-  !   read_network_data (reaction_data) -> initialize_evolve -> initialize_evolve_batch
-  ! Standalone logs the data description after the data read, before reaction-matching output.
-  ! Output-species lookup is handled by xnet_output between solver and workspace setup.
+  ! Shared setup (once per initialized instance):
+  !   initialize_network_data       reaction_data in xnet_data.F90
+  !   initialize_rates_and_solver   Jacobian/matching data, rates, EOS and integrator
+  !   initialize_zone_workspace     NSE and reusable zone/history arrays
+  ! Standalone logs the data description after network initialization. Output-species lookup
+  ! stays in the frontends, between rates/solver setup and zone-workspace initialization.
   !
-  ! Cleanup:
-  !   finalize_evolve_solver -> API Jacobian cleanup -> finalize_evolve_data
-  ! Standalone Jacobian storage lasts until process exit; some sparse providers have no finalizer.
-  ! Owners unmap their arrays before freeing host storage. Controls stay available until the last
-  ! owner finishes, and GPU resources outlive both cleanup phases.
+  ! Cleanup reverses these groups:
+  !   finalize_zone_workspace -> finalize_rates_and_solver -> finalize_network_data
+  ! The API releases its dense Jacobian after rates/solver cleanup and before network cleanup.
+  ! Standalone Jacobian storage lasts until process exit; some sparse providers lack finalizers.
+  ! Each owner unmaps arrays before freeing them. The frontends finalize controls last and keep
+  ! GPU resources alive until all workspace, solver and network cleanup is complete.
   !=================================================================================================
 
-  Subroutine initialize_evolve(data_dir)
+  Subroutine initialize_rates_and_solver(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! Initialize Jacobian sparsity/layout data, reaction flux matching, plasma screening, flux
     ! tracking, equation-of-state state, and the selected implicit time integrator (isolv = 1 or 3)
@@ -96,9 +99,9 @@ Contains
     If ( isolv == 3 ) Call bdf_init
 
     Return
-  End Subroutine initialize_evolve
+  End Subroutine initialize_rates_and_solver
 
-  Subroutine initialize_evolve_batch(nhistory)
+  Subroutine initialize_zone_workspace(nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Once per initialized instance, initialize NSE and reusable storage for every worker batch:
     ! abundances, thermodynamic conditions and neutrino histories. Each module maps its own arrays.
@@ -120,59 +123,50 @@ Contains
     Call nnu_initialize(nhistory)
 
     Return
-  End Subroutine initialize_evolve_batch
+  End Subroutine initialize_zone_workspace
 
-  Subroutine finalize_evolve_solver
+  Subroutine finalize_zone_workspace
     !-----------------------------------------------------------------------------------------------
-    ! Release time-integrator (BE and BDF), NSE, and EOS workspaces before Jacobian teardown.
-    ! Remaining network/zone storage and controls stay available until finalize_evolve_data.
+    ! Release the NSE, abundance, condition and neutrino-history workspace initialized by
+    ! initialize_zone_workspace. Rates, solver state, network tables and controls remain available.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_abundances, Only: abundances_finalize
+    Use xnet_conditions, Only: conditions_finalize
+    Use xnet_nnu, Only: nnu_history_finalize
+    Use xnet_nse, Only: nse_finalize
+    Implicit None
+
+    Call nse_finalize
+    Call nnu_history_finalize
+    Call abundances_finalize
+    Call conditions_finalize
+
+    Return
+  End Subroutine finalize_zone_workspace
+
+  Subroutine finalize_rates_and_solver
+    !-----------------------------------------------------------------------------------------------
+    ! Release the BE/BDF, EOS, screening, flux and matching state initialized by
+    ! initialize_rates_and_solver. The API releases its dense Jacobian next; standalone leaves
+    ! Jacobian storage to process exit. Keep network tables, controls and GPU resources alive.
     !-----------------------------------------------------------------------------------------------
     Use xnet_eos, Only: eos_finalize
+    Use xnet_flux, Only: flux_finalize
     Use xnet_integrate_be, Only: be_finalize
     Use xnet_integrate_bdf, Only: bdf_finalize
-    Use xnet_nse, Only: nse_finalize
+    Use xnet_match, Only: match_finalize
+    Use xnet_screening, Only: screening_finalize
     Implicit None
 
     Call be_finalize
     Call bdf_finalize
-    Call nse_finalize
     Call eos_finalize
-
-    Return
-  End Subroutine finalize_evolve_solver
-
-  Subroutine finalize_evolve_data
-    !-----------------------------------------------------------------------------------------------
-    ! Release screening, flux, reaction-matching, weak/neutrino rate, reaction, nuclear, abundance,
-    ! thermodynamic condition, and control workspaces. Each module removes its device mappings
-    ! before deallocating host arrays; controls_finalize runs last because earlier finalizers
-    ! reference gpu_queue and control flags.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: nuclear_data_finalize
-    Use reaction_data, Only: reaction_data_finalize
-    Use xnet_abundances, Only: abundances_finalize
-    Use xnet_conditions, Only: conditions_finalize
-    Use xnet_controls, Only: controls_finalize
-    Use xnet_ffn, Only: ffn_finalize
-    Use xnet_flux, Only: flux_finalize
-    Use xnet_match, Only: match_finalize
-    Use xnet_nnu, Only: nnu_finalize
-    Use xnet_screening, Only: screening_finalize
-    Implicit None
-
     Call screening_finalize
     Call flux_finalize
     Call match_finalize
-    Call ffn_finalize
-    Call nnu_finalize
-    Call reaction_data_finalize
-    Call nuclear_data_finalize
-    Call abundances_finalize
-    Call conditions_finalize
-    Call controls_finalize
 
     Return
-  End Subroutine finalize_evolve_data
+  End Subroutine finalize_rates_and_solver
 
   !=================================================================================================
   ! Batch Reaction-Network Evolution

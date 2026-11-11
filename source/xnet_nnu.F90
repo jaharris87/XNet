@@ -56,6 +56,25 @@ Contains
     Return
   End Subroutine nnu_initialize
 
+  Subroutine nnu_history_finalize
+    !-----------------------------------------------------------------------------------------------
+    ! Release the histories allocated by nnu_initialize. Reaction tables remain available until
+    ! nnu_finalize releases the network data.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: gpu_queue
+    Implicit None
+
+    If ( allocated(tmevnu) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(tmevnu,fluxcms)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    If ( allocated(tmevnu) ) Deallocate (tmevnu)
+    If ( allocated(fluxcms) ) Deallocate (fluxcms)
+
+    Return
+  End Subroutine nnu_history_finalize
+
   Subroutine read_nnu_data(nnnu,data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads the neutrino cross sections [in units of 10^-42 cm^2]
@@ -339,10 +358,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
-    If ( allocated(tmevnu) ) Then
-      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(tmevnu,fluxcms)
-    EndIf
+    Call nnu_history_finalize
     If ( allocated(irl) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(irl,nuspec)
@@ -352,8 +368,6 @@ Contains
       !XDIR XDELETE(sigmanu,ltnu,fluxnu,rnnu)
     EndIf
     !XDIR XWAIT(gpu_queue)
-    If ( allocated(tmevnu) ) Deallocate (tmevnu)
-    If ( allocated(fluxcms) ) Deallocate (fluxcms)
     If ( allocated(ltnu) ) Deallocate (ltnu)
     If ( allocated(fluxnu) ) Deallocate (fluxnu)
     If ( allocated(irl) ) Deallocate (irl)

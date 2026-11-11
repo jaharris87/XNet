@@ -28,6 +28,7 @@ Program cleanup_consumer
   Call expect(xnet_success,'initialize')
   Call check(Allocated(y),'real XNet workspace allocated')
   Call check(init_calls == 1,'one GPU initialization')
+  Call check_zone_workspace_lifetime
   Allocate(x(Size(network%names),1),nse(Size(network%names)))
   x = 0.0_dp
   density = 1.0e7_dp
@@ -80,6 +81,32 @@ Program cleanup_consumer
   Call failed_initialization_checks()
   Print '(a)', 'GPU_CLEANUP_RETRY_CHECKS_PASSED'
 Contains
+  Subroutine check_zone_workspace_lifetime
+    ! Exercise the shared phases directly, independently of the API cleanup-state bookkeeping.
+    Use nuclear_data, Only: aa
+    Use xnet_conditions, Only: t
+    Use xnet_eos, Only: ytot
+    Use xnet_evolve, Only: initialize_zone_workspace, finalize_zone_workspace
+    Use xnet_nnu, Only: sigmanu, tmevnu, fluxcms
+    Use xnet_nse, Only: ynse
+    Implicit None
+    Real(dp) :: rate_sum
+
+    Call check(allocated(sigmanu),'reaction tables exist before workspace cleanup')
+    rate_sum = sum(sigmanu)
+    Call finalize_zone_workspace
+    Call check(.not. allocated(y) .and. .not. allocated(t),'zone composition and conditions released')
+    Call check(.not. allocated(tmevnu) .and. .not. allocated(fluxcms),'neutrino histories released')
+    Call check(.not. allocated(ynse),'NSE workspace released')
+    Call check(allocated(aa) .and. allocated(sigmanu),'network and reaction tables survive zone cleanup')
+    Call check(sum(sigmanu) == rate_sum,'reaction tables unchanged by zone cleanup')
+    Call check(allocated(ytot),'EOS state survives zone cleanup')
+    Call initialize_zone_workspace(2)
+    Call check(allocated(y) .and. allocated(t) .and. allocated(ynse),'zone workspace reinitialized')
+    Call check(size(tmevnu,1) == 2 .and. size(fluxcms,1) == 2,'history shape restored')
+    Return
+  End Subroutine check_zone_workspace_lifetime
+
   Subroutine failed_initialization_checks()
     Integer :: saved_init_calls, saved_finalize_calls, attempt
     saved_init_calls = init_calls

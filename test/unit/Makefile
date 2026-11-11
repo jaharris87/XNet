@@ -45,6 +45,8 @@ PARDISO_COMPONENT_EXE := $(SPARSE_BUILD_DIR)/pardiso/sparse_component_tests
 PARDISO_MKL_COMPONENT_EXE := $(SPARSE_BUILD_DIR)/pardiso_mkl/sparse_component_tests
 SPARSE_COMPONENT_EXES := $(DENSE_COMPONENT_EXE) $(MA48_COMPONENT_EXE) \
   $(PARDISO_COMPONENT_EXE) $(PARDISO_MKL_COMPONENT_EXE)
+SPARSE_OPENMP_EXES := $(addsuffix /sparse_component_tests,$(addprefix $(SPARSE_BUILD_DIR)/,ma48-omp pardiso-omp pardiso-mkl-omp))
+HOST_OPENMP_FLAGS ?= -fopenmp
 REAL_SPARSE_BUILD_DIR := $(BUILD_DIR)/real-sparse
 REAL_SPARSE_WORK_DIR := $(abspath $(BUILD_DIR)/real-sparse-work)
 REAL_MA48_COMPONENT_EXE := $(REAL_SPARSE_BUILD_DIR)/ma48/sparse_component_tests
@@ -149,7 +151,7 @@ BUILD_NET_OBJECTS := \
 .DEFAULT_GOAL := test
 
 .PHONY: test eos-test screening-test real-ma48-test real-pardiso-mkl-test clean production-xnet model-input-test \
-  surrogate-underflow-trap-test surrogate-verifier
+  surrogate-underflow-trap-test surrogate-verifier sparse-lifecycle-openmp-test
 
 test: eos-test screening-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
     $(CONTROLS_TEST_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
@@ -633,6 +635,22 @@ $(eval $(call sparse_component_rules,dense,support/dense_component_stubs.F90,$(X
 $(eval $(call sparse_component_rules,ma48,support/ma48_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_MA48.F90,TEST_MA48))
 $(eval $(call sparse_component_rules,pardiso,support/pardiso_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO.F90,TEST_PARDISO))
 $(eval $(call sparse_component_rules,pardiso_mkl,support/pardiso_mkl_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL))
+
+$(eval $(call sparse_component_rules,ma48-omp,support/ma48_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_MA48.F90,TEST_MA48))
+$(eval $(call sparse_component_rules,pardiso-omp,support/pardiso_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO.F90,TEST_PARDISO))
+$(eval $(call sparse_component_rules,pardiso-mkl-omp,support/pardiso_mkl_component_stubs.F90,$(XNET_DIR)/xnet_jacobian_PARDISO_MKL.F90,TEST_PARDISO_MKL))
+$(SPARSE_OPENMP_EXES): FFLAGS += $(HOST_OPENMP_FLAGS)
+$(SPARSE_OPENMP_EXES): F90FLAGS += -DXNET_OMP
+$(SPARSE_OPENMP_EXES): LDFLAGS += $(HOST_OPENMP_FLAGS)
+
+sparse-lifecycle-openmp-test: $(SPARSE_OPENMP_EXES)
+	@set -e; for exe in $(abspath $(SPARSE_OPENMP_EXES)); do \
+	  for workers in 2 4; do \
+	    work="$(SPARSE_WORK_DIR)/$$(basename $$(dirname $$exe))-$$workers"; \
+	    mkdir -p "$$work"; \
+	    (cd "$$work" && OMP_NUM_THREADS=$$workers OMP_DYNAMIC=FALSE "$$exe" workers .); \
+	  done; \
+	done
 
 # Real-solver targets are opt-in and require the corresponding external library.
 define real_sparse_component_rules

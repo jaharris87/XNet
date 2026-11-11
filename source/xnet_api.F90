@@ -413,7 +413,6 @@ Contains
     Use xnet_controls, Only: controls_finalize
     Use xnet_evolve, Only: finalize_zone_workspace, finalize_rates_and_solver
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
-    Use xnet_jacobian, Only: jacobian_finalize
     Implicit None
 
     ! Output arguments
@@ -432,7 +431,6 @@ Contains
       If ( ierr /= xnet_success ) Return
       Call finalize_zone_workspace
       Call finalize_rates_and_solver
-      Call jacobian_finalize
       Call finalize_network_data
       Call controls_finalize
       api_state = api_cleanup_pending

@@ -65,8 +65,6 @@ Contains
   !
   ! Cleanup reverses these groups:
   !   finalize_zone_workspace -> finalize_rates_and_solver -> finalize_network_data
-  ! The API releases its dense Jacobian after rates/solver cleanup and before network cleanup.
-  ! Standalone Jacobian storage lasts until process exit; some sparse providers lack finalizers.
   ! Each owner unmaps arrays before freeing them. The frontends finalize controls last and keep
   ! GPU resources alive until all workspace, solver and network cleanup is complete.
   !=================================================================================================
@@ -146,14 +144,14 @@ Contains
 
   Subroutine finalize_rates_and_solver
     !-----------------------------------------------------------------------------------------------
-    ! Release the BE/BDF, EOS, screening, flux and matching state initialized by
-    ! initialize_rates_and_solver. The API releases its dense Jacobian next; standalone leaves
-    ! Jacobian storage to process exit. Keep network tables, controls and GPU resources alive.
+    ! Release the integrator, EOS, screening, flux, matching and Jacobian state initialized by
+    ! initialize_rates_and_solver. Keep network tables, controls and GPU resources alive.
     !-----------------------------------------------------------------------------------------------
     Use xnet_eos, Only: eos_finalize
     Use xnet_flux, Only: flux_finalize
     Use xnet_integrate_be, Only: be_finalize
     Use xnet_integrate_bdf, Only: bdf_finalize
+    Use xnet_jacobian, Only: jacobian_finalize
     Use xnet_match, Only: match_finalize
     Use xnet_screening, Only: screening_finalize
     Implicit None
@@ -164,6 +162,7 @@ Contains
     Call screening_finalize
     Call flux_finalize
     Call match_finalize
+    Call jacobian_finalize
 
     Return
   End Subroutine finalize_rates_and_solver

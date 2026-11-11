@@ -268,8 +268,7 @@ Program net
 
   Deallocate (abund_desc,thermo_desc,denu)
 
-  ! Release shared evolution and network workspaces (sparse Jacobian backends have no finalizer
-  ! and release their solver storage at process exit).
+  ! Release the shared zone, solver and network state before controls and GPU/MPI shutdown.
   Call finalize_zone_workspace
   Call finalize_rates_and_solver
   Call finalize_network_data

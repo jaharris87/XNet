@@ -60,7 +60,7 @@ these areas, especially through shared module state.
 5. reads thermodynamic histories and initial abundances through
    `model_input_ascii`;
 6. evolves assigned zones and writes diagnostic or timestep output;
-7. releases non-Jacobian module storage, then accelerator and parallel resources.
+7. releases module and solver storage, then accelerator and parallel resources.
 
 The exact order and conditional calls live in `source/net.F90`.
 `xnet_controls_t` is the validated configuration value shared with programmatic
@@ -98,10 +98,9 @@ These calls run once during initialization. Cleanup reverses the three groups:
 
 1. `finalize_zone_workspace` releases NSE, abundance, condition and neutrino
    histories, retaining reaction tables and solver state.
-2. `finalize_rates_and_solver` releases integrator, EOS, screening, flux and
-   matching state. The API then releases its dense Jacobian. Standalone
-   Jacobian storage lasts until process exit because some sparse providers
-   lack finalizers.
+2. `finalize_rates_and_solver` releases integrator, EOS, screening, flux,
+   matching and Jacobian state. Each Jacobian provider releases its own storage;
+   PARDISO providers release library-owned factors before their Fortran arrays.
 3. `finalize_network_data` in `reaction_data` releases weak/neutrino reaction
    tables and the nuclear/reaction data. Each frontend calls `controls_finalize`
    afterwards, then releases GPU resources.

@@ -283,20 +283,54 @@ Contains
 
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared) copyin(iparm,dparm)
-#endif
-
-    ! Initialize work arrays
+    ! The permutation array is shared; only the solver controls are worker-private.
     Allocate (perm(msize))
     perm = 0
 
 #ifdef XNET_OMP
+    !$omp parallel default(shared) copyin(iparm,dparm)
     !$omp end parallel
 #endif
 
     Return
   End Subroutine read_jacobian_data
+
+  Subroutine jacobian_finalize
+    !-----------------------------------------------------------------------------------------------
+    ! Release oneMKL's internal memory for each batch slot before freeing the handle table and
+    ! XNet arrays. Unused (zero) handles need no release. Call outside parallel regions with the
+    ! initialized worker team; network tables and controls must still exist.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: zb_lo, zb_hi
+    Use xnet_util, Only: xnet_terminate
+    Implicit None
+
+    Integer :: ierr, izb
+    Real(dp), Allocatable :: b(:), x(:)
+
+    If ( .not. allocated(pt) ) Return
+
+#ifdef XNET_OMP
+    !$omp parallel default(shared) private(ierr,izb,b,x)
+#endif
+    phase = -1
+    Allocate (b(msize),x(msize))
+    b = 0.0_dp
+    Do izb = zb_lo, zb_hi
+      If ( .not. any(pt(:,izb) /= 0_i8) ) Cycle
+      Call xnet_pardiso(izb,tvals(:,izb),b,x,ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('oneMKL PARDISO memory release failed',ierr)
+    EndDo
+    Deallocate (b,x)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
+    Deallocate (pt,dydotdy,tvals,perm,ridx,cidx,sident,pb)
+    Deallocate (ns11,ns21,ns22,ns31,ns32,ns33,ns41,ns42,ns43,ns44)
+
+    Return
+  End Subroutine jacobian_finalize
 
   Subroutine jacobian_scale(diag,mult,mask_in)
     !-----------------------------------------------------------------------------------------------

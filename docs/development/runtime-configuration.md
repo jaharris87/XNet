@@ -127,6 +127,14 @@ escapes apostrophes. Output and input labels occupy records even though their te
 ignored. `nnucout` comes from columns 51-54 of its record; species names occupy
 five-character fields, fourteen per record, continuing on further records.
 
+Absent optional blocks use the table's defaults only when the file has fewer
+than 1000 physical records. With 1000 or more records, a missing optional title
+within the scan is rejected and requires manual migration. The v8 reader did
+not reach EOF in this case: its search left a success flag set and attempted
+to read controls from record 1001 instead of selecting defaults. The converter
+does not reproduce that fall-through behavior. A title found at record 1000
+remains supported, as do longer files with all optional titles inside the scan.
+
 `nzone` and `szone` are preserved. At most `nzone` file pairs are consumed. One
 pair at end of file expands to `1..nzone`, padded to the decimal width of
 `nzone`, independent of `szone`; the expanded A80 paths retain v8 truncation.

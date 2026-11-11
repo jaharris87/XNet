@@ -63,6 +63,11 @@ def remove_block(text, title):
     return re.sub(rf"^## {re.escape(title)}[^\n]*\n(?:(?!^##).*(?:\n|$))*", "", text, flags=re.M)
 
 
+def pad_records(text, count):
+    records = text.splitlines()
+    return "\n".join(records + [""] * (count - len(records))) + "\n"
+
+
 class ConversionTests(unittest.TestCase):
     def test_all_public_values(self):
         cases = list(public_cases())
@@ -87,6 +92,43 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(fields["t9nse"], "8.0")
         self.assertEqual(fields["ineutrino"], "0")
         assert_values(self, resolved_values(namelist), EXPECTED["optional_defaults"])
+
+    def test_optional_scan_limit(self):
+        for title in CONVERTER.DEFAULTS:
+            text = remove_block(BASE, title)
+            with self.subTest(title=title, records=999):
+                namelist, _ = CONVERTER.convert(pad_records(text, 999))
+                expected = EXPECTED["fixtures"]["tnsn_torch47"].copy()
+                for field in CONVERTER.SCALARS[title]:
+                    index = EXPECTED["fields"].index(field)
+                    expected[index] = EXPECTED["optional_defaults"][index]
+                assert_values(self, resolved_values(namelist), expected)
+            for count in (1000, 1001):
+                with self.subTest(title=title, records=count):
+                    with self.assertRaisesRegex(CONVERTER.ConversionError, "scan exhaustion.*" + title):
+                        CONVERTER.convert(pad_records(text, 1000) + ("1\n" if count == 1001 else ""))
+        # A matched title at record 1000 is supported, even with its value after the scan.
+        text = pad_records(remove_block(BASE, "NSE Initial Conditions"), 999)
+        fields = assignments(CONVERTER.convert(text + "## NSE Initial Conditions\n7.5\n")[0])
+        self.assertEqual(fields["t9nse"], "7.5")
+        # Long inputs remain supported when every optional title was found.
+        self.assertEqual(CONVERTER.convert(pad_records(BASE, 1001))[0], CONVERTER.convert(BASE)[0])
+
+    def test_scan_exhaustion_creates_no_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "control"
+            text = remove_block(BASE, "Neutrinos")
+            for count in (1000, 1001):
+                with self.subTest(records=count):
+                    output = Path(directory) / f"controls-{count}.nml"
+                    source.write_text(pad_records(text, 1000) + ("1\n" if count == 1001 else ""))
+                    command = [os.sys.executable, str(TOOL), str(source), "-o", str(output)]
+                    result = subprocess.run(command, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("scan exhaustion", result.stderr)
+                    self.assertIn("Neutrinos", result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertFalse(output.exists())
 
     def test_tokens_flags_and_szone(self):
         text = BASE.replace("1.00E-01", "+1.00000000000000001D-01", 1)
@@ -220,6 +262,13 @@ class FortranReaderTests(unittest.TestCase):
         text = text.replace("2000 timesteps", "  O'Brien, \"quoted\" ! / &", 1)
         expected = EXPECTED["optional_defaults"].copy()
         expected[0] = "  O'Brien, \"quoted\" ! / &"
+        assert_values(self, self.probe(text), expected)
+        text = pad_records(remove_block(BASE, "Neutrinos"), 999)
+        assert_values(self, self.probe(text), EXPECTED["fixtures"]["tnsn_torch47"])
+        text = pad_records(remove_block(BASE, "NSE Initial Conditions"), 999)
+        text += "## NSE Initial Conditions\n7.5\n"
+        expected = EXPECTED["fixtures"]["tnsn_torch47"].copy()
+        expected[EXPECTED["fields"].index("t9nse")] = "7.5"
         assert_values(self, self.probe(text), expected)
 
     def test_fixed_columns_tokens_and_szone(self):

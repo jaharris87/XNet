@@ -97,6 +97,11 @@ def convert(text):
     controls = {}
     for title, fields in SCALARS.items():
         if title not in blocks and title in DEFAULTS:
+            if len(lines) >= 1000:
+                raise ConversionError(
+                    f"unsupported scan exhaustion: {title} absent from the first 1000 records; "
+                    "v8 did not reach EOF to select defaults; migrate this input manually"
+                )
             tokens = DEFAULTS[title]
         else:
             index = block(title)

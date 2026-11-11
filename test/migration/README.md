@@ -12,7 +12,7 @@ controls reader, its serial support modules, and `controls_probe.F90` in a
 temporary directory. It reads and applies all 34 converted inputs and compares
 every consumed field with v8 results. No nuclear data are opened, preprocessed,
 or evolved. It also checks absent optional defaults and quoted descriptions.
-The first command needs only Python; the two Fortran checks are skipped.
+The first command needs only Python; the three Fortran checks are skipped.
 
 `v8_values.json` records consumed fields from the unmodified v8.0 reader at
 `b017bd657bb38105b9a61908aa51adb1361e5ba5`, compiled with GNU Fortran 16.2.0,
@@ -40,6 +40,9 @@ Focused checks cover optional defaults, fixed count/species columns and format
 reversion, A80 truncation, leading spaces and quoting, E/D numeric spelling,
 integer flags, nondefault `szone`, suffix expansion, surplus pairs, missing and
 ambiguous blocks, malformed/null/repetition scalars, partial pairs, unsupported
-HDF/non-ASCII input, stdout, and exclusive output creation. The converter
+HDF/non-ASCII input, stdout, and exclusive output creation. Scan-limit checks
+cover absent optional titles at 999 records (EOF defaults) versus 1000/1001
+records (unsupported v8 fall-through, rejected before creating output), a title
+at record 1000, and longer files containing all optional titles. The converter
 deliberately rejects several v8-accepted or undefined forms; the supported
 subset is described in the [migration guide](../../docs/development/runtime-configuration.md#converting-v8-ascii-controls).

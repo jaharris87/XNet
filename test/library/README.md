@@ -13,6 +13,23 @@ make -C test/library XNET_CONFIG=../../build/library-test/xnet-config.mk test
 Use a different caller `BUILD_DIR` when checking another production
 configuration, for example `BUILD_DIR=build-debug` for a debug archive.
 
+The normal `test` target also extracts `Program quickstart` from the Fortran
+fence in the [library guide](../../docs/development/embedding.md), compiles it
+with `xnet-config.mk`, and runs it with copies of the four documented alpha
+ASCII inputs. Missing, duplicate or incomplete examples fail selection. Its
+owned runs and process log are under `BUILD_DIR/quickstart-runs/`; the guide's
+source is the only implementation of the example. Run just this check with
+`make -C test/library XNET_CONFIG=... quickstart-test`.
+
+Both hosted GNU workflows reuse their serial build for this suite and build a
+separate GNU OPT dense/STARKILLER CPU `OPENMP_MODE=ON` archive for
+`host-batch-openmp-test`. Their component job keeps the full OPT suite, then
+runs the existing EOS and screening targets with `CMODE=DEBUG` in its separate
+mode directory. MPI, device execution, private providers and facility checks
+remain outside these jobs. Failure uploads add
+only library logs and JSON summaries from the two CI caller directories,
+capped at 1 MiB per file and 10 MiB overall, alongside the existing build logs.
+
 Python 3 is required; there are no additional Python packages. The production
 Starkiller EOS table must be present at its normal repository path. The tests
 use the real dense serial CPU archive and selected EOS; the numerical callers
@@ -205,6 +222,20 @@ make -C test/library XNET_CONFIG=../../build/library-batch-omp/xnet-config.mk \
   BUILD_DIR=build-batch-omp host-batch-openmp-test
 ```
 
+For Perlmutter NVIDIA/LibSci dense CPU checks, select `PE_ENV=NVIDIA` and
+`LAPACK_VER=LIBSCI` for the archive and `HOST_OPENMP_FLAGS=-mp=multicore` for
+the caller. Set the tested workaround in the launch environment before
+running the target inside the approved compute allocation:
+
+```sh
+export OMP_STACKSIZE=16M
+```
+
+The [Perlmutter stack guidance](../../docs/development/build-and-test.md#perlmutter-nvidia-cpu-openmp-stack-workaround)
+records the tested NVHPC/CPE/LibSci versions, the separate initial-thread
+process-stack limit and pending current-candidate checks. `16M` is a tested
+workaround value, not a measured minimum or a global default.
+
 The runner checks actual teams of two and four workers with dynamic teams
 disabled and no nested execution. Every worker makes repeated batch calls;
 logical inputs and reference results do not depend on worker assignment.
@@ -281,6 +312,8 @@ libraries, `GPU_BACKEND=HIP`, `GPU_LAPACK_VER=ROCM`, `OPENACC_MODE=OFF`, and
 `OPENMP_OL_MODE=ON`, with the installed `HIPFORT_DIR` and `ROCM_DIR`. These
 are build selections, not a claim that every compiler/library combination
 works. Consult the current facility instructions for modules and placement.
+These GPU recipes use `OPENMP_MODE=OFF`; the CPU worker-stack workaround
+above is not a GPU device-stack setting.
 
 The exported `XNET_CPPFLAGS` supplies `xnet_macros.fh`'s include directory and
 the archive's actual accelerator definitions. The caller Makefile uses those

@@ -211,6 +211,17 @@ alone does not configure those initialization regions. Preserve those default
 settings through finalization, which also enters internal parallel regions.
 XNet does not change the application's OpenMP settings.
 
+For Perlmutter NVIDIA/LibSci CPU OpenMP runs, also set this before starting
+the application:
+
+```sh
+export OMP_STACKSIZE=16M
+```
+
+See the [tested stack workaround](build-and-test.md#perlmutter-nvidia-cpu-openmp-stack-workaround)
+for its compiler/library configuration, separate process-stack limit and
+current-candidate validation limits.
+
 XNet allocates shared batch banks for `nthread*nzbatchmx` zones and gives each
 worker a disjoint range. It also allocates and frees worker NSE scratch inside
 internal parallel regions. Memory follows that full capacity even when calls
@@ -667,6 +678,8 @@ GPU library builds require `MATRIX_SOLVER=dense`, `MPI_MODE=OFF`,
 `OPENMP_MODE=OFF`, and either CUDA with `GPU_LAPACK_VER=CUBLAS` or HIP with
 `GPU_LAPACK_VER=ROCM`. Exactly one of `OPENACC_MODE` and `OPENMP_OL_MODE`
 must be `ON`. Make rejects other library selections, including MAGMA.
+The CPU OpenMP stack workaround above does not configure GPU device stacks;
+these GPU recipes disable XNet host OpenMP teams with `OPENMP_MODE=OFF`.
 
 For Perlmutter with its NVIDIA programming environment and CUDA selected,
 an OpenACC build is:

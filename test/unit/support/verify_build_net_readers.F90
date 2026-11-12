@@ -3,8 +3,7 @@ Program verify_build_net_readers
   Use reaction_data, Only: ires1, ires2, ires3, ires4, irev1, irev2, iwk1, iwk2, &
     & mu1, mu2, n1i, n2i, n10, n11, n20, n21, n22, nan, nreac, q1, q2, rc1, rc2, &
     & read_reaction_data
-  Use xnet_controls, Only: idiag, iheat, iscrn, iweak0, nzevolve, nzbatchmx, szbatch, tid, &
-    & zb_hi, zb_lo
+  Use xnet_controls, Only: idiag, iheat, iscrn, iweak0, nzbatchmx, szbatch, tid
   Use xnet_jacobian, Only: cidx, l1s, l2s, l3s, l4s, lval, ns11, ns21, ns22, pb, &
     & read_jacobian_data, ridx
   Use xnet_match, Only: descx, ifl1, ifl2, iwflx, mflx, nflx, qflx, &
@@ -28,11 +27,11 @@ Program verify_build_net_readers
   iscrn = 0
   iweak0 = 1
   nzbatchmx = 1
-  nzevolve = 1
+  nzbatchmx = 1
   szbatch = 1
   tid = 1
-  zb_lo = 1
-  zb_hi = 1
+
+
 
   Call read_nuclear_data(trim(data_dir),data_desc)
   Call read_reaction_data(trim(data_dir))

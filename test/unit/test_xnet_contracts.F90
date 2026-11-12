@@ -303,7 +303,7 @@ Contains
   End Subroutine test_y_moment_vector
 
   Subroutine test_nnu_lifetimes(error)
-    Use xnet_controls, Only: nzevolve
+    Use xnet_controls, Only: nzbatchmx
     Use xnet_nnu, Only: nnu_initialize, nnu_history_finalize, nnu_finalize, &
       & tmevnu, fluxcms, sigmanu, ntnu
     Implicit None
@@ -312,8 +312,8 @@ Contains
     Integer :: saved_nzevolve
     Logical :: histories_released, rates_preserved, histories_recreated, all_released
 
-    saved_nzevolve = nzevolve
-    nzevolve = 2
+    saved_nzevolve = nzbatchmx
+    nzbatchmx = 2
     Call nnu_finalize
     Allocate (sigmanu(1,ntnu))
     sigmanu = 7.0_dp
@@ -329,7 +329,7 @@ Contains
     Call nnu_finalize
     all_released = .not. allocated(tmevnu) .and. .not. allocated(fluxcms) .and. .not. allocated(sigmanu)
     Call nnu_finalize
-    nzevolve = saved_nzevolve
+    nzbatchmx = saved_nzevolve
 
     Call check(error,histories_released)
     If ( allocated(error) ) Return
@@ -464,14 +464,13 @@ Contains
 
   Subroutine initialize_zone_fixture
     Use xnet_conditions, Only: nh, rhoh, t9h, th
-    Use xnet_controls, Only: lzactive, nzevolve, zb_hi, zb_lo
+    Use xnet_controls, Only: lzactive, nzbatchmx
     Implicit None
 
     Integer :: zone
 
-    zb_lo = 1
-    zb_hi = 3
-    nzevolve = 3
+
+    nzbatchmx = 3
     If ( allocated(lzactive) ) Deallocate(lzactive)
     Allocate(lzactive(3))
     lzactive = .True.

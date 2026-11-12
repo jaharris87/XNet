@@ -8,7 +8,7 @@
 !
 ! Concurrency model:
 ! - CPU (OPENMP_MODE=ON): The host application owns the outer OpenMP parallel loop over batches.
-!   Each fixed-team worker owns a disjoint preallocated batch bank (zb_lo:zb_hi) and threadprivate
+!   Each fixed-team worker owns a disjoint preallocated workspace with local lanes 1:nzbatchmx, including
 !   NSE scratch. Initialization and finalization must occur outside OpenMP parallel regions.
 ! - GPU (GPU_MODE=ON, OPENMP_MODE=OFF): Host API calls are serialized; the application may supply
 !   borrowed streams/handles via xnet_gpu_t and evolve device-resident arrays via data_on_device.
@@ -232,8 +232,7 @@ Contains
     ! Timing and status always return on the host.
     ! Fatal burn statuses require shutdown after workers join; no physical batch result is valid.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: ktot, lzactive, nzbatch, szbatch, &
-      & zb_hi, zb_lo, zone_work=>zone_id
+    Use xnet_controls, Only: ktot, lzactive, nzbatch, szbatch, nzbatchmx, zone_work=>zone_id
     Use xnet_gpu, Only: gpu_check_device, stream, stream_sync
     Implicit None
 
@@ -255,7 +254,7 @@ Contains
     Logical, Optional, Intent(in) :: data_on_device
 
     ! Local variables
-    Integer :: nz, izone, izb, kstep, evolve_status, failed_zone
+    Integer :: nz, izb, kstep, evolve_status, failed_zone
     Type(xnet_timing_t) :: before
     Logical :: on_device
     Integer :: stream_status
@@ -314,10 +313,10 @@ Contains
     before = get_timing()
     szbatch = 1
     nzbatch = count(active)
-    lzactive(zb_lo:zb_hi) = .false.
-    lzactive(zb_lo:zb_lo+nz-1) = active
-    zone_work(:,zb_lo:zb_hi) = 0
-    zone_work(:,zb_lo:zb_lo+nz-1) = zone_id
+    lzactive = .false.
+    lzactive(1:nz) = active
+    zone_work = 0
+    zone_work(:,1:nz) = zone_id
 
     ! 5. Stage, evolve and collect in the requested memory space
     Call evolve_batch(dt_s,on_device,active,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
@@ -325,16 +324,15 @@ Contains
     If ( ierr /= xnet_success ) Return
 
     ! Record XNet counters for active zones.
-    Do izb = zb_lo, zb_lo+nz-1
-      izone = izb + szbatch - zb_lo
-      If ( active(izone) ) counters(:,izone) = ktot(:,izb)
+    Do izb = 1, nz
+      If ( active(izb) ) counters(:,izb) = ktot(:,izb)
     EndDo
 
     ! 6. Record per-call timing differences and format any numerical failure diagnostic
     If ( evolve_status == 0 .and. present(max_steps_taken) ) max_steps_taken = kstep
     timing = get_timing_since(before)
     If ( evolve_status /= 0 ) Then
-      Call format_burn_failure(evolve_status,failed_zone+szbatch-zb_lo,zone_id,ierr,message)
+      Call format_burn_failure(evolve_status,failed_zone,zone_id,ierr,message)
     EndIf
 
     Return
@@ -646,7 +644,7 @@ Contains
   Subroutine evolve_batch(dt_s,on_device,active,density,temperature,electron_fraction,mass_fraction,restart_dt_s,neutrino_loss, &
     & aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Prepare the current worker bank, evolve once, and return results in the requested memory space.
+    ! Prepare the current worker workspace, evolve once, and return results in the requested memory space.
     ! The caller has validated inputs and selected at least one active zone.
     ! Conditional offload keeps host values authoritative even when stale device mappings exist.
     !-----------------------------------------------------------------------------------------------
@@ -654,7 +652,7 @@ Contains
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
     Use xnet_conditions, Only: t, t9, rho, ye, tdel, tdel_old, nt, nstart, &
       & tstart, tstop, tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: lzactive, iheat, ktot, gpu_queue, szbatch, zb_lo, zb_hi
+    Use xnet_controls, Only: lzactive, iheat, ktot, gpu_queue, nzbatchmx
     Use xnet_evolve, Only: full_net
     Use xnet_output, Only: close_output_files
     Implicit None
@@ -669,7 +667,7 @@ Contains
 
     ! Local variables
     Real(dp), Allocatable :: loss_work(:)
-    Integer :: nz, izone, izb, k
+    Integer :: nz, izb, k
 
     nz = size(active)
     kstep = 0
@@ -683,8 +681,8 @@ Contains
     If ( ierr /= xnet_success ) Return
 
     ! full_net also checks the stop time on the host.
-    tstop(zb_lo:zb_hi) = dt_s
-    Allocate (loss_work(zb_lo:zb_hi))
+    tstop = dt_s
+    Allocate (loss_work(nzbatchmx))
 
     If ( on_device ) Then
       ! Keep loss_work mapped across full_net (including denu cleanup) and result collection.
@@ -695,17 +693,14 @@ Contains
       !XDIR XDEVICE(lzactive)
     EndIf
 
-    ! Follow the standalone convention: izb indexes workspace, izone indexes input arrays.
-    ! The API sets szbatch = 1, so izone is the caller-array column within this batch.
+    ! Local lanes index both the calling worker workspace and the caller-array columns.
     ! Reset inactive and unused zones without reading their scientific inputs.
     ! XIF(on_device) selects the device or host copy of every array in these loops.
     !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
-    !XDIR XPRIVATE(izone) &
     !XDIR XPRESENT(lzactive,aa,ystart,xext,aext,zext,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart) &
     !XDIR XPRESENT(nh,th,t9h,rhoh,yeh,tdel,nt,t,t9,rho,ye,y) &
     !XDIR XPRESENT(density,temperature,electron_fraction,mass_fraction,restart_dt_s)
-    Do izb = zb_lo, zb_hi
-      izone = izb + szbatch - zb_lo
+    Do izb = 1, nzbatchmx
       xext(izb) = 0.0_dp
       aext(izb) = 1.0_dp
       zext(izb) = 0.0_dp
@@ -721,17 +716,17 @@ Contains
       Do k = 1, ny
         ystart(k,izb) = 0.0_dp
       EndDo
-      If ( izone <= nz ) Then
+      If ( izb <= nz ) Then
         If ( lzactive(izb) ) Then
           !XDIR XLOOP_SERIAL(1)
           Do k = 1, ny
-            ystart(k,izb) = mass_fraction(k,izone) / aa(k)
+            ystart(k,izb) = mass_fraction(k,izb) / aa(k)
           EndDo
-          t9start(izb) = temperature(izone) * kelvin_to_gk
-          rhostart(izb) = density(izone)
-          yestart(izb) = electron_fraction(izone)
+          t9start(izb) = temperature(izb) * kelvin_to_gk
+          rhostart(izb) = density(izb)
+          yestart(izb) = electron_fraction(izb)
           ! Preserve the CHIMERA startup hint convention without exposing its sign encoding.
-          tdelstart(izb) = -restart_dt_s(izone)
+          tdelstart(izb) = -restart_dt_s(izb)
         EndIf
       EndIf
       ! Constant conditions: both history endpoints carry the start values.
@@ -758,15 +753,13 @@ Contains
 
     If ( present(aux_x) ) Then
       !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
-      !XDIR XPRIVATE(izone) &
       !XDIR XPRESENT(lzactive,xext,aext,zext,aux_x,aux_a,aux_z)
-      Do izb = zb_lo, zb_lo+nz-1
-        izone = izb + szbatch - zb_lo
+      Do izb = 1, nz
         If ( .not. lzactive(izb) ) Cycle
-        If ( aux_x(izone) > 0.0_dp ) Then
-          xext(izb) = aux_x(izone)
-          aext(izb) = aux_a(izone)
-          zext(izb) = aux_z(izone)
+        If ( aux_x(izb) > 0.0_dp ) Then
+          xext(izb) = aux_x(izb)
+          aext(izb) = aux_a(izb)
+          zext(izb) = aux_z(izb)
         EndIf
       EndDo
     EndIf
@@ -791,20 +784,18 @@ Contains
         !XDIR XHOST(y,t9,ye,tdel_old)
       EndIf
       !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
-      !XDIR XPRIVATE(izone) &
       !XDIR XPRESENT(lzactive,aa,y,t9,ye,tdel_old,loss_work) &
       !XDIR XPRESENT(temperature,electron_fraction,mass_fraction,restart_dt_s,neutrino_loss)
-      Do izb = zb_lo, zb_lo+nz-1
-        izone = izb + szbatch - zb_lo
+      Do izb = 1, nz
         If ( .not. lzactive(izb) ) Cycle
         !XDIR XLOOP_SERIAL(1)
         Do k = 1, ny
-          mass_fraction(k,izone) = y(k,izb) * aa(k)
+          mass_fraction(k,izb) = y(k,izb) * aa(k)
         EndDo
-        If ( iheat > 0 ) temperature(izone) = t9(izb) * gk_to_kelvin
-        electron_fraction(izone) = ye(izb)
-        restart_dt_s(izone) = tdel_old(izb)
-        neutrino_loss(izone) = loss_work(izb)
+        If ( iheat > 0 ) temperature(izb) = t9(izb) * gk_to_kelvin
+        electron_fraction(izb) = ye(izb)
+        restart_dt_s(izb) = tdel_old(izb)
+        neutrino_loss(izb) = loss_work(izb)
       EndDo
     EndIf
 
@@ -1223,11 +1214,11 @@ Contains
   Subroutine open_burn_output(ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Open per-call binary (itsout>=1) and ASCII (itsout>=2) time-series files for active zones
-    ! in the current worker bank. Reserve a unique process-wide call number under a short
+    ! in the current worker workspace. Reserve a unique process-wide call number under a short
     ! critical region while keeping file writes and evolution outside the critical region.
     ! Each call has its own local 0..dt_s history. Zone numbers distinguish repeated diagnostic IDs.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: itsout, lzactive, bin_file_base, ev_file_base, zone_id, szbatch, zb_lo, zb_hi
+    Use xnet_controls, Only: itsout, lzactive, bin_file_base, ev_file_base, zone_id, nzbatchmx
     Use xnet_flux, Only: flx
     Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
     Implicit None
@@ -1245,7 +1236,7 @@ Contains
 
     ierr = xnet_success
     message = ' '
-    If ( itsout <= 0 .or. .not. any(lzactive(zb_lo:zb_hi)) ) Return
+    If ( itsout <= 0 .or. .not. any(lzactive) ) Return
     ierr = xnet_invalid
 
     ! Reserve one number for this call; do not serialize file writes or evolution.
@@ -1262,9 +1253,9 @@ Contains
     EndIf
 
     ! Open ts/ev files for each active zone.
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( .not. lzactive(izb) ) Cycle
-      Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_lane',izb+szbatch-zb_lo
+      Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_lane',izb
       filename = trim(bin_file_base)//trim(suffix)
 
       ! Identify the caller zone in the existing input label; keep the record layout.
@@ -1288,7 +1279,7 @@ Contains
     EndIf
 
     ! The initial snapshot has no reaction flux; do not reuse final flux from the preceding burn.
-    flx(:,zb_lo:zb_hi) = 0.0_dp
+    flx = 0.0_dp
     ierr = xnet_success
 
     Return

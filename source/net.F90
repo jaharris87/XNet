@@ -20,10 +20,9 @@ Program net
   Use xnet_abundances, Only: ystart, y, xext, zext, aext
   Use xnet_conditions, Only: t, tdel, t9, rho, ye, nt, nstart, tstart, tstop, tdelstart, &
     & t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
-  Use xnet_controls, Only: idiag, iprocess, itsout, &
-    & szone, nzone, zone_id, kstmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
-    & lun_diag, lun_stdout, tid, gpu_queue, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
-    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls, controls_finalize
+  Use xnet_controls, Only: idiag, iprocess, itsout, szone, nzone, zone_id, kstmx, ev_file_base, bin_file_base, &
+    & thermo_file, inab_file, lun_diag, lun_stdout, tid, gpu_queue, nthread, nzbatchmx, nzbatch, szbatch, lzactive, &
+    & myid, nproc, read_controls, write_controls, controls_finalize
   Use xnet_evolve, Only: full_net, initialize_evolve, finalize_evolve
   Use xnet_flux, Only: flx_int
   Use xnet_gpu, Only: gpu_init, gpu_finalize
@@ -125,13 +124,6 @@ Program net
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
   Call initialize_evolve(data_dir,nhmx)
 
-  Allocate (abund_desc(nzevolve),thermo_desc(nzevolve),denu(nzevolve))
-  denu = 0.0_dp
-
-  !XDIR XENTER_DATA XASYNC(gpu_queue) &
-  !XDIR XCOPYIN(denu)
-  !XDIR XWAIT(gpu_queue)
-
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
@@ -142,13 +134,20 @@ Program net
 
 #ifdef XNET_OMP
   !$omp parallel default(shared) &
-  !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
+  !$omp   private(dyf,flx_diff,abund_desc,thermo_desc,denu,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
   !$omp   copyin(timer_setup)
 #endif
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
   Allocate (dyf(0:ny),flx_diff(ny))
+  Allocate (abund_desc(nzbatchmx),thermo_desc(nzbatchmx),denu(nzbatchmx))
+  denu = 0.0_dp
+
+  !XDIR XENTER_DATA XASYNC(gpu_queue) &
+  !XDIR XCOPYIN(denu)
+  !XDIR XWAIT(gpu_queue)
+
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
@@ -163,13 +162,13 @@ Program net
     nzbatch = min(nzone - szbatch + 1, nzbatchmx)
 
     ! Active zone mask
-    Do izb = zb_lo, zb_hi
-      lzactive(izb) = ( izb <= zb_offset + nzbatch )
+    Do izb = 1, nzbatchmx
+      lzactive(izb) = ( izb <= nzbatch )
     EndDo
 
     ! Read thermodynamic trajectories and interpolate conditions at tstart
     Call read_thermo_file(thermo_file,thermo_desc,ierr)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( lzactive(izb) ) Then
         Call t9rhofind(0,tstart(izb),nstart(izb),t9start(izb),rhostart(izb), &
           & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
@@ -178,7 +177,7 @@ Program net
 
     ! Load initial abundances (from file or NSE) and initialize zone state
     Call load_initial_abundances(inab_file,abund_desc,ierr)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       tdel(izb)      = 0.0_dp
       nt(izb)        = nstart(izb)
       t(izb)         = tstart(izb)
@@ -191,9 +190,9 @@ Program net
 
     ! Open per-zone binary and ASCII time-series output files when requested
     If ( itsout > 0 ) Then
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( lzactive(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_stdout,"(a,i6,a,i2,2(a,es10.3))") &
             & 'Max Step',kstmx,' IDiag=',idiag,' Start Time',tstart(izb),' Stop Time',tstop(izb)
 
@@ -225,13 +224,13 @@ Program net
     timer_setup = timer_setup + stop_timer
 
     ! Evolve abundances from tstart to tstop
-    Call full_net(kstep,denu(zb_lo:zb_hi))
+    Call full_net(kstep,denu)
 
     ! Compare integrated reaction fluxes against net abundance changes when idiag >= 3
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(y)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( lzactive(izb) ) Then
           dyf = 0.0_dp
           Do k = 1, mflx
@@ -250,6 +249,12 @@ Program net
   EndDo
   !$omp end do
 
+  !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+  !XDIR XDELETE(denu)
+  !XDIR XWAIT(gpu_queue)
+
+  Deallocate (abund_desc,thermo_desc,denu)
+
   Deallocate (dyf,flx_diff)
   If ( idiag >= 0 ) Close(lun_diag)
 #ifdef XNET_OMP
@@ -259,12 +264,6 @@ Program net
   !-------------------------------------------------------------------------------------------------
   ! 6. Release workspaces, GPU handles, and MPI resources
   !-------------------------------------------------------------------------------------------------
-  !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-  !XDIR XDELETE(denu)
-  !XDIR XWAIT(gpu_queue)
-
-  Deallocate (abund_desc,thermo_desc,denu)
-
   ! Release the shared zone, solver and network state before controls and GPU/MPI shutdown.
   Call finalize_evolve
   Call finalize_network_data

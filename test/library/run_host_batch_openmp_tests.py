@@ -186,6 +186,7 @@ def main() -> None:
     parser.add_argument("--work-dir", type=Path, default=Path("build/host-batch-runs"))
     parser.add_argument("--serial-only", action="store_true", help="safe fixture check with an old OPENMP_MODE=OFF archive")
     parser.add_argument("--histories", action="store_true", help="also compare complete itsout=2 SN160/BDF histories")
+    parser.add_argument("--storage-consumer", type=Path, help="optional production worker-allocation probe")
     args = parser.parse_args()
     root, exe, config, setup = [path.resolve(strict=True) for path in (args.root, args.consumer, args.library_config, args.net_setup)]
     args.work_dir.mkdir(parents=True, exist_ok=True)
@@ -258,6 +259,15 @@ def main() -> None:
         (case / networks[network].name).symlink_to(networks[network], target_is_directory=True)
         (case / table.name).symlink_to(table)
         return case
+    if args.storage_consumer is not None:
+        storage_consumer = args.storage_consumer.resolve(strict=True)
+        for network in networks:
+            for capacity in (4, 16):
+                for workers in (1, 2, 4):
+                    case = case_dir(f"storage-{network}-{capacity}-{workers}", network)
+                    run([str(storage_consumer), networks[network].name, str(capacity)], case,
+                        case / "storage.log", threads=workers)
+        print("PASS worker storage: alpha/SN160, capacity 4/16, 1/2/4 workers, repeated and idle-worker cleanup", flush=True)
     owners = {}
     def compare(left, right, label: str) -> None:
         diff = differences(left, right)

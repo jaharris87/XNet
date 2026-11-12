@@ -7,7 +7,7 @@
 !    Shared by the standalone driver (net.F90) and the library API (xnet_api.F90) to map configured
 !    ASCII output species names to network indices, open per-zone unformatted binary (itsout >= 1)
 !    and condensed ASCII (itsout >= 2) output files, write their header records, and close open
-!    units across the batch bank of the calling worker (zb_lo:zb_hi).
+!    units across the batch bank of the calling worker (1:nzbatchmx).
 ! 2. Per-Timestep and Final Evolution Output (ts_output, final_output):
 !    Called by full_net to evaluate reaction fluxes, record binary and ASCII time-series snapshots,
 !    and write integrated flux, final abundance, work-counter, and timing summaries to lun_diag.
@@ -78,8 +78,8 @@ Contains
     ! ierr is supplied, open failures return a nonzero status instead of raising a runtime error.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, zz, aa
-    Use xnet_controls, Only: lun_ts, descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, &
-      & tolm, tolc, yacc, ymin, tdel_maxmult, iheat, isolv
+    Use xnet_controls, Only: lun_ts, descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, &
+      & tdel_maxmult, iheat, isolv
     Use xnet_flux, Only: ifl_orig, ifl_term
     Use xnet_match, Only: mflx
     Implicit None
@@ -157,16 +157,16 @@ Contains
   Subroutine close_output_files
     !-----------------------------------------------------------------------------------------------
     ! Close any open binary (lun_ts) and ASCII (lun_ev) time-series units in the workspace bank
-    ! of the calling worker (zb_lo:zb_hi) and reset their unit slots to zero.
+    ! of the calling worker (1:nzbatchmx) and reset their unit slots to zero.
     ! Zero marks an unopened slot; valid NEWUNIT numbers are negative.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_ts, lun_ev, zb_lo, zb_hi
+    Use xnet_controls, Only: lun_ts, lun_ev, nzbatchmx
     Implicit None
 
     ! Local variables
     Integer :: izb
 
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( lun_ts(izb) /= 0 ) Close(lun_ts(izb))
       If ( lun_ev(izb) /= 0 ) Close(lun_ev(izb))
       lun_ts(izb) = 0
@@ -195,8 +195,8 @@ Contains
     Use nuclear_data, Only: ny, aa, nname
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: rho, t, t9, tdel
-    Use xnet_controls, Only: nnucout, nnucout_string, idiag, inucout, itsout, kmon, lun_diag, &
-      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive, gpu_queue
+    Use xnet_controls, Only: nnucout, nnucout_string, idiag, inucout, itsout, kmon, lun_diag, lun_ev, lun_stdout, &
+      & lun_ts, szbatch, tid, nzbatchmx, lzactive, gpu_queue
     Use xnet_flux, Only: flx, flx_int, flux
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_output
@@ -205,10 +205,10 @@ Contains
 
     ! Input arguments
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: enuc(zb_lo:zb_hi), edot(zb_lo:zb_hi), sqnu(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: enuc(1:nzbatchmx), edot(1:nzbatchmx), sqnu(1:nzbatchmx)
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Character(40) :: ev_format
@@ -216,9 +216,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -230,8 +230,8 @@ Contains
       If ( kstep > 0 ) Then
         Call flux(mask_in = mask_in)
       Else
-        flx(:,zb_lo:zb_hi)     = 0.0_dp
-        flx_int(:,zb_lo:zb_hi) = 0.0_dp
+        flx     = 0.0_dp
+        flx_int = 0.0_dp
       EndIf
     EndIf
 
@@ -241,9 +241,9 @@ Contains
       ev_format = '(i4,1es15.8,2es10.3,3es10.2,2i2)'
       If ( nnucout > 0 ) ev_format = '(i4,1es15.8,2es10.3,3es10.2,'//trim(nnucout_string)//'es9.2,2i2)'
 
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
 
           ! itsout >= 1: unformatted binary state and flux snapshot
           Write(lun_ts(izb)) kstep,t(izb),t9(izb),rho(izb),sqnu(izb),tdel(izb), &
@@ -254,9 +254,9 @@ Contains
             & kstep,t(izb),t9(izb),rho(izb),edot(izb),sqnu(izb),tdel(izb), &
             & (aa(inucout(i))*y(inucout(i),izb),i=1,nnucout),(kmon(j,izb),j=1,2)
 
-          ! itsout >= 3: screen progress line
+          ! itsout >= 3: progress, preserving the legacy worker-slot label before the input-zone ordinal
           If ( itsout >= 3 ) Write(lun_stdout,"(3i5,4es12.4,2i3)") &
-            & izb,izone,kstep,t(izb),tdel(izb),t9(izb),rho(izb),(kmon(j,izb),j=1,2)
+            & (tid-1)*nzbatchmx+izb,izone,kstep,t(izb),tdel(izb),t9(izb),rho(izb),(kmon(j,izb),j=1,2)
 
           ! itsout >= 4: full mass-fraction table to diagnostic log
           If ( itsout >= 4 .and. idiag >= 0 ) Write(lun_diag,"(4(a5,es14.7,1x))") &
@@ -286,7 +286,7 @@ Contains
     Use nuclear_data, Only: ny, nname, aa
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: t, t9, rho, ye, tstop
-    Use xnet_controls, Only: ktot, lun_diag, szbatch, zb_lo, zb_hi, lzactive, idiag, gpu_queue
+    Use xnet_controls, Only: ktot, lun_diag, szbatch, lzactive, idiag, gpu_queue, nzbatchmx
     Use xnet_flux, Only: flx_int
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_parallel, Only: parallel_IOProcessor
@@ -298,7 +298,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer, Parameter :: itimer_reset = 0
@@ -307,9 +307,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
 
     start_timer = xnet_wtime()
@@ -317,9 +317,9 @@ Contains
 
     ! Write time-integrated reaction fluxes to diagnostic output
     If ( idiag >= 1 ) Then
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           iflx_mx = maxloc(abs(flx_int(:,izb)),dim=1)
           Write(lun_diag,"(2x,a8,i5,es11.3,9a5)") 'Flux Max', &
             & iflx_mx,flx_int(iflx_mx,izb),(nname(nflx(i,iflx_mx)),i=1,4),' <-> ',(nname(nflx(i,iflx_mx)),i=5,8)
@@ -333,9 +333,9 @@ Contains
     If ( idiag >= 0 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(t,t9,rho,ye,y)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,2i6,5es14.7)") &
             & 'End',izone,kstep,tstop(izb),t(izb),t9(izb),rho(izb),ye(izb)
           Write(lun_diag,"(4(a5,es14.7,1x))") (nname(i),aa(i)*y(i,izb),i=1,ny)
@@ -351,9 +351,9 @@ Contains
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ktot)
       Write(lun_diag,"(a10,a5,5a10)") 'Counters: ','Zone','TS','NR','Jacobian','Deriv','CrossSect'
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(10x,i5,5i10)") izone,(ktot(i,izb),i=1,5)
         EndIf
       EndDo

@@ -3,7 +3,7 @@ Module xnet_controls
   Use, Intrinsic :: iso_fortran_env, Only: error_unit
   Implicit None
   Integer :: idiag = 0, iheat = 1, iscrn = 1, lun_diag = error_unit
-  Integer :: nzevolve = 1, szbatch = 1, tid = 1, zb_lo = 1, zb_hi = 1, gpu_queue = 1
+  Integer :: nzbatchmx = 1, szbatch = 1, tid = 1, gpu_queue = 1
   Logical, Target :: lzactive(1) = .True.
 End Module xnet_controls
 

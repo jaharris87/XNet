@@ -50,6 +50,10 @@ Module nuclear_data
     Module Procedure benuc_vector
   End Interface benuc
 
+#ifdef XNET_OMP
+  !$omp threadprivate(gg,dlngdt9)
+#endif
+
 Contains
 
   Subroutine index_from_name(nuc_name,inuc)
@@ -123,19 +127,19 @@ Contains
     ! distribution.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: epmev, avn
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
+    Real(dp), Intent(in) :: y(ny,1:nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: enb(zb_lo:zb_hi) ! Binding energy [ergs g^{-1}]
-    Real(dp), Intent(inout) :: enm(zb_lo:zb_hi) ! Mass excess [ergs g^{-1}]
+    Real(dp), Intent(inout) :: enb(1:nzbatchmx) ! Binding energy [ergs g^{-1}]
+    Real(dp), Intent(inout) :: enm(1:nzbatchmx) ! Mass excess [ergs g^{-1}]
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Real(dp) :: ztot, btot
@@ -143,9 +147,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -155,7 +159,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,y,enb,enm,zz,be) &
     !XDIR XPRIVATE(ztot,btot)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
 
         ztot = 0.0
@@ -186,16 +190,16 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, lun_diag, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: i, ii, k, izb
@@ -203,9 +207,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -215,7 +219,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,t9i,gg,g,dlngdt9) &
     !XDIR XPRIVATE(ii,rdt9)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
 
         !XDIR XLOOP_SERIAL(1)
@@ -269,7 +273,7 @@ Contains
     EndDo
 
     !If ( idiag >= 1 ) Then
-    !  Do izb = zb_lo, zb_hi
+    !  Do izb = 1, nzbatchmx
     !    If ( mask(izb) ) Then
     !      Write(lun_diag,"(a5,i3,es14.7)") 'PartF',ii,t9(izb)
     !      Write(lun_diag,"(5(i4,es12.4))") (i, gg(i,izb), i=1,ny)
@@ -461,7 +465,7 @@ Contains
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
-    Use xnet_controls, Only: iheat, nzevolve, tid, gpu_queue
+    Use xnet_controls, Only: iheat, tid, gpu_queue, nzbatchmx
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
@@ -568,13 +572,23 @@ Contains
     mm = aa / avn! + mex(:)*epmev/(clt*clt)
     !mm(:) = zz(:)*(m_p+m_e) + nn(:)*m_n - be(:)*epmev/(clt*clt)
 
-    Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
-
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(aa,zz,nn,be,mex,mm,ia,iz,in) &
     !XDIR XCOPYIN(zz2,zz53,zzi,zseq,zseq53,zseqi) &
-    !XDIR XCOPYIN(it9i,t9i,g,angm) &
+    !XDIR XCOPYIN(it9i,t9i,g,angm)
+    !XDIR XWAIT(gpu_queue)
+
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    Allocate (gg(0:ny,nzbatchmx),dlngdt9(0:ny,nzbatchmx))
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(gg,dlngdt9)
+    !XDIR XWAIT(gpu_queue)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
 
     Return
   End Subroutine read_nuclear_data
@@ -669,10 +683,23 @@ Contains
     ! Release mappings established by read_nuclear_data before CPU allocations.
     Use xnet_controls, Only: gpu_queue
     Implicit None
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( Allocated(gg) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(gg,dlngdt9)
+      !XDIR XWAIT(gpu_queue)
+      Deallocate (gg,dlngdt9)
+    EndIf
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
     If ( Allocated(aa) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(aa,zz,nn,be,mex,mm,ia,iz,in) &
-      !XDIR XDELETE(zz2,zz53,zzi,zseq,zseq53,zseqi,it9i,t9i,g,angm,gg,dlngdt9)
+      !XDIR XDELETE(zz2,zz53,zzi,zseq,zseq53,zseqi,it9i,t9i,g,angm)
       !XDIR XWAIT(gpu_queue)
     EndIf
     If ( Allocated(nname) ) Deallocate (nname)
@@ -694,9 +721,7 @@ Contains
     If ( Allocated(it9i) ) Deallocate (it9i)
     If ( Allocated(t9i) ) Deallocate (t9i)
     If ( Allocated(g) ) Deallocate (g)
-    If ( Allocated(gg) ) Deallocate (gg)
     If ( Allocated(angm) ) Deallocate (angm)
-    If ( Allocated(dlngdt9) ) Deallocate (dlngdt9)
     Return
   End Subroutine nuclear_data_finalize
 
@@ -752,6 +777,10 @@ Module reaction_data
   ! Reaction rates after folding cross-sections in with counting factors
   Real(dp), Allocatable :: b1(:,:), b2(:,:), b3(:,:), b4(:,:) ! Coefficiencts of the Y terms in Eq. 10 of Hix & Meyer (2006)
 
+#ifdef XNET_OMP
+  !$omp threadprivate(b1,b2,b3,b4,csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+#endif
+
 Contains
 
   Subroutine initialize_network_data(data_dir,data_description)
@@ -800,10 +829,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0, tid, gpu_queue
-    Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
-      & qkffn, phasei, dphaseidt9, ngrid, rffn, dlnrffndt9
-    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, ltnu, fluxnu, rnnu
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, iweak0, tid, gpu_queue, nzbatchmx
+    Use xnet_ffn, Only: ffn_workspace_initialize, read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
+      & ngrid
+    Use xnet_nnu, Only: nnu_rates_initialize, read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -865,52 +894,47 @@ Contains
         Call read_ffn_data(nffn,data_dir)
       Else
         Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
-        Allocate (qkffn(0:nffn,nzevolve))
+
         Allocate (has_logft(nffn))
         ffnsum = 0.0
         ffnenu = 0.0
-        qkffn = 0.0
+
         has_logft = 0
 
         ! Additional data for logft rates
         Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
         Allocate (ffn_qval(nffn))
-        Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
+
         ffn_ec = 0.0
         ffn_beta = 0.0
         ffn_qval = 0.0
-        phasei = 0.0
-        dphaseidt9 = 0.0
+
       EndIf
       Call parallel_bcast(ffnsum)
       Call parallel_bcast(ffnenu)
-      Call parallel_bcast(qkffn)
       Call parallel_bcast(has_logft)
 
       ! Additional data for logft rates
       Call parallel_bcast(ffn_ec)
       Call parallel_bcast(ffn_beta)
       Call parallel_bcast(ffn_qval)
-      Call parallel_bcast(phasei)
-      Call parallel_bcast(dphaseidt9)
     Else
       Allocate (ffnsum(1,ngrid),ffnenu(1,ngrid))
-      Allocate (qkffn(1,nzevolve))
+
       Allocate (has_logft(1))
       ffnsum = 0.0
       ffnenu = 0.0
-      qkffn = 0.0
+
       has_logft = 0
 
       ! Additional arrays for logft rates
       Allocate (ffn_ec(1,ngrid),ffn_beta(1,ngrid))
       Allocate (ffn_qval(1))
-      Allocate (phasei(1,nzevolve),dphaseidt9(1,nzevolve))
+
       ffn_ec = 0.0
       ffn_beta = 0.0
       ffn_qval = 0.0
-      phasei = 0.0
-      dphaseidt9 = 0.0
+
     EndIf
 
     ! If there are NNU rates, read in the NNU data and set NNU array sizes
@@ -918,20 +942,16 @@ Contains
       If ( parallel_IOProcessor() ) Then
         Call read_nnu_data(nnnu,data_dir)
       Else
-        Allocate (ltnu(nnuspec,nzevolve))
-        Allocate (fluxnu(nnuspec,nzevolve))
+
         Allocate (sigmanu(nnnu,ntnu))
-        ltnu = 0.0
-        fluxnu = 0.0
+
         sigmanu = 0.0
       EndIf
       Call parallel_bcast(sigmanu)
     Else
-      Allocate (ltnu(nnuspec,nzevolve))
-      Allocate (fluxnu(nnuspec,nzevolve))
+
       Allocate (sigmanu(1,ntnu))
-      ltnu = 0.0
-      fluxnu = 0.0
+
       sigmanu = 0.0
     EndIf
 
@@ -1084,34 +1104,43 @@ Contains
       EndDo
     EndDo
 
-    Allocate (b1(nan(1),nzevolve))
-    Allocate (b2(nan(2),nzevolve))
-    Allocate (b3(nan(3),nzevolve))
-    Allocate (b4(nan(4),nzevolve))
-    Allocate (csect1(nr1,nzevolve))
-    Allocate (csect2(nr2,nzevolve))
-    Allocate (csect3(nr3,nzevolve))
-    Allocate (csect4(nr4,nzevolve))
-    Allocate (dcsect1dt9(nr1,nzevolve))
-    Allocate (dcsect2dt9(nr2,nzevolve))
-    Allocate (dcsect3dt9(nr3,nzevolve))
-    Allocate (dcsect4dt9(nr4,nzevolve))
+    Call ffn_workspace_initialize(nffn)
+    Call nnu_rates_initialize(nnnu)
 
-    Allocate (rffn(max(1,nffn),nzevolve))
-    Allocate (dlnrffndt9(max(1,nffn),nzevolve))
-    Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    Allocate (b1(nan(1),nzbatchmx))
+    Allocate (b2(nan(2),nzbatchmx))
+    Allocate (b3(nan(3),nzbatchmx))
+    Allocate (b4(nan(4),nzbatchmx))
+    Allocate (csect1(nr1,nzbatchmx))
+    Allocate (csect2(nr2,nzbatchmx))
+    Allocate (csect3(nr3,nzbatchmx))
+    Allocate (csect4(nr4,nzbatchmx))
+    Allocate (dcsect1dt9(nr1,nzbatchmx))
+    Allocate (dcsect2dt9(nr2,nzbatchmx))
+    Allocate (dcsect3dt9(nr3,nzbatchmx))
+    Allocate (dcsect4dt9(nr4,nzbatchmx))
+
+
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
+    !XDIR XCREATE(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !XDIR XCREATE(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+    !XDIR XWAIT(gpu_queue)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
     !XDIR XCOPYIN(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XCOPYIN(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
     !XDIR XCOPYIN(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !XDIR XCOPYIN(iffn,ffnsum,ffnenu,qkffn) &
-    !XDIR XCOPYIN(has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
-    !XDIR XCOPYIN(innu,sigmanu,ltnu,fluxnu) &
-    !XDIR XCREATE(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !XDIR XCREATE(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !XDIR XCREATE(rffn,dlnrffndt9,rnnu)
+    !XDIR XCOPYIN(iffn,ffnsum,ffnenu) &
+    !XDIR XCOPYIN(has_logft,ffn_ec,ffn_beta,ffn_qval) &
+    !XDIR XCOPYIN(innu,sigmanu)
+    !XDIR XWAIT(gpu_queue)
 
     Return
   End Subroutine read_reaction_data
@@ -1122,19 +1151,19 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_constants, Only: epmev, avn
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_ffn, Only: qkffn
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
+    Real(dp), Intent(in) :: y(ny,1:nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: sqnu(zb_lo:zb_hi) ! Neutrino energy loss rate [ergs g^{-1} s^{-1}]
+    Real(dp), Intent(inout) :: sqnu(1:nzbatchmx) ! Neutrino energy loss rate [ergs g^{-1} s^{-1}]
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Real(dp) :: sqnu1
@@ -1142,9 +1171,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -1158,7 +1187,7 @@ Contains
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,qkffn,iffn,y,sqnu) &
       !XDIR XPRIVATE(sqnu1)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
 
           ! Loop over 1 species weak reactions to calculate neutrino loss
@@ -1187,14 +1216,37 @@ Contains
     ! Release mappings established by read_reaction_data before CPU allocations.
     Use xnet_controls, Only: gpu_queue
     Implicit None
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( Allocated(b1) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(b1,b2,b3,b4,csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    If ( Allocated(b1) ) Deallocate (b1)
+    If ( Allocated(b2) ) Deallocate (b2)
+    If ( Allocated(b3) ) Deallocate (b3)
+    If ( Allocated(b4) ) Deallocate (b4)
+    If ( Allocated(csect1) ) Deallocate (csect1)
+    If ( Allocated(csect2) ) Deallocate (csect2)
+    If ( Allocated(csect3) ) Deallocate (csect3)
+    If ( Allocated(csect4) ) Deallocate (csect4)
+    If ( Allocated(dcsect1dt9) ) Deallocate (dcsect1dt9)
+    If ( Allocated(dcsect2dt9) ) Deallocate (dcsect2dt9)
+    If ( Allocated(dcsect3dt9) ) Deallocate (dcsect3dt9)
+    If ( Allocated(dcsect4dt9) ) Deallocate (dcsect4dt9)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
     If ( Allocated(la) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
       !XDIR XDELETE(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
       !XDIR XDELETE(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
       !XDIR XDELETE(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-      !XDIR XDELETE(iffn,innu) &
-      !XDIR XDELETE(b1,b2,b3,b4,csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+      !XDIR XDELETE(iffn,innu)
       !XDIR XWAIT(gpu_queue)
     EndIf
     If ( Allocated(n1i) ) Deallocate (n1i)
@@ -1205,14 +1257,6 @@ Contains
     If ( Allocated(rc2) ) Deallocate (rc2)
     If ( Allocated(rc3) ) Deallocate (rc3)
     If ( Allocated(rc4) ) Deallocate (rc4)
-    If ( Allocated(csect1) ) Deallocate (csect1)
-    If ( Allocated(csect2) ) Deallocate (csect2)
-    If ( Allocated(csect3) ) Deallocate (csect3)
-    If ( Allocated(csect4) ) Deallocate (csect4)
-    If ( Allocated(dcsect1dt9) ) Deallocate (dcsect1dt9)
-    If ( Allocated(dcsect2dt9) ) Deallocate (dcsect2dt9)
-    If ( Allocated(dcsect3dt9) ) Deallocate (dcsect3dt9)
-    If ( Allocated(dcsect4dt9) ) Deallocate (dcsect4dt9)
     If ( Allocated(iwk1) ) Deallocate (iwk1)
     If ( Allocated(iwk2) ) Deallocate (iwk2)
     If ( Allocated(iwk3) ) Deallocate (iwk3)
@@ -1255,10 +1299,6 @@ Contains
     If ( Allocated(a2) ) Deallocate (a2)
     If ( Allocated(a3) ) Deallocate (a3)
     If ( Allocated(a4) ) Deallocate (a4)
-    If ( Allocated(b1) ) Deallocate (b1)
-    If ( Allocated(b2) ) Deallocate (b2)
-    If ( Allocated(b3) ) Deallocate (b3)
-    If ( Allocated(b4) ) Deallocate (b4)
     Return
   End Subroutine reaction_data_finalize
 

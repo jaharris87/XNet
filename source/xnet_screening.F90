@@ -40,6 +40,10 @@ Module xnet_screening
   Real(dp), Parameter :: rdlam34 = 1.0_dp / (lam_3 - lam_4)
   Real(dp), Parameter :: rdlam56 = 1.0_dp / (lam_6 - lam_5)
 
+#ifdef XNET_OMP
+  !$omp threadprivate(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9,ztilde,zinter,lambda0,gammae,dztildedt9)
+#endif
+
 Contains
 
   Subroutine screening_init
@@ -49,7 +53,7 @@ Contains
     Use nuclear_data, Only: zz
     Use reaction_data, Only: nreac, n2i, n3i, n4i
     Use xnet_constants, Only: bip1, thbim1, five3rd
-    Use xnet_controls, Only: iheat, iscrn, nzevolve, tid, gpu_queue
+    Use xnet_controls, Only: iheat, iscrn, tid, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
@@ -108,30 +112,38 @@ Contains
       zeta4w = z41*(z42 + z43 + z44) + z42*(z43 + z44) + z43 * z44
       zeta4i = z4c**bip1 - z41**bip1 - z42**bip1 - z43**bip1 - z44**bip1
 
-      Allocate (ztilde(nzevolve))
-      Allocate (zinter(nzevolve))
-      Allocate (lambda0(nzevolve))
-      Allocate (gammae(nzevolve))
-      Allocate (dztildedt9(nzevolve))
+      !XDIR XENTER_DATA XASYNC(gpu_queue) &
+      !XDIR XCOPYIN(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
+      !XDIR XCOPYIN(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( iscrn > 0 ) Then
+      Allocate (ztilde(nzbatchmx))
+      Allocate (zinter(nzbatchmx))
+      Allocate (lambda0(nzbatchmx))
+      Allocate (gammae(nzbatchmx))
+      Allocate (dztildedt9(nzbatchmx))
       ztilde = 0.0
       zinter = 0.0
       lambda0 = 0.0
       gammae = 0.0
       dztildedt9 = 0.0
       !XDIR XENTER_DATA XASYNC(gpu_queue) &
-      !XDIR XCOPYIN(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
-      !XDIR XCOPYIN(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
       !XDIR XCOPYIN(ztilde,zinter,lambda0,gammae,dztildedt9)
     EndIf
 
-    Allocate (h1(nr1,nzevolve))
-    Allocate (h2(nr2,nzevolve))
-    Allocate (h3(nr3,nzevolve))
-    Allocate (h4(nr4,nzevolve))
-    Allocate (dh1dt9(nr1,nzevolve))
-    Allocate (dh2dt9(nr2,nzevolve))
-    Allocate (dh3dt9(nr3,nzevolve))
-    Allocate (dh4dt9(nr4,nzevolve))
+    Allocate (h1(nr1,nzbatchmx))
+    Allocate (h2(nr2,nzbatchmx))
+    Allocate (h3(nr3,nzbatchmx))
+    Allocate (h4(nr4,nzbatchmx))
+    Allocate (dh1dt9(nr1,nzbatchmx))
+    Allocate (dh2dt9(nr2,nzbatchmx))
+    Allocate (dh3dt9(nr3,nzbatchmx))
+    Allocate (dh4dt9(nr4,nzbatchmx))
     h1 = 0.0
     h2 = 0.0
     h3 = 0.0
@@ -143,6 +155,10 @@ Contains
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
+
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
 
     Return
   End Subroutine screening_init
@@ -167,14 +183,14 @@ Contains
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_constants, Only: bi, bip1, cds, kbi, thbim2
     Use xnet_conditions, Only: rhot, t9t, etae, detaedt9
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_eos, Only: eos_screen
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_prescrn, timer_scrn
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Real(dp) :: fhs(0:izmax+2), dfhsdt9(0:izmax+2)
@@ -186,9 +202,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -199,10 +215,10 @@ Contains
     !XDIR XCOPYIN(mask)
 
     ! Call EOS to get plasma quantities
-    Call eos_screen(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi),etae(zb_lo:zb_hi), &
-      & detaedt9(zb_lo:zb_hi),ztilde(zb_lo:zb_hi),zinter(zb_lo:zb_hi),lambda0(zb_lo:zb_hi), &
-      & gammae(zb_lo:zb_hi),dztildedt9(zb_lo:zb_hi),xext(zb_lo:zb_hi),aext(zb_lo:zb_hi), &
-      & zext(zb_lo:zb_hi),mask_in = mask_in)
+    Call eos_screen(t9t,rhot,yt,etae, &
+      & detaedt9,ztilde,zinter,lambda0, &
+      & gammae,dztildedt9,xext,aext, &
+      & zext,mask_in = mask_in)
 
     stop_timer = xnet_wtime()
     timer_prescrn = timer_prescrn + stop_timer
@@ -218,7 +234,7 @@ Contains
     !XDIR XPRESENT(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XPRESENT(mask,t9t) &
     !XDIR XPRIVATE(fhs,dfhsdt9,hw0,hi0,dlnhw0dt9,dlnhi0dt9)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
 
         ! Calculate screening energies as a function of Z, for prescriptions that follow this approach
@@ -327,9 +343,9 @@ Contains
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !XDIR XHOST(ztilde,zinter,lambda0,gammae,dztildedt9)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,i5)") 'SCREEN',izone
           hw0 = ztilde(izb) * lambda0(izb)
           hi0 = kbi * zinter(izb) * lambda0(izb)**bi
@@ -473,10 +489,11 @@ Contains
     ! Release mappings established by screening_init before CPU allocations.
     Use xnet_controls, Only: gpu_queue
     Implicit None
-    If ( Allocated(iz21) ) Then
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( Allocated(ztilde) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
-      !XDIR XDELETE(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
       !XDIR XDELETE(ztilde,zinter,lambda0,gammae,dztildedt9)
     EndIf
     If ( Allocated(h1) ) Then
@@ -492,6 +509,21 @@ Contains
     If ( Allocated(dh2dt9) ) Deallocate (dh2dt9)
     If ( Allocated(dh3dt9) ) Deallocate (dh3dt9)
     If ( Allocated(dh4dt9) ) Deallocate (dh4dt9)
+    If ( Allocated(ztilde) ) Deallocate (ztilde)
+    If ( Allocated(zinter) ) Deallocate (zinter)
+    If ( Allocated(lambda0) ) Deallocate (lambda0)
+    If ( Allocated(gammae) ) Deallocate (gammae)
+    If ( Allocated(dztildedt9) ) Deallocate (dztildedt9)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
+    If ( Allocated(iz21) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
+      !XDIR XDELETE(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
     If ( Allocated(z21) ) Deallocate (z21)
     If ( Allocated(z22) ) Deallocate (z22)
     If ( Allocated(z31) ) Deallocate (z31)
@@ -522,11 +554,6 @@ Contains
     If ( Allocated(zeta3i) ) Deallocate (zeta3i)
     If ( Allocated(zeta4w) ) Deallocate (zeta4w)
     If ( Allocated(zeta4i) ) Deallocate (zeta4i)
-    If ( Allocated(ztilde) ) Deallocate (ztilde)
-    If ( Allocated(zinter) ) Deallocate (zinter)
-    If ( Allocated(lambda0) ) Deallocate (lambda0)
-    If ( Allocated(gammae) ) Deallocate (gammae)
-    If ( Allocated(dztildedt9) ) Deallocate (dztildedt9)
     Return
   End Subroutine screening_finalize
 

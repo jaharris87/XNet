@@ -7,7 +7,7 @@ Program verify_surrogate_candidate
   Use eos_type_module, Only: eos_input_rt, eos_t
   Use nuclear_data, Only: aa, be, nname, ny, read_nuclear_data, zz
   Use xnet_constants, Only: avn, epmev
-  Use xnet_controls, Only: iheat, nzevolve, tid
+  Use xnet_controls, Only: iheat, tid, nzbatchmx
   Use xnet_surrogate_checks, Only: check_surrogate_result_with_energy, &
     & surrogate_check_config, surrogate_check_report
   Use xnet_types, Only: dp
@@ -33,7 +33,7 @@ Program verify_surrogate_candidate
   Call get_command_argument(2,candidate_file)
 
   iheat = 0
-  nzevolve = 1
+  nzbatchmx = 1
   tid = 1
   Call read_nuclear_data(trim(data_dir),data_desc)
 

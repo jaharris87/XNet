@@ -166,12 +166,12 @@ Contains
   End Subroutine initialize
 
   Subroutine check_empty_output_mask
-    Use xnet_controls, Only: zb_lo, zb_hi
+    Use xnet_controls, Only: nzbatchmx
     Use xnet_output, Only: ts_output
     Use xnet_timers, Only: timer_output
     Implicit None
-    Real(dp) :: zeros(zb_lo:zb_hi), before
-    Logical :: empty_mask(zb_lo:zb_hi)
+    Real(dp) :: zeros(1:nzbatchmx), before
+    Logical :: empty_mask(1:nzbatchmx)
 
     zeros = 0.0_dp
     empty_mask = .false.
@@ -261,16 +261,15 @@ Contains
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
     Use xnet_conditions, Only: t, t9, rho, ye_work=>ye, tdel, tdel_old, nt, nstart, tstart, tstop, &
       & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: lzactive, szbatch, nzbatch, iaux, ktot, lun_ts, lun_ev, nzevolve, &
-      & descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, tdel_maxmult, &
-      & iheat, isolv
+    Use xnet_controls, Only: lzactive, szbatch, nzbatch, iaux, ktot, lun_ts, lun_ev, descript, kstmx, kitmx, iweak0,&
+      & iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, tdel_maxmult, iheat, isolv, nzbatchmx
     Use xnet_evolve, Only: full_net
     Use xnet_flux, Only: flx, ifl_orig, ifl_term
     Use xnet_match, Only: mflx
     Implicit None
     Integer, Intent(in) :: n
     Real(dp), Intent(in) :: duration
-    Real(dp) :: denu(nzevolve)
+    Real(dp) :: denu(nzbatchmx)
     Integer :: j, status, failed_zone, sequence
     Character(80) :: input_description(2), reference_description
 

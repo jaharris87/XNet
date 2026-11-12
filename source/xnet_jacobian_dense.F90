@@ -49,6 +49,10 @@ Module xnet_jacobian
   Real(dp), Parameter :: pivot_thresh = 1.0e-4
   Logical, Allocatable :: pivot(:)
 
+#ifdef XNET_OMP
+  !$omp threadprivate(dydotdy,jac,rhs,indx,info,hjac,hrhs,hindx,djac,drhs,dindx,diag0,mult1,pivot)
+#endif
+
 Contains
 
   Subroutine read_jacobian_data(data_dir)
@@ -56,7 +60,7 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzevolve, tid, gpu_queue
+    Use xnet_controls, Only: iheat, tid, gpu_queue, nzbatchmx
     Use xnet_gpu, Only: dev_ptr
     Implicit None
 
@@ -73,18 +77,21 @@ Contains
       msize = ny
     EndIf
 
-    Allocate (diag0(nzevolve))
-    Allocate (mult1(nzevolve))
-    Allocate (pivot(nzevolve))
+#ifdef XNET_OMP
+    !$omp parallel default(shared) private(izb)
+#endif
+    Allocate (diag0(nzbatchmx))
+    Allocate (mult1(nzbatchmx))
+    Allocate (pivot(nzbatchmx))
     diag0 = 0.0
     mult1 = 1.0
     pivot = .false.
 
-    Allocate (dydotdy(msize,msize,nzevolve))
-    Allocate (jac(msize,msize,nzevolve))
-    Allocate (rhs(msize,nzevolve))
-    Allocate (indx(msize,nzevolve))
-    Allocate (info(nzevolve))
+    Allocate (dydotdy(msize,msize,nzbatchmx))
+    Allocate (jac(msize,msize,nzbatchmx))
+    Allocate (rhs(msize,nzbatchmx))
+    Allocate (indx(msize,nzbatchmx))
+    Allocate (info(nzbatchmx))
     dydotdy = 0.0
     jac = 0.0
     rhs = 0.0
@@ -94,19 +101,19 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(dydotdy,jac,rhs,indx,info,diag0,mult1,pivot)
 
-    Allocate (hjac(nzevolve))
-    Allocate (hrhs(nzevolve))
-    Allocate (hindx(nzevolve))
-    Do izb = 1, nzevolve
+    Allocate (hjac(nzbatchmx))
+    Allocate (hrhs(nzbatchmx))
+    Allocate (hindx(nzbatchmx))
+    Do izb = 1, nzbatchmx
       hjac(izb) = c_loc( jac(1,1,izb) )
       hrhs(izb) = c_loc( rhs(1,izb) )
       hindx(izb) = c_loc( indx(1,izb) )
     EndDo
 
-    Allocate (djac(nzevolve))
-    Allocate (drhs(nzevolve))
-    Allocate (dindx(nzevolve))
-    Do izb = 1, nzevolve
+    Allocate (djac(nzbatchmx))
+    Allocate (drhs(nzbatchmx))
+    Allocate (dindx(nzbatchmx))
+    Do izb = 1, nzbatchmx
       djac(izb) = dev_ptr( jac(1,1,izb) )
       drhs(izb) = dev_ptr( rhs(1,izb) )
       dindx(izb) = dev_ptr( indx(1,izb) )
@@ -114,6 +121,10 @@ Contains
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(djac,drhs,dindx)
+
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
 
     Return
   End Subroutine read_jacobian_data
@@ -126,7 +137,10 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-    If ( .not. allocated(dydotdy) ) Return
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( allocated(dydotdy) ) Then
 
     !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
@@ -137,6 +151,11 @@ Contains
     Deallocate (hjac,hrhs,hindx)
     Deallocate (djac,drhs,dindx)
 
+    EndIf
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
     Return
   End Subroutine jacobian_finalize
 
@@ -146,15 +165,15 @@ Contains
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Optional, Target, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(1:nzbatchmx), mult_in(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -163,21 +182,21 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
     If ( present(diag_in) ) Then
-      diag(zb_lo:) => diag_in
+      diag => diag_in
     Else
-      diag(zb_lo:) => diag0(zb_lo:zb_hi)
+      diag => diag0
     EndIf
     If ( present(mult_in) ) Then
-      mult(zb_lo:) => mult_in
+      mult => mult_in
     Else
-      mult(zb_lo:) => mult1(zb_lo:zb_hi)
+      mult => mult1
     EndIf
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
@@ -187,7 +206,7 @@ Contains
     !XDIR XPRESENT(jac,dydotdy,pivot) &
     !XDIR XPRESENT(mask,diag,mult) &
     !XDIR XPRIVATE(rsum)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       Do j1 = 1, msize
         If ( mask(izb) ) Then
           rsum = 0.0
@@ -211,9 +230,9 @@ Contains
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(pivot,jac)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           If ( pivot(izb) ) Then
             Do j = 1, msize
               rsum = 0.0
@@ -235,9 +254,9 @@ Contains
     If ( idiag >= 5 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(diag,mult,jac)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a9,i5,2es24.16)") 'JAC_SCALE',izone,diag(izb),mult(izb)
           Do i = 1, ny
             Write(lun_diag,"(3a)") 'J(',nname(i),',Y)'
@@ -272,15 +291,14 @@ Contains
       & n10, n20, n30, n40
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
-      & lzactive, tid, gpu_queue
+    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, lzactive, tid, gpu_queue
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Target, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(1:nzbatchmx), mult_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -288,9 +306,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -307,7 +325,7 @@ Contains
     !XDIR XPRESENT(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
     !XDIR XPRESENT(mu1,mu2,mu3,mu4,a1,a2,a3,a4) &
     !XDIR XPRESENT(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       Do i0 = 1, ny
         If ( mask(izb) ) Then
           !XDIR XLOOP_INNER(1)
@@ -382,7 +400,7 @@ Contains
       !XDIR XLOOP_OUTER(2) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,dydotdy,cv,mex) &
       !XDIR XPRIVATE(sdot)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         Do j1 = 1, msize
           If ( mask(izb) ) Then
             sdot = 0.0
@@ -399,7 +417,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,ktot)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         ktot(3,izb) = ktot(3,izb) + 1
       EndIf
@@ -411,9 +429,9 @@ Contains
     If ( idiag >= 5 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(dydotdy)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a9,i5)") 'JAC_BUILD',izone
           Do i = 1, ny
             Write(lun_diag,"(3a)") 'dYDOT(',nname(i),')/dY'
@@ -445,7 +463,7 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
@@ -453,15 +471,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
-    Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
-    Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
+    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
+    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone, istat
@@ -472,9 +490,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -487,7 +505,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         !XDIR XLOOP_INNER(1)
         Do i = 1, ny
@@ -505,19 +523,19 @@ Contains
     ! Solve the linear system
 #if defined(XNET_GPU)
 #if USE_NOPIVOT
-    any_pivot = any(pivot(zb_lo:zb_hi))
+    any_pivot = any(pivot)
 #else
     any_pivot = .true.
 #endif
     ! Vendor batched solves require contiguous systems. Submit each active run
     ! in its existing source order, leaving holes and cached factors untouched.
-    first = zb_lo
-    Do last = zb_lo, zb_hi
+    first = 1
+    Do last = 1, nzbatchmx
       If ( .not. mask(last) ) Then
         first = last + 1
         Cycle
       EndIf
-      If ( last < zb_hi ) Then
+      If ( last < nzbatchmx ) Then
         If ( mask(last+1) ) Cycle
       EndIf
       batchcount = last - first + 1
@@ -526,7 +544,7 @@ Contains
         &   dindx(first), rhs(1,first), drhs(first), msize, info(first), batchcount, pivot = any_pivot )
     EndDo
 #else
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         call LinearSolve_CPU &
           & ( 'N', msize, 1, jac(1,1,izb), msize, indx(1,izb), rhs(1,izb), msize, info(izb) )
@@ -536,7 +554,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,dy,dt9)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         !XDIR XLOOP_INNER(1)
         Do i = 1, ny
@@ -549,9 +567,9 @@ Contains
     If ( idiag >= 6 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(dy,dt9)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,i5)") 'JAC_SOLVE',izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
@@ -573,7 +591,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -582,7 +600,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: i, j, izb, izone, istat
@@ -593,9 +611,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -606,18 +624,18 @@ Contains
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
 #if USE_NOPIVOT
-    any_pivot = any(pivot(zb_lo:zb_hi))
+    any_pivot = any(pivot)
 #else
     any_pivot = .true.
 #endif
     ! BDF can reuse LU factors in lanes outside the refactor mask.
-    first = zb_lo
-    Do last = zb_lo, zb_hi
+    first = 1
+    Do last = 1, nzbatchmx
       If ( .not. mask(last) ) Then
         first = last + 1
         Cycle
       EndIf
-      If ( last < zb_hi ) Then
+      If ( last < nzbatchmx ) Then
         If ( mask(last+1) ) Cycle
       EndIf
       batchcount = last - first + 1
@@ -626,7 +644,7 @@ Contains
         &   dindx(first), info(first), batchcount, pivot = any_pivot )
     EndDo
 #else
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         call LUDecomp_CPU &
           & ( msize, msize, jac(1,1,izb), msize, indx(1,izb), info(izb) )
@@ -637,9 +655,9 @@ Contains
     If ( idiag >= 6 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(jac)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a3,i5,i4)") 'LUD',izone,info(izb)
           Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
         EndIf
@@ -658,7 +676,7 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
@@ -666,15 +684,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
-    Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
-    Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
+    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
+    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone
@@ -685,9 +703,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -701,7 +719,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         !XDIR XLOOP_INNER(1)
         Do i = 1, ny
@@ -719,17 +737,17 @@ Contains
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
 #if USE_NOPIVOT
-    any_pivot = any(pivot(zb_lo:zb_hi))
+    any_pivot = any(pivot)
 #else
     any_pivot = .true.
 #endif
-    first = zb_lo
-    Do last = zb_lo, zb_hi
+    first = 1
+    Do last = 1, nzbatchmx
       If ( .not. mask(last) ) Then
         first = last + 1
         Cycle
       EndIf
-      If ( last < zb_hi ) Then
+      If ( last < nzbatchmx ) Then
         If ( mask(last+1) ) Cycle
       EndIf
       batchcount = last - first + 1
@@ -738,7 +756,7 @@ Contains
         &   dindx(first), rhs(1,first), drhs(first), msize, info(first), batchcount, pivot = any_pivot )
     EndDo
 #else
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         call LUBksub_CPU &
           & ( 'N', msize, 1, jac(1,1,izb), msize, indx(1,izb), rhs(1,izb), msize, info(izb) )
@@ -748,7 +766,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,rhs,dy,dt9)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         !XDIR XLOOP_INNER(1)
         Do i = 1, ny
@@ -761,9 +779,9 @@ Contains
     If ( idiag >= 6 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(dy,dt9)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,i5)") 'BKSUB', izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)

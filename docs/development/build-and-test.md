@@ -130,6 +130,34 @@ make --no-print-directory print-CMODE
 make --no-print-directory print-MATRIX_SOLVER
 ```
 
+## Perlmutter NVIDIA CPU OpenMP stack workaround
+
+For Perlmutter NVIDIA/LibSci dense CPU OpenMP runs, set this in the launch
+environment before starting the process:
+
+```sh
+export OMP_STACKSIZE=16M
+```
+
+This is the [maintainer-selected tested workaround](https://github.com/jaharris87/XNet/issues/192#issuecomment-6805620878),
+not a measured minimum or a project-wide build or runtime default. The tested
+configuration used NVHPC 26.5, PrgEnv-nvidia 8.7.0, CPE and LibSci 26.03,
+`EOS=STARKILLER`, `MATRIX_SOLVER=dense`, `OPENMP_MODE=ON`, and MPI/GPU off.
+The [single-case diagnostic](https://github.com/jaharris87/XNet/issues/192#issuecomment-6784278301)
+and [#195's full CPU suite at `b8607a4e`](https://github.com/jaharris87/XNet/pull/195#issuecomment-6786074563)
+completed with this setting; the latter completed all 28 commands, including
+serial/two/four-worker comparisons, histories, failures and lifecycle checks.
+Applicable current-candidate NVIDIA execution remains pending after maintenance.
+
+[`OMP_STACKSIZE`](https://www.openmp.org/spec-html/5.1/openmpse63.html) controls
+stacks for threads created by the OpenMP runtime, not the initial thread's
+process-stack limit. Check and record that limit separately (`ulimit -s` in
+Bash); increasing the process-stack limit does not replace this worker-stack
+setting. This host-worker workaround is not a GPU device-stack setting. The
+original timeout and LibSci fault remain under [#192](https://github.com/jaharris87/XNet/issues/192);
+the successful runs do not establish their full cause or explain private
+application failures.
+
 ## Configuration changes and clean builds
 
 Each build directory contains predictable `obj/`, `mod/`, `pp/`, and

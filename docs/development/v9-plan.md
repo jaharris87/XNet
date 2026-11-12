@@ -160,11 +160,16 @@ The [#190](https://github.com/jaharris87/XNet/pull/190) compile workaround for t
 [NVIDIA CPU threaded-caller issue #183](https://github.com/jaharris87/XNet/issues/183)
 and [#195](https://github.com/jaharris87/XNet/pull/195) caller-output flush are
 merged. The latter's [native suite](https://github.com/jaharris87/XNet/pull/195#issuecomment-6786074563)
-completed all 28 commands with diagnostic `OMP_STACKSIZE=16M`. This does not
-adopt a supported minimum or default. The original timeout/LibSci fault,
-IEEE warnings and large affinity report remain under
-[#192](https://github.com/jaharris87/XNet/issues/192); GPU-library success does
-not cover the CPU caller or explain those failures.
+completed all 28 commands with `OMP_STACKSIZE=16M`. The maintainer
+[selected that tested workaround for Perlmutter CPU OpenMP runs](https://github.com/jaharris87/XNet/issues/192#issuecomment-6805620878)
+without requiring full crash root-cause proof before v9.0. The
+[run guidance](build-and-test.md#perlmutter-nvidia-cpu-openmp-stack-workaround)
+records its tested NVIDIA/LibSci configuration and separate process-stack
+limit; `16M` is not a measured minimum or project-wide default. Applicable
+current-candidate NVIDIA execution remains pending after maintenance.
+The original timeout/LibSci fault, IEEE warnings and large affinity report
+remain under [#192](https://github.com/jaharris87/XNet/issues/192);
+GPU-library success does not cover the CPU caller or explain those failures.
 
 The remaining implementation has separate scopes. [#184](https://github.com/jaharris87/XNet/issues/184)
 is implemented by merged [#191](https://github.com/jaharris87/XNet/pull/191):

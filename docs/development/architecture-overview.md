@@ -137,6 +137,11 @@ allocates, initializes, maps and releases its worker arrays inside its own team
 region. Immutable network tables, output-species selections, BDF tables and
 external EOS initialization remain shared once per rank.
 
+For v9, OpenMP target GPU builds require `OPENMP_MODE=OFF` for standalone
+programs and the library. XNet's host worker teams and threadprivate state
+are then disabled; application OpenMP elsewhere remains independent. CPU
+batch threading and CUDA/OpenACC selection remain separate.
+
 `nzbatchmx` is allocated capacity; the API input extent includes inactive lanes,
 while `nzbatch` counts active lanes. The standalone driver uses `nzbatch` for
 the submitted tail extent and fills its active mask from that extent. The API

@@ -317,7 +317,9 @@ evaluations.
 With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE and lifecycle
 operations. The application may use OpenMP elsewhere. This choice suppresses
 XNet's host teams and threadprivate state even when target-offload compilation
-enables OpenMP directives. GPU host calls remain serialized.
+enables OpenMP directives. For v9, OpenMP target GPU builds require this XNet
+setting for both standalone programs and the library. GPU host calls remain
+serialized.
 
 ## Mapped GPU batch
 

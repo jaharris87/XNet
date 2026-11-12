@@ -189,6 +189,7 @@ def main() -> None:
     parser.add_argument("--storage-consumer", type=Path, help="optional production worker-allocation probe")
     args = parser.parse_args()
     root, exe, config, setup = [path.resolve(strict=True) for path in (args.root, args.consumer, args.library_config, args.net_setup)]
+    storage_consumer = args.storage_consumer.resolve(strict=True) if args.storage_consumer is not None else None
     args.work_dir.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="host-batch-", dir=args.work_dir.resolve()))
     print(f"Application outer-batch OpenMP work: {work}", flush=True)
@@ -233,6 +234,9 @@ def main() -> None:
     inputs = {name: digest(root / name) for name in source_files if name and (root / name).is_file()}
     inputs.update({str(path): digest(path) for path in (exe, archive, config, setup, root / "tools/starkiller-helmholtz/helm_table.dat",
                    Path(__file__), Path(__file__).with_name("host_batch_openmp_consumer.F90"), Path(__file__).with_name("Makefile"))})
+    if storage_consumer is not None:
+        inputs.update({str(path): digest(path) for path in
+                       (storage_consumer, Path(__file__).with_name("worker_storage_consumer.F90"))})
     compiler_command = shlex.split(settings["XNET_FC"]) + ["--version"]
     if build_record.is_file() and "PE_ENV=NVIDIA" in build_record.read_text().splitlines():
         # Query the NVIDIA driver directly; ftn --version is not a safe version query.
@@ -259,14 +263,18 @@ def main() -> None:
         (case / networks[network].name).symlink_to(networks[network], target_is_directory=True)
         (case / table.name).symlink_to(table)
         return case
-    if args.storage_consumer is not None:
-        storage_consumer = args.storage_consumer.resolve(strict=True)
+    if storage_consumer is not None:
         for network in networks:
             for capacity in (4, 16):
                 for workers in (1, 2, 4):
                     case = case_dir(f"storage-{network}-{capacity}-{workers}", network)
-                    run([str(storage_consumer), networks[network].name, str(capacity)], case,
-                        case / "storage.log", threads=workers)
+                    output = run([str(storage_consumer), networks[network].name, str(capacity)], case,
+                                 case / "storage.log", threads=workers)
+                    marker = "PASS worker storage, capacity/workers:"
+                    rows = [line[len(marker):].split() for line in output.splitlines() if line.startswith(marker)]
+                    require(len(rows) == 1, f"expected one storage completion row, got {rows}: {case}")
+                    require(rows[0] == [str(capacity), str(workers)],
+                            f"storage completion capacity/workers {rows[0]} != {[capacity, workers]}: {case}")
         print("PASS worker storage: alpha/SN160, capacity 4/16, 1/2/4 workers, repeated and idle-worker cleanup", flush=True)
     owners = {}
     def compare(left, right, label: str) -> None:

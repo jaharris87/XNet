@@ -197,6 +197,12 @@ defaults unchanged. The main selection variables include:
 - `MATRIX_SOLVER` for the Jacobian and linear solver implementation;
 - `EOS` for the equation-of-state implementation.
 
+For v9, OpenMP target GPU builds require `OPENMP_MODE=OFF` for both the
+standalone programs and the library. Make rejects `GPU_MODE=ON`,
+`OPENMP_OL_MODE=ON`, `OPENMP_MODE=ON` together. This disables XNet's host
+worker teams and threadprivate state; the application may use OpenMP
+elsewhere. CPU batch threading and CUDA/OpenACC selection remain separate.
+
 Each selected path requires its compiler, headers, libraries, and runtime.
 Validate support and numerical behavior for the exact combination used.
 

@@ -188,11 +188,11 @@
     "electron_fraction": {
       "value": {
         "1": 0.49885684,
-        "2": 0.49912074,
-        "3": 0.49928049,
+        "2": 0.49912081,
+        "3": 0.49928089,
         "4": 0.4995296,
         "5": 0.49953348,
-        "6": 0.49953675
+        "6": 0.49953674
       },
       "exact": false,
       "atol": 1e-07,
@@ -1874,5 +1874,25 @@
     "4": 8.800967520589042e-07,
     "5": 1.8835243211410724e-06,
     "6": 1.7354888559209781e-06
+  },
+  "field_updates": {
+    "electron_fraction": {
+      "generated_from_revision": "d8dc7efe90e2c4511bcca5a095b740d651cbf9c3",
+      "generated_on": "2026-11-06",
+      "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+      "compiler": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+      "build": {
+        "CMODE": "OPT",
+        "PE_ENV": "GNU",
+        "MPI_MODE": "OFF",
+        "OPENMP_MODE": "OFF",
+        "GPU_MODE": "OFF",
+        "EOS": "STARKILLER",
+        "MATRIX_SOLVER": "dense",
+        "LAPACK_VER": "NETLIB"
+      },
+      "reason": "Issue #181: Ye from the accepted composition, normalized as the EOS moments; all other reference values and tolerances retain their original producer metadata.",
+      "maintainer_approval": "https://github.com/jaharris87/XNet/pull/182#issuecomment-6692358484"
+    }
   }
 }

@@ -4,7 +4,7 @@ Program api_consumer
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, xnet_gpu_t, &
     & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize, &
     & xnet_success, xnet_invalid, xnet_lifecycle_error, xnet_unsupported
-  Use consumer_fixture, Only: fixture_state, write_state, check
+  Use consumer_fixture, Only: fixture_state, write_state, check, check_ye_consistency
   Implicit None
 
   Integer, Parameter :: lanes = 4
@@ -408,6 +408,12 @@ Contains
         Call check(All(ieee_is_finite(x(:,j))) .and. All(x(:,j) >= 0.0_dp),label//' composition')
         Call check(ieee_is_finite(temperature(j)) .and. temperature(j) > 0.0_dp,label//' temperature')
         Call check(ieee_is_finite(ye(j)) .and. ye(j) >= 0.0_dp .and. ye(j) <= 1.0_dp,label//' Ye')
+        If ( label == 'no_aux' ) Then
+          Call check_ye_consistency(ye(j),x(:,j),network%mass_number,network%charge_number,label)
+        Else
+          Call check_ye_consistency(ye(j),x(:,j),network%mass_number,network%charge_number, &
+            & label,aux_x(j),aux_a(j),aux_z(j))
+        EndIf
         Call check(ieee_is_finite(restart(j)) .and. restart(j) >= 0.0_dp,label//' restart')
         Call check(ieee_is_finite(loss(j)) .and. loss(j) >= 0.0_dp,label//' neutrino loss')
         Call check(counters(1,j) > 0 .and. All(counters(:,j) >= 0),label//' counters')

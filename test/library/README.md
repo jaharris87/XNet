@@ -159,6 +159,14 @@ processes. Inactive caller state must remain unchanged and its loss/counters
 must be zero. Metadata names and order are compared with the staged `sunet`;
 all A/Z and energy values are compared with the legacy nuclear-data arrays.
 
+Successful active lanes also compare returned Ye with
+`(sum(X*Z/A) + aux_x*aux_z/aux_a)/(sum(X) + aux_x)`, using public network
+metadata and the submitted auxiliary inputs. Calls without auxiliary arguments
+omit those terms. The arithmetic bound is
+`8*(species_count+2)*epsilon(binary64)*max(abs(Ye),abs(expected_Ye))`;
+it allows rounding in the composition sums and conversions, not integration
+error. This check uses no EOS routine or same-archive reference result.
+
 Validation checks cover invalid controls, duplicate initialization, unsupported
 neutrino capture histories, invalid extents, incomplete auxiliary
 arguments, NaN/Inf input, negative fractions/restart hints, invalid Ye, and an
@@ -405,6 +413,12 @@ that its mirrors still contain the original poison, returning only a logical
 result. Device outputs are read immediately after the API returns without
 another stream wait, including in the persistent chains. Timings must be
 finite and nonnegative; they are not compared across calls.
+
+Every successful active GPU lane also uses the composition-based Ye check
+above, including the resident chains, producer calls and one-lane allocations.
+Auxiliary inputs are saved before poisoning the host arrays. The application
+outer-batch OpenMP caller retains each batch's auxiliary inputs for the same
+check. Inactive and unsubmitted lanes keep their state-preservation checks.
 
 GPU physical-output comparisons allow for floating-point ordering differences
 from atomic updates and reductions. Temperature and Ye use `rtol=1e-7` and

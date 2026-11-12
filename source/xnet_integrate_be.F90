@@ -38,8 +38,8 @@ Contains
     ! the iteration, yt(i) is the trial abundance at the end of the timestep, ydot(i) is the time
     ! derivative of the trial abundance calculated from reaction rates and tdel is the timestep.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
-    Use xnet_abundances, Only: y, yo, yt
+    Use nuclear_data, Only: ny, aa, zz
+    Use xnet_abundances, Only: y, yo, yt, xext, aext, zext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
@@ -58,6 +58,7 @@ Contains
     ! Local variables
     Integer, Parameter :: ktsmx = 10
     Integer :: kts, k, izb, izone
+    Real(dp) :: atot, ztot
 
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
@@ -173,7 +174,9 @@ Contains
     ! Mark TS convergence only for zones which haven't previously failed or converged
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
-    !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
+    !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt) &
+    !XDIR XPRESENT(aa,zz,xext,aext,zext) &
+    !XDIR XPRIVATE(atot,ztot)
     Do izb = zb_lo, zb_hi
       If ( inr(izb) >= 0 ) Then
         kmon(1,izb) = mykts(izb)
@@ -189,12 +192,19 @@ Contains
           rhoo(izb) = rho(izb)
           rho(izb) = rhot(izb)
           yeo(izb) = ye(izb)
-          ye(izb) = yet(izb)
-          !XDIR XLOOP_INNER(1)
+          atot = 0.0_dp
+          ztot = 0.0_dp
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XREDUCTION(+,atot,ztot)
           Do k = 1, ny
             yo(k,izb) = y(k,izb)
             y(k,izb) = yt(k,izb)
+            atot = atot + aa(k)*y(k,izb)
+            ztot = ztot + zz(k)*y(k,izb)
           EndDo
+          ! The last EOS evaluation precedes the final Newton correction. Report Ye from
+          ! the accepted composition, using the same normalization as the EOS moments.
+          ye(izb) = (ztot + xext(izb)/aext(izb)*zext(izb))/(atot + xext(izb))
         Else
           its(izb) = 1
         EndIf

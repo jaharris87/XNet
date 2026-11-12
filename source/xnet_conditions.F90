@@ -4,7 +4,7 @@
 !
 ! Manages per-zone time, timestep, temperature (T9 [GK]), density (rho [g/cm^3]), electron
 ! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories in the zone workspace
-! (1:nzevolve). The standalone driver allocates full trajectories (nhistory = nhmx),
+! (1:nzbatchmx). The standalone driver allocates full trajectories (nhistory = nhmx),
 ! whereas constant-condition library burns allocate two-point endpoint histories (nhistory = 2).
 !***************************************************************************************************
 
@@ -15,7 +15,7 @@ Module xnet_conditions
   Implicit None
 
   !-------------------------------------------------------------------------------------------------
-  ! Current, trial, and previous time and thermodynamic state (1:nzevolve)
+  ! Current, trial, and previous time and thermodynamic state (1:nzbatchmx)
   !-------------------------------------------------------------------------------------------------
   Real(dp), Allocatable :: t(:)        ! Time at the beginning of the current timestep [s]
   Real(dp), Allocatable :: tt(:)       ! Trial time at the end of the current timestep [s]
@@ -40,7 +40,7 @@ Module xnet_conditions
   Integer, Allocatable :: intso(:)     ! Species index governing the previous timestep
 
   !-------------------------------------------------------------------------------------------------
-  ! Thermodynamic trajectory histories (nhistory, nzevolve)
+  ! Thermodynamic trajectory histories (nhistory, nzbatchmx)
   !-------------------------------------------------------------------------------------------------
   Integer, Parameter    :: nhmx = 50000 ! Maximum trajectory history points for standalone runs
   Integer, Allocatable  :: nh(:)        ! Number of populated trajectory points per zone
@@ -54,6 +54,12 @@ Module xnet_conditions
     Module Procedure t9rhofind_vector
   End Interface t9rhofind
 
+#ifdef XNET_OMP
+  !$omp threadprivate(t,tt,to,tdel,tdel_next,tdel_old,t9t,rhot,yet,t9,rho,ye,t9o,rhoo,yeo,t9dot,cv,etae,detaedt9)
+  !$omp threadprivate(nt,ntt,nto,ints,intso,nh,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart,th,t9h,rhoh)
+  !$omp threadprivate(yeh)
+#endif
+
 Contains
 
   !=================================================================================================
@@ -62,22 +68,25 @@ Contains
 
   Subroutine conditions_initialize(nhistory)
     !-----------------------------------------------------------------------------------------------
-    ! Allocate and zero thermodynamic state and trajectory history arrays for 1:nzevolve zones,
+    ! Allocate and zero thermodynamic state and trajectory history arrays for 1:nzbatchmx zones,
     ! then establish persistent device mappings.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzevolve, gpu_queue
+    Use xnet_controls, Only: gpu_queue, nzbatchmx
     Implicit None
 
     ! Input arguments
     Integer, Intent(in) :: nhistory ! Allocated history points per zone
 
-    Allocate (tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
-      & t(nzevolve),tt(nzevolve),to(nzevolve), &
-      & t9(nzevolve),t9t(nzevolve),t9o(nzevolve),t9dot(nzevolve), &
-      & rho(nzevolve),rhot(nzevolve),rhoo(nzevolve), &
-      & ye(nzevolve),yet(nzevolve),yeo(nzevolve), &
-      & cv(nzevolve),etae(nzevolve),detaedt9(nzevolve), &
-      & nt(nzevolve),ntt(nzevolve),nto(nzevolve),ints(nzevolve),intso(nzevolve))
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    Allocate (tdel(nzbatchmx),tdel_next(nzbatchmx),tdel_old(nzbatchmx), &
+      & t(nzbatchmx),tt(nzbatchmx),to(nzbatchmx), &
+      & t9(nzbatchmx),t9t(nzbatchmx),t9o(nzbatchmx),t9dot(nzbatchmx), &
+      & rho(nzbatchmx),rhot(nzbatchmx),rhoo(nzbatchmx), &
+      & ye(nzbatchmx),yet(nzbatchmx),yeo(nzbatchmx), &
+      & cv(nzbatchmx),etae(nzbatchmx),detaedt9(nzbatchmx), &
+      & nt(nzbatchmx),ntt(nzbatchmx),nto(nzbatchmx),ints(nzbatchmx),intso(nzbatchmx))
     tdel      = 0.0_dp
     tdel_next = 0.0_dp
     tdel_old  = 0.0_dp
@@ -103,10 +112,10 @@ Contains
     ints      = 0
     intso     = 0
 
-    Allocate (nstart(nzevolve),tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
-      & t9start(nzevolve),rhostart(nzevolve),yestart(nzevolve),nh(nzevolve), &
-      & th(nhistory,nzevolve),t9h(nhistory,nzevolve), &
-      & rhoh(nhistory,nzevolve),yeh(nhistory,nzevolve))
+    Allocate (nstart(nzbatchmx),tstart(nzbatchmx),tstop(nzbatchmx),tdelstart(nzbatchmx), &
+      & t9start(nzbatchmx),rhostart(nzbatchmx),yestart(nzbatchmx),nh(nzbatchmx), &
+      & th(nhistory,nzbatchmx),t9h(nhistory,nzbatchmx), &
+      & rhoh(nhistory,nzbatchmx),yeh(nhistory,nzbatchmx))
     nstart    = 0
     tstart    = 0.0_dp
     tstop     = 0.0_dp
@@ -127,6 +136,10 @@ Contains
     !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh)
     !XDIR XWAIT(gpu_queue)
 
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
     Return
   End Subroutine conditions_initialize
 
@@ -137,6 +150,9 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
     If ( allocated(t) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
@@ -181,6 +197,10 @@ Contains
     If ( allocated(t9h) )       Deallocate (t9h)
     If ( allocated(rhoh) )      Deallocate (rhoh)
     If ( allocated(yeh) )       Deallocate (yeh)
+
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
 
     Return
   End Subroutine conditions_finalize
@@ -243,31 +263,31 @@ Contains
 
   Subroutine t9rhofind_vector(kstep,tf,nf,t9f,rhof,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! Batched trajectory interpolation across the active zones (zb_lo:zb_hi).
+    ! Batched trajectory interpolation across the active zones (1:nzbatchmx).
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, gpu_queue
+    Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input arguments
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: tf(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: tf(1:nzbatchmx)
 
     ! Input/Output arguments
-    Integer, Intent(inout) :: nf(zb_lo:zb_hi)
-    Real(dp), Intent(inout) :: t9f(zb_lo:zb_hi), rhof(zb_lo:zb_hi)
+    Integer, Intent(inout) :: nf(1:nzbatchmx)
+    Real(dp), Intent(inout) :: t9f(1:nzbatchmx), rhof(1:nzbatchmx)
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -276,7 +296,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         Call t9rhofind_scalar(kstep,tf(izb),nf(izb),t9f(izb),rhof(izb), &
           & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))

@@ -68,7 +68,7 @@ callers. The current executable uses `apply_standalone_controls` to enforce its
 file-input requirements and copy the value into the existing module execution
 state. The `xnet_api` lifecycle provides initialization, constant-condition
 batched burns, scalar NSE composition queries, and cleanup for a dense
-instance. A CPU OpenMP build assigns disjoint batch banks and NSE scratch to
+instance. A CPU OpenMP build allocates separate plain workspaces and NSE scratch for
 application workers; the application owns the batch loop. Initialization and
 finalization stay outside the fixed worker team. GPU host calls remain
 serialized. CPU and GPU paths share control application,
@@ -129,10 +129,26 @@ in `source/net.F90`. The following files explain the state shared by both paths:
 
 Keep the two composition conventions distinct: standalone abundance files and
 internal arrays use molar abundances `Y = X/A`; `xnet_burn_batch` accepts mass
-fractions `X`. Workspace index `izb` selects a slot in the current worker bank
-`zb_lo:zb_hi`. The corresponding input-zone ordinal is
-`izone = izb + szbatch - zb_lo`; diagnostic mesh labels are the separate
-`zone_id(:,izb)` tuple.
+fractions `X`. Each fixed-team worker owns plain allocatable workspace arrays
+with local lanes `izb = 1:nzbatchmx`. Conditional OpenMP `THREADPRIVATE`
+declarations give each worker its own descriptors and allocations; numerical
+array ranks and species/matrix strides are unchanged. Each owning module
+allocates, initializes, maps and releases its worker arrays inside its own team
+region. Immutable network tables, output-species selections, BDF tables and
+external EOS initialization remain shared once per rank.
+
+For v9, OpenMP target GPU builds require `OPENMP_MODE=OFF` for standalone
+programs and the library. XNet's host worker teams and threadprivate state
+are then disabled; application OpenMP elsewhere remains independent. CPU
+batch threading and CUDA/OpenACC selection remain separate.
+
+`nzbatchmx` is allocated capacity; the API input extent includes inactive lanes,
+while `nzbatch` counts active lanes. The standalone driver uses `nzbatch` for
+the submitted tail extent and fills its active mask from that extent. The API
+uses local lanes directly in caller arrays. Standalone input-zone ordinals are
+`izone = szbatch + izb - 1`; diagnostic mesh labels are the separate
+`zone_id(:,izb)` tuple. Only verbose timestep diagnostics reconstruct the old
+worker-slot label `(tid-1)*nzbatchmx+izb` to preserve the output format.
 
 ## Per-timestep flow
 

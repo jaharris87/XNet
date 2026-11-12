@@ -32,13 +32,47 @@ Module xnet_ffn
   Real(dp), Parameter :: lqkmin = -90.0, qkmin = 1.0e-90
   Real(dp), Parameter :: lrfmin = -30.0, rfmin = 1.0e-30
 
+#ifdef XNET_OMP
+  !$omp threadprivate(qkffn,phasei,dphaseidt9,rffn,dlnrffndt9)
+#endif
+
 Contains
+
+  Subroutine ffn_workspace_initialize(nffn)
+    ! Allocate rate scratch for every member of the fixed worker team.
+    Use xnet_controls, Only: nzbatchmx, gpu_queue
+    Implicit None
+    Integer, Intent(in) :: nffn
+
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( nffn > 0 ) Then
+      Allocate (qkffn(0:nffn,nzbatchmx))
+    Else
+      Allocate (qkffn(1,nzbatchmx))
+    EndIf
+    Allocate (phasei(max(1,nffn),nzbatchmx),dphaseidt9(max(1,nffn),nzbatchmx))
+    Allocate (rffn(max(1,nffn),nzbatchmx),dlnrffndt9(max(1,nffn),nzbatchmx))
+    qkffn = 0.0
+    phasei = 0.0
+    dphaseidt9 = 0.0
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
+    !XDIR XCOPYIN(qkffn,phasei,dphaseidt9) &
+    !XDIR XCREATE(rffn,dlnrffndt9)
+    !XDIR XWAIT(gpu_queue)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+    Return
+  End Subroutine ffn_workspace_initialize
+
 
   Subroutine read_ffn_data(nffn,data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine decides whether to call the standard read or the logft table read
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, nzevolve
+    Use xnet_controls, Only: iweak0, nzbatchmx
     Implicit None
 
     ! Input variables
@@ -49,18 +83,13 @@ Contains
     has_logft = 0
 
     Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
-    Allocate (qkffn(0:nffn,nzevolve))
     Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
     Allocate (ffn_qval(nffn))
-    Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
     ffnsum = 0.0
     ffnenu = 0.0
-    qkffn = 0.0
     ffn_ec = 0.0
     ffn_beta = 0.0
     ffn_qval = 0.0
-    phasei = 0.0
-    dphaseidt9 = 0.0
 
     If ( abs(iweak0) == 2 ) Then  ! Allows to use -2 for weak interactions only
       Call read_ffn_data_logft(nffn,data_dir)
@@ -141,7 +170,7 @@ Contains
     ! This routine calculates the reaction rates for FFN weak rates
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: ln_2, ln_10, bok, m_e
-    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: iheat, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_conditions, Only: etae
     Use xnet_types, Only: dp
     Use xnet_controls, Only: lun_diag, idiag
@@ -150,15 +179,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in)  :: nffn              ! Number of FFN rates
-    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)   ! Temperature [GK]
-    Real(dp), Intent(in) :: ene(zb_lo:zb_hi)  ! Electron Density [g cm^{-3}]
+    Real(dp), Intent(in) :: t9(1:nzbatchmx)   ! Temperature [GK]
+    Real(dp), Intent(in) :: ene(1:nzbatchmx)  ! Electron Density [g cm^{-3}]
 
     ! Output variables
-    Real(dp), Intent(out) :: rf(nffn,zb_lo:zb_hi)       ! Temperature and density dependent FFN rates
-    Real(dp), Intent(out) :: dlnrfdt9(nffn,zb_lo:zb_hi) ! Temperature and density dependent log FFN rate derivatives
+    Real(dp), Intent(out) :: rf(nffn,1:nzbatchmx)       ! Temperature and density dependent FFN rates
+    Real(dp), Intent(out) :: dlnrfdt9(nffn,1:nzbatchmx) ! Temperature and density dependent log FFN rate derivatives
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Real(dp) :: r1, r2, dr1, dr2, dr1_ec, dr2_ec
@@ -166,13 +195,13 @@ Contains
     Real(dp) :: rf_beta, rf_ec, cheme
     Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt, drec_dt
     Integer :: i, izb, k, le1, i1, i2, i3, i4
-    Integer :: lt1(zb_lo:zb_hi)
+    Integer :: lt1(1:nzbatchmx)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -184,7 +213,7 @@ Contains
     !XDIR XLOOP(2) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,etae,has_logft,ffn_qval,phasei,dphaseidt9) &
     !XDIR XPRIVATE(cheme)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       Do k = 1, nffn
         If ( mask(izb) .and. has_logft(k) > 0 ) Then
           cheme = etae(izb)*bok*t9(izb) + m_e
@@ -196,7 +225,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,lt1)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       ! Keep inactive indices valid when interpolation is hoisted before its mask.
       lt1(izb) = 1
       If ( mask(izb) ) Then
@@ -216,7 +245,7 @@ Contains
     !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
     !XDIR XPRIVATE(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt) &
     !XDIR XPRIVATE(qdr1,qdr2,qr1,qr2,qk)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       Do k = 1, nffn
         If ( mask(izb) ) Then
 
@@ -305,7 +334,7 @@ Contains
     If ( idiag >= 5 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(rf,dlnrfdt9,phasei,dphaseidt9)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           Do k = 1, nffn
             If ( has_logft(k) > 0 ) Then
@@ -426,22 +455,34 @@ Contains
     ! Release mappings established by read_reaction_data before CPU allocations.
     Use xnet_controls, Only: gpu_queue
     Implicit None
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( Allocated(qkffn) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(qkffn,phasei,dphaseidt9,rffn,dlnrffndt9)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    If ( Allocated(qkffn) ) Deallocate (qkffn)
+    If ( Allocated(phasei) ) Deallocate (phasei)
+    If ( Allocated(dphaseidt9) ) Deallocate (dphaseidt9)
+    If ( Allocated(rffn) ) Deallocate (rffn)
+    If ( Allocated(dlnrffndt9) ) Deallocate (dlnrffndt9)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
     If ( Allocated(ffnsum) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(ffnsum,ffnenu,qkffn,has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9,rffn,dlnrffndt9)
+      !XDIR XDELETE(ffnsum,ffnenu,has_logft,ffn_ec,ffn_beta,ffn_qval)
       !XDIR XWAIT(gpu_queue)
     EndIf
     If ( Allocated(ffn_ec) ) Deallocate (ffn_ec)
     If ( Allocated(ffn_beta) ) Deallocate (ffn_beta)
     If ( Allocated(ffnsum) ) Deallocate (ffnsum)
     If ( Allocated(ffnenu) ) Deallocate (ffnenu)
-    If ( Allocated(qkffn) ) Deallocate (qkffn)
     If ( Allocated(ffn_qval) ) Deallocate (ffn_qval)
-    If ( Allocated(phasei) ) Deallocate (phasei)
-    If ( Allocated(dphaseidt9) ) Deallocate (dphaseidt9)
     If ( Allocated(has_logft) ) Deallocate (has_logft)
-    If ( Allocated(rffn) ) Deallocate (rffn)
-    If ( Allocated(dlnrffndt9) ) Deallocate (dlnrffndt9)
     Return
   End Subroutine ffn_finalize
 

@@ -8,12 +8,11 @@ Program legacy_reference
   Use xnet_conditions, Only: t, tt, to, tdel, tdel_next, tdel_old, t9, t9t, t9o, t9dot, &
     & rho, rhot, rhoo, ye, yet, yeo, cv, etae, detaedt9, nt, ntt, nto, ints, intso, &
     & nstart, tstart, tstop, tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-  Use xnet_controls, Only: descript, szone, nzone, zone_id, iweak, iweak0, iscrn, iprocess, &
-    & nzevolve, nzbatchmx, nzbatch, szbatch, zb_offset, zb_lo, zb_hi, lzactive, isolv, &
-    & kstmx, kitmx, ijac, iconvc, changemx, yacc, tolc, tolm, ymin, tdel_maxmult, kmon, ktot, &
-    & iheat, changemxt, tolt9, t9nse, ineutrino, nnucout, idiag, itsout, nnucout_string, &
-    & inucout, lun_ts, lun_ev, output_nuc, ev_file_base, bin_file_base, lun_diag, lun_stdout, &
-    & inab_file, thermo_file, iaux, myid, nproc, tid, nthread, sweep
+  Use xnet_controls, Only: descript, szone, nzone, zone_id, iweak, iweak0, iscrn, iprocess, nzbatchmx, nzbatch,&
+    & szbatch, lzactive, isolv, kstmx, kitmx, ijac, iconvc, changemx, yacc, tolc, tolm, ymin, tdel_maxmult, kmon,&
+    & ktot, iheat, changemxt, tolt9, t9nse, ineutrino, nnucout, idiag, itsout, nnucout_string, inucout, lun_ts,&
+    & lun_ev, output_nuc, ev_file_base, bin_file_base, lun_diag, lun_stdout, inab_file, thermo_file, iaux, myid,&
+    & nproc, tid, nthread, sweep
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
   Use xnet_flux, Only: flux_init
@@ -70,12 +69,12 @@ Program legacy_reference
   iscrn = 1
   iprocess = 0
   nzbatchmx = lanes
-  nzevolve = lanes
+  nzbatchmx = lanes
   nzbatch = lanes
   szbatch = 1
-  zb_offset = 0
-  zb_lo = 1
-  zb_hi = lanes
+
+
+
   kstmx = 9999
   kitmx = 5
   ijac = 1
@@ -105,8 +104,8 @@ Program legacy_reference
     changemxt = 1.0e10_dp
   EndIf
 
-  Allocate(zone_id(4,nzevolve),lzactive(nzevolve),iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
-  Allocate(kmon(5,nzevolve),ktot(5,nzevolve),inab_file(nzone),thermo_file(nzone))
+  Allocate(zone_id(4,nzbatchmx),lzactive(nzbatchmx),iweak(nzbatchmx),lun_ev(nzbatchmx),lun_ts(nzbatchmx))
+  Allocate(kmon(5,nzbatchmx),ktot(5,nzbatchmx),inab_file(nzone),thermo_file(nzone))
   Allocate(output_nuc(nnucout),inucout(nnucout))
   zone_id = 1
   zone_id(4,:) = 0
@@ -136,15 +135,15 @@ Program legacy_reference
   Call nse_initialize()
 
   ! Allocate the legacy state as the standalone driver does, with just two history endpoints.
-  Allocate(y(ny,nzevolve),yo(ny,nzevolve),yt(ny,nzevolve),ydot(ny,nzevolve),ystart(ny,nzevolve))
-  Allocate(xext(nzevolve),aext(nzevolve),zext(nzevolve),iaux(nzevolve))
+  Allocate(y(ny,nzbatchmx),yo(ny,nzbatchmx),yt(ny,nzbatchmx),ydot(ny,nzbatchmx),ystart(ny,nzbatchmx))
+  Allocate(xext(nzbatchmx),aext(nzbatchmx),zext(nzbatchmx),iaux(nzbatchmx))
   y = 0.0_dp ; yo = 0.0_dp ; yt = 0.0_dp ; ydot = 0.0_dp ; ystart = 0.0_dp
   xext = 0.0_dp ; aext = 1.0_dp ; zext = 0.0_dp ; iaux = 0
 
-  Allocate(tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve),t(nzevolve),tt(nzevolve),to(nzevolve), &
-    & t9(nzevolve),t9t(nzevolve),t9o(nzevolve),t9dot(nzevolve),rho(nzevolve),rhot(nzevolve),rhoo(nzevolve), &
-    & ye(nzevolve),yet(nzevolve),yeo(nzevolve),cv(nzevolve),etae(nzevolve),detaedt9(nzevolve), &
-    & nt(nzevolve),ntt(nzevolve),nto(nzevolve),ints(nzevolve),intso(nzevolve))
+  Allocate(tdel(nzbatchmx),tdel_next(nzbatchmx),tdel_old(nzbatchmx),t(nzbatchmx),tt(nzbatchmx),to(nzbatchmx), &
+    & t9(nzbatchmx),t9t(nzbatchmx),t9o(nzbatchmx),t9dot(nzbatchmx),rho(nzbatchmx),rhot(nzbatchmx),rhoo(nzbatchmx), &
+    & ye(nzbatchmx),yet(nzbatchmx),yeo(nzbatchmx),cv(nzbatchmx),etae(nzbatchmx),detaedt9(nzbatchmx), &
+    & nt(nzbatchmx),ntt(nzbatchmx),nto(nzbatchmx),ints(nzbatchmx),intso(nzbatchmx))
   tdel = 0.0_dp ; tdel_next = 0.0_dp ; tdel_old = 0.0_dp
   t = 0.0_dp ; tt = 0.0_dp ; to = 0.0_dp
   t9 = 0.0_dp ; t9t = 0.0_dp ; t9o = 0.0_dp ; t9dot = 0.0_dp
@@ -153,11 +152,11 @@ Program legacy_reference
   cv = 0.0_dp ; etae = 0.0_dp ; detaedt9 = 0.0_dp
   nt = 0 ; ntt = 0 ; nto = 0 ; ints = 0 ; intso = 0
 
-  Allocate(nstart(nzevolve),tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
-    & t9start(nzevolve),rhostart(nzevolve),yestart(nzevolve),nh(nzevolve), &
-    & th(history_points,nzevolve),t9h(history_points,nzevolve), &
-    & rhoh(history_points,nzevolve),yeh(history_points,nzevolve), &
-    & tmevnu(history_points,nnuspec,nzevolve),fluxcms(history_points,nnuspec,nzevolve))
+  Allocate(nstart(nzbatchmx),tstart(nzbatchmx),tstop(nzbatchmx),tdelstart(nzbatchmx), &
+    & t9start(nzbatchmx),rhostart(nzbatchmx),yestart(nzbatchmx),nh(nzbatchmx), &
+    & th(history_points,nzbatchmx),t9h(history_points,nzbatchmx), &
+    & rhoh(history_points,nzbatchmx),yeh(history_points,nzbatchmx), &
+    & tmevnu(history_points,nnuspec,nzbatchmx),fluxcms(history_points,nnuspec,nzbatchmx))
   nstart = 0 ; tstart = 0.0_dp ; tstop = 0.0_dp ; tdelstart = 0.0_dp
   t9start = 0.0_dp ; rhostart = 0.0_dp ; yestart = 0.0_dp ; nh = 0
   th = 0.0_dp ; t9h = 0.0_dp ; rhoh = 0.0_dp ; yeh = 0.0_dp
@@ -242,7 +241,7 @@ Contains
         rho(j) = rhostart(j)
         ye(j) = yestart(j)
       EndDo
-      Call full_net(kstep,denu(zb_lo:zb_hi))
+      Call full_net(kstep,denu(1:nzbatchmx))
       Call check(kstep > 0,'legacy evolution took no steps')
       Do j = 1, ncall
         If ( active(j) ) Then

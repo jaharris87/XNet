@@ -25,8 +25,8 @@ Contains
     Use xnet_abundances, Only: y, yo, ydot
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
       & rhot, t9dot, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
-    Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
-      & ymin, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, ymin, szbatch, &
+      & nzbatchmx, lzactive, tid, gpu_queue
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -35,23 +35,23 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Real(dp), Parameter :: changeth = 0.1
     Real(dp) :: changest, yfloor
-    Real(dp) :: rtau_y(ny), changey, tdel_dy(zb_lo:zb_hi)
-    Real(dp) :: rtau_t9, changet9, tdel_dt9(zb_lo:zb_hi)
-    Real(dp) :: tdel_stop(zb_lo:zb_hi), tdel_init
-    Real(dp) :: dtherm(zb_lo:zb_hi)
+    Real(dp) :: rtau_y(ny), changey, tdel_dy(1:nzbatchmx)
+    Real(dp) :: rtau_t9, changet9, tdel_dt9(1:nzbatchmx)
+    Real(dp) :: tdel_stop(1:nzbatchmx), tdel_init
+    Real(dp) :: dtherm(1:nzbatchmx)
     Integer :: i, j, k, izb, izone
-    Logical :: mask_init(zb_lo:zb_hi)
+    Logical :: mask_init(1:nzbatchmx)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -62,7 +62,7 @@ Contains
     ! Retain old values of timestep and thermo and calculate remaining time
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,mask_init,tdel,tdel_old)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         tdel_old(izb) = tdel(izb)
         mask_init(izb) = ( abs(tdel_old(izb)) < tiny(0.0) )
@@ -79,7 +79,7 @@ Contains
     !XDIR XPRESENT(mask,mask_init,t,tt,tstop,y,yo,ydot,t9,t9o,t9dot,ints,intso,nh) &
     !XDIR XPRESENT(tdel,tdel_next,tdel_old,tdelstart,tdel_stop,tdel_dy,tdel_dt9) &
     !XDIR XPRIVATE(tdel_init,rtau_y,rtau_t9,changey,changet9)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         tdel_stop(izb) = tstop(izb) - t(izb)
         tdel_dy(izb) = 0.0
@@ -174,9 +174,9 @@ Contains
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(tdel,tdel_old,tdel_stop,tdel_next,tdel_dy,tdel_dt9) &
       !XDIR XHOST(ints,intso,y,t)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a4,2i5,6es12.4,i5)") &
             & 'tdel',kstep,izone,tdel(izb),tdel_old(izb),tdel_stop(izb),tdel_next(izb), &
             & tdel_dy(izb),tdel_dt9(izb),ints(izb)
@@ -200,7 +200,7 @@ Contains
       ! for profile monotonicity between t and t+del
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) .and. nh(izb) > 1 ) Then
           Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
             & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
@@ -246,9 +246,9 @@ Contains
       If ( idiag >= 2 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(dtherm,tdel,t9t,rhot)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( mask(izb) .and. nh(izb) > 1 ) Then
-            izone = izb + szbatch - zb_lo
+            izone = szbatch + izb - 1
             If ( dtherm(izb) >= changeth ) Then
               Write(lun_diag,"(a,i2,a,i5,3es24.16)") &
                 & 'Error in Thermo variations after ',i,' reductions',izone,tdel(izb),t9t(izb),rhot(izb)
@@ -271,24 +271,24 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the value of the iweak flag to control the treatment of strong reactions.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -297,7 +297,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,iweak)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
 
         ! Turn off strong interactions if the temperature is less than t9min
@@ -322,23 +322,23 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_conditions, Only: t9t, rhot, yet, cv, etae, detaedt9
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: lzactive, tid, gpu_queue, nzbatchmx
     Use xnet_eos, Only: eos_interface
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_eos
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -348,9 +348,9 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
-    Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
-      & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
+    Call eos_interface(t9t,rhot,yt, &
+      & yet,cv,etae,detaedt9, &
+      & xext,aext,zext,mask_in = mask_in)
 
     !XDIR XEXIT_DATA XASYNC(gpu_queue) &
     !XDIR XDELETE(mask)
@@ -372,14 +372,13 @@ Contains
       & n22, n31, n32, n33, n41, n42, n43, n44, csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i
     Use xnet_abundances, Only: yt, ydot
     Use xnet_conditions, Only: cv, t9t, t9dot
-    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
-      & lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, lzactive, tid, gpu_queue
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_deriv
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, i1, la1, le1, la2, le2, la3, le3, la4, le4, izb, izone
@@ -387,9 +386,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -406,7 +405,7 @@ Contains
     !XDIR XPRESENT(a1,a2,a3,a4,csect1,csect2,csect3,csect4) &
     !XDIR XPRESENT(n11,n21,n22,n31,n32,n33,n41,n42,n43,n44) &
     !XDIR XPRIVATE(la1,la2,la3,la4,le1,le2,le3,le4,s1,s2,s3,s4)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       Do i0 = 1, ny
         If ( mask(izb) ) Then
           la1 = la(1,i0)
@@ -473,7 +472,7 @@ Contains
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(mask,ydot,t9dot,cv,mex) &
       !XDIR XPRIVATE(sdot)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           sdot = 0.0
           !XDIR XLOOP_INNER(1) &
@@ -488,7 +487,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,ktot)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         ktot(4,izb) = ktot(4,izb) + 1
       EndIf
@@ -498,9 +497,9 @@ Contains
     If ( idiag >= 5 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(yt,t9t,ydot,t9dot,b1,b2,b3,b4)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,i5)") 'YDERIV',izone
           Do i0 = 1, ny
             la1 = la(1,i0)
@@ -574,8 +573,8 @@ Contains
     Use reaction_data
     Use xnet_conditions, Only: tt, rhot, t9t, yet
     Use xnet_constants, Only: third, two3rd, four3rd, five3rd
-    Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, &
-      & zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, lzactive, tid, &
+      & gpu_queue
     Use xnet_ffn, Only: ffn_rate, rffn, dlnrffndt9
     Use xnet_linalg, Only: MatrixMatrixMultiply, MatrixVectorMultiply
     Use xnet_nnu, Only: nnu_rate, nnuspec, rnnu
@@ -586,13 +585,13 @@ Contains
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Logical, Parameter :: use_blas = .false.
     Integer, Parameter :: dgemm_nzbatch = 200 ! Min number of zones to use dgemm, otherwise use dgemv
-    Real(dp) :: t09(7,zb_lo:zb_hi), dt09(7,zb_lo:zb_hi)
-    Real(dp) :: ene(zb_lo:zb_hi), ytot, abar, zbar, z2bar, zibar
+    Real(dp) :: t09(7,1:nzbatchmx), dt09(7,1:nzbatchmx)
+    Real(dp) :: ene(1:nzbatchmx), ytot, abar, zbar, z2bar, zibar
     Real(dp) :: ascrn, rhot2, rhot3
     Real(dp) :: rpf1, rpf2, rpf3, rpf4
     Real(dp) :: dlnrpf1dt9, dlnrpf2dt9, dlnrpf3dt9, dlnrpf4dt9
@@ -604,9 +603,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
     nzmask = count(mask)
@@ -635,15 +634,15 @@ Contains
     timer_csect = timer_csect - start_timer
 
     ! Check for any changes to iweak
-    Call update_iweak(t9t(zb_lo:zb_hi),mask_in = mask_in)
+    Call update_iweak(t9t,mask_in = mask_in)
 
     ! Calculate partition functions for each nucleus at t9t
-    Call partf(t9t(zb_lo:zb_hi),mask_in = mask_in)
+    Call partf(t9t,mask_in = mask_in)
 
     ! Calculate necessary thermodynamic moments
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,ene,t09,dt09,t9t,rhot,yet)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       ! FFN interpolation may evaluate inactive density before testing its mask.
       ene(izb) = 1.0_dp
       If ( mask(izb) ) Then
@@ -669,28 +668,28 @@ Contains
     EndDo
 
     ! If there are any FFN reactions, calculate their rates
-    If ( nffn > 0 ) Call ffn_rate(nffn,t9t(zb_lo:zb_hi),ene, &
-      & rffn(:,zb_lo:zb_hi),dlnrffndt9(:,zb_lo:zb_hi),mask_in = mask_in)
+    If ( nffn > 0 ) Call ffn_rate(nffn,t9t,ene, &
+      & rffn,dlnrffndt9,mask_in = mask_in)
 
     ! If there are any neutrino-nucleus reactions, calculate their rates
-    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask_in)
+    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt,rnnu(:,:,1:nzbatchmx),mask_in = mask_in)
 
     ! Calculate the REACLIB exponent polynomials and derivatives, adding screening terms
     If ( use_blas ) Then
       If ( nzmask >= dgemm_nzbatch ) Then
-        If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
-        If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
-        If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
-        If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
+        If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1,nr1)
+        If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2,nr2)
+        If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3,nr3)
+        If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4,nr4)
 
         If ( iheat > 0 ) Then
-          If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
-          If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
-          If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
-          If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
+          If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9,nr1)
+          If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9,nr2)
+          If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9,nr3)
+          If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9,nr4)
         EndIf
       Else
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( mask(izb) ) Then
             If ( nr1 > 0 ) Call MatrixVectorMultiply('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
             If ( nr2 > 0 ) Call MatrixVectorMultiply('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
@@ -710,7 +709,7 @@ Contains
       !XDIR XPRESENT(rc1,rc2,rc3,rc4) &
       !XDIR XPRESENT(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !XDIR XPRESENT(mask,t09,dt09)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           !XDIR XLOOP_INNER(1) &
           !XDIR XPRIVATE(lambda1,dlam1dt9)
@@ -771,7 +770,7 @@ Contains
     !XDIR XPRESENT(csect1,csect2,csect3,csect4) &
     !XDIR XPRESENT(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
     !XDIR XPRESENT(mask,rhot,ene,gg,dlngdt9,iweak,iffn,rffn,dlnrffndt9,innu,rnnu,ktot)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
 
         ! Calculate the csect for reactions with 1 reactant
@@ -933,9 +932,9 @@ Contains
       !XDIR XHOST(csect1,csect2,csect3,csect4) &
       !XDIR XHOST(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
       !XDIR XHOST(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,i5)") 'CSect',izone
           Write(lun_diag,"(a,i5)") 'CSect1',nr1
           Write(lun_diag,"(i5,6a5,3i3,2es23.15)") &

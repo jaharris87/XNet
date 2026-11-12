@@ -1,7 +1,7 @@
 Module eos_component_fixture
   Use nuclear_data, Only: aa, nname, ny, zz, zz2, zz53, zzi
   Use xnet_constants, Only: five3rd, thbim1
-  Use xnet_controls, Only: lzactive, nzevolve, zb_hi, zb_lo
+  Use xnet_controls, Only: lzactive, nzbatchmx
   Use xnet_eos, Only: eos_initialize
   Use xnet_types, Only: dp
   Implicit None
@@ -23,9 +23,9 @@ Contains
     Integer :: length, status
 
     ny = 4
-    nzevolve = nzone
-    zb_lo = 1
-    zb_hi = nzone
+    nzbatchmx = nzone
+
+
     Allocate (aa(ny),zz(ny),zz2(ny),zz53(ny),zzi(ny),nname(ny),lzactive(nzone))
     nname = (/ 'p    ', 'he4  ', 'c12  ', 'fe56 ' /)
     aa = (/ 1.0_dp, 4.0_dp, 12.0_dp, 56.0_dp /)

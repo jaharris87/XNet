@@ -27,6 +27,11 @@ Module xnet_integrate_be
 
   Public :: solve_be, be_init, be_finalize
 
+#ifdef XNET_OMP
+  !$omp threadprivate(inr,mykts,lzstep,testc,testc2,testm,testn,toln,xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs)
+  !$omp threadprivate(dt9,relt9,iterate,eval_rates,rebuild)
+#endif
+
 Contains
 
   Subroutine solve_be(kstep,its)
@@ -42,8 +47,8 @@ Contains
     Use xnet_abundances, Only: y, yo, yt
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
-    Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
-      & szbatch, zb_lo, zb_hi, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, szbatch, nzbatchmx, &
+      & tid, gpu_queue
     Use xnet_integrate, Only: timestep
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
@@ -52,7 +57,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: its(zb_lo:zb_hi) ! On input,  = 0 indicates active zone
+    Integer, Intent(inout) :: its(1:nzbatchmx) ! On input,  = 0 indicates active zone
                                                ! On output, = 1 if zone fails to converge
 
     ! Local variables
@@ -68,7 +73,7 @@ Contains
     ! If the zone has previously converged or failed, do not iterate
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(its,inr,lzstep,mykts)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( its(izb) /= 0 ) Then
         inr(izb) = -1
         lzstep(izb) = .false.
@@ -86,13 +91,12 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Do kts = 1, ktsmx
 
-      ! Attempt Backward Euler integration over desired timestep. Pass the
-      ! current worker section explicitly to preserve zb_lo:zb_hi association.
-      Call step_be(kstep,inr(zb_lo:zb_hi))
+      ! Attempt Backward Euler integration over the desired timestep.
+      Call step_be(kstep,inr)
 
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot,lzstep)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
 
         ! If integration fails, reset abundances, reduce timestep and retry.
         If ( inr(izb) == 0 ) Then
@@ -128,12 +132,12 @@ Contains
       !XDIR XHOST(lzstep)
 
       ! Reset temperature and density for failed integrations
-      Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
-        & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep(zb_lo:zb_hi))
+      Call t9rhofind(kstep,tt,ntt, &
+        & t9t,rhot,mask_in = lzstep)
       If ( iheat > 0 ) Then
         !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
         !XDIR XPRESENT(lzstep,t9t,t9)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( lzstep(izb) ) Then
             t9t(izb) = t9(izb)
           EndIf
@@ -145,36 +149,36 @@ Contains
       If ( kts == ktsmx-1 ) Then
         !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
         !XDIR XPRESENT(lzstep,tdel,tdelstart)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( lzstep(izb) ) Then
             tdel(izb) = 0.0
             tdelstart(izb) = 0.0
           EndIf
         EndDo
-        Call timestep(kstep,mask_in = lzstep(zb_lo:zb_hi))
+        Call timestep(kstep,mask_in = lzstep)
       EndIf
 
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(inr,tt,tdel)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( inr(izb) == 0 ) Then
-            izone = izb + szbatch - zb_lo
+            izone = szbatch + izb - 1
             Write(lun_diag,"(a,i5,i3,3es12.4)") 'BE TS Reduce',izone,kts,tt(izb),tdel(izb),tdel_maxmult
           EndIf
         EndDo
       EndIf
 
       ! Test if all zones have converged
-      If ( .not. any( lzstep(zb_lo:zb_hi) ) ) Exit
+      If ( .not. any( lzstep ) ) Exit
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( inr(izb) >= 0 ) Then
         kmon(1,izb) = mykts(izb)
         ktot(1,izb) = ktot(1,izb) + mykts(izb)
@@ -205,8 +209,8 @@ Contains
     If ( idiag >= 0 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(inr)
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
+      Do izb = 1, nzbatchmx
+        izone = szbatch + izb - 1
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
           !XDIR XUPDATE XWAIT(gpu_queue) &
           !XDIR XHOST(mykts(izb))
@@ -239,8 +243,8 @@ Contains
     Use nuclear_data, Only: ny, aa, nname
     Use xnet_abundances, Only: y, ydot, yt, xext
     Use xnet_conditions, Only: t9, t9dot, t9t, tdel, nh
-    Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
-      & szbatch, zb_lo, zb_hi, tid, gpu_queue
+    Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, szbatch, &
+      & nzbatchmx, tid, gpu_queue
     Use xnet_integrate, Only: cross_sect, yderiv
     Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_nraph
@@ -251,7 +255,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: inr(zb_lo:zb_hi) ! On input,  = 0 indicates active zone
+    Integer, Intent(inout) :: inr(1:nzbatchmx) ! On input,  = 0 indicates active zone
                                                !            =-1 indicates inactive zone
                                                ! On output, > 0 indicates # NR iterations if converged
 
@@ -269,7 +273,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
     !XDIR XPRIVATE(s1)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( inr(izb) == 0 ) Then
 
         ! Create mask for active zone integrations
@@ -299,7 +303,7 @@ Contains
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
     Do kit = 1, kitmx
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
 
         ! Rebuild and update LU factorization of the jacobian every ijac iterations
         rebuild(izb) = ( iterate(izb) .and. mod(kit-1,ijac) == 0 )
@@ -317,17 +321,17 @@ Contains
       !XDIR XDEVICE(rebuild,eval_rates)
 
       ! Calculate the reaction rates and abundance time derivatives. These module arrays
-      ! need explicit current-worker sections for the zb_lo:zb_hi dummy bounds.
-      Call cross_sect(mask_in = eval_rates(zb_lo:zb_hi))
-      Call yderiv(mask_in = iterate(zb_lo:zb_hi))
-      Call jacobian_build(diag_in = rdt(zb_lo:zb_hi),mult_in = mult(zb_lo:zb_hi), &
-        & mask_in = rebuild(zb_lo:zb_hi))
-      Call jacobian_decomp(kstep,mask_in = rebuild(zb_lo:zb_hi))
+      ! need explicit current-worker sections for the 1:nzbatchmx dummy bounds.
+      Call cross_sect(mask_in = eval_rates)
+      Call yderiv(mask_in = iterate)
+      Call jacobian_build(diag_in = rdt,mult_in = mult, &
+        & mask_in = rebuild)
+      Call jacobian_decomp(kstep,mask_in = rebuild)
 
       ! Calculate equation to zero
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( iterate(izb) ) Then
           If ( kit > 1 ) Then
             !XDIR XLOOP_INNER(1)
@@ -353,9 +357,9 @@ Contains
       If ( idiag >= 4 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( iterate(izb) ) Then
-            izone = izb + szbatch - zb_lo
+            izone = szbatch + izb - 1
             Write(lun_diag,"(a3,2i5,es14.7)") 'RHS',kstep,izone,rdt(izb)
             Write(lun_diag,"(a5,4es23.15)") (nname(i),yrhs(i,izb),ydot(i,izb),yt(i,izb),y(i,izb),i=1,ny)
             If ( iheat > 0 ) Write(lun_diag,"(a5,4es23.15)") 'T9',t9rhs(izb),t9dot(izb),t9t(izb),t9(izb)
@@ -364,10 +368,10 @@ Contains
       EndIf
 
       ! Solve the jacobian and calculate the changes in abundances, dy
-      !Call jacobian_solve(kstep,yrhs(:,zb_lo:zb_hi),dy(:,zb_lo:zb_hi), &
-      !  & t9rhs(zb_lo:zb_hi),dt9(zb_lo:zb_hi),mask_in = iterate(zb_lo:zb_hi))
-      Call jacobian_bksub(kstep,yrhs(:,zb_lo:zb_hi),dy(:,zb_lo:zb_hi), &
-        & t9rhs(zb_lo:zb_hi),dt9(zb_lo:zb_hi),mask_in = iterate(zb_lo:zb_hi))
+      !Call jacobian_solve(kstep,yrhs,dy, &
+      !  & t9rhs(1:nzbatchmx),dt9(1:nzbatchmx),mask_in = iterate(1:nzbatchmx))
+      Call jacobian_bksub(kstep,yrhs,dy, &
+        & t9rhs,dt9,mask_in = iterate)
 
       ! Evolve the abundances and calculate convergence tests
       !-----------------------------------------------------------------------------------------
@@ -385,7 +389,7 @@ Contains
       !XDIR XPRESENT(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
       !XDIR XPRESENT(aa,inr,testm,testc,testc2,testn,toln) &
       !XDIR XPRIVATE(s1,s2,s3)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( iterate(izb) ) Then
           s1 = 0.0
           s2 = 0.0
@@ -438,9 +442,9 @@ Contains
       If ( idiag >= 3 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( inr(izb) >= 0 ) Then
-            izone = izb + szbatch - zb_lo
+            izone = szbatch + izb - 1
             If ( idiag >= 4 ) Then
               irdymx = maxloc(reldy(:,izb),dim=1)
               idymx = maxloc(dy(:,izb),dim=1)
@@ -459,15 +463,15 @@ Contains
       EndIf
 
       ! Check that all zones are converged
-      If ( .not. any(iterate(zb_lo:zb_hi)) ) Exit
+      If ( .not. any(iterate) ) Exit
     EndDo
 
     If ( idiag >= 2 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(inr,xtot,testn,toln)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( inr(izb) >= 0 ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           If ( inr(izb) > 0 ) Then
             Write(lun_diag,"(a,3i5,3es12.4)") 'Conv',kstep,izone,inr(izb),xtot(izb),testn(izb),toln(izb)
           ElseIf ( inr(izb) == 0 ) Then
@@ -491,21 +495,24 @@ Contains
     ! This routine initializes the BE data structures
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iconvc, tolc, tolm, nzevolve, tid, gpu_queue
+    Use xnet_controls, Only: iconvc, tolc, tolm, tid, gpu_queue, nzbatchmx
     Implicit None
 
-    If ( .not. allocated(inr) ) Allocate (inr(nzevolve))
-    If ( .not. allocated(mykts) ) Allocate (mykts(nzevolve))
-    If ( .not. allocated(lzstep) ) Allocate (lzstep(nzevolve))
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    If ( .not. allocated(inr) ) Allocate (inr(nzbatchmx))
+    If ( .not. allocated(mykts) ) Allocate (mykts(nzbatchmx))
+    If ( .not. allocated(lzstep) ) Allocate (lzstep(nzbatchmx))
     inr = 0
     mykts = 0
     lzstep = .false.
 
     ! Set convergence condition and tolerances
-    If ( .not. allocated(testc) ) Allocate (testc(nzevolve))
-    If ( .not. allocated(testc2) ) Allocate (testc2(nzevolve))
-    If ( .not. allocated(testm) ) Allocate (testm(nzevolve))
-    If ( .not. allocated(toln) ) Allocate (toln(nzevolve))
+    If ( .not. allocated(testc) ) Allocate (testc(nzbatchmx))
+    If ( .not. allocated(testc2) ) Allocate (testc2(nzbatchmx))
+    If ( .not. allocated(testm) ) Allocate (testm(nzbatchmx))
+    If ( .not. allocated(toln) ) Allocate (toln(nzbatchmx))
     testc = 0.0_dp
     testc2 = 0.0_dp
     testm = 0.0_dp
@@ -517,33 +524,33 @@ Contains
       toln = tolm
     EndIf
 
-    If ( .not. allocated(xtot) ) Allocate (xtot(nzevolve))
-    If ( .not. allocated(xtot_init) ) Allocate (xtot_init(nzevolve))
+    If ( .not. allocated(xtot) ) Allocate (xtot(nzbatchmx))
+    If ( .not. allocated(xtot_init) ) Allocate (xtot_init(nzbatchmx))
     xtot = 0.0_dp
     xtot_init = 0.0_dp
 
-    If ( .not. allocated(rdt) ) Allocate (rdt(nzevolve))
-    If ( .not. allocated(mult) ) Allocate (mult(nzevolve))
+    If ( .not. allocated(rdt) ) Allocate (rdt(nzbatchmx))
+    If ( .not. allocated(mult) ) Allocate (mult(nzbatchmx))
     rdt = 0.0_dp
     mult = 0.0_dp
 
-    If ( .not. allocated(yrhs) ) Allocate (yrhs(ny,nzevolve))
-    If ( .not. allocated(dy) ) Allocate (dy(ny,nzevolve))
-    If ( .not. allocated(reldy) ) Allocate (reldy(ny,nzevolve))
+    If ( .not. allocated(yrhs) ) Allocate (yrhs(ny,nzbatchmx))
+    If ( .not. allocated(dy) ) Allocate (dy(ny,nzbatchmx))
+    If ( .not. allocated(reldy) ) Allocate (reldy(ny,nzbatchmx))
     yrhs = 0.0_dp
     dy = 0.0_dp
     reldy = 0.0_dp
 
-    If ( .not. allocated(t9rhs) ) Allocate (t9rhs(nzevolve))
-    If ( .not. allocated(dt9) ) Allocate (dt9(nzevolve))
-    If ( .not. allocated(relt9) ) Allocate (relt9(nzevolve))
+    If ( .not. allocated(t9rhs) ) Allocate (t9rhs(nzbatchmx))
+    If ( .not. allocated(dt9) ) Allocate (dt9(nzbatchmx))
+    If ( .not. allocated(relt9) ) Allocate (relt9(nzbatchmx))
     t9rhs = 0.0_dp
     dt9 = 0.0_dp
     relt9 = 0.0_dp
 
-    If ( .not. allocated(iterate) ) Allocate (iterate(nzevolve))
-    If ( .not. allocated(eval_rates) ) Allocate (eval_rates(nzevolve))
-    If ( .not. allocated(rebuild) ) Allocate (rebuild(nzevolve))
+    If ( .not. allocated(iterate) ) Allocate (iterate(nzbatchmx))
+    If ( .not. allocated(eval_rates) ) Allocate (eval_rates(nzbatchmx))
+    If ( .not. allocated(rebuild) ) Allocate (rebuild(nzbatchmx))
     iterate = .false.
     eval_rates = .false.
     rebuild = .false.
@@ -552,6 +559,10 @@ Contains
     !XDIR XCOPYIN(inr,mykts,lzstep) &
     !XDIR XCOPYIN(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
     !XDIR XCOPYIN(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
 
   End Subroutine be_init
 
@@ -562,6 +573,9 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
     If ( allocated(inr) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(inr,mykts,lzstep) &
@@ -590,6 +604,10 @@ Contains
     If ( allocated(iterate) ) Deallocate (iterate)
     If ( allocated(eval_rates) ) Deallocate (eval_rates)
     If ( allocated(rebuild) ) Deallocate (rebuild)
+
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
 
     Return
   End Subroutine be_finalize

@@ -492,3 +492,11 @@ checks also confirm that the application maximum-thread setting is unchanged.
 An explicitly requested multi-thread case fails when compiled without host
 OpenMP. These optional checks do not change the default caller flags or claim
 concurrent library entry, application GPU execution or performance.
+
+The CPU `host-batch-openmp-test` also runs `worker_storage_consumer` on alpha
+and SN160 with capacities 4/16 and one/two/four workers. It inspects production
+array shapes, non-zone lower bounds, distinct worker addresses, shared nuclear
+tables, dense matrix/RHS/pivot strides and host pointer arrays. Worker canaries,
+a short call, idle workers and repeated initialize/finalize lifetimes check
+storage isolation and release. This checks CPU ownership, not native device
+mapping, allocator/RSS costs or performance.

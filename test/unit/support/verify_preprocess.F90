@@ -5,7 +5,7 @@ Program verify_preprocess
     & iwk1, iwk2, iwk3, iwk4, &
     & mu1, mu2, mu3, mu4, n1i, n2i, n3i, n4i, n10, n11, n20, n21, n22, n30, n31, n32, n33, &
     & n40, n41, n42, n43, n44, nan, nreac, q1, q2, q3, q4, rc1, rc2, rc3, rc4, read_reaction_data
-  Use xnet_controls, Only: idiag, iheat, iscrn, iweak0, nzbatchmx, nzevolve, szbatch, tid, zb_hi, zb_lo
+  Use xnet_controls, Only: idiag, iheat, iscrn, iweak0, nzbatchmx, szbatch, tid
   Use xnet_jacobian, Only: cidx, l1s, l2s, l3s, l4s, lval, ns11, ns21, ns22, ns31, ns32, ns33, &
     & ns41, ns42, ns43, ns44, pb, read_jacobian_data, ridx
   Use xnet_match, Only: descx, ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx, qflx, read_match_data
@@ -32,11 +32,11 @@ Program verify_preprocess
   iscrn = 0
   iweak0 = 0
   nzbatchmx = 1
-  nzevolve = 1
+  nzbatchmx = 1
   szbatch = 1
   tid = 1
-  zb_lo = 1
-  zb_hi = 1
+
+
 
   Call read_nuclear_data(trim(data_dir),data_desc)
   Call require(trim(data_desc) == expected_description,'production net_desc description mismatch')

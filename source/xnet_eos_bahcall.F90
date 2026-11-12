@@ -25,22 +25,29 @@ Module xnet_eos
     Module Procedure salpeter_ratio_vector
   End Interface
 
+#ifdef XNET_OMP
+  !$omp threadprivate(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+#endif
+
 Contains
 
   Subroutine eos_initialize
     !-----------------------------------------------------------------------------------------------
     ! This routine initializes the EoS.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzevolve
+    Use xnet_controls, Only: nzbatchmx
     Implicit None
 
-    Allocate (ye(nzevolve))
-    Allocate (ytot(nzevolve))
-    Allocate (abar(nzevolve))
-    Allocate (zbar(nzevolve))
-    Allocate (z2bar(nzevolve))
-    Allocate (zibar(nzevolve))
-    Allocate (sratio(nzevolve))
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    Allocate (ye(nzbatchmx))
+    Allocate (ytot(nzbatchmx))
+    Allocate (abar(nzbatchmx))
+    Allocate (zbar(nzbatchmx))
+    Allocate (z2bar(nzbatchmx))
+    Allocate (zibar(nzbatchmx))
+    Allocate (sratio(nzbatchmx))
     ye = 0.0
     ytot = 0.0
     abar = 0.0
@@ -48,6 +55,10 @@ Contains
     z2bar = 0.0
     zibar = 0.0
     sratio = 0.0
+
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
 
     Return
   End Subroutine eos_initialize
@@ -169,20 +180,20 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, zz53
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, lzactive, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(zb_lo:zb_hi), rho(zb_lo:zb_hi), y(ny,zb_lo:zb_hi)
-    Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9(1:nzbatchmx), rho(1:nzbatchmx), y(ny,1:nzbatchmx)
+    Real(dp), Intent(in) :: xext(1:nzbatchmx), aext(1:nzbatchmx), zext(1:nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ye(zb_lo:zb_hi), cv(zb_lo:zb_hi)
-    Real(dp), Intent(inout) :: efermkt(zb_lo:zb_hi), defermktdt9(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: ye(1:nzbatchmx), cv(1:nzbatchmx)
+    Real(dp), Intent(inout) :: efermkt(1:nzbatchmx), defermktdt9(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -190,19 +201,19 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
     ! Calculate Ye
-    Call y_moment(y,ye,ytot(zb_lo:zb_hi), &
-      & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
+    Call y_moment(y,ye,ytot, &
+      & abar,zbar,z2bar,zibar, &
+      & xext,aext,zext,mask_in = mask_in)
 
     ! Call the eos
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         z53bar = sum(zz53 * y(:,izb)) / ytot(izb)
         Call eosx(t9(izb),rho(izb),ye(izb),ytot(izb),abar(izb),zbar(izb), &
@@ -211,7 +222,7 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           Write(lun_diag,"(a,6es23.15)") 'EOS',t9(izb),rho(izb),ye(izb),cv(izb),efermkt(izb),defermktdt9(izb)
         EndIf
@@ -272,44 +283,44 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, lzactive, nzbatchmx
     Use xnet_types, Only: dp
     Use xnet_util, Only: plasma
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(zb_lo:zb_hi), rho(zb_lo:zb_hi), y(ny,zb_lo:zb_hi)
-    Real(dp), Intent(in) :: efermkt(zb_lo:zb_hi), defermktdt9(zb_lo:zb_hi)
-    Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9(1:nzbatchmx), rho(1:nzbatchmx), y(ny,1:nzbatchmx)
+    Real(dp), Intent(in) :: efermkt(1:nzbatchmx), defermktdt9(1:nzbatchmx)
+    Real(dp), Intent(in) :: xext(1:nzbatchmx), aext(1:nzbatchmx), zext(1:nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ztilde(zb_lo:zb_hi), zinter(zb_lo:zb_hi)
-    Real(dp), Intent(inout) :: lambda0(zb_lo:zb_hi), gammae(zb_lo:zb_hi)
-    Real(dp), Intent(inout) :: dztildedt9(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: ztilde(1:nzbatchmx), zinter(1:nzbatchmx)
+    Real(dp), Intent(inout) :: lambda0(1:nzbatchmx), gammae(1:nzbatchmx)
+    Real(dp), Intent(inout) :: dztildedt9(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
     ! Calculate Ye
-    Call y_moment(y,ye(zb_lo:zb_hi),ytot(zb_lo:zb_hi), &
-      & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
+    Call y_moment(y,ye,ytot, &
+      & abar,zbar,z2bar,zibar, &
+      & xext,aext,zext,mask_in = mask_in)
 
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
-    Call salpeter_ratio(efermkt,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
+    Call salpeter_ratio(efermkt,sratio,dztildedt9,mask_in = mask_in)
 
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         ztilde(izb) = sqrt(z2bar(izb) + sratio(izb)*zbar(izb)) ! DGC, Eq. 4
         dztildedt9(izb) = 0.5*zbar(izb)/ztilde(izb) * dztildedt9(izb)*defermktdt9(izb)
@@ -320,7 +331,7 @@ Contains
       EndIf
     EndDo
     If ( idiag >= 3 ) Then
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           Write(lun_diag,"(a14,9es23.15)") 'EOS Screen', &
             & t9(izb),rho(izb),ye(izb),z2bar(izb),zbar(izb),sratio(izb), &
@@ -378,31 +389,31 @@ Contains
     ! This routine calculates the Salpeter (1954) ratio f'/f(eta) needed for electron screening, using
     ! a fit to Figure 24 in that paper. efmkt is the ratio of electron chemical potential to kT.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: lzactive, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: efmkt(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: efmkt(1:nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ratio(zb_lo:zb_hi), dratiodefmkt(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: ratio(1:nzbatchmx), dratiodefmkt(1:nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         Call salpeter_ratio_scalar(efmkt(izb),ratio(izb),dratiodefmkt(izb))
       EndIf
@@ -414,6 +425,9 @@ Contains
   Subroutine eos_finalize
     ! Release XNet-owned CPU allocations.
     Implicit None
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
     If ( Allocated(ye) ) Deallocate (ye)
     If ( Allocated(ytot) ) Deallocate (ytot)
     If ( Allocated(abar) ) Deallocate (abar)
@@ -421,6 +435,10 @@ Contains
     If ( Allocated(z2bar) ) Deallocate (z2bar)
     If ( Allocated(zibar) ) Deallocate (zibar)
     If ( Allocated(sratio) ) Deallocate (sratio)
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
     Return
   End Subroutine eos_finalize
 

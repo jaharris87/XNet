@@ -150,7 +150,7 @@ Contains
 
   Subroutine full_net(kstep,denu,ierr_out,failed_zone)
     !-----------------------------------------------------------------------------------------------
-    ! Evolve active zones in the calling worker bank (lzactive(zb_lo:zb_hi)) from tstart to tstop.
+    ! Evolve active zones in the calling worker workspace (lzactive(1:nzbatchmx)) from tstart to tstop.
     ! The caller supplies the starting composition, thermodynamic state/history, active mask,
     ! and any output files required by itsout. On success, y, t, t9, rho and ye hold the final state.
     !
@@ -174,8 +174,8 @@ Contains
     Use xnet_abundances, Only: yo, y, yt, ystart, ydot
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, &
       & rho, rhoo, rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9start, rhostart, yestart
-    Use xnet_controls, Only: idiag, iheat, isolv, kstmx, kmon, ktot, lun_diag, &
-      & lzactive, szbatch, zb_lo, zb_hi, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, isolv, kstmx, kmon, ktot, lun_diag, lzactive, szbatch, nzbatchmx, &
+      & gpu_queue
     Use xnet_integrate, Only: timestep
     Use xnet_integrate_be, Only: solve_be
     Use xnet_integrate_bdf, Only: solve_bdf
@@ -186,20 +186,20 @@ Contains
 
     ! Output arguments
     Integer, Intent(out) :: kstep
-    Real(dp), Intent(out) :: denu(zb_lo:zb_hi)
+    Real(dp), Intent(out) :: denu(1:nzbatchmx)
 
     ! Optional output arguments (present for embedded API calls; omitted for standalone driver)
     Integer, Optional, Intent(out) :: ierr_out, failed_zone
 
     ! Local variables
-    Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
-    Real(dp) :: enold(zb_lo:zb_hi), en0(zb_lo:zb_hi)
-    Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
-    Real(dp) :: sqnu(zb_lo:zb_hi)
+    Real(dp) :: enm(1:nzbatchmx), enb(1:nzbatchmx)
+    Real(dp) :: enold(1:nzbatchmx), en0(1:nzbatchmx)
+    Real(dp) :: delta_en(1:nzbatchmx), edot(1:nzbatchmx)
+    Real(dp) :: sqnu(1:nzbatchmx)
     Integer :: k, izb, izone
-    Integer :: its(zb_lo:zb_hi), zone_final_step(zb_lo:zb_hi)
+    Integer :: its(1:nzbatchmx), zone_final_step(1:nzbatchmx)
     Integer :: failure_status, failure_zone
-    Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
+    Logical :: lzsolve(1:nzbatchmx), lzoutput(1:nzbatchmx)
 
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
@@ -212,9 +212,9 @@ Contains
     If ( present(failed_zone) ) failed_zone = 0
 
     zone_final_step = 0
-    lzsolve         = lzactive(zb_lo:zb_hi)
+    lzsolve         = lzactive
     lzoutput        = lzsolve
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( lzsolve(izb) ) Then
         its(izb) = zone_converged
       Else
@@ -227,14 +227,13 @@ Contains
     !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
 
     ! 2. Evaluate initial nuclear binding energy and initialize working state
-    ! Pass the explicit worker slice y(:,zb_lo:zb_hi) to match the zb_lo:zb_hi dummy bounds.
-    Call benuc(y(:,zb_lo:zb_hi),enb,enm)
+    Call benuc(y,enb,enm)
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
     !XDIR XPRESENT(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       tdel_old(izb)  = tdel(izb)
       tdel_next(izb) = tdel(izb)
       nto(izb)       = nt(izb)
@@ -272,9 +271,9 @@ Contains
       ! Device-resident API burns populate start arrays on the accelerator; refresh host before printing.
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(tstart,t9start,rhostart,yestart,ystart)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( lzactive(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,2i6,4es14.7)") &
             & 'Start',izone,kstep,tstart(izb),t9start(izb),rhostart(izb),yestart(izb)
           Write(lun_diag,"(4(a5,es14.7,1x))") (nname(k),aa(k)*ystart(k,izb),k=1,ny)
@@ -300,7 +299,7 @@ Contains
       If ( present(ierr_out) ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(its)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( lzactive(izb) .and. its(izb) > 0 ) Then
             failure_status = evolve_integrator_failure
             failure_zone   = izb
@@ -314,8 +313,8 @@ Contains
       If ( idiag >= 1 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
-        Do izb = zb_lo, zb_hi
-          izone = izb + szbatch - zb_lo
+        Do izb = 1, nzbatchmx
+          izone = szbatch + izb - 1
           If ( its(izb) == zone_converged ) Then
             Write(lun_diag,"(2(a,i5),5es14.7)") &
               & 'KStep ',kstep,' Zone ',izone,t(izb),tdel(izb),t9(izb),rho(izb),ye(izb)
@@ -336,7 +335,7 @@ Contains
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(enm,enold) &
       !XDIR XPRESENT(its,t,tstop,zone_final_step,lzsolve,lzoutput)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( its(izb) == zone_converged ) Then
           enold(izb) = enm(izb)
           ! Zone reached stop time: still emit ts_output for this final step, then stop solving
@@ -356,12 +355,12 @@ Contains
       EndDo
 
       ! Compute nuclear energy release and weak-reaction neutrino energy loss for converged zones
-      Call benuc(yt(:,zb_lo:zb_hi),enb,enm,mask_in = lzoutput)
-      Call enudot(yt(:,zb_lo:zb_hi),sqnu,mask_in = lzoutput)
+      Call benuc(yt,enb,enm,mask_in = lzoutput)
+      Call enudot(yt,sqnu,mask_in = lzoutput)
 
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(lzoutput,enm,enold,en0,delta_en,edot,denu,sqnu,tdel)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( lzoutput(izb) ) Then
           delta_en(izb) = enm(izb) - en0(izb)
           edot(izb)     = -(enm(izb) - enold(izb)) / tdel(izb)
@@ -380,7 +379,7 @@ Contains
     ! 5. Verify that all active zones reached tstop; report or dump any failure
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(its,zone_final_step,t,tdel)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( lzactive(izb) ) Then
         If ( t(izb) < tstop(izb) .or. its(izb) > 0 ) Then
           If ( present(ierr_out) ) Then
@@ -422,7 +421,7 @@ Contains
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: yo, xext
     Use xnet_conditions, Only: t, tdel, tstart, tstop, t9start, rhostart, yestart
-    Use xnet_controls, Only: lun_diag, lun_stdout, szbatch, zb_lo, zone_id
+    Use xnet_controls, Only: lun_diag, lun_stdout, szbatch, zone_id
     Use xnet_output, Only: write_xnet_th, write_xnet_inab
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -437,7 +436,7 @@ Contains
     Character(128) :: ab_fname, th_fname
     Integer :: izone, nstep_est, ierr
 
-    izone = izb + szbatch - zb_lo
+    izone = szbatch + izb - 1
     Write(lun_stdout,"(a,i5,a,3(es12.4,a))") &
       & 'Zone ',izone,' Evolution stopped at time= ',t(izb),' with timestep= ',tdel(izb), &
       & ', stop time= ',tstop(izb),' not reached!'

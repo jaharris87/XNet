@@ -111,9 +111,9 @@ Module xnet_controls
   ! Runtime Control State and Worker Workspace Bookkeeping
   !-------------------------------------------------------------------------------------------------
   ! Populated by apply_xnet_controls / apply_standalone_controls and released by controls_finalize.
-  ! Each OpenMP worker owns a disjoint workspace slice zb_lo:zb_hi within 1:nzevolve.
-  ! For a workspace slot izb in zb_lo:zb_hi, the corresponding input-zone ordinal is
-  ! izone = izb + szbatch - zb_lo.
+  ! Each fixed-team worker allocates one workspace with local lanes 1:nzbatchmx.
+  ! szbatch is the standalone input ordinal of lane 1; izone = szbatch + izb - 1.
+  ! zone_id holds the independent mesh label supplied by the caller.
 
   ! Problem description
   Character(80) :: descript(3)
@@ -122,23 +122,19 @@ Module xnet_controls
   Integer              :: szone        ! Standalone starting zone index
   Integer              :: nzone        ! Standalone total number of zones
   Integer              :: iweak0       ! Baseline weak-reaction control flag
-  Integer, Allocatable :: iweak(:)     ! Per-zone active weak-reaction flag (1:nzevolve)
+  Integer, Allocatable :: iweak(:)     ! Per-zone active weak-reaction flag (1:nzbatchmx)
   Integer              :: iscrn        ! Plasma screening control flag
   Integer              :: iprocess     ! Runtime network preprocessing flag
   Real(dp)             :: t9min = 0.01_dp ! Temperature [GK] below which strong reactions are disabled
 
   ! Worker batch indexing and zone state
-  Integer :: nzevolve                  ! Total zone workspace capacity across all workers (nzbatchmx * nthread)
   Integer :: nzbatchmx                 ! Maximum zones per worker batch
   Integer :: nzbatch                   ! Number of active zones in the current worker batch
-  Integer :: szbatch                   ! Starting zone ordinal corresponding to workspace slot zb_lo
-  Integer :: zb_offset                 ! Zero-based workspace offset for the calling worker (zb_lo - 1)
-  Integer :: zb_lo                     ! First workspace slot owned by the calling worker
-  Integer :: zb_hi                     ! Last workspace slot owned by the calling worker
-  Logical, Allocatable, Target :: lzactive(:) ! Active-zone mask indexed by workspace slot (1:nzevolve)
-  Integer, Allocatable :: zone_id(:,:) ! Mesh location tuple [i,j,k,block] per workspace slot (4,nzevolve)
+  Integer :: szbatch                   ! Input-zone ordinal corresponding to local lane 1
+  Logical, Allocatable, Target :: lzactive(:) ! Active-zone mask indexed by workspace slot (1:nzbatchmx)
+  Integer, Allocatable :: zone_id(:,:) ! Mesh location tuple [i,j,k,block] per workspace slot (4,nzbatchmx)
 #ifdef XNET_OMP
-  !$omp threadprivate(nzbatch,szbatch,zb_offset,zb_lo,zb_hi)
+  !$omp threadprivate(nzbatch,szbatch)
 #endif
 
   ! Integration controls and work counters
@@ -153,8 +149,8 @@ Module xnet_controls
   Real(dp) :: tolm                     ! Mass-conservation tolerance
   Real(dp) :: ymin                     ! Minimum abundance cutoff
   Real(dp) :: tdel_maxmult             ! Maximum timestep growth factor
-  Integer, Allocatable :: kmon(:,:)    ! Per-step solver counters [TS, NR, Jac, Deriv, CSect] (5,nzevolve)
-  Integer, Allocatable :: ktot(:,:)    ! Cumulative solver counters over the burn (5,nzevolve)
+  Integer, Allocatable :: kmon(:,:)    ! Per-step solver counters [TS, NR, Jac, Deriv, CSect] (5,nzbatchmx)
+  Integer, Allocatable :: ktot(:,:)    ! Cumulative solver counters over the burn (5,nzbatchmx)
 
   ! Self-heating, NSE, and neutrino controls
   Integer  :: iheat                    ! Implicit temperature coupling flag
@@ -172,8 +168,8 @@ Module xnet_controls
   Integer, Allocatable :: inucout(:)   ! Condensed-output species indices (1:nnucout)
   Character(80) :: ev_file_base        ! ASCII evolution filename prefix
   Character(80) :: bin_file_base       ! Binary time-series filename prefix
-  Integer, Allocatable :: lun_ts(:)    ! Open binary time-series logical units (1:nzevolve; 0 = closed)
-  Integer, Allocatable :: lun_ev(:)    ! Open ASCII evolution logical units (1:nzevolve; 0 = closed)
+  Integer, Allocatable :: lun_ts(:)    ! Open binary time-series logical units (1:nzbatchmx; 0 = closed)
+  Integer, Allocatable :: lun_ev(:)    ! Open ASCII evolution logical units (1:nzbatchmx; 0 = closed)
   Integer :: lun_diag                  ! Per-thread diagnostic logical unit
 #ifdef XNET_OMP
   !$omp threadprivate(lun_diag)
@@ -184,7 +180,7 @@ Module xnet_controls
   Character(80) :: thermo_file_base    ! Legacy thermodynamic-trajectory filename prefix
   Character(80), Allocatable :: inab_file(:)   ! Per-zone initial-abundance filenames (1:nzone)
   Character(80), Allocatable :: thermo_file(:) ! Per-zone thermodynamic-trajectory filenames (1:nzone)
-  Integer, Allocatable :: iaux(:)      ! Allow auxiliary nuclei when reading abundance files (1:nzevolve)
+  Integer, Allocatable :: iaux(:)      ! Allow auxiliary nuclei when reading abundance files (1:nzbatchmx)
   Integer :: lun_th, lun_ab            ! Per-thread temporary input logical units
 #ifdef XNET_OMP
   !$omp threadprivate(lun_th,lun_ab)
@@ -203,6 +199,10 @@ Module xnet_controls
 
   ! Accelerator kernels read these scalar controls directly on the device.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
+
+#ifdef XNET_OMP
+  !$omp threadprivate(zone_id,lzactive,iweak,lun_ev,lun_ts,iaux,kmon,ktot)
+#endif
 
 Contains
 
@@ -346,8 +346,7 @@ Contains
   Subroutine apply_xnet_controls(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Validate controls, copy them into the module runtime state, allocate per-zone bookkeeping
-    ! for nzevolve = nzbatchmx * nthread workspace slots, assign each OpenMP worker its disjoint
-    ! zb_lo:zb_hi bank, and map device-resident control arrays.
+    ! for each fixed-team worker, and map the worker-owned control arrays.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -401,10 +400,22 @@ Contains
       changemxt = bdf_change_limit
     EndIf
 
-    nzevolve = nzbatchmx * nthread
-    Allocate (zone_id(4,nzevolve),lzactive(nzevolve),iweak(nzevolve), &
-      & lun_ev(nzevolve),lun_ts(nzevolve),iaux(nzevolve), &
-      & kmon(5,nzevolve),ktot(5,nzevolve),output_nuc(nnucout),inucout(nnucout))
+    Allocate (output_nuc(nnucout),inucout(nnucout))
+    inucout = 0
+    If ( nnucout > 0 ) output_nuc = controls%output_nuclei(:nnucout)
+    Write(nnucout_string,'(i4)') nnucout
+    nnucout_string = adjustl(nnucout_string)
+
+    ! Shared scalar device controls are established once, before worker mappings.
+    !XDIR XUPDATE XASYNC(gpu_queue) &
+    !XDIR XDEVICE(iheat,iscrn,iconvc,ymin)
+
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
+    Allocate (zone_id(4,nzbatchmx),lzactive(nzbatchmx),iweak(nzbatchmx), &
+      & lun_ev(nzbatchmx),lun_ts(nzbatchmx),iaux(nzbatchmx), &
+      & kmon(5,nzbatchmx),ktot(5,nzbatchmx))
     zone_id  = 0
     lzactive = .false.
     iweak    = iweak0
@@ -413,25 +424,15 @@ Contains
     lun_ts   = 0
     kmon     = 0
     ktot     = 0
-    inucout  = 0
-    If ( nnucout > 0 ) output_nuc = controls%output_nuclei(:nnucout)
-    Write(nnucout_string,'(i4)') nnucout
-    nnucout_string = adjustl(nnucout_string)
+    nzbatch  = 0
+    szbatch  = 1
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
-    zb_offset = (tid - 1) * nzbatchmx
-    zb_lo     = zb_offset + 1
-    zb_hi     = zb_offset + nzbatchmx
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
+    !XDIR XCREATE(lzactive,iweak,kmon,ktot)
+    !XDIR XWAIT(gpu_queue)
 #ifdef XNET_OMP
     !$omp end parallel
 #endif
-
-    !XDIR XUPDATE XASYNC(gpu_queue) &
-    !XDIR XDEVICE(iheat,iscrn,iconvc,ymin)
-    !XDIR XENTER_DATA XASYNC(gpu_queue) &
-    !XDIR XCREATE(lzactive,iweak,kmon,ktot)
 
     Return
   End Subroutine apply_xnet_controls
@@ -474,6 +475,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
+#ifdef XNET_OMP
+    !$omp parallel default(shared)
+#endif
     If ( allocated(lzactive) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(lzactive,iweak,kmon,ktot)
@@ -484,13 +488,18 @@ Contains
     If ( allocated(lzactive) )    Deallocate (lzactive)
     If ( allocated(kmon) )        Deallocate (kmon)
     If ( allocated(ktot) )        Deallocate (ktot)
-    If ( allocated(inucout) )     Deallocate (inucout)
     If ( allocated(lun_ts) )      Deallocate (lun_ts)
     If ( allocated(lun_ev) )      Deallocate (lun_ev)
+    If ( allocated(iaux) )        Deallocate (iaux)
+
+#ifdef XNET_OMP
+    !$omp end parallel
+#endif
+
+    If ( allocated(inucout) )     Deallocate (inucout)
     If ( allocated(output_nuc) )  Deallocate (output_nuc)
     If ( allocated(inab_file) )   Deallocate (inab_file)
     If ( allocated(thermo_file) ) Deallocate (thermo_file)
-    If ( allocated(iaux) )        Deallocate (iaux)
 
     Return
   End Subroutine controls_finalize

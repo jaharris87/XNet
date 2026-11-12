@@ -9,10 +9,8 @@ Module xnet_controls
   Integer :: lun_stderr = error_unit
   Integer :: lun_th = 0
   Integer :: nzone = 1
-  Integer :: nzevolve = 1
+  Integer :: nzbatchmx = 1
   Integer :: szbatch = 1
-  Integer :: zb_hi = 1
-  Integer :: zb_lo = 1
   Real :: t9nse = 10.0
   Logical, Allocatable, Target :: lzactive(:)
 
@@ -22,13 +20,13 @@ Contains
     Implicit None
 
     nzone = 1
-    nzevolve = 1
+    nzbatchmx = 1
     szbatch = 1
-    zb_lo = 1
-    zb_hi = 1
+
+
     If ( allocated(iaux) ) Deallocate(iaux)
     If ( allocated(lzactive) ) Deallocate(lzactive)
-    Allocate(iaux(nzevolve),lzactive(nzevolve))
+    Allocate(iaux(nzbatchmx),lzactive(nzbatchmx))
     iaux = 1
     lzactive = .True.
 

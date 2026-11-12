@@ -8,8 +8,7 @@ Module sparse_component_fixture
     & n22, n30, n31, n32, n33, n40, n41, n42, n43, n44, nan
   Use xnet_abundances, Only: yt
   Use xnet_conditions, Only: cv
-  Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lzactive, lun_diag, &
-    & nzbatch, nzbatchmx, nzevolve, szbatch, zb_hi, zb_lo, tid
+  Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lzactive, lun_diag, nzbatch, nzbatchmx, szbatch, tid
 #if defined(TEST_DENSE)
   Use xnet_jacobian, Only: msize, read_jacobian_data, jacobian_finalize
 #else
@@ -49,20 +48,12 @@ Contains
     EndIf
 
     ny = 3
-    nzevolve = 2
-#ifdef XNET_OMP
-    If ( workers_mode ) nzevolve = 2*omp_get_max_threads()
-#endif
-    nzbatch = 2
     nzbatchmx = 2
-    zb_lo = 1
-    zb_hi = 2
+    nzbatch = 2
     szbatch = 1
 #ifdef XNET_OMP
     !$omp parallel default(shared)
     tid = omp_get_thread_num()+1
-    zb_lo = (tid-1)*nzbatchmx+1
-    zb_hi = tid*nzbatchmx
     szbatch = 1
     !$omp end parallel
 #endif
@@ -76,11 +67,11 @@ Contains
     Allocate (mex(ny),nname(ny))
     mex = (/ 1.0_dp, 2.0_dp, 3.0_dp /)
     nname = (/ '   n1', '   n2', '   n3' /)
-    Allocate (lzactive(nzevolve),kmon(2,nzevolve),ktot(3,nzevolve))
+    Allocate (lzactive(nzbatchmx),kmon(2,nzbatchmx),ktot(3,nzbatchmx))
     lzactive = .True.
     kmon = 0
     ktot = 0
-    Allocate (yt(ny,nzevolve),cv(nzevolve))
+    Allocate (yt(ny,nzbatchmx),cv(nzbatchmx))
     yt = 1.0_dp
     cv = 1.0_dp
 
@@ -98,21 +89,21 @@ Contains
     la(4,:) = (/ 1, 1, 2 /)
     le(4,:) = (/ 0, 1, 1 /)
 
-    Allocate (n10(3),n11(3),mu1(3),a1(3),b1(3,nzevolve),dcsect1dt9(3,nzevolve))
+    Allocate (n10(3),n11(3),mu1(3),a1(3),b1(3,nzbatchmx),dcsect1dt9(3,nzbatchmx))
     n10 = (/ 1, 2, 3 /)
     n11 = (/ 2, 3, 2 /)
-    Allocate (n20(2),n21(2),n22(2),mu2(2),a2(2),b2(2,nzevolve),dcsect2dt9(2,nzevolve))
+    Allocate (n20(2),n21(2),n22(2),mu2(2),a2(2),b2(2,nzbatchmx),dcsect2dt9(2,nzbatchmx))
     n20 = (/ 1, 2 /)
     n21 = (/ 1, 1 /)
     n22 = (/ 2, 3 /)
-    Allocate (n30(1),n31(1),n32(1),n33(1),mu3(1),a3(1),b3(1,nzevolve), &
-      & dcsect3dt9(1,nzevolve))
+    Allocate (n30(1),n31(1),n32(1),n33(1),mu3(1),a3(1),b3(1,nzbatchmx), &
+      & dcsect3dt9(1,nzbatchmx))
     n30 = 3
     n31 = 2
     n32 = 3
     n33 = 2
-    Allocate (n40(1),n41(1),n42(1),n43(1),n44(1),mu4(1),a4(1),b4(1,nzevolve), &
-      & dcsect4dt9(1,nzevolve))
+    Allocate (n40(1),n41(1),n42(1),n43(1),n44(1),mu4(1),a4(1),b4(1,nzbatchmx), &
+      & dcsect4dt9(1,nzbatchmx))
     n40 = 2
     n41 = 1
     n42 = 2
@@ -138,6 +129,11 @@ Contains
 #if !defined(TEST_DENSE)
     Call write_sparse_file(data_dir)
     Call write_sparse_controls
+#endif
+#ifdef XNET_OMP
+    !$omp parallel default(shared) copyin(lzactive,kmon,ktot,yt,cv,b1,b2,b3,b4) &
+    !$omp   copyin(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+    !$omp end parallel
 #endif
     Call read_jacobian_data(data_dir)
 #if !defined(TEST_DENSE)
@@ -290,10 +286,9 @@ Module test_sparse_solvers
   Use sparse_component_fixture, Only: expected_matrix, heat_mode, tracked_controls, component_data_dir
 #ifdef XNET_OMP
   Use omp_lib, Only: omp_get_max_threads
-  Use xnet_controls, Only: tid, nzevolve
 #endif
   Use testdrive, Only: check, error_type, new_unittest, unittest_type
-  Use xnet_controls, Only: lun_diag, zb_lo, zb_hi
+  Use xnet_controls, Only: lun_diag, nzbatchmx, tid
   Use xnet_jacobian
   Use xnet_types, Only: dp
 #if !defined(TEST_DENSE) && !defined(TEST_REAL_SOLVER)
@@ -539,7 +534,7 @@ Contains
       Call expected_matrix(matrix(:,:,zone))
 #if defined(TEST_REAL_SOLVER) && defined(TEST_PARDISO_MKL)
       ! Every slot has a distinct matrix, including the two slots owned by the same worker.
-      matrix(:,:,zone) = real(zb_lo+zone-1,dp)*matrix(:,:,zone)
+      matrix(:,:,zone) = real((tid-1)*nzbatchmx+zone,dp)*matrix(:,:,zone)
 #endif
     EndDo
     diag = 0.0_dp
@@ -752,13 +747,13 @@ Contains
     ! Give every worker/slot a distinct nonzero handle. The doubles record which ones are released.
     !$omp parallel default(shared) private(i)
 #if defined(TEST_MA48)
-    Allocate (vals0(1,zb_lo:zb_hi),jcn0(1,zb_lo:zb_hi),irn0(1,zb_lo:zb_hi))
+    Allocate (vals0(1,1:nzbatchmx),jcn0(1,1:nzbatchmx),irn0(1,1:nzbatchmx))
 #elif defined(TEST_PARDISO)
     pt = 0_i8
     pt(1) = tid
 #else
-    Do i = zb_lo, zb_hi
-      pt(1,i) = i
+    Do i = 1, nzbatchmx
+      pt(1,i) = (tid-1)*nzbatchmx+i
     EndDo
 #endif
     !$omp end parallel
@@ -773,7 +768,7 @@ Contains
 #if !defined(TEST_MA48) && !defined(TEST_REAL_SOLVER)
     nrelease = nworkers
 #if defined(TEST_PARDISO_MKL)
-    nrelease = nzevolve
+    nrelease = nzbatchmx*nworkers
 #endif
     Call check(error,call_count == nrelease,'one release for each worker/slot handle')
     If ( allocated(error) ) Return
@@ -830,15 +825,15 @@ Contains
     Call test_sparse_structure(worker_error)
     If ( .not. allocated(worker_error) ) Call test_solver_controls(worker_error)
     !$omp critical(real_pardiso_record)
-    Write(*,'(a,i0,a,2(i0,1x),a,64(i0,1x))') 'real PARDISO worker=',tid,' slots=',zb_lo,zb_hi,' iparm=',iparm
+    Write(*,'(a,i0,a,2(i0,1x),a,64(i0,1x))') 'real PARDISO worker=',tid,' slots=',1,nzbatchmx,' iparm=',iparm
     !$omp end critical(real_pardiso_record)
     !$omp barrier
     If ( .not. allocated(worker_error) ) Call test_known_system_solve(worker_error)
     If ( .not. allocated(worker_error) ) Call test_sparse_structure(worker_error)
-    If ( .not. allocated(worker_error) ) Call check(worker_error,all(any(pt(:,zb_lo:zb_hi) /= 0_i8,dim=1)), &
+    If ( .not. allocated(worker_error) ) Call check(worker_error,all(any(pt(:,1:nzbatchmx) /= 0_i8,dim=1)), &
       & 'each used real PARDISO slot has a live handle before release')
     !$omp critical(real_pardiso_record)
-    Do slot = zb_lo, zb_hi
+    Do slot = 1, nzbatchmx
       Write(*,'(a,i0,a,i0,a,64(i0,1x))') 'real PARDISO worker=',tid,' slot=',slot,' handle=',pt(:,slot)
     EndDo
     !$omp end critical(real_pardiso_record)
@@ -1009,18 +1004,18 @@ Contains
   Subroutine install_matrix(matrix,diag,mult)
     Implicit None
 
-    Real(dp), Intent(in) :: matrix(msize,msize,2), diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: matrix(msize,msize,2), diag(1:nzbatchmx), mult(1:nzbatchmx)
 
     Integer :: entry, zone
 
 #if defined(TEST_DENSE)
-    Do zone = zb_lo, zb_hi
-      dydotdy(:,:,zone) = transpose(matrix(:,:,zone-zb_lo+1))
+    Do zone = 1, nzbatchmx
+      dydotdy(:,:,zone) = transpose(matrix(:,:,zone-1+1))
     EndDo
 #else
-    Do zone = zb_lo, zb_hi
+    Do zone = 1, nzbatchmx
       Do entry = 1, nnz
-        dydotdy(entry,zone) = matrix(ridx(entry),cidx(entry),zone-zb_lo+1)
+        dydotdy(entry,zone) = matrix(ridx(entry),cidx(entry),zone-1+1)
       EndDo
     EndDo
 #endif
@@ -1038,11 +1033,11 @@ Contains
     Integer :: entry
 
 #if defined(TEST_DENSE)
-    matrix = jac(:,:,zb_lo+zone-1)
+    matrix = jac(:,:,1+zone-1)
 #else
     matrix = 0.0_dp
     Do entry = 1, nnz
-      matrix(ridx(entry),cidx(entry)) = tvals(entry,zb_lo+zone-1)
+      matrix(ridx(entry),cidx(entry)) = tvals(entry,1+zone-1)
     EndDo
 #endif
 

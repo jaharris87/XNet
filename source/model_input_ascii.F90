@@ -33,8 +33,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: iostat_end
     Use xnet_conditions, Only: nhmx, nh, tstart, tstop, tdelstart, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: idiag, lun_diag, lun_th, nzone, nzevolve, szbatch, zb_lo, zb_hi, &
-      & lzactive
+    Use xnet_controls, Only: idiag, lun_diag, lun_th, nzone, szbatch, nzbatchmx, lzactive
     Use xnet_nnu, Only: nnuspec, fluxcms, tmevnu
     Use xnet_types, Only: dp
     Use xnet_util, Only: replace_tabs, readnext, xnet_terminate
@@ -44,11 +43,11 @@ Contains
     Character(*), Intent(in) :: thermo_file(nzone)
 
     ! Output arguments
-    Character(80), Intent(out) :: thermo_desc(nzevolve)
+    Character(80), Intent(out) :: thermo_desc(nzbatchmx)
     Integer, Intent(out) :: ierr
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Integer, Parameter :: max_line_length = 1024
@@ -57,17 +56,17 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
     ierr = 0
 
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
-        izone = izb + szbatch - zb_lo
+        izone = szbatch + izb - 1
 
         !$omp critical(th_read)
         Open(newunit=lun_th,file=trim(thermo_file(izone)),action='read',status='old',iostat=ierr)
@@ -137,15 +136,14 @@ Contains
   Subroutine load_initial_abundances(inab_file,abund_desc,ierr,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! Initialize starting abundances ystart(:,izb), electron fraction yestart(izb), and auxiliary
-    ! reservoir parameters (xext, aext, zext) for active zones in the current worker bank.
+    ! reservoir parameters (xext, aext, zext) for active zones in the current worker workspace.
     ! Reads the initial abundance file for the zone unless t9start > t9nse and the trajectory
     ! already supplies a valid electron fraction in (0, 1).
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment, ystart, xext, aext, zext
     Use xnet_conditions, Only: nstart, tstart, t9start, rhostart, yestart, nh, th, yeh
-    Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, nzevolve, szbatch, zb_lo, zb_hi, &
-      & lzactive, iaux
+    Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, szbatch, nzbatchmx, lzactive, iaux
     Use xnet_nse, Only: nse_solve, ynse
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -155,11 +153,11 @@ Contains
     Character(*), Intent(in) :: inab_file(nzone)
 
     ! Output arguments
-    Character(80), Intent(out) :: abund_desc(nzevolve)
+    Character(80), Intent(out) :: abund_desc(nzbatchmx)
     Integer, Intent(out) :: ierr
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
 
     ! Local variables
     Real(dp) :: yein, yin(ny)
@@ -169,14 +167,14 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
     ierr = 0
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       yestart(izb)  = 0.0_dp
       ystart(:,izb) = 0.0_dp
 
@@ -188,9 +186,9 @@ Contains
       zext(izb) = 0.0_dp
     EndDo
 
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
-        izone = izb + szbatch - zb_lo
+        izone = szbatch + izb - 1
 
         ! 1. Interpolate initial electron fraction from the thermodynamic trajectory
         If ( nstart(izb) > 1 .and. nstart(izb) <= nh(izb) ) Then

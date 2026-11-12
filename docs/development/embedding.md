@@ -222,10 +222,14 @@ See the [tested stack workaround](build-and-test.md#perlmutter-nvidia-cpu-openmp
 for its compiler/library configuration, separate process-stack limit and
 current-candidate validation limits.
 
-XNet allocates shared batch banks for `nthread*nzbatchmx` zones and gives each
-worker a disjoint range. It also allocates and frees worker NSE scratch inside
-internal parallel regions. Memory follows that full capacity even when calls
-are short or masked. With eight-byte `dp`, the two dense matrices alone occupy
+Each fixed-team worker allocates its own plain workspace arrays with local
+lanes `1:nzbatchmx`, using conditional OpenMP `THREADPRIVATE` ownership. Each
+existing owner allocates and frees its worker scratch inside internal parallel
+regions, including workers that receive no application batch. Shared network
+tables and external EOS initialization remain once per rank. Memory follows
+`nthread*nzbatchmx` total lane capacity even when calls are short or masked;
+storage is reused across logical application batches. With eight-byte `dp`,
+the two dense matrices alone occupy
 approximately `16*msize**2*nthread*nzbatchmx` bytes, where `msize` is `ny` or
 `ny+1` with self-heating, before other solver and physics arrays.
 
@@ -313,7 +317,9 @@ evaluations.
 With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE and lifecycle
 operations. The application may use OpenMP elsewhere. This choice suppresses
 XNet's host teams and threadprivate state even when target-offload compilation
-enables OpenMP directives. GPU host calls remain serialized.
+enables OpenMP directives. For v9, OpenMP target GPU builds require this XNet
+setting for both standalone programs and the library. GPU host calls remain
+serialized.
 
 ## Mapped GPU batch
 
@@ -980,7 +986,7 @@ them follow the same sequence:
 | Part of a call | Where to read |
 | --- | --- |
 | Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. `initialize_network_data` in `reaction_data` loads species and reactions. `initialize_evolve` in `xnet_evolve` prepares the engine and reusable zone storage with two history endpoints, mapping any requested output species regardless of the output level. `copy_network_data` returns copied metadata. |
-| Worker checks | `check_worker` checks the fixed team and initialized worker scratch. `apply_xnet_controls` assigns each worker's bank during initialization. Workspace loops use `izb` in `zb_lo:zb_hi`, with `izone = izb + szbatch - zb_lo` as in standalone. The API sets `szbatch=1`, so `izone` indexes caller arrays. |
+| Worker checks | `check_worker` checks the fixed team and initialized worker scratch. `apply_xnet_controls` allocates each worker's flags, counters and file-unit arrays during initialization. Workspace loops use local lanes `izb=1:nzbatchmx`; the API indexes caller arrays with the same lane. Standalone translates to the input ordinal `izone=szbatch+izb-1`. Mesh IDs remain independent of either index. |
 | Batch evolution | `xnet_burn_batch` checks lifecycle, mappings, dimensions and scientific values before workspace setup. `evolve_batch` then prepares the workspace, calls `full_net` and extracts results; conditional offload selects current host or device values. |
 | Validation and failures | One `validate_inputs` shares range and mass checks between host and device execution. Its temporary verdict buffer carries the host active mask, independently of the worker workspace. Host IEEE classification stays outside device loops. `zone_error_message` translates verdicts; `format_burn_failure` translates numerical failures and the caller's diagnostic tuple. |
 | Histories and timing | `open_burn_output` reserves API filenames; shared `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` handle files and headers for both drivers. `get_timing`/`get_timing_since` report differences in the worker timers. |

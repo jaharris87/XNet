@@ -211,10 +211,18 @@ test host-openmp-test: all quickstart-test
 	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/output-runs
 
 # The application owns the parallel batch loop; this target needs a CPU OPENMP_MODE=ON archive.
-host-batch-openmp-test: $(BUILD_DIR)/host_batch_openmp_consumer
+host-batch-openmp-test: $(BUILD_DIR)/host_batch_openmp_consumer $(BUILD_DIR)/worker_storage_consumer
 	python3 run_host_batch_openmp_tests.py --consumer $(BUILD_DIR)/host_batch_openmp_consumer \
 	  --library-config $(XNET_CONFIG) --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup \
-	  --work-dir $(BUILD_DIR)/host-batch-runs --histories
+	  --work-dir $(BUILD_DIR)/host-batch-runs --histories \
+	  --storage-consumer $(BUILD_DIR)/worker_storage_consumer
+
+# Inspect local shapes, worker addresses, dense strides and idle-worker cleanup.
+$(BUILD_DIR)/worker_storage_consumer.o: worker_storage_consumer.F90 $(BUILD_DIR)/consumer_fixture.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) $(HOST_OPENMP_FLAGS) $(XNET_MODFLAGS) -I$(BUILD_DIR) -c '$<' -o '$@'
+
+$(BUILD_DIR)/worker_storage_consumer: $(BUILD_DIR)/worker_storage_consumer.o $(BUILD_DIR)/consumer_fixture.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) $(HOST_OPENMP_FLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 # Test-only EOS observation and whole-evolution serialization control. Keep the
 # production archive and its module directory unchanged; link replacements first.

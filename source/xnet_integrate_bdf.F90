@@ -155,7 +155,8 @@ Contains
   Subroutine solve_bdf(kstep,ierr)
     !-----------------------------------------------------------------------------------------------
     !-----------------------------------------------------------------------------------------------
-    Use xnet_abundances, Only: y, yo, yt, ydot
+    Use nuclear_data, Only: aa, zz
+    Use xnet_abundances, Only: y, yo, yt, ydot, xext, aext, zext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, rhot, &
       yeo, ye, yet, nt, nto, ntt
     Use xnet_controls, Only: kitmx, kmon, ktot
@@ -171,6 +172,7 @@ Contains
 
     ! Local variables
     Integer :: kts, k, izb, izone
+    Real(dp) :: atot, ztot
 
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
@@ -242,7 +244,9 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr,ierr_nr,ierr_ts,nit_ts,nit_nrslv,eta,z) &
     !XDIR XPRESENT(kmon,ktot,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
-    !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
+    !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt) &
+    !XDIR XPRESENT(aa,zz,xext,aext,zext) &
+    !XDIR XPRIVATE(atot,ztot)
     Do izb = zb_lo, zb_hi
 
       ! Set the factor for the next timestep
@@ -250,11 +254,16 @@ Contains
 
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
         ierr_ts(izb) = BDF_STATUS_SUCCESS
-        !XDIR XLOOP_INNER(1)
+        atot = 0.0_dp
+        ztot = 0.0_dp
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XREDUCTION(+,atot,ztot)
         Do k = 1, ny
           yt(k,izb) = z(k,0,izb)
           yo(k,izb) = y(k,izb)
           y(k,izb) = yt(k,izb)
+          atot = atot + aa(k)*y(k,izb)
+          ztot = ztot + zz(k)*y(k,izb)
         EndDo
         If ( iheat > 0 ) t9t(izb) = z(neq,0,izb)
         nto(izb) = nt(izb)
@@ -266,7 +275,9 @@ Contains
         rhoo(izb) = rho(izb)
         rho(izb) = rhot(izb)
         yeo(izb) = ye(izb)
-        ye(izb) = yet(izb)
+        ! The last EOS evaluation precedes the final Newton correction. Report Ye from
+        ! the accepted composition, using the same normalization as the EOS moments.
+        ye(izb) = (ztot + xext(izb)/aext(izb)*zext(izb))/(atot + xext(izb))
       ElseIf ( ierr_nr(izb) == BDF_STATUS_FAIL .or. ierr_ts(izb) == BDF_STATUS_FAIL ) Then
         ierr_ts(izb) = BDF_STATUS_FAIL
       EndIf

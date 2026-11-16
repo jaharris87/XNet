@@ -27,7 +27,6 @@ Program verify_build_net_readers
   iscrn = 0
   iweak0 = 1
   nzbatchmx = 1
-  nzbatchmx = 1
   szbatch = 1
   tid = 1
 

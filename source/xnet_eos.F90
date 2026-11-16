@@ -27,9 +27,7 @@ Module xnet_eos
     Module Procedure salpeter_ratio_vector
   End Interface
 
-#ifdef XNET_OMP
-  !$omp threadprivate(ye,ytot,abar,zbar,z2bar,zibar,sratio)
-#endif
+  !XOMP threadprivate(ye,ytot,abar,zbar,z2bar,zibar,sratio)
 
 Contains
 
@@ -37,16 +35,14 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Initialize thermodynamics and allocate XNet-owned scratch.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: gpu_queue, nzbatchmx
     Use nuclear_data, Only: ny, nname, aa, zz
     Use xnet_eos_interface, Only: xnet_eos_interface_initialize
     Implicit None
 
     Call xnet_eos_interface_initialize(ny,nname(1:ny),aa,zz)
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (ye(nzbatchmx))
     Allocate (ytot(nzbatchmx))
     Allocate (abar(nzbatchmx))
@@ -65,9 +61,7 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ye,ytot,abar,zbar,z2bar,zibar,sratio)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine eos_initialize
@@ -145,20 +139,20 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, lun_diag, lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(1:nzbatchmx), rho(1:nzbatchmx), y(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: xext(1:nzbatchmx), aext(1:nzbatchmx), zext(1:nzbatchmx)
+    Real(dp), Intent(in) :: t9(nzbatchmx), rho(nzbatchmx), y(ny,nzbatchmx)
+    Real(dp), Intent(in) :: xext(nzbatchmx), aext(nzbatchmx), zext(nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ye(1:nzbatchmx), cv(1:nzbatchmx)
-    Real(dp), Intent(inout) :: etae(1:nzbatchmx), detaedt9(1:nzbatchmx)
+    Real(dp), Intent(inout) :: ye(nzbatchmx), cv(nzbatchmx)
+    Real(dp), Intent(inout) :: etae(nzbatchmx), detaedt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb, nspecies
@@ -255,23 +249,23 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, lun_diag, lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Use xnet_util, Only: plasma
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(1:nzbatchmx), rho(1:nzbatchmx), y(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: etae(1:nzbatchmx), detaedt9(1:nzbatchmx)
-    Real(dp), Intent(in) :: xext(1:nzbatchmx), aext(1:nzbatchmx), zext(1:nzbatchmx)
+    Real(dp), Intent(in) :: t9(nzbatchmx), rho(nzbatchmx), y(ny,nzbatchmx)
+    Real(dp), Intent(in) :: etae(nzbatchmx), detaedt9(nzbatchmx)
+    Real(dp), Intent(in) :: xext(nzbatchmx), aext(nzbatchmx), zext(nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ztilde(1:nzbatchmx), zinter(1:nzbatchmx)
-    Real(dp), Intent(inout) :: lambda0(1:nzbatchmx), gammae(1:nzbatchmx)
-    Real(dp), Intent(inout) :: dztildedt9(1:nzbatchmx)
+    Real(dp), Intent(inout) :: ztilde(nzbatchmx), zinter(nzbatchmx)
+    Real(dp), Intent(inout) :: lambda0(nzbatchmx), gammae(nzbatchmx)
+    Real(dp), Intent(inout) :: dztildedt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -380,18 +374,18 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: eta(1:nzbatchmx)
+    Real(dp), Intent(in) :: eta(nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ratio(1:nzbatchmx), dratiodeta(1:nzbatchmx)
+    Real(dp), Intent(inout) :: ratio(nzbatchmx), dratiodeta(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -425,13 +419,13 @@ Contains
   End Subroutine salpeter_ratio_vector
 
   Subroutine eos_finalize
-    ! Release XNet-owned composition scratch and the selected adapter's storage.
+    !-----------------------------------------------------------------------------------------------
+    ! Remove device mappings before releasing composition arrays and the selected EOS interface.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Use xnet_eos_interface, Only: xnet_eos_interface_finalize
     Implicit None
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(ye) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(ye,ytot,abar,zbar,z2bar,zibar,sratio)
@@ -444,9 +438,7 @@ Contains
     If ( Allocated(z2bar) ) Deallocate (z2bar)
     If ( Allocated(zibar) ) Deallocate (zibar)
     If ( Allocated(sratio) ) Deallocate (sratio)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Call xnet_eos_interface_finalize
     Return

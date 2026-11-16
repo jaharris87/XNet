@@ -3,6 +3,8 @@
 ! This file contains the module defining Fortran interfaces for the HIP Runtime API
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 module xnet_hipf
   !-------------------------------------------------------------------------------------------------
   ! Interface to hip Runtime API
@@ -27,8 +29,6 @@ module xnet_hipf
     hipDeviceSynchronize
 
   type(c_ptr), target :: stream = c_null_ptr
-#ifdef XNET_OMP
-  !$omp threadprivate(stream)
-#endif
+  !XOMP threadprivate(stream)
 
 end module xnet_hipf

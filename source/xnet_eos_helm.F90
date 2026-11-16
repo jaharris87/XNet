@@ -5,6 +5,8 @@
 ! corrections for reaction rates.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_eos
   Use xnet_types, Only: dp
   Implicit None
@@ -26,9 +28,7 @@ Module xnet_eos
     Module Procedure salpeter_ratio_vector
   End Interface
 
-#ifdef XNET_OMP
-  !$omp threadprivate(ye,ytot,abar,zbar,z2bar,zibar,sratio)
-#endif
+  !XOMP threadprivate(ye,ytot,abar,zbar,z2bar,zibar,sratio)
 
 Contains
 
@@ -41,9 +41,7 @@ Contains
 
     Call read_helm_table
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (ye(nzbatchmx))
     Allocate (ytot(nzbatchmx))
     Allocate (abar(nzbatchmx))
@@ -59,9 +57,7 @@ Contains
     zibar = 0.0
     sratio = 0.0
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine eos_initialize
@@ -146,15 +142,15 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(1:nzbatchmx), rho(1:nzbatchmx), y(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: xext(1:nzbatchmx), aext(1:nzbatchmx), zext(1:nzbatchmx)
+    Real(dp), Intent(in) :: t9(nzbatchmx), rho(nzbatchmx), y(ny,nzbatchmx)
+    Real(dp), Intent(in) :: xext(nzbatchmx), aext(nzbatchmx), zext(nzbatchmx)
 
     ! Ouput variables
-    Real(dp), Intent(out) :: ye(1:nzbatchmx), cv(1:nzbatchmx)
-    Real(dp), Intent(out) :: etae(1:nzbatchmx), detaedt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: ye(nzbatchmx), cv(nzbatchmx)
+    Real(dp), Intent(out) :: etae(nzbatchmx), detaedt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -241,17 +237,17 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(1:nzbatchmx), rho(1:nzbatchmx), y(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: etae(1:nzbatchmx), detaedt9(1:nzbatchmx)
-    Real(dp), Intent(in) :: xext(1:nzbatchmx), aext(1:nzbatchmx), zext(1:nzbatchmx)
+    Real(dp), Intent(in) :: t9(nzbatchmx), rho(nzbatchmx), y(ny,nzbatchmx)
+    Real(dp), Intent(in) :: etae(nzbatchmx), detaedt9(nzbatchmx)
+    Real(dp), Intent(in) :: xext(nzbatchmx), aext(nzbatchmx), zext(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: ztilde(1:nzbatchmx), zinter(1:nzbatchmx)
-    Real(dp), Intent(out) :: lambda0(1:nzbatchmx), gammae(1:nzbatchmx)
-    Real(dp), Intent(out) :: dztildedt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: ztilde(nzbatchmx), zinter(nzbatchmx)
+    Real(dp), Intent(out) :: lambda0(nzbatchmx), gammae(nzbatchmx)
+    Real(dp), Intent(out) :: dztildedt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -350,13 +346,13 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: eta(1:nzbatchmx)
+    Real(dp), Intent(in) :: eta(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: ratio(1:nzbatchmx), dratiodeta(1:nzbatchmx)
+    Real(dp), Intent(out) :: ratio(nzbatchmx), dratiodeta(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -379,11 +375,11 @@ Contains
   End Subroutine salpeter_ratio_vector
 
   Subroutine eos_finalize
-    ! Release XNet-owned CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Release composition work arrays.
+    !-----------------------------------------------------------------------------------------------
     Implicit None
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(ye) ) Deallocate (ye)
     If ( Allocated(ytot) ) Deallocate (ytot)
     If ( Allocated(abar) ) Deallocate (abar)
@@ -391,9 +387,7 @@ Contains
     If ( Allocated(z2bar) ) Deallocate (z2bar)
     If ( Allocated(zibar) ) Deallocate (zibar)
     If ( Allocated(sratio) ) Deallocate (sratio)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine eos_finalize

@@ -14,6 +14,8 @@
 ! package available, with fairly wide distribution as part of the Intel MKL.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_jacobian
   !-------------------------------------------------------------------------------------------------
   ! Contains data for use in the sparse solver using Compressed-Row Storage (CRS)
@@ -61,9 +63,7 @@ Module xnet_jacobian
     Module Procedure pardisoinit61
   End Interface xnet_pardisoinit
 
-#ifdef XNET_OMP
-  !$omp threadprivate(dydotdy,tvals,perm)
-#endif
+  !XOMP threadprivate(dydotdy,tvals,perm)
 
 Contains
 
@@ -291,9 +291,9 @@ Contains
 
   Subroutine jacobian_finalize
     !-----------------------------------------------------------------------------------------------
-    ! Release all stored factors in each worker's PARDISO handle before freeing XNet arrays.
+    ! Release all stored factors in each PARDISO thread handle before freeing XNet arrays.
     ! PHASE = -1 releases every matrix in that handle, not just MNUM = 1. Call outside parallel
-    ! regions with the initialized worker team; network tables and controls must still exist.
+    ! regions with the initialized OpenMP team; network tables and controls must still exist.
     !-----------------------------------------------------------------------------------------------
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -332,10 +332,10 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: diag(1:nzbatchmx), mult(1:nzbatchmx)
+    Real(dp), Intent(in) :: diag(nzbatchmx), mult(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, i0, izb
@@ -373,8 +373,8 @@ Contains
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Intent(in) :: diag_in(1:nzbatchmx), mult_in(1:nzbatchmx)
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Real(dp), Optional, Intent(in) :: diag_in(nzbatchmx), mult_in(nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -384,7 +384,7 @@ Contains
     Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
     Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp) :: diag(1:nzbatchmx), mult(1:nzbatchmx)
+    Real(dp) :: diag(nzbatchmx), mult(nzbatchmx)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -567,15 +567,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
+    Real(dp), Intent(in) :: yrhs(ny,nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
-    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: dy(ny,nzbatchmx)
+    Real(dp), Intent(out) :: dt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone
@@ -619,7 +619,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone, err
@@ -676,15 +676,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
+    Real(dp), Intent(in) :: yrhs(ny,nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
-    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: dy(ny,nzbatchmx)
+    Real(dp), Intent(out) :: dt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: rhs(msize), dx(msize)

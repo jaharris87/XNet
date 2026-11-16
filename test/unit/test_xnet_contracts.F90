@@ -309,10 +309,10 @@ Contains
     Implicit None
 
     Type(error_type), Allocatable, Intent(out) :: error
-    Integer :: saved_nzevolve
+    Integer :: saved_nzbatchmx
     Logical :: histories_released, rates_preserved, histories_recreated, all_released
 
-    saved_nzevolve = nzbatchmx
+    saved_nzbatchmx = nzbatchmx
     nzbatchmx = 2
     Call nnu_finalize
     Allocate (sigmanu(1,ntnu))
@@ -329,7 +329,7 @@ Contains
     Call nnu_finalize
     all_released = .not. allocated(tmevnu) .and. .not. allocated(fluxcms) .and. .not. allocated(sigmanu)
     Call nnu_finalize
-    nzbatchmx = saved_nzevolve
+    nzbatchmx = saved_nzbatchmx
 
     Call check(error,histories_released)
     If ( allocated(error) ) Return

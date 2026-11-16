@@ -15,9 +15,7 @@ Module xnet_flux
   Real(dp), Allocatable :: dcflx(:,:)
   Integer, Allocatable  :: ifl_orig(:), ifl_term(:)
 
-#ifdef XNET_OMP
-  !$omp threadprivate(flx,flx_int)
-#endif
+  !XOMP threadprivate(flx,flx_int)
 
 Contains
 
@@ -54,9 +52,7 @@ Contains
       ifl_term(i) = nflx(count(nflx(5:8,i) /= 0 ) + 4,i)
     EndDo
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (flx(mflx,nzbatchmx),flx_int(mflx,nzbatchmx))
     flx = 0.0
     flx_int = 0.0
@@ -65,9 +61,7 @@ Contains
       Write(lun_diag,"(12i5,2f6.3)") &
         & ((nflx(j,i),j=1,8),ifl_orig(i),ifl_term(i),countf(i),countr(i),(dcflx(k,i),k=1,2),i=1,mflx)
     EndIf
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine flux_init
@@ -81,13 +75,13 @@ Contains
     Use reaction_data, Only: csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i, nreac
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: tdel
-    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, lzactive, gpu_queue, nzbatchmx
     Use xnet_match, Only: ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, k, ifl, idcfl, izb, izone
@@ -170,7 +164,7 @@ Contains
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: flx_test(0:ny)
@@ -208,16 +202,14 @@ Contains
   End Subroutine flux_check
 
   Subroutine flux_finalize
-    ! Release XNet-owned CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Release reaction-flux work arrays and double-counting factors.
+    !-----------------------------------------------------------------------------------------------
     Implicit None
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(flx) ) Deallocate (flx)
     If ( Allocated(flx_int) ) Deallocate (flx_int)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
     If ( Allocated(dcflx) ) Deallocate (dcflx)
     If ( Allocated(ifl_orig) ) Deallocate (ifl_orig)
     If ( Allocated(ifl_term) ) Deallocate (ifl_term)

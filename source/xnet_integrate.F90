@@ -26,7 +26,7 @@ Contains
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
       & rhot, t9dot, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, ymin, szbatch, &
-      & nzbatchmx, lzactive, tid, gpu_queue
+      & nzbatchmx, lzactive, gpu_queue
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -35,17 +35,17 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp), Parameter :: changeth = 0.1
     Real(dp) :: changest, yfloor
-    Real(dp) :: rtau_y(ny), changey, tdel_dy(1:nzbatchmx)
-    Real(dp) :: rtau_t9, changet9, tdel_dt9(1:nzbatchmx)
-    Real(dp) :: tdel_stop(1:nzbatchmx), tdel_init
-    Real(dp) :: dtherm(1:nzbatchmx)
+    Real(dp) :: rtau_y(ny), changey, tdel_dy(nzbatchmx)
+    Real(dp) :: rtau_t9, changet9, tdel_dt9(nzbatchmx)
+    Real(dp) :: tdel_stop(nzbatchmx), tdel_init
+    Real(dp) :: dtherm(nzbatchmx)
     Integer :: i, j, k, izb, izone
-    Logical :: mask_init(1:nzbatchmx)
+    Logical :: mask_init(nzbatchmx)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -271,15 +271,15 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the value of the iweak flag to control the treatment of strong reactions.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(1:nzbatchmx)
+    Real(dp), Intent(in) :: t9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -322,14 +322,14 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_conditions, Only: t9t, rhot, yet, cv, etae, detaedt9
-    Use xnet_controls, Only: lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
     Use xnet_eos, Only: eos_interface
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_eos
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
@@ -372,13 +372,13 @@ Contains
       & n22, n31, n32, n33, n41, n42, n43, n44, csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i
     Use xnet_abundances, Only: yt, ydot
     Use xnet_conditions, Only: cv, t9t, t9dot
-    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, lzactive, gpu_queue
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_deriv
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, i1, la1, le1, la2, le2, la3, le3, la4, le4, izb, izone
@@ -573,7 +573,7 @@ Contains
     Use reaction_data
     Use xnet_conditions, Only: tt, rhot, t9t, yet
     Use xnet_constants, Only: third, two3rd, four3rd, five3rd
-    Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, lzactive, tid, &
+    Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, lzactive, &
       & gpu_queue
     Use xnet_ffn, Only: ffn_rate, rffn, dlnrffndt9
     Use xnet_linalg, Only: MatrixMatrixMultiply, MatrixVectorMultiply
@@ -585,13 +585,13 @@ Contains
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Logical, Parameter :: use_blas = .false.
     Integer, Parameter :: dgemm_nzbatch = 200 ! Min number of zones to use dgemm, otherwise use dgemv
-    Real(dp) :: t09(7,1:nzbatchmx), dt09(7,1:nzbatchmx)
-    Real(dp) :: ene(1:nzbatchmx), ytot, abar, zbar, z2bar, zibar
+    Real(dp) :: t09(7,nzbatchmx), dt09(7,nzbatchmx)
+    Real(dp) :: ene(nzbatchmx), ytot, abar, zbar, z2bar, zibar
     Real(dp) :: ascrn, rhot2, rhot3
     Real(dp) :: rpf1, rpf2, rpf3, rpf4
     Real(dp) :: dlnrpf1dt9, dlnrpf2dt9, dlnrpf3dt9, dlnrpf4dt9
@@ -672,7 +672,7 @@ Contains
       & rffn,dlnrffndt9,mask_in = mask_in)
 
     ! If there are any neutrino-nucleus reactions, calculate their rates
-    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt,rnnu(:,:,1:nzbatchmx),mask_in = mask_in)
+    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt,rnnu,mask_in = mask_in)
 
     ! Calculate the REACLIB exponent polynomials and derivatives, adding screening terms
     If ( use_blas ) Then

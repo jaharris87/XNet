@@ -3,8 +3,8 @@
 ! Thermodynamic state, timestep bookkeeping, trajectory history storage, and interpolation.
 !
 ! Manages per-zone time, timestep, temperature (T9 [GK]), density (rho [g/cm^3]), electron
-! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories in the zone workspace
-! (1:nzbatchmx). The standalone driver allocates full trajectories (nhistory = nhmx),
+! fraction (Ye), EOS derivatives, and thermodynamic trajectory histories for each zone of the
+! current batch. The standalone driver allocates full trajectories (nhistory = nhmx),
 ! whereas constant-condition library burns allocate two-point endpoint histories (nhistory = 2).
 !***************************************************************************************************
 
@@ -15,7 +15,7 @@ Module xnet_conditions
   Implicit None
 
   !-------------------------------------------------------------------------------------------------
-  ! Current, trial, and previous time and thermodynamic state (1:nzbatchmx)
+  ! Current, trial, and previous time and thermodynamic state (nzbatchmx)
   !-------------------------------------------------------------------------------------------------
   Real(dp), Allocatable :: t(:)        ! Time at the beginning of the current timestep [s]
   Real(dp), Allocatable :: tt(:)       ! Trial time at the end of the current timestep [s]
@@ -54,21 +54,19 @@ Module xnet_conditions
     Module Procedure t9rhofind_vector
   End Interface t9rhofind
 
-#ifdef XNET_OMP
-  !$omp threadprivate(t,tt,to,tdel,tdel_next,tdel_old,t9t,rhot,yet,t9,rho,ye,t9o,rhoo,yeo,t9dot,cv,etae,detaedt9)
-  !$omp threadprivate(nt,ntt,nto,ints,intso,nh,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart,th,t9h,rhoh)
-  !$omp threadprivate(yeh)
-#endif
+  !XOMP threadprivate(t,tt,to,tdel,tdel_next,tdel_old,t9t,rhot,yet,t9,rho,ye,t9o,rhoo,yeo,t9dot,cv,etae,detaedt9)
+  !XOMP threadprivate(nt,ntt,nto,ints,intso,nh,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart,th,t9h,rhoh)
+  !XOMP threadprivate(yeh)
 
 Contains
 
   !=================================================================================================
-  ! Workspace Lifecycle
+  ! Allocation and Release
   !=================================================================================================
 
   Subroutine conditions_initialize(nhistory)
     !-----------------------------------------------------------------------------------------------
-    ! Allocate and zero thermodynamic state and trajectory history arrays for 1:nzbatchmx zones,
+    ! Allocate and zero thermodynamic state and trajectory history arrays on each thread,
     ! then establish persistent device mappings.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue, nzbatchmx
@@ -77,9 +75,7 @@ Contains
     ! Input arguments
     Integer, Intent(in) :: nhistory ! Allocated history points per zone
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (tdel(nzbatchmx),tdel_next(nzbatchmx),tdel_old(nzbatchmx), &
       & t(nzbatchmx),tt(nzbatchmx),to(nzbatchmx), &
       & t9(nzbatchmx),t9t(nzbatchmx),t9o(nzbatchmx),t9dot(nzbatchmx), &
@@ -136,9 +132,7 @@ Contains
     !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh)
     !XDIR XWAIT(gpu_queue)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine conditions_initialize
@@ -150,9 +144,7 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( allocated(t) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
@@ -198,9 +190,7 @@ Contains
     If ( allocated(rhoh) )      Deallocate (rhoh)
     If ( allocated(yeh) )       Deallocate (yeh)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine conditions_finalize
@@ -263,7 +253,7 @@ Contains
 
   Subroutine t9rhofind_vector(kstep,tf,nf,t9f,rhof,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! Batched trajectory interpolation across the active zones (1:nzbatchmx).
+    ! Interpolate the trajectories of the active zones in the current batch.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
@@ -271,14 +261,14 @@ Contains
 
     ! Input arguments
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: tf(1:nzbatchmx)
+    Real(dp), Intent(in) :: tf(nzbatchmx)
 
     ! Input/Output arguments
-    Integer, Intent(inout) :: nf(1:nzbatchmx)
-    Real(dp), Intent(inout) :: t9f(1:nzbatchmx), rhof(1:nzbatchmx)
+    Integer, Intent(inout) :: nf(nzbatchmx)
+    Real(dp), Intent(inout) :: t9f(nzbatchmx), rhof(nzbatchmx)
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb

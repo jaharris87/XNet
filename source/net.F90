@@ -3,8 +3,8 @@
 ! Standalone trajectory driver program for XNet.
 !
 ! Reads runtime controls from controls.nml, optionally preprocesses nuclear and reaction data,
-! initializes solver and accelerator workspaces, and evolves thermodynamic trajectories across
-! zones distributed over MPI ranks and OpenMP worker batches.
+! initializes solver and accelerator workspaces, and evolves thermodynamic trajectories for zones
+! distributed over MPI ranks and, within a rank, over batches handled by OpenMP threads.
 !
 ! To embed XNet inside a hydrodynamics or multiphysics application, use the library interface in
 ! xnet_api.F90 (documented in docs/development/embedding.md) rather than calling full_net directly.
@@ -59,18 +59,14 @@ Program net
   myid  = parallel_myproc()
   nproc = parallel_nprocs()
 
-#ifdef XNET_OMP
-  !$omp parallel default(shared)
-#endif
+  !XOMP parallel default(shared)
   tid = 1
   !$ tid = omp_get_thread_num() + 1
   !$omp single
   nthread = 1
   !$ nthread = omp_get_num_threads()
   !$omp end single
-#ifdef XNET_OMP
-  !$omp end parallel
-#endif
+  !XOMP end parallel
 
   Call gpu_init()
 
@@ -91,9 +87,7 @@ Program net
   !-------------------------------------------------------------------------------------------------
   ! Keep the long-lived diagnostic stream on a positive logical unit; some compiler runtimes can
   ! alias negative NEWUNIT values after many short-lived per-zone files are opened and closed.
-#ifdef XNET_OMP
-  !$omp parallel default(shared) private(diag_file,diag_ierr)
-#endif
+  !XOMP parallel default(shared) private(diag_file,diag_ierr)
   If ( idiag >= 0 ) Then
     diag_file = trim(diag_file_base)
     Call name_ordered(diag_file,myid,nproc)
@@ -113,9 +107,7 @@ Program net
     lun_diag = lun_stdout
   EndIf
   Call write_controls(lun_diag,data_dir)
-#ifdef XNET_OMP
-  !$omp end parallel
-#endif
+  !XOMP end parallel
 
   !-------------------------------------------------------------------------------------------------
   ! 4. Load network data and initialize the evolution engine
@@ -128,15 +120,13 @@ Program net
   timer_setup = timer_setup + stop_timer
 
   !-------------------------------------------------------------------------------------------------
-  ! 5. Evolve zone batches across MPI ranks and OpenMP worker threads
+  ! 5. Evolve zone batches across MPI ranks and OpenMP threads
   !-------------------------------------------------------------------------------------------------
   batch_count = (nzone + nzbatchmx - 1) / nzbatchmx
 
-#ifdef XNET_OMP
-  !$omp parallel default(shared) &
-  !$omp   private(dyf,flx_diff,abund_desc,thermo_desc,denu,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
-  !$omp   copyin(timer_setup)
-#endif
+  !XOMP parallel default(shared) &
+  !XOMP   private(dyf,flx_diff,abund_desc,thermo_desc,denu,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
+  !XOMP   copyin(timer_setup)
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
@@ -257,9 +247,7 @@ Program net
 
   Deallocate (dyf,flx_diff)
   If ( idiag >= 0 ) Close(lun_diag)
-#ifdef XNET_OMP
-  !$omp end parallel
-#endif
+  !XOMP end parallel
 
   !-------------------------------------------------------------------------------------------------
   ! 6. Release workspaces, GPU handles, and MPI resources

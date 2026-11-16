@@ -7,7 +7,7 @@
 !    Shared by the standalone driver (net.F90) and the library API (xnet_api.F90) to map configured
 !    ASCII output species names to network indices, open per-zone unformatted binary (itsout >= 1)
 !    and condensed ASCII (itsout >= 2) output files, write their header records, and close open
-!    units across the batch bank of the calling worker (1:nzbatchmx).
+!    units for the current batch.
 ! 2. Per-Timestep and Final Evolution Output (ts_output, final_output):
 !    Called by full_net to evaluate reaction fluxes, record binary and ASCII time-series snapshots,
 !    and write integrated flux, final abundance, work-counter, and timing summaries to lun_diag.
@@ -72,7 +72,7 @@ Contains
   Subroutine open_ts_file(izb,filename,data_description,abundance_source,abundance_description, &
     & thermo_source,thermo_description,status,ierr)
     !-----------------------------------------------------------------------------------------------
-    ! Open one unformatted binary time-series file for workspace slot izb and write its six
+    ! Open one unformatted binary time-series file for zone izb of the batch and write its six
     ! header records. Metadata fields retain their 80-character widths. The caller selects the
     ! filename and OPEN status ('unknown' in standalone; 'new' in the library API). When optional
     ! ierr is supplied, open failures return a nonzero status instead of raising a runtime error.
@@ -118,7 +118,7 @@ Contains
 
   Subroutine open_ev_file(izb,filename,status,ierr)
     !-----------------------------------------------------------------------------------------------
-    ! Open one condensed ASCII evolution file for workspace slot izb and write its column header
+    ! Open one condensed ASCII evolution file for zone izb of the batch and write its column header
     ! for the configured output_nuclei (1:nnucout). When optional ierr is supplied, open failures
     ! return a nonzero status.
     !-----------------------------------------------------------------------------------------------
@@ -156,9 +156,9 @@ Contains
 
   Subroutine close_output_files
     !-----------------------------------------------------------------------------------------------
-    ! Close any open binary (lun_ts) and ASCII (lun_ev) time-series units in the workspace bank
-    ! of the calling worker (1:nzbatchmx) and reset their unit slots to zero.
-    ! Zero marks an unopened slot; valid NEWUNIT numbers are negative.
+    ! Close any open binary (lun_ts) and ASCII (lun_ev) time-series units of the current batch
+    ! and reset the stored unit numbers to zero.
+    ! Zero marks a closed unit; valid NEWUNIT numbers are negative.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: lun_ts, lun_ev, nzbatchmx
     Implicit None
@@ -205,10 +205,10 @@ Contains
 
     ! Input arguments
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: enuc(1:nzbatchmx), edot(1:nzbatchmx), sqnu(1:nzbatchmx)
+    Real(dp), Intent(in) :: enuc(nzbatchmx), edot(nzbatchmx), sqnu(nzbatchmx)
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Character(40) :: ev_format
@@ -254,7 +254,8 @@ Contains
             & kstep,t(izb),t9(izb),rho(izb),edot(izb),sqnu(izb),tdel(izb), &
             & (aa(inucout(i))*y(inucout(i),izb),i=1,nnucout),(kmon(j,izb),j=1,2)
 
-          ! itsout >= 3: progress, preserving the legacy worker-slot label before the input-zone ordinal
+          ! itsout >= 3: progress line. The first column keeps the historical thread/zone number
+          ! (tid-1)*nzbatchmx+izb; the second is the standalone zone number.
           If ( itsout >= 3 ) Write(lun_stdout,"(3i5,4es12.4,2i3)") &
             & (tid-1)*nzbatchmx+izb,izone,kstep,t(izb),tdel(izb),t9(izb),rho(izb),(kmon(j,izb),j=1,2)
 
@@ -298,7 +299,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer, Parameter :: itimer_reset = 0

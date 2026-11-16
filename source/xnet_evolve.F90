@@ -3,9 +3,9 @@
 ! Shared evolution initialization, finalization, and batch reaction-network evolution for XNet.
 !
 ! Shared by the standalone driver (net.F90) and the embedded library API (xnet_api.F90).
-! Initialization and finalization appear first; full_net advances active zones from tstart to tstop using
-! Backward Euler (isolv = 1) or Gear BDF (isolv = 3), tracking nuclear energy generation and
-! weak-reaction neutrino losses.
+! Initialization and finalization appear first; full_net advances active zones from tstart to
+! tstop using Backward Euler (isolv = 1) or Gear BDF (isolv = 3), tracking nuclear energy
+! generation and weak-reaction neutrino losses.
 !
 ! Per-zone integration status its(izb):
 !   -1  Inactive zone, or active zone that has already reached tstop(izb).
@@ -15,7 +15,7 @@
 !
 ! Failure handling in full_net:
 ! - When optional ierr_out is present (library API): reports evolve_integrator_failure or
-!   evolve_step_limit (and the workspace index in failed_zone) to the caller without writing
+!   evolve_step_limit (and the batch index in failed_zone) to the caller without writing
 !   failure dump files or terminating the process.
 ! - When ierr_out is omitted (standalone driver): writes failure diagnostics and ab_fail_*/th_fail_*
 !   reproducer files before terminating via xnet_terminate.
@@ -54,24 +54,25 @@ Contains
   !=================================================================================================
   ! Evolution Initialization and Finalization
   !
-  ! The frontends first call initialize_network_data (reaction_data in xnet_data.F90). Standalone logs
-  ! its data description before initialize_evolve reads Jacobian/matching data and prepares the
-  ! evolution engine. These calls run once per initialized instance, not once per batch.
+  ! The frontends first call initialize_network_data (reaction_data in xnet_data.F90). Standalone
+  ! logs its data description before initialize_evolve reads Jacobian/matching data and prepares
+  ! the evolution state. These calls run once per initialized instance, not once per batch.
   !
-  ! finalize_evolve releases the engine, including the selected Jacobian provider. The frontends
-  ! then call finalize_network_data and controls_finalize. Network tables and controls outlive
-  ! the workspaces that use them; GPU resources remain available until all mappings are removed.
+  ! finalize_evolve releases the solver and zone state, including the selected Jacobian provider.
+  ! The frontends then call finalize_network_data and controls_finalize. Network tables and
+  ! controls outlive the work arrays that use them; GPU resources remain available until all
+  ! device mappings are removed.
   !=================================================================================================
 
   Subroutine initialize_evolve(data_dir,nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Read Jacobian/matching data and initialize rates, EOS, integrator, NSE and reusable zone
-    ! storage. Nuclear/reaction tables and controls must already be loaded. Each owner maps its
-    ! own arrays. Call outside parallel regions with the worker team configured by the frontend.
+    ! storage. Nuclear/reaction tables and controls must already be loaded. Each module maps its
+    ! own arrays. Call outside parallel regions with the OpenMP team configured by the frontend.
     !
     ! data_dir    Directory containing the preprocessed network.
     ! nhistory    Allocated history points per zone: nhmx for standalone trajectories, or
-    !             api_history_points for the library's start/end conditions.
+    !             api_history_points (2) for constant-condition library burns.
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_initialize
     Use xnet_conditions, Only: conditions_initialize
@@ -110,11 +111,11 @@ Contains
 
   Subroutine finalize_evolve
     !-----------------------------------------------------------------------------------------------
-    ! Release the evolution engine's integrator, NSE/EOS, Jacobian, rate-evaluation and zone
-    ! workspace. The selected Jacobian provider releases its own arrays and any library-owned
-    ! factors. Loaded network tables remain for finalize_network_data; controls and GPU resources
-    ! must remain available until both routines finish. Call outside parallel regions, after all
-    ! workers finish, with the same team used during initialization.
+    ! Release integrator, NSE/EOS, Jacobian, rate-evaluation and zone work arrays. The selected
+    ! Jacobian provider releases its own arrays and any library-owned factors. Loaded network
+    ! tables remain for finalize_network_data; controls and GPU resources must remain available
+    ! until both routines finish. Call outside parallel regions, after all threads finish, with
+    ! the same OpenMP team used during initialization.
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_finalize
     Use xnet_conditions, Only: conditions_finalize
@@ -150,16 +151,16 @@ Contains
 
   Subroutine full_net(kstep,denu,ierr_out,failed_zone)
     !-----------------------------------------------------------------------------------------------
-    ! Evolve active zones in the calling worker workspace (lzactive(1:nzbatchmx)) from tstart to tstop.
+    ! Evolve the active zones of the current batch (lzactive) from tstart to tstop.
     ! The caller supplies the starting composition, thermodynamic state/history, active mask,
     ! and any output files required by itsout. On success, y, t, t9, rho and ye hold the final state.
     !
     ! kstep        Largest step count at which a zone finished (at least 1).
-    ! denu         Time-integrated weak-reaction neutrino energy loss [erg/g], by workspace slot.
+    ! denu         Time-integrated weak-reaction neutrino energy loss [erg/g] of each zone.
     ! ierr_out     Optional completion status; presence selects caller-handled failure.
-    ! failed_zone  Optional workspace slot of the first reported failure, or zero.
+    ! failed_zone  Optional batch index izb of the first reported failure, or zero.
     !
-    ! Energy workspace (per zone):
+    ! Local energy arrays (per zone):
     !   enm       Current nuclear mass-excess energy [erg/g].
     !   en0       Initial mass-excess energy [erg/g].
     !   enold     Mass-excess energy before the current step [erg/g].
@@ -186,20 +187,20 @@ Contains
 
     ! Output arguments
     Integer, Intent(out) :: kstep
-    Real(dp), Intent(out) :: denu(1:nzbatchmx)
+    Real(dp), Intent(out) :: denu(nzbatchmx)
 
     ! Optional output arguments (present for embedded API calls; omitted for standalone driver)
     Integer, Optional, Intent(out) :: ierr_out, failed_zone
 
     ! Local variables
-    Real(dp) :: enm(1:nzbatchmx), enb(1:nzbatchmx)
-    Real(dp) :: enold(1:nzbatchmx), en0(1:nzbatchmx)
-    Real(dp) :: delta_en(1:nzbatchmx), edot(1:nzbatchmx)
-    Real(dp) :: sqnu(1:nzbatchmx)
+    Real(dp) :: enm(nzbatchmx), enb(nzbatchmx)
+    Real(dp) :: enold(nzbatchmx), en0(nzbatchmx)
+    Real(dp) :: delta_en(nzbatchmx), edot(nzbatchmx)
+    Real(dp) :: sqnu(nzbatchmx)
     Integer :: k, izb, izone
-    Integer :: its(1:nzbatchmx), zone_final_step(1:nzbatchmx)
+    Integer :: its(nzbatchmx), zone_final_step(nzbatchmx)
     Integer :: failure_status, failure_zone
-    Logical :: lzsolve(1:nzbatchmx), lzoutput(1:nzbatchmx)
+    Logical :: lzsolve(nzbatchmx), lzoutput(nzbatchmx)
 
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
@@ -415,7 +416,7 @@ Contains
 
   Subroutine terminate_on_zone_failure(izb)
     !-----------------------------------------------------------------------------------------------
-    ! Standalone failure handler: report the unreached stop time for workspace slot izb, write
+    ! Standalone failure handler: report the unreached stop time for zone izb of the batch, write
     ! ab_fail_* and th_fail_* reproducer inputs, flush diagnostics, and terminate XNet.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname

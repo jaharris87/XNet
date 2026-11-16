@@ -47,7 +47,7 @@ Contains
     Integer, Intent(out) :: ierr
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer, Parameter :: max_line_length = 1024
@@ -136,7 +136,7 @@ Contains
   Subroutine load_initial_abundances(inab_file,abund_desc,ierr,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! Initialize starting abundances ystart(:,izb), electron fraction yestart(izb), and auxiliary
-    ! reservoir parameters (xext, aext, zext) for active zones in the current worker workspace.
+    ! reservoir parameters (xext, aext, zext) for active zones in the current batch.
     ! Reads the initial abundance file for the zone unless t9start > t9nse and the trajectory
     ! already supplies a valid electron fraction in (0, 1).
     !-----------------------------------------------------------------------------------------------
@@ -157,7 +157,7 @@ Contains
     Integer, Intent(out) :: ierr
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: yein, yin(ny)

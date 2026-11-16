@@ -50,9 +50,7 @@ Module nuclear_data
     Module Procedure benuc_vector
   End Interface benuc
 
-#ifdef XNET_OMP
-  !$omp threadprivate(gg,dlngdt9)
-#endif
+  !XOMP threadprivate(gg,dlngdt9)
 
 Contains
 
@@ -127,19 +125,19 @@ Contains
     ! distribution.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: epmev, avn
-    Use xnet_controls, Only: lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: y(ny,1:nzbatchmx)
+    Real(dp), Intent(in) :: y(ny,nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: enb(1:nzbatchmx) ! Binding energy [ergs g^{-1}]
-    Real(dp), Intent(inout) :: enm(1:nzbatchmx) ! Mass excess [ergs g^{-1}]
+    Real(dp), Intent(inout) :: enb(nzbatchmx) ! Binding energy [ergs g^{-1}]
+    Real(dp), Intent(inout) :: enm(nzbatchmx) ! Mass excess [ergs g^{-1}]
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: ztot, btot
@@ -190,16 +188,16 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, iheat, lun_diag, lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(1:nzbatchmx)
+    Real(dp), Intent(in) :: t9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, ii, k, izb
@@ -465,7 +463,7 @@ Contains
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
-    Use xnet_controls, Only: iheat, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: gpu_queue, nzbatchmx
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
@@ -578,16 +576,12 @@ Contains
     !XDIR XCOPYIN(it9i,t9i,g,angm)
     !XDIR XWAIT(gpu_queue)
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (gg(0:ny,nzbatchmx),dlngdt9(0:ny,nzbatchmx))
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(gg,dlngdt9)
     !XDIR XWAIT(gpu_queue)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
 
     Return
@@ -680,21 +674,19 @@ Contains
   End Subroutine format_nuclear_data
 
   Subroutine nuclear_data_finalize
-    ! Release mappings established by read_nuclear_data before CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Remove device mappings before releasing nuclear data and partition-function work arrays.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(gg) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(gg,dlngdt9)
       !XDIR XWAIT(gpu_queue)
       Deallocate (gg,dlngdt9)
     EndIf
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     If ( Allocated(aa) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
@@ -777,9 +769,7 @@ Module reaction_data
   ! Reaction rates after folding cross-sections in with counting factors
   Real(dp), Allocatable :: b1(:,:), b2(:,:), b3(:,:), b4(:,:) ! Coefficiencts of the Y terms in Eq. 10 of Hix & Meyer (2006)
 
-#ifdef XNET_OMP
-  !$omp threadprivate(b1,b2,b3,b4,csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
-#endif
+  !XOMP threadprivate(b1,b2,b3,b4,csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
 
 Contains
 
@@ -829,7 +819,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, iweak0, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, iweak0, gpu_queue, nzbatchmx
     Use xnet_ffn, Only: ffn_workspace_initialize, read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
       & ngrid
     Use xnet_nnu, Only: nnu_rates_initialize, read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu
@@ -1107,9 +1097,7 @@ Contains
     Call ffn_workspace_initialize(nffn)
     Call nnu_rates_initialize(nnnu)
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (b1(nan(1),nzbatchmx))
     Allocate (b2(nan(2),nzbatchmx))
     Allocate (b3(nan(3),nzbatchmx))
@@ -1128,9 +1116,7 @@ Contains
     !XDIR XCREATE(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
     !XDIR XCREATE(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
     !XDIR XWAIT(gpu_queue)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
@@ -1151,19 +1137,19 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_constants, Only: epmev, avn
-    Use xnet_controls, Only: lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
     Use xnet_ffn, Only: qkffn
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: y(ny,1:nzbatchmx)
+    Real(dp), Intent(in) :: y(ny,nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: sqnu(1:nzbatchmx) ! Neutrino energy loss rate [ergs g^{-1} s^{-1}]
+    Real(dp), Intent(inout) :: sqnu(nzbatchmx) ! Neutrino energy loss rate [ergs g^{-1} s^{-1}]
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: sqnu1
@@ -1213,12 +1199,12 @@ Contains
   End Subroutine enudot
 
   Subroutine reaction_data_finalize
-    ! Release mappings established by read_reaction_data before CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Remove device mappings before releasing reaction tables and rate work arrays.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(b1) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(b1,b2,b3,b4,csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
@@ -1236,9 +1222,7 @@ Contains
     If ( Allocated(dcsect2dt9) ) Deallocate (dcsect2dt9)
     If ( Allocated(dcsect3dt9) ) Deallocate (dcsect3dt9)
     If ( Allocated(dcsect4dt9) ) Deallocate (dcsect4dt9)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     If ( Allocated(la) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &

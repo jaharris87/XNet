@@ -203,7 +203,8 @@ $(SCREENING_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 $(SCREEN
 $(SCREENING_BUILD_DIR)/screening_test_stubs.o: support/screening_test_stubs.F90 $(SCREENING_BUILD_DIR)/xnet_types.o
 	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
 
-$(SCREENING_BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 $(SCREENING_BUILD_DIR)/xnet_types.o
+$(SCREENING_BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 $(XNET_DIR)/xnet_macros.fh \
+    $(SCREENING_BUILD_DIR)/xnet_types.o
 	$(FC) $(FFLAGS) $(F90FLAGS) $(SCREENING_MODULE_FLAGS) -c $< -o $@
 
 $(SCREENING_BUILD_DIR)/xnet_screening.o: $(XNET_DIR)/xnet_screening.F90 $(XNET_DIR)/xnet_macros.fh \
@@ -335,7 +336,7 @@ $(BUILD_DIR)/xnet_test_stubs.o: support/xnet_test_stubs.F90 \
     $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 \
+$(BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 $(XNET_DIR)/xnet_macros.fh \
     $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
@@ -359,7 +360,7 @@ $(BUILD_DIR)/xnet_nnu.o: $(XNET_DIR)/xnet_nnu.F90 \
 $(NSE_TEST_SOURCE): $(XNET_DIR)/xnet_nse.F90 | $(BUILD_DIR)
 	cp $< $@
 
-$(BUILD_DIR)/xnet_nse.o: $(NSE_TEST_SOURCE) \
+$(BUILD_DIR)/xnet_nse.o: $(NSE_TEST_SOURCE) $(XNET_DIR)/xnet_macros.fh \
     $(BUILD_DIR)/xnet_constants.o $(BUILD_DIR)/xnet_test_stubs.o \
     $(BUILD_DIR)/xnet_timers.o $(BUILD_DIR)/xnet_util.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
@@ -508,7 +509,7 @@ $(PREPROCESS_BUILD_DIR)/xnet_preprocess.o: $(XNET_DIR)/xnet_preprocess.F90 \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
-$(PREPROCESS_BUILD_DIR)/xnet_match.o: $(XNET_DIR)/xnet_match.F90 \
+$(PREPROCESS_BUILD_DIR)/xnet_match.o: $(XNET_DIR)/xnet_match.F90 $(XNET_DIR)/xnet_macros.fh \
     $(PREPROCESS_BUILD_DIR)/xnet_data.o $(PREPROCESS_BUILD_DIR)/xnet_util.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
@@ -517,7 +518,7 @@ $(PREPROCESS_BUILD_DIR)/xnet_abundances.o: $(XNET_DIR)/xnet_abundances.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_data.o | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
-$(PREPROCESS_BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 \
+$(PREPROCESS_BUILD_DIR)/xnet_timers.o: $(XNET_DIR)/xnet_timers.F90 $(XNET_DIR)/xnet_macros.fh \
     $(PREPROCESS_BUILD_DIR)/xnet_types.o | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
@@ -525,7 +526,7 @@ $(PREPROCESS_BUILD_DIR)/xnet_sparse.o: $(XNET_DIR)/xnet_sparse.F90 \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
-$(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o: $(XNET_DIR)/xnet_jacobian_PARDISO.F90 \
+$(PREPROCESS_BUILD_DIR)/xnet_jacobian_PARDISO.o: $(XNET_DIR)/xnet_jacobian_PARDISO.F90 $(XNET_DIR)/xnet_macros.fh \
     $(PREPROCESS_BUILD_DIR)/xnet_abundances.o $(PREPROCESS_BUILD_DIR)/xnet_conditions.o \
     $(PREPROCESS_BUILD_DIR)/xnet_data.o $(PREPROCESS_BUILD_DIR)/xnet_timers.o \
     $(PREPROCESS_BUILD_DIR)/xnet_sparse.o $(PREPROCESS_BUILD_DIR)/xnet_util.o \
@@ -772,7 +773,7 @@ $(EOS_BUILD_DIR)/$(1)/xnet_fd.o: $$(XNET_DIR)/xnet_fd.F90 \
 	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \
 	  -c $$< -o $$@
 
-$(EOS_BUILD_DIR)/$(1)/xnet_eos.o: $(2) $(4) \
+$(EOS_BUILD_DIR)/$(1)/xnet_eos.o: $(2) $(4) $$(XNET_DIR)/xnet_macros.fh \
     $(EOS_BUILD_DIR)/$(1)/xnet_abundances.o $(EOS_BUILD_DIR)/$(1)/xnet_fd.o \
     $(EOS_BUILD_DIR)/$(1)/xnet_util.o | $(EOS_BUILD_DIR)/$(1)
 	$$(FC) $$(FFLAGS) $$(F90FLAGS) -J$(EOS_BUILD_DIR)/$(1) -I$(EOS_BUILD_DIR)/$(1) \

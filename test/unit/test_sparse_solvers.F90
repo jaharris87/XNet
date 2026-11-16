@@ -747,7 +747,7 @@ Contains
     ! Give every worker/slot a distinct nonzero handle. The doubles record which ones are released.
     !$omp parallel default(shared) private(i)
 #if defined(TEST_MA48)
-    Allocate (vals0(1,1:nzbatchmx),jcn0(1,1:nzbatchmx),irn0(1,1:nzbatchmx))
+    Allocate (vals0(1,nzbatchmx),jcn0(1,nzbatchmx),irn0(1,nzbatchmx))
 #elif defined(TEST_PARDISO)
     pt = 0_i8
     pt(1) = tid
@@ -1004,18 +1004,18 @@ Contains
   Subroutine install_matrix(matrix,diag,mult)
     Implicit None
 
-    Real(dp), Intent(in) :: matrix(msize,msize,2), diag(1:nzbatchmx), mult(1:nzbatchmx)
+    Real(dp), Intent(in) :: matrix(msize,msize,2), diag(nzbatchmx), mult(nzbatchmx)
 
     Integer :: entry, zone
 
 #if defined(TEST_DENSE)
     Do zone = 1, nzbatchmx
-      dydotdy(:,:,zone) = transpose(matrix(:,:,zone-1+1))
+      dydotdy(:,:,zone) = transpose(matrix(:,:,zone))
     EndDo
 #else
     Do zone = 1, nzbatchmx
       Do entry = 1, nnz
-        dydotdy(entry,zone) = matrix(ridx(entry),cidx(entry),zone-1+1)
+        dydotdy(entry,zone) = matrix(ridx(entry),cidx(entry),zone)
       EndDo
     EndDo
 #endif
@@ -1033,11 +1033,11 @@ Contains
     Integer :: entry
 
 #if defined(TEST_DENSE)
-    matrix = jac(:,:,1+zone-1)
+    matrix = jac(:,:,zone)
 #else
     matrix = 0.0_dp
     Do entry = 1, nnz
-      matrix(ridx(entry),cidx(entry)) = tvals(entry,1+zone-1)
+      matrix(ridx(entry),cidx(entry)) = tvals(entry,zone)
     EndDo
 #endif
 

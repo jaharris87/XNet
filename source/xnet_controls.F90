@@ -64,7 +64,7 @@ Module xnet_controls
     Integer :: iprocess  = 0          ! Network preprocessing: >0 run net_preprocess on data_dir
 
     ! Zone batching controls
-    Integer :: nzbatchmx = 0          ! Maximum zones per worker batch (>= 1)
+    Integer :: nzbatchmx = 0          ! Maximum zones per batch (>= 1)
 
     ! Integration controls
     Integer :: isolv         = 0       ! Integrator selection: 1 = Backward Euler (BE), 3 = Gear BDF
@@ -108,12 +108,14 @@ Module xnet_controls
   ! namelist reading/writing, and broadcast_xnet_controls. Extend test_xnet_controls accordingly.
 
   !-------------------------------------------------------------------------------------------------
-  ! Runtime Control State and Worker Workspace Bookkeeping
+  ! Runtime Control State and Zone Batching
   !-------------------------------------------------------------------------------------------------
   ! Populated by apply_xnet_controls / apply_standalone_controls and released by controls_finalize.
-  ! Each fixed-team worker allocates one workspace with local lanes 1:nzbatchmx.
-  ! szbatch is the standalone input ordinal of lane 1; izone = szbatch + izb - 1.
-  ! zone_id holds the independent mesh label supplied by the caller.
+  ! Per-zone arrays have capacity nzbatchmx and use izb for the position within the batch.
+  ! Under OpenMP these arrays are threadprivate, so each thread has its own batch.
+  ! nzbatch counts active zones; lzactive can contain inactive zones between active ones.
+  ! In the standalone driver, izone = szbatch + izb - 1 is the zone number in the run.
+  ! zone_id(:,izb) is the mesh label supplied by the caller; it is not used for indexing.
 
   ! Problem description
   Character(80) :: descript(3)
@@ -122,20 +124,18 @@ Module xnet_controls
   Integer              :: szone        ! Standalone starting zone index
   Integer              :: nzone        ! Standalone total number of zones
   Integer              :: iweak0       ! Baseline weak-reaction control flag
-  Integer, Allocatable :: iweak(:)     ! Per-zone active weak-reaction flag (1:nzbatchmx)
+  Integer, Allocatable :: iweak(:)     ! Per-zone active weak-reaction flag (nzbatchmx)
   Integer              :: iscrn        ! Plasma screening control flag
   Integer              :: iprocess     ! Runtime network preprocessing flag
   Real(dp)             :: t9min = 0.01_dp ! Temperature [GK] below which strong reactions are disabled
 
-  ! Worker batch indexing and zone state
-  Integer :: nzbatchmx                 ! Maximum zones per worker batch
-  Integer :: nzbatch                   ! Number of active zones in the current worker batch
-  Integer :: szbatch                   ! Input-zone ordinal corresponding to local lane 1
-  Logical, Allocatable, Target :: lzactive(:) ! Active-zone mask indexed by workspace slot (1:nzbatchmx)
-  Integer, Allocatable :: zone_id(:,:) ! Mesh location tuple [i,j,k,block] per workspace slot (4,nzbatchmx)
-#ifdef XNET_OMP
-  !$omp threadprivate(nzbatch,szbatch)
-#endif
+  ! Zone batching
+  Integer :: nzbatchmx                 ! Maximum zones per batch
+  Integer :: nzbatch                   ! Number of active zones in the current batch
+  Integer :: szbatch                   ! Standalone zone number of the first zone in the batch
+  Logical, Allocatable, Target :: lzactive(:) ! Active-zone mask (nzbatchmx)
+  Integer, Allocatable :: zone_id(:,:) ! Mesh location [i,j,k,block] of each zone (4,nzbatchmx)
+  !XOMP threadprivate(nzbatch,szbatch)
 
   ! Integration controls and work counters
   Integer  :: isolv                    ! Integration method (1 = BE, 3 = BDF)
@@ -168,41 +168,33 @@ Module xnet_controls
   Integer, Allocatable :: inucout(:)   ! Condensed-output species indices (1:nnucout)
   Character(80) :: ev_file_base        ! ASCII evolution filename prefix
   Character(80) :: bin_file_base       ! Binary time-series filename prefix
-  Integer, Allocatable :: lun_ts(:)    ! Open binary time-series logical units (1:nzbatchmx; 0 = closed)
-  Integer, Allocatable :: lun_ev(:)    ! Open ASCII evolution logical units (1:nzbatchmx; 0 = closed)
+  Integer, Allocatable :: lun_ts(:)    ! Open binary time-series logical units (nzbatchmx; 0 = closed)
+  Integer, Allocatable :: lun_ev(:)    ! Open ASCII evolution logical units (nzbatchmx; 0 = closed)
   Integer :: lun_diag                  ! Per-thread diagnostic logical unit
-#ifdef XNET_OMP
-  !$omp threadprivate(lun_diag)
-#endif
+  !XOMP threadprivate(lun_diag)
 
   ! Standalone input file controls
   Character(80) :: inab_file_base      ! Legacy initial-abundance filename prefix
   Character(80) :: thermo_file_base    ! Legacy thermodynamic-trajectory filename prefix
   Character(80), Allocatable :: inab_file(:)   ! Per-zone initial-abundance filenames (1:nzone)
   Character(80), Allocatable :: thermo_file(:) ! Per-zone thermodynamic-trajectory filenames (1:nzone)
-  Integer, Allocatable :: iaux(:)      ! Allow auxiliary nuclei when reading abundance files (1:nzbatchmx)
+  Integer, Allocatable :: iaux(:)      ! Allow auxiliary nuclei when reading abundance files (nzbatchmx)
   Integer :: lun_th, lun_ab            ! Per-thread temporary input logical units
-#ifdef XNET_OMP
-  !$omp threadprivate(lun_th,lun_ab)
-#endif
+  !XOMP threadprivate(lun_th,lun_ab)
 
   ! Parallel and accelerator execution state
   Integer :: myid                      ! MPI rank index (0-based)
   Integer :: nproc                     ! Total MPI ranks
-  Integer :: tid                       ! OpenMP worker thread index (1-based)
-  Integer :: nthread                   ! Total OpenMP worker threads in the fixed team
+  Integer :: tid                       ! OpenMP thread number (1-based)
+  Integer :: nthread                   ! Number of OpenMP threads, fixed at initialization
   Integer :: gpu_queue = 1             ! Directive async queue ID (OpenACC async queue or thread ID)
   Character(1) :: sweep                ! Legacy hydrodynamic sweep label
-#ifdef XNET_OMP
-  !$omp threadprivate(tid,sweep,gpu_queue)
-#endif
+  !XOMP threadprivate(tid,sweep,gpu_queue)
 
   ! Accelerator kernels read these scalar controls directly on the device.
   !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
 
-#ifdef XNET_OMP
-  !$omp threadprivate(zone_id,lzactive,iweak,lun_ev,lun_ts,iaux,kmon,ktot)
-#endif
+  !XOMP threadprivate(zone_id,lzactive,iweak,lun_ev,lun_ts,iaux,kmon,ktot)
 
 Contains
 
@@ -345,8 +337,8 @@ Contains
 
   Subroutine apply_xnet_controls(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Validate controls, copy them into the module runtime state, allocate per-zone bookkeeping
-    ! for each fixed-team worker, and map the worker-owned control arrays.
+    ! Validate controls and copy them into the module runtime state. Each thread then allocates
+    ! its per-zone flags, counters and file units and maps the arrays needed on the device.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -406,13 +398,11 @@ Contains
     Write(nnucout_string,'(i4)') nnucout
     nnucout_string = adjustl(nnucout_string)
 
-    ! Shared scalar device controls are established once, before worker mappings.
+    ! Copy scalar controls to the device before mapping per-zone arrays.
     !XDIR XUPDATE XASYNC(gpu_queue) &
     !XDIR XDEVICE(iheat,iscrn,iconvc,ymin)
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (zone_id(4,nzbatchmx),lzactive(nzbatchmx),iweak(nzbatchmx), &
       & lun_ev(nzbatchmx),lun_ts(nzbatchmx),iaux(nzbatchmx), &
       & kmon(5,nzbatchmx),ktot(5,nzbatchmx))
@@ -430,9 +420,7 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCREATE(lzactive,iweak,kmon,ktot)
     !XDIR XWAIT(gpu_queue)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine apply_xnet_controls
@@ -475,9 +463,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( allocated(lzactive) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(lzactive,iweak,kmon,ktot)
@@ -492,9 +478,7 @@ Contains
     If ( allocated(lun_ev) )      Deallocate (lun_ev)
     If ( allocated(iaux) )        Deallocate (iaux)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     If ( allocated(inucout) )     Deallocate (inucout)
     If ( allocated(output_nuc) )  Deallocate (output_nuc)
@@ -989,7 +973,7 @@ Contains
     Call resize_input_controls(controls,controls%nzone,message)
     If ( len_trim(message) /= 0 ) Return
 
-    ! Verify that every populated slot supplies both an abundance file and a thermo file.
+    ! Verify that every zone with an input filename supplies both abundance and thermo files.
     last_input_index = 0
     Do izone = 1, controls%nzone
       If ( (len_trim(controls%inab_files(izone)) == 0) .neqv. &

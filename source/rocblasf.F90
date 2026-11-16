@@ -3,6 +3,8 @@
 ! This file contains the module defining Fortran interfaces for the rocBLAS library
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 module xnet_rocblasf
   !-------------------------------------------------------------------------------------------------
   ! Interface to rocBLAS routines
@@ -33,8 +35,6 @@ module xnet_rocblasf
     rocblas_ddot_strided_batched
 
   type(c_ptr) :: rocblas_handle = c_null_ptr
-#ifdef XNET_OMP
-  !$omp threadprivate(rocblas_handle)
-#endif
+  !XOMP threadprivate(rocblas_handle)
 
 end module xnet_rocblasf

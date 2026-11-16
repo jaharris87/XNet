@@ -32,7 +32,6 @@ Program verify_preprocess
   iscrn = 0
   iweak0 = 0
   nzbatchmx = 1
-  nzbatchmx = 1
   szbatch = 1
   tid = 1
 

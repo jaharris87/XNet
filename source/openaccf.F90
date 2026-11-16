@@ -3,6 +3,8 @@
 ! This file contains the module defining Fortran interfaces for the OpenACC Runtime Library
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 module xnet_openaccf
   !-------------------------------------------------------------------------------------------------
   ! Interface to OpenACC routines
@@ -13,9 +15,7 @@ module xnet_openaccf
   implicit none
 
   integer(c_long_long) :: acc_queue
-#ifdef XNET_OMP
-  !$omp threadprivate(acc_queue)
-#endif
+  !XOMP threadprivate(acc_queue)
 
   !enum, bind(c) !:: acc_device_t
   !  enumerator :: acc_device_none = 0

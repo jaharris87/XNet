@@ -40,9 +40,7 @@ Module xnet_screening
   Real(dp), Parameter :: rdlam34 = 1.0_dp / (lam_3 - lam_4)
   Real(dp), Parameter :: rdlam56 = 1.0_dp / (lam_6 - lam_5)
 
-#ifdef XNET_OMP
-  !$omp threadprivate(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9,ztilde,zinter,lambda0,gammae,dztildedt9)
-#endif
+  !XOMP threadprivate(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9,ztilde,zinter,lambda0,gammae,dztildedt9)
 
 Contains
 
@@ -53,7 +51,7 @@ Contains
     Use nuclear_data, Only: zz
     Use reaction_data, Only: nreac, n2i, n3i, n4i
     Use xnet_constants, Only: bip1, thbim1, five3rd
-    Use xnet_controls, Only: iheat, iscrn, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: iheat, iscrn, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
@@ -118,9 +116,7 @@ Contains
       !XDIR XWAIT(gpu_queue)
     EndIf
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( iscrn > 0 ) Then
       Allocate (ztilde(nzbatchmx))
       Allocate (zinter(nzbatchmx))
@@ -156,9 +152,7 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine screening_init
@@ -183,14 +177,14 @@ Contains
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_constants, Only: bi, bip1, cds, kbi, thbim2
     Use xnet_conditions, Only: rhot, t9t, etae, detaedt9
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, lzactive, gpu_queue, nzbatchmx
     Use xnet_eos, Only: eos_screen
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_prescrn, timer_scrn
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: fhs(0:izmax+2), dfhsdt9(0:izmax+2)
@@ -486,12 +480,12 @@ Contains
   End Subroutine screen_blend
 
   Subroutine screening_finalize
-    ! Release mappings established by screening_init before CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Remove device mappings before releasing screening tables and per-zone work arrays.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(ztilde) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(ztilde,zinter,lambda0,gammae,dztildedt9)
@@ -514,9 +508,7 @@ Contains
     If ( Allocated(lambda0) ) Deallocate (lambda0)
     If ( Allocated(gammae) ) Deallocate (gammae)
     If ( Allocated(dztildedt9) ) Deallocate (dztildedt9)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     If ( Allocated(iz21) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &

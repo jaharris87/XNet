@@ -49,9 +49,7 @@ Module xnet_jacobian
   Real(dp), Parameter :: pivot_thresh = 1.0e-4
   Logical, Allocatable :: pivot(:)
 
-#ifdef XNET_OMP
-  !$omp threadprivate(dydotdy,jac,rhs,indx,info,hjac,hrhs,hindx,djac,drhs,dindx,diag0,mult1,pivot)
-#endif
+  !XOMP threadprivate(dydotdy,jac,rhs,indx,info,hjac,hrhs,hindx,djac,drhs,dindx,diag0,mult1,pivot)
 
 Contains
 
@@ -60,7 +58,7 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: iheat, gpu_queue, nzbatchmx
     Use xnet_gpu, Only: dev_ptr
     Implicit None
 
@@ -77,9 +75,7 @@ Contains
       msize = ny
     EndIf
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared) private(izb)
-#endif
+    !XOMP parallel default(shared) private(izb)
     Allocate (diag0(nzbatchmx))
     Allocate (mult1(nzbatchmx))
     Allocate (pivot(nzbatchmx))
@@ -122,39 +118,31 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(djac,drhs,dindx)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
     !-----------------------------------------------------------------------------------------------
-    ! Remove device mappings before releasing dense matrix and solver workspace. Call after the
-    ! worker team has finished, while controls and GPU resources are still available.
+    ! Remove device mappings before releasing dense matrix and solver arrays. Call outside
+    ! parallel regions with the initialized OpenMP team, after all threads have finished,
+    ! while controls and GPU resources are still available.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( allocated(dydotdy) ) Then
-
-    !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-    !XDIR XDELETE(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
-    !XDIR XWAIT(gpu_queue)
-
-    Deallocate (diag0,mult1,pivot)
-    Deallocate (dydotdy,jac,rhs,indx,info)
-    Deallocate (hjac,hrhs,hindx)
-    Deallocate (djac,drhs,dindx)
-
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
+      !XDIR XWAIT(gpu_queue)
+      Deallocate (diag0,mult1,pivot)
+      Deallocate (dydotdy,jac,rhs,indx,info)
+      Deallocate (hjac,hrhs,hindx)
+      Deallocate (djac,drhs,dindx)
     EndIf
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine jacobian_finalize
@@ -165,15 +153,15 @@ Contains
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Optional, Target, Intent(in) :: diag_in(1:nzbatchmx), mult_in(1:nzbatchmx)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(nzbatchmx), mult_in(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -291,14 +279,14 @@ Contains
       & n10, n20, n30, n40
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, lzactive, gpu_queue
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Target, Intent(in) :: diag_in(1:nzbatchmx), mult_in(1:nzbatchmx)
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(nzbatchmx), mult_in(nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -463,7 +451,7 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, gpu_queue, nzbatchmx
     Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
@@ -471,15 +459,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
+    Real(dp), Intent(in) :: yrhs(ny,nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
-    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: dy(ny,nzbatchmx)
+    Real(dp), Intent(out) :: dt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone, istat
@@ -591,7 +579,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, lun_diag, szbatch, lzactive, gpu_queue, nzbatchmx
     Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -600,7 +588,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, izb, izone, istat
@@ -628,7 +616,7 @@ Contains
 #else
     any_pivot = .true.
 #endif
-    ! BDF can reuse LU factors in lanes outside the refactor mask.
+    ! BDF can reuse LU factors in zones outside the refactor mask.
     first = 1
     Do last = 1, nzbatchmx
       If ( .not. mask(last) ) Then
@@ -676,7 +664,7 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, lzactive, gpu_queue, nzbatchmx
     Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
@@ -684,15 +672,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
+    Real(dp), Intent(in) :: yrhs(ny,nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
-    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: dy(ny,nzbatchmx)
+    Real(dp), Intent(out) :: dt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone

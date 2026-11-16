@@ -14,6 +14,8 @@
 ! package available, with fairly wide distribution as part of the Intel MKL.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_jacobian
   !-------------------------------------------------------------------------------------------------
   ! Contains data for use in the sparse solver using Compressed-Row Storage (CRS)
@@ -44,15 +46,13 @@ Module xnet_jacobian
   Integer, Parameter :: solver = 0 ! Solver method (0 = sparse direct)
 
   ! Solver controls
-  Integer(i8), Allocatable :: pt(:,:) ! PARDISO internal data pointers, one handle per batch slot
+  Integer(i8), Allocatable :: pt(:,:) ! PARDISO internal data pointers, one handle per zone of the batch
   Integer     :: iparm(64)         ! PARDISO solver parameters
   Real(dp)    :: dparm(64)         ! PARDISO solver parameters for iterative solver
   Integer     :: phase             ! PARDISO execution mode
   Integer     :: msglvl            ! Verbosity of PARDISO diagnostics
   Integer     :: maxfct            ! Number of factors stored by each PARDISO handle
-#ifdef XNET_OMP
-  !$omp threadprivate(iparm,dparm,phase,pb,cidx,perm)
-#endif
+  !XOMP threadprivate(iparm,dparm,phase,pb,cidx,perm)
   Namelist /pardiso_controls/ iparm, dparm
 
   Interface xnet_pardiso
@@ -63,9 +63,7 @@ Module xnet_jacobian
     Module Procedure mkl_pardisoinit
   End Interface xnet_pardisoinit
 
-#ifdef XNET_OMP
-  !$omp threadprivate(dydotdy,tvals,pt)
-#endif
+  !XOMP threadprivate(dydotdy,tvals,pt)
 
 Contains
 
@@ -281,24 +279,20 @@ Contains
       msglvl = 0
     EndIf
 
-    ! Each local batch slot has an independent PARDISO handle so analysis and refactorization in
-    ! one slot do not invalidate another slot's stored factors.
+    ! Each zone in the batch has its own PARDISO handle so analysis and refactorization for
+    ! one zone do not invalidate stored factors in other zones.
     maxfct = 1
 
 
-    ! oneMKL can temporarily modify the index arrays during a call. Each worker needs its own
+    ! oneMKL can temporarily modify the index arrays during a call. Each thread needs its own
     ! storage, including the permutation vector; allocatable COPYIN copies the initial contents.
     Allocate (perm(msize))
     perm = 0
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared) copyin(iparm,dparm,pb,cidx,perm)
-#endif
+    !XOMP parallel default(shared) copyin(iparm,dparm,pb,cidx,perm)
     If ( .not. allocated(pt) ) Allocate (pt(64,nzbatchmx),source=0_i8)
     Allocate (dydotdy(nnz,nzbatchmx),tvals(nnz,nzbatchmx))
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
 
     Return
@@ -306,9 +300,9 @@ Contains
 
   Subroutine jacobian_finalize
     !-----------------------------------------------------------------------------------------------
-    ! Release oneMKL's internal memory for each batch slot before freeing the handle table and
+    ! Release internal oneMKL memory for each zone handle before freeing the handle table and
     ! XNet arrays. Unused (zero) handles need no release. Call outside parallel regions with the
-    ! initialized worker team; network tables and controls must still exist.
+    ! initialized OpenMP team; network tables and controls must still exist.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzbatchmx
     Use xnet_util, Only: xnet_terminate
@@ -319,9 +313,7 @@ Contains
 
     If ( .not. allocated(pt) ) Return
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared) private(ierr,izb,b,x)
-#endif
+    !XOMP parallel default(shared) private(ierr,izb,b,x)
     phase = -1
     Allocate (b(msize),x(msize))
     b = 0.0_dp
@@ -332,9 +324,7 @@ Contains
     EndDo
     Deallocate (b,x)
     Deallocate (pb,cidx,perm,pt,dydotdy,tvals)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Deallocate (ridx,sident)
     Deallocate (ns11,ns21,ns22,ns31,ns32,ns33,ns41,ns42,ns43,ns44)
@@ -352,10 +342,10 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: diag(1:nzbatchmx), mult(1:nzbatchmx)
+    Real(dp), Intent(in) :: diag(nzbatchmx), mult(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, i0, izb
@@ -393,8 +383,8 @@ Contains
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Intent(in) :: diag_in(1:nzbatchmx), mult_in(1:nzbatchmx)
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Real(dp), Optional, Intent(in) :: diag_in(nzbatchmx), mult_in(nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -404,7 +394,7 @@ Contains
     Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
     Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp) :: diag(1:nzbatchmx), mult(1:nzbatchmx)
+    Real(dp) :: diag(nzbatchmx), mult(nzbatchmx)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -587,15 +577,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
+    Real(dp), Intent(in) :: yrhs(ny,nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
-    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: dy(ny,nzbatchmx)
+    Real(dp), Intent(out) :: dt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone
@@ -639,7 +629,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: i, izb, izone, err
@@ -696,15 +686,15 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: t9rhs(1:nzbatchmx)
+    Real(dp), Intent(in) :: yrhs(ny,nzbatchmx)
+    Real(dp), Intent(in) :: t9rhs(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(ny,1:nzbatchmx)
-    Real(dp), Intent(out) :: dt9(1:nzbatchmx)
+    Real(dp), Intent(out) :: dy(ny,nzbatchmx)
+    Real(dp), Intent(out) :: dt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: rhs(msize), dx(msize)

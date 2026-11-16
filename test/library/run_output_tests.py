@@ -165,7 +165,7 @@ def check_ascii(path: Path, trace: dict, names: list[str], selected: list[int]) 
 
 
 def check_case(case: Path, log: dict, level: int, solver: int, heat: int, selected: list[int]) -> dict:
-    inventory = {f"ts_call{sequence}_lane{lane}" for sequence, (_, lanes) in CALLS.items() for lane in lanes}
+    inventory = {f"ts_call{sequence}_zone{lane}" for sequence, (_, lanes) in CALLS.items() for lane in lanes}
     require({p.name for p in case.glob("ts*")} == (inventory if level else set()), f"wrong binary lane/call inventory: {case}")
     ascii_inventory = {name.replace("ts_", "ev_", 1) for name in inventory}
     require({p.name for p in case.glob("ev*")} == (ascii_inventory if level >= 2 else set()), f"wrong ASCII inventory: {case}")
@@ -173,7 +173,7 @@ def check_case(case: Path, log: dict, level: int, solver: int, heat: int, select
     traces = {}
     for name in sorted(inventory if level else ()):
         trace = binary(case / name)
-        sequence, lane = map(int, re.fullmatch(r"ts_call(\d+)_lane(\d+)", name).groups())
+        sequence, lane = map(int, re.fullmatch(r"ts_call(\d+)_zone(\d+)", name).groups())
         label = CALLS[sequence][0]
         initial, final = log["states"]["input_"+label], log["states"][label]
         duration = log["calls"][label][0]
@@ -328,27 +328,27 @@ def main() -> None:
         case = new_case(f"alpha-{mode}", "alpha")
         text = run([consumer, "Data_alpha", "1", "0", "2", mode], case, case / "consumer.log")
         require("OUTPUT_OPEN_CHECKS_PASSED" in text, f"open-failure checks incomplete: {case}")
-        sentinel_name = {"open_failure": "ts_call1_lane3", "ascii_open_failure": "ev_call1_lane3",
-                         "collision": "ts_call1_lane1"}[mode]
+        sentinel_name = {"open_failure": "ts_call1_zone3", "ascii_open_failure": "ev_call1_zone3",
+                         "collision": "ts_call1_zone1"}[mode]
         sentinel = case / sentinel_name
         require(sentinel.read_bytes() == b"DO NOT CLOBBER\n", f"existing output clobbered: {sentinel}")
         if mode != "collision":
-            partial = binary(case / "ts_call1_lane1", allow_header_only=True)
+            partial = binary(case / "ts_call1_zone1", allow_header_only=True)
             require(not partial["steps"], f"rejected open wrote evolution records: {case}")
-        expected_binary = {"ts_call2_lane1", "ts_call2_lane3"}
-        expected_ascii = {"ev_call2_lane1", "ev_call2_lane3"}
+        expected_binary = {"ts_call2_zone1", "ts_call2_zone3"}
+        expected_ascii = {"ev_call2_zone1", "ev_call2_zone3"}
         (expected_binary if sentinel.name.startswith("ts") else expected_ascii).add(sentinel.name)
         if mode != "collision":
-            expected_binary.add("ts_call1_lane1")
-            expected_ascii.add("ev_call1_lane1")
+            expected_binary.add("ts_call1_zone1")
+            expected_ascii.add("ev_call1_zone1")
         if mode == "ascii_open_failure":
-            expected_binary.add("ts_call1_lane3")
-            partial = binary(case / "ts_call1_lane3", allow_header_only=True)
+            expected_binary.add("ts_call1_zone3")
+            partial = binary(case / "ts_call1_zone3", allow_header_only=True)
             require(not partial["steps"], f"rejected ASCII open wrote evolution records: {case}")
         require({p.name for p in case.glob("ts*")} == expected_binary and
                 {p.name for p in case.glob("ev*")} == expected_ascii, f"wrong partial-open inventory: {case}")
         for lane in (1, 3):
-            binary(case / f"ts_call2_lane{lane}")
+            binary(case / f"ts_call2_zone{lane}")
         require(not list(case.glob("fort.*")), f"implicit output on open failure: {case}")
     print("PASS binary/ASCII partial-open failures and collision: files preserved; units closed; next burn uses next sequence", flush=True)
 
@@ -357,12 +357,12 @@ def main() -> None:
             case = new_case(f"alpha-{solver}-{mode}", "alpha")
             text = run([consumer, "Data_alpha", str(solver), "0", "2", mode], case, case / "consumer.log")
             require("OUTPUT_FATAL_CHECKS_PASSED" in text, f"fatal output checks incomplete: {case}")
-            partial = binary(case / "ts_call1_lane2")
+            partial = binary(case / "ts_call1_zone2")
             names = [row[0] for row in parsed_log(text)["metadata"]]
-            check_ascii(case / "ev_call1_lane2", partial, names,
+            check_ascii(case / "ev_call1_zone2", partial, names,
                         [names.index("c12"), names.index("o16"), len(names)-1])
-            require({p.name for p in case.glob("ts*")} == {"ts_call1_lane2"} and
-                    {p.name for p in case.glob("ev*")} == {"ev_call1_lane2"}, f"wrong failed-call inventory: {case}")
+            require({p.name for p in case.glob("ts*")} == {"ts_call1_zone2"} and
+                    {p.name for p in case.glob("ev*")} == {"ev_call1_zone2"}, f"wrong failed-call inventory: {case}")
             require(partial["steps"][-1]["time"] < 0.1, f"failure unexpectedly wrote completed burn: {case}")
             require(not any(line.startswith("End") for line in text.splitlines()), f"failure wrote successful final output: {case}")
             require(not list(case.glob("fort.*")) and not list(case.glob("ab_fail_*")) and not list(case.glob("th_fail_*")),

@@ -69,7 +69,6 @@ Program legacy_reference
   iscrn = 1
   iprocess = 0
   nzbatchmx = lanes
-  nzbatchmx = lanes
   nzbatch = lanes
   szbatch = 1
 

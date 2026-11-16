@@ -2,7 +2,7 @@
 ! xnet_abundances.F90
 ! Nuclear species abundance state, persistent device mappings, and composition-moment routines.
 !
-! Manages per-zone molar abundances Y = X / A in the calling worker workspace (1:nzbatchmx) at the
+! Manages molar abundances Y = X / A for each zone of the current batch at the
 ! start (ystart), previous (yo), current (y), and trial (yt) times, along with trial time
 ! derivatives (ydot) and optional fixed auxiliary-reservoir parameters (xext, aext, zext).
 !***************************************************************************************************
@@ -14,7 +14,7 @@ Module xnet_abundances
   Implicit None
 
   !-------------------------------------------------------------------------------------------------
-  ! Per-zone abundance workspace (ny, nzbatchmx) and auxiliary reservoir parameters (nzbatchmx)
+  ! Per-zone abundances (ny, nzbatchmx) and auxiliary reservoir parameters (nzbatchmx)
   !-------------------------------------------------------------------------------------------------
   Real(dp), Allocatable :: ystart(:,:) ! Molar abundances at burn start time
   Real(dp), Allocatable :: yo(:,:)     ! Molar abundances at previous timestep
@@ -32,27 +32,23 @@ Module xnet_abundances
 
   Private :: y_moment_internal
 
-#ifdef XNET_OMP
-  !$omp threadprivate(ystart,yo,y,yt,ydot,xext,aext,zext)
-#endif
+  !XOMP threadprivate(ystart,yo,y,yt,ydot,xext,aext,zext)
 
 Contains
 
   !=================================================================================================
-  ! Workspace Lifecycle
+  ! Allocation and Release
   !=================================================================================================
 
   Subroutine abundances_initialize
     !-----------------------------------------------------------------------------------------------
-    ! Allocate and zero the reusable abundance workspace, then establish persistent device mappings.
+    ! Allocate and zero the abundance arrays on each thread, then establish persistent device mappings.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: gpu_queue, nzbatchmx
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (y(ny,nzbatchmx),yo(ny,nzbatchmx),yt(ny,nzbatchmx),ydot(ny,nzbatchmx),ystart(ny,nzbatchmx))
     Allocate (xext(nzbatchmx),aext(nzbatchmx),zext(nzbatchmx))
     y      = 0.0_dp
@@ -68,9 +64,7 @@ Contains
     !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext)
     !XDIR XWAIT(gpu_queue)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine abundances_initialize
@@ -82,9 +76,7 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( allocated(y) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext)
@@ -99,9 +91,7 @@ Contains
     If ( allocated(aext) )   Deallocate (aext)
     If ( allocated(zext) )   Deallocate (zext)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine abundances_finalize
@@ -179,15 +169,15 @@ Contains
     Implicit None
 
     ! Input arguments
-    Real(dp), Intent(in) :: y(ny,1:nzbatchmx)
-    Real(dp), Intent(in) :: xext(1:nzbatchmx), aext(1:nzbatchmx), zext(1:nzbatchmx)
+    Real(dp), Intent(in) :: y(ny,nzbatchmx)
+    Real(dp), Intent(in) :: xext(nzbatchmx), aext(nzbatchmx), zext(nzbatchmx)
 
     ! Input/Output arguments
-    Real(dp), Intent(inout) :: ye(1:nzbatchmx), ytot(1:nzbatchmx), abar(1:nzbatchmx)
-    Real(dp), Intent(inout) :: zbar(1:nzbatchmx), z2bar(1:nzbatchmx), zibar(1:nzbatchmx)
+    Real(dp), Intent(inout) :: ye(nzbatchmx), ytot(nzbatchmx), abar(nzbatchmx)
+    Real(dp), Intent(inout) :: zbar(nzbatchmx), z2bar(nzbatchmx), zibar(nzbatchmx)
 
     ! Optional arguments
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb, k

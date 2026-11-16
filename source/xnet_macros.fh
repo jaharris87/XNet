@@ -1,3 +1,10 @@
+! Host OpenMP is selected independently of accelerator directives.
+#ifdef XNET_OMP
+#define XOMP               $omp
+#else
+#define XOMP
+#endif
+
 #if defined(XNET_OACC)
 #define XDIR               $acc
 #define XLOOP(N)           parallel loop gang vector collapse(N)

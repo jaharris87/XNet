@@ -8,8 +8,8 @@
 !
 ! Concurrency model:
 ! - CPU (OPENMP_MODE=ON): The host application owns the outer OpenMP parallel loop over batches.
-!   Each fixed-team worker owns a disjoint preallocated workspace with local lanes 1:nzbatchmx, including
-!   NSE scratch. Initialization and finalization must occur outside OpenMP parallel regions.
+!   Each thread has its own threadprivate work arrays, including NSE scratch, for one batch of up
+!   to nzbatchmx zones. Initialization and finalization must occur outside OpenMP parallel regions.
 ! - GPU (GPU_MODE=ON, OPENMP_MODE=OFF): Host API calls are serialized; the application may supply
 !   borrowed streams/handles via xnet_gpu_t and evolve device-resident arrays via data_on_device.
 !
@@ -63,7 +63,7 @@ Module xnet_api
   End Type xnet_network_t
 
   Type, Public :: xnet_timing_t
-    ! Per-burn wall times in seconds for the calling worker. Timers overlap; do not sum them.
+    ! Per-burn wall times in seconds for the calling thread. Timers overlap; do not sum them.
     ! evolve excludes API staging, result extraction and final_output. output can extend beyond evolve.
     ! Zero can mean an unused stage, missing instrumentation or insufficient timer resolution.
     ! GPU values are host wall times, not individual kernel timings.
@@ -131,7 +131,7 @@ Contains
     ! Validate controls, optionally preprocess nuclear data, initialize GPU resources and solver
     ! workspaces once, map persistent device arrays, and return copied network metadata.
     !
-    ! Set control defaults before overrides and configure the fixed team before initialization.
+    ! Set control defaults before overrides and set the number of threads before initialization.
     ! Call outside application OpenMP regions. Controls are copied; later edits do not reconfigure XNet.
     ! A failed GPU rollback may require xnet_finalize before another initialization attempt.
     ! Supplied GPU handles remain caller-owned.
@@ -230,7 +230,7 @@ Contains
     ! Supply all three auxiliary arrays together, or omit all three.
     ! The returned restart hint is the preceding internal timestep, not a recommended application dt.
     ! Timing and status always return on the host.
-    ! Fatal burn statuses require shutdown after workers join; no physical batch result is valid.
+    ! Fatal burn statuses require shutdown after the parallel region ends; no batch result is valid.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: ktot, lzactive, nzbatch, szbatch, nzbatchmx, zone_work=>zone_id
     Use xnet_gpu, Only: gpu_check_device, stream, stream_sync
@@ -269,7 +269,7 @@ Contains
     counters = 0
     message = ' '
 
-    ! 1. Verify API lifecycle and worker-team state
+    ! 1. Verify API lifecycle and OpenMP thread state
     ierr = xnet_lifecycle_error
     If ( api_state /= api_ready ) Then
       message = 'Initialize XNet before burning'
@@ -569,9 +569,7 @@ Contains
     Implicit None
 
     nthread = 1
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     tid = 1
 #ifdef XNET_OMP
     tid = omp_get_thread_num()+1
@@ -580,9 +578,7 @@ Contains
     !$omp end single
 #endif
     lun_diag = lun_stdout
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
     Return
   End Subroutine initialize_thread_state
 
@@ -606,7 +602,7 @@ Contains
 
   Subroutine check_finalize_team(ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Finalization must use the fixed team established at initialization.
+    ! Finalization must use the OpenMP threads initialized by XNet.
     ! Builds without XNet host threading return success.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nthread
@@ -638,15 +634,16 @@ Contains
   End Subroutine check_finalize_team
 
   !=================================================================================================
-  ! Private Batch Execution and Worker Validation
+  ! Private Batch Execution and Thread Validation
   !=================================================================================================
 
-  Subroutine evolve_batch(dt_s,on_device,active,density,temperature,electron_fraction,mass_fraction,restart_dt_s,neutrino_loss, &
-    & aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
+  Subroutine evolve_batch(dt_s,on_device,active,density,temperature,electron_fraction,mass_fraction,restart_dt_s, &
+    & neutrino_loss,aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Prepare the current worker workspace, evolve once, and return results in the requested memory space.
+    ! Load the batch into the calling thread's work arrays, evolve once, and return results in the
+    ! requested memory space.
     ! The caller has validated inputs and selected at least one active zone.
-    ! Conditional offload keeps host values authoritative even when stale device mappings exist.
+    ! Use host values when on_device is false, even if device mappings already exist.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: aa, ny
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
@@ -693,7 +690,7 @@ Contains
       !XDIR XDEVICE(lzactive)
     EndIf
 
-    ! Local lanes index both the calling worker workspace and the caller-array columns.
+    ! Zone izb of the batch is column izb of the caller's arrays.
     ! Reset inactive and unused zones without reading their scientific inputs.
     ! XIF(on_device) selects the device or host copy of every array in these loops.
     !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
@@ -910,7 +907,7 @@ Contains
     & ierr,message,aux_x,aux_a,aux_z)
     !-----------------------------------------------------------------------------------------------
     ! Validate active scientific inputs after checking extents and any required device mappings.
-    ! A temporary verdict array also carries the host active mask; no worker workspace is needed.
+    ! A temporary verdict array also carries the host active mask; no module work arrays are needed.
     ! Clear device loss here; the public entry point has already cleared the host output.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
@@ -1214,9 +1211,10 @@ Contains
   Subroutine open_burn_output(ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Open per-call binary (itsout>=1) and ASCII (itsout>=2) time-series files for active zones
-    ! in the current worker workspace. Reserve a unique process-wide call number under a short
+    ! in the current batch. Reserve a unique process-wide call number under a short
     ! critical region while keeping file writes and evolution outside the critical region.
-    ! Each call has its own local 0..dt_s history. Zone numbers distinguish repeated diagnostic IDs.
+    ! Each call has its own 0..dt_s history. The filename identifies the position in the batch;
+    ! the binary header records the caller's zone ID.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: itsout, lzactive, bin_file_base, ev_file_base, zone_id, nzbatchmx
     Use xnet_flux, Only: flx
@@ -1255,7 +1253,7 @@ Contains
     ! Open ts/ev files for each active zone.
     Do izb = 1, nzbatchmx
       If ( .not. lzactive(izb) ) Cycle
-      Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_lane',izb
+      Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_zone',izb
       filename = trim(bin_file_base)//trim(suffix)
 
       ! Identify the caller zone in the existing input label; keep the record layout.

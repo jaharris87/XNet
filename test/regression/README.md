@@ -244,13 +244,14 @@ absolute destinations, duplicates, missing sources, and replacement of an
 already staged destination are rejected. Preprocessing writes only into the
 isolated writable `Data_alpha` directory.
 
-`nzbatchmx` is the configured maximum zones per batch; `nzevolve` is
-`nzbatchmx * nthread`; `nzbatch` is the active count in the current batch;
-and `szbatch` is that batch's global starting zone, not the configured block
-size. `zb_lo` and `zb_hi` select a thread's local range in `nzevolve`, while
-`lzactive` masks inactive local slots. `net.F90` uses ceiling division for the
-batch count and maps a local index back to global zone number with
-`szbatch`. The permanent case therefore requires precisely four ordered
+`nzbatchmx` is the configured maximum zones per batch; `nzbatch` is the
+number of zones in the current standalone batch; and `szbatch` is that
+batch's first zone number. Per-zone work arrays hold one batch
+(`nzbatchmx` entries), with one copy per OpenMP thread. `lzactive` marks
+entries `1:nzbatch` active and masks the unused entries of a short batch.
+`net.F90` uses ceiling division for the batch count and maps batch position
+`izb` to standalone zone number `izone = szbatch + izb - 1`.
+The permanent case therefore requires precisely four ordered
 diagnostic groups: zones 1–4, 5–8, 9–12, and 13–16. Each group has four
 ordered End/composition records, one matching four-row Counters table, and
 one delimited timer section. The parser rejects a sequence of one-zone groups

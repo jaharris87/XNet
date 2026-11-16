@@ -12,7 +12,7 @@ model. See [build and test](build-and-test.md) for configuration rules and
 [library tests](../../test/library/README.md) for reproducible checks.
 
 **Check every returned status.** Burn statuses `xnet_integrator_failure` and
-`xnet_step_limit` require application shutdown after any worker team joins;
+`xnet_step_limit` require application shutdown after any parallel region ends;
 no physical result from that batch is valid. Some failures, including EOS,
 allocation, malformed-data, singular-solve and NSE convergence failures,
 still terminate inside XNet. The [status reference](#status-and-shutdown)
@@ -165,7 +165,7 @@ make XNET_CONFIG="$xnet_root/build/library-cpu/xnet-config.mk"
 `xnet_controls_t()` constructor contains intentionally invalid values and
 unallocated arrays. After setting defaults, a nonblank `data_dir` is the only
 additional control required for initialization. Choose `nzbatchmx` to hold
-the largest submitted zone count per worker, including inactive holes. Leave
+the largest submitted zone count per thread, including inactive holes. Leave
 `szone=nzone=1` for this use: their common validation still requires
 `nzone>=1` and `1<=szone<=nzone`, but they do not select API zones or zone IDs.
 
@@ -182,7 +182,7 @@ does not coordinate preprocessing through MPI.
 | Library build | Application calls |
 | --- | --- |
 | [CPU, `OPENMP_MODE=OFF`](#cpu-quickstart) | Serialize all XNet calls. The application may use OpenMP elsewhere. |
-| [CPU, `OPENMP_MODE=ON`](#cpu-openmp-batches) | Each worker in one fixed application team calls XNet for its own batch. Configure the team before initialization, as below. |
+| [CPU, `OPENMP_MODE=ON`](#cpu-openmp-batches) | Each thread in one fixed application team calls XNet for its own batch. Configure the team before initialization, as below. |
 | [GPU, `OPENMP_MODE=OFF`](#mapped-gpu-batch) | Serialize host calls and keep the selected device. Choose host or mapped scientific arrays per call. Application OpenMP remains independent. |
 
 Initialize and finalize with no calls in flight. The following examples keep
@@ -198,7 +198,7 @@ make BUILD_NAME=library-openmp MPI_MODE=OFF OPENMP_MODE=ON GPU_MODE=OFF \
   MATRIX_SOLVER=dense EOS=STARKILLER -j libxnet
 ```
 
-The application keeps the batch loop. Each worker may call a burn or an NSE
+The application keeps the batch loop. Each thread may call a burn or an NSE
 query with its own input/output storage, one call at a time. Initialize and
 finalize on the initial thread outside application parallel regions.
 
@@ -222,14 +222,15 @@ See the [tested stack workaround](build-and-test.md#perlmutter-nvidia-cpu-openmp
 for its compiler/library configuration, separate process-stack limit and
 current-candidate validation limits.
 
-Each fixed-team worker allocates its own plain workspace arrays with local
-lanes `1:nzbatchmx`, using conditional OpenMP `THREADPRIVATE` ownership. Each
-existing owner allocates and frees its worker scratch inside internal parallel
-regions, including workers that receive no application batch. Shared network
-tables and external EOS initialization remain once per rank. Memory follows
-`nthread*nzbatchmx` total lane capacity even when calls are short or masked;
-storage is reused across logical application batches. With eight-byte `dp`,
-the two dense matrices alone occupy
+In a CPU OpenMP build, each thread has its own work arrays for a batch of up
+to `nzbatchmx` zones, declared `THREADPRIVATE`. XNet allocates and frees these
+arrays in internal parallel regions during `xnet_initialize` and
+`xnet_finalize`, on every thread, including threads that receive no
+application batch. Network tables and external EOS initialization remain
+shared and are set up once per MPI rank. Memory scales with
+`nthread*nzbatchmx` even when calls are short or contain inactive zones;
+the arrays are reused across calls. With eight-byte `dp`, the two dense
+Jacobian matrices (`dydotdy` and `jac`) alone occupy
 approximately `16*msize**2*nthread*nzbatchmx` bytes, where `msize` is `ny` or
 `ny+1` with self-heating, before other solver and physics arrays.
 
@@ -300,15 +301,15 @@ terminates and consumes none of the batch results. An application may correct
 a checked input error before evolution, but statuses 4 and 5 always require
 shutdown.
 
-Use one fixed, nonnested worker team throughout the lifetime. Keep affinity
+Use one fixed, nonnested OpenMP team throughout the lifetime. Keep affinity
 settings stable and dynamic teams disabled. OpenMP's guarantee that a
-noninitial worker keeps its `threadprivate` allocation between active regions
+noninitial thread keeps its `threadprivate` allocation between active regions
 also requires no intervening host `teams` region, no `order(concurrent)`
 construct, and no `omp_pause_resource`/`omp_pause_resource_all` call. The
 [OpenMP 5.2 threadprivate rules](https://www.openmp.org/spec-html/5.2/openmpse24.html)
 give the full conditions. XNet checks only part of this: dynamic/nested or
-wrong-sized teams return `xnet_unsupported`, and absent worker scratch returns
-`xnet_lifecycle_error`. Equal thread counts alone do not establish persistence.
+wrong-sized teams return `xnet_unsupported`, and a thread without work arrays
+returns `xnet_lifecycle_error`. Equal thread counts alone do not establish persistence.
 Tasks, recursive calls, simultaneous unrelated teams and arbitrary team
 changes are unsupported. Calls on the initial thread between supported
 regions are allowed. A supplied EOS provider must also permit concurrent
@@ -316,10 +317,12 @@ evaluations.
 
 With `OPENMP_MODE=OFF`, serialize all XNet calls, including NSE and lifecycle
 operations. The application may use OpenMP elsewhere. This choice suppresses
-XNet's host teams and threadprivate state even when target-offload compilation
-enables OpenMP directives. For v9, OpenMP target GPU builds require this XNet
-setting for both standalone programs and the library. GPU host calls remain
-serialized.
+XNet's host teams and threadprivate state. Host parallel regions and threadprivate declarations use the `XOMP`
+sentinel in `xnet_macros.fh`, controlled by `XNET_OMP` independently of the
+accelerator `XDIR` sentinel. Thus host directives stay disabled even when
+target-offload compilation enables OpenMP. OpenMP target GPU builds require
+`OPENMP_MODE=OFF` for both standalone programs and the library. GPU host
+calls remain serialized.
 
 ## Mapped GPU batch
 
@@ -394,9 +397,12 @@ when omitting auxiliaries. All real arguments use `Real(dp)`.
 Let `nz=size(active)` and `ny=size(network%names)`. The thermodynamic, restart,
 loss and optional auxiliary arrays have length `nz`; `mass_fraction` has shape
 `(ny,nz)`, `zone_id` has shape `(4,nz)`, and integer `counters` has shape `(5,nz)`.
-`nz` may be smaller than `nzbatchmx`.
+`nz` may be smaller than `nzbatchmx`; it includes inactive entries. Internally,
+`nzbatch = count(active)` is the active count, not an array bound. For example,
+`active = [.true.,.false.,.true.]` submits three columns and evolves columns
+1 and 3. The per-zone arguments keep their three-column or three-entry extent.
 
-Each `zone_id(:,izone)` is the application mesh location **`[i,j,k,block]`**,
+Each `zone_id(:,izb)` is the application mesh location **`[i,j,k,block]`**,
 in that order. Use `1` for unused spatial dimensions and `0` when the
 application has no block identifier. For example, a one-dimensional zone 17
 is `[17,1,1,0]`; cell `(2,5,1)` in block 9 is `[2,5,1,9]`.
@@ -491,7 +497,7 @@ Optional `max_steps_taken` returns the maximum accepted outer integration
 step count in the batch (`full_net`'s `kstep`). It differs from row 1, and is
 zero for an all-inactive call or any non-success return.
 
-`xnet_timing_t` reports changes in the calling worker's existing timers over
+`xnet_timing_t` reports changes in the calling thread's existing timers over
 this burn, in wall-clock seconds:
 
 | Field | Timed work |
@@ -540,8 +546,8 @@ accommodates current diagnostics. Status constants are exported by `xnet_api`.
 | --- | --- |
 | `xnet_success=0` | The requested operation completed. Burn physical results are valid for active zones. |
 | `xnet_invalid=1` | Invalid controls, extents or active values; missing/unreadable required files; output-open failure; or some GPU runtime checks. Correct the rejected request. Host-input validation preserves in/out physical arrays and clears loss, counters, timing and step count. |
-| `xnet_lifecycle_error=2` | Initialization while already initialized or cleanup is pending; work before initialization/after finalization; or missing worker scratch. Correct the lifecycle or worker use. |
-| `xnet_unsupported=3` | Unsupported feature or checked execution mode, including incident-neutrino histories, GPU arguments in a CPU build, dynamic/nested host OpenMP teams, or a worker-team size mismatch. |
+| `xnet_lifecycle_error=2` | Initialization while already initialized or cleanup is pending; work before initialization/after finalization; or a calling thread without work arrays. Correct the lifecycle or call from the initialized threads. |
+| `xnet_unsupported=3` | Unsupported feature or checked execution mode, including incident-neutrino histories, GPU arguments in a CPU build, dynamic/nested host OpenMP teams, or a team size different from initialization. |
 | `xnet_integrator_failure=4` | BE/BDF reports failure after its internal retry logic. The application must terminate. BDF does not retain a detailed failure reason, so this status does not assert that every failure exhausted the same number of attempts. |
 | `xnet_step_limit=5` | An active zone has not reached the stop time after `kstmx` outer integration steps. The application must terminate. |
 
@@ -549,7 +555,7 @@ For statuses 4 and 5, use only `ierr`, `message`, attempted `counters` and
 per-call `timing` for diagnosis. No physical result from the batch is valid;
 loss and `max_steps_taken` remain zero. The message identifies the one-based
 submitted zone and its `[i,j,k,block]` location. Log the application's
-context, join any worker team, then perform its fatal/MPI shutdown. Do not
+context, end any parallel region, then perform its fatal/MPI shutdown. Do not
 retry, use successful zones from the failed batch, or reuse the instance.
 This is a caller obligation: XNet does not latch a failed state that rejects
 every subsequent call. Other calls already in flight may finish; this is not
@@ -596,7 +602,7 @@ the API or selected solver; for example, BDF does not permit a nonpositive
 | `iweak0` | Integer, `1` | `>0`: strong and weak reactions; `0`: no weak; `<0`: weak only. Existing low-temperature logic can change the effective per-zone weak flag. |
 | `iscrn` | Integer, `1` | `>0` enables screening; `<=0` disables ordinary screening. NSE uses the same setting. |
 | `iprocess` | Integer, `0` | `>0` preprocesses ASCII network inputs, writing `data_dir`; `<=0` loads prepared data. The application provides exclusive access. |
-| `nzbatchmx` | Integer, `1` | Positive maximum submitted zone count per call and worker, including inactive holes. |
+| `nzbatchmx` | Integer, `1` | Positive maximum submitted zone count per call and thread, including inactive holes. |
 | `isolv` | Integer, `1` | Exactly `1` for Backward Euler or `3` for BDF; other values rejected. |
 | `kstmx` | Integer, `9999` | Positive maximum outer integration steps; reaching it short of the stop time returns status 5. |
 | `kitmx` | Integer, `5` | Positive BE Newton iteration limit; BDF uses `max(kitmx,3)` per Newton solve attempt. |
@@ -637,10 +643,15 @@ readers or EOS providers. Output controls do not change failure obligations.
 
 With `itsout>=1`, an active zone gets a new sequential-unformatted binary
 file; `itsout>=2` adds a condensed ASCII companion. Names append
-`_callN_laneL` to `bin_file_base` and `ev_file_base`. `L` is the original
-one-based local zone, including holes. `N` is reserved once per active output
-attempt; concurrent callers may reserve numbers in either order. Do not use
-it to infer application batch order.
+`_callN_zoneZ` to `bin_file_base` and `ev_file_base`. `Z` is the one-based
+position in the submitted batch, counting inactive entries; it is not a mesh
+ID. `N` is reserved once per active output attempt; concurrent callers may
+reserve numbers in either order. Do not use it to infer application batch
+order.
+
+Earlier development versions used `_callN_laneL` for the same batch position.
+Update filename globs and readers to use `_callN_zoneZ`; the history record
+layouts and zone numbering in the suffix are unchanged.
 
 The binary file's third header record starts with an 80-character label
 `XNet API zone_id [i,j,k,block]:` followed by the four supplied integers
@@ -915,7 +926,7 @@ and `nse_fraction(:)` as `Real(dp)` and
 allocate the result to `size(network%names)`. Density is finite positive
 g/cm^3, temperature finite positive K, and Ye finite in `[0,1]`. The current
 network and screening controls apply. Queries obey the same lifetime and CPU
-worker rules as burns; GPU-library queries are serialized host calls with
+thread rules as burns; GPU-library queries are serialized host calls with
 no device-residency flag. They do not load EOS tables again.
 
 The result is `A*ynse`, not the solver's nuclear-mass-weighted `xnse`.
@@ -986,10 +997,10 @@ them follow the same sequence:
 | Part of a call | Where to read |
 | --- | --- |
 | Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call. `initialize_network_data` in `reaction_data` loads species and reactions. `initialize_evolve` in `xnet_evolve` prepares the engine and reusable zone storage with two history endpoints, mapping any requested output species regardless of the output level. `copy_network_data` returns copied metadata. |
-| Worker checks | `check_worker` checks the fixed team and initialized worker scratch. `apply_xnet_controls` allocates each worker's flags, counters and file-unit arrays during initialization. Workspace loops use local lanes `izb=1:nzbatchmx`; the API indexes caller arrays with the same lane. Standalone translates to the input ordinal `izone=szbatch+izb-1`. Mesh IDs remain independent of either index. |
-| Batch evolution | `xnet_burn_batch` checks lifecycle, mappings, dimensions and scientific values before workspace setup. `evolve_batch` then prepares the workspace, calls `full_net` and extracts results; conditional offload selects current host or device values. |
-| Validation and failures | One `validate_inputs` shares range and mass checks between host and device execution. Its temporary verdict buffer carries the host active mask, independently of the worker workspace. Host IEEE classification stays outside device loops. `zone_error_message` translates verdicts; `format_burn_failure` translates numerical failures and the caller's diagnostic tuple. |
-| Histories and timing | `open_burn_output` reserves API filenames; shared `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` handle files and headers for both drivers. `get_timing`/`get_timing_since` report differences in the worker timers. |
+| Thread checks | `check_worker` checks the fixed OpenMP team and the calling thread's work arrays. `apply_xnet_controls` allocates each thread's per-zone flags, counters and file units during initialization. Work arrays use batch positions `izb=1:nzbatchmx`; API positions `1:nz` match caller array columns, including inactive entries. Only the standalone driver maps `izb` to a run zone number with `izone=szbatch+izb-1`. Mesh IDs are not used for indexing. |
+| Batch evolution | `xnet_burn_batch` checks lifecycle, mappings, dimensions and scientific values before preparing the work arrays. For a batch with active zones, it uses `nz=size(active)`, `nzbatch=count(active)` and `lzactive(1:nz)=active`. `evolve_batch` prepares the arrays, calls `full_net` and extracts results; conditional offload selects current host or device values. |
+| Validation and failures | One `validate_inputs` shares range and mass checks between host and device execution. Its temporary verdict buffer carries the host active mask, independently of the module work arrays. Host IEEE classification stays outside device loops. `zone_error_message` translates verdicts; `format_burn_failure` translates numerical failures and the caller's diagnostic tuple. |
+| Histories and timing | `open_burn_output` reserves API filenames; shared `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` handle files and headers for both drivers. `get_timing`/`get_timing_since` report differences in the thread timers. |
 | Finalization | `finalize_evolve` releases integrator, NSE/EOS, Jacobian, rate-evaluation and zone/history workspace. `finalize_network_data` releases loaded tables, then `controls_finalize` releases bookkeeping before GPU cleanup. Pending GPU cleanup skips all completed data teardown on retry. |
 
 Abundance, condition and neutrino-history storage is allocated and mapped by

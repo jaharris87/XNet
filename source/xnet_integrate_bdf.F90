@@ -29,7 +29,7 @@
 
 Module xnet_integrate_bdf
   Use nuclear_data, Only: ny
-  Use xnet_controls, Only: idiag, iheat, iscrn, szbatch, lzactive, tid, gpu_queue, nzbatchmx, lun_diag, lun_stdout
+  Use xnet_controls, Only: idiag, iheat, iscrn, szbatch, lzactive, gpu_queue, nzbatchmx, lun_diag, lun_stdout
   Use xnet_types, Only: dp
   Implicit None
   Private
@@ -149,13 +149,11 @@ Module xnet_integrate_bdf
   Private :: bdf_correct, bdf_eta, bdf_stab
   Private :: bdf_stab_detect, bdf_adjust_order, bdf_rescale, bdf_restore, pascal_build, normw
 
-#ifdef XNET_OMP
-  !$omp threadprivate(bdf_active,retry_ts,ierr_nr,ierr_ts,nit_nrslv,nit_nr,nit_ts,nerr_ts,ncf_ts,q,deltaq,q_age)
-  !$omp threadprivate(j_age,p_age,nscon,sddat,z,z0,zt0,hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio)
-  !$omp threadprivate(ewt,acor,acorp,acnrm,crate,tq,tq2save,ydot0,t9dot0,restore,rescale,rebuild,refactor,iterate)
-  !$omp threadprivate(converged,eval_rates,diag,mult,yrhs,dy,t9rhs,dt9,dvec,del,delp,dcon,errorq,acorhat,detect)
-  !$omp threadprivate(ldflag)
-#endif
+  !XOMP threadprivate(bdf_active,retry_ts,ierr_nr,ierr_ts,nit_nrslv,nit_nr,nit_ts,nerr_ts,ncf_ts,q,deltaq,q_age)
+  !XOMP threadprivate(j_age,p_age,nscon,sddat,z,z0,zt0,hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio)
+  !XOMP threadprivate(ewt,acor,acorp,acnrm,crate,tq,tq2save,ydot0,t9dot0,restore,rescale,rebuild,refactor,iterate)
+  !XOMP threadprivate(converged,eval_rates,diag,mult,yrhs,dy,t9rhs,dt9,dvec,del,delp,dcon,errorq,acorhat,detect)
+  !XOMP threadprivate(ldflag)
 
 Contains
 
@@ -173,7 +171,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: ierr(1:nzbatchmx) ! On input,  = BDF_STATUS_SUCCESS indicates active zone
+    Integer, Intent(inout) :: ierr(nzbatchmx) ! On input,  = BDF_STATUS_SUCCESS indicates active zone
                                                 ! On output, = BDF_STATUS_FAIL    if zone fails to converge
 
     ! Local variables
@@ -357,9 +355,7 @@ Contains
     !XDIR XCOPYIN(A_pascal,Ainv_pascal,rtol,atol)
     !XDIR XWAIT(gpu_queue)
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( .not. allocated(bdf_active) ) Allocate (bdf_active(nzbatchmx))
     If ( .not. allocated(retry_ts) ) Allocate (retry_ts(nzbatchmx))
     bdf_active = .false.
@@ -498,9 +494,7 @@ Contains
     !XDIR XCOPYIN(diag,mult,yrhs,dy,t9rhs,dt9,dvec,del,delp,dcon) &
     !XDIR XCOPYIN(errorq,acorhat,detect,ldflag)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine bdf_init
@@ -512,9 +506,7 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( allocated(bdf_active) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(bdf_active,retry_ts) &
@@ -586,9 +578,7 @@ Contains
     If ( allocated(detect) ) Deallocate (detect)
     If ( allocated(ldflag) ) Deallocate (ldflag)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     If ( allocated(A_pascal) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
@@ -1037,7 +1027,7 @@ Contains
       !XDIR XUPDATE XASYNC(gpu_queue) &
       !XDIR XDEVICE(eval_rates)
 
-      ! Update abundance derivatives and build Jacobian using only this worker's bank.
+      ! Update reaction rates, abundance derivatives, and the Jacobian factorization
       Call cross_sect(mask_in = eval_rates)
       Call yderiv(mask_in = iterate)
       Call jacobian_build(mask_in = rebuild)
@@ -1715,10 +1705,10 @@ Contains
     Implicit None
 
     ! Input variables
-    Logical, Intent(in) :: mask(1:nzbatchmx)
+    Logical, Intent(in) :: mask(nzbatchmx)
 
     ! Output variables
-    Integer, Intent(out) :: kflag(1:nzbatchmx)
+    Integer, Intent(out) :: kflag(nzbatchmx)
 
     ! Local variables
     Real(dp), Parameter :: rrcut = 0.98_dp
@@ -2065,7 +2055,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Logical, Intent(in) :: mask(1:nzbatchmx)
+    Logical, Intent(in) :: mask(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, izb
@@ -2105,7 +2095,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Logical, Intent(in) :: mask(1:nzbatchmx)
+    Logical, Intent(in) :: mask(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, izb

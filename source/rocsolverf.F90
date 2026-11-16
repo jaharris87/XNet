@@ -3,6 +3,8 @@
 ! This file contains the module defining Fortran interfaces for the rocSOLVER library
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 module xnet_rocsolverf
   !-------------------------------------------------------------------------------------------------
   ! Interface to rocSOLVER routines
@@ -15,8 +17,6 @@ module xnet_rocsolverf
     rocsolver_dgetrs_batched
 
   type(c_ptr) :: rocsolver_handle = c_null_ptr
-#ifdef XNET_OMP
-  !$omp threadprivate(rocsolver_handle)
-#endif
+  !XOMP threadprivate(rocsolver_handle)
 
 end module xnet_rocsolverf

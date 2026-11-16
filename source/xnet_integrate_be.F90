@@ -27,10 +27,8 @@ Module xnet_integrate_be
 
   Public :: solve_be, be_init, be_finalize
 
-#ifdef XNET_OMP
-  !$omp threadprivate(inr,mykts,lzstep,testc,testc2,testm,testn,toln,xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs)
-  !$omp threadprivate(dt9,relt9,iterate,eval_rates,rebuild)
-#endif
+  !XOMP threadprivate(inr,mykts,lzstep,testc,testc2,testm,testn,toln,xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs)
+  !XOMP threadprivate(dt9,relt9,iterate,eval_rates,rebuild)
 
 Contains
 
@@ -48,7 +46,7 @@ Contains
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, szbatch, nzbatchmx, &
-      & tid, gpu_queue
+      & gpu_queue
     Use xnet_integrate, Only: timestep
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
@@ -57,7 +55,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: its(1:nzbatchmx) ! On input,  = 0 indicates active zone
+    Integer, Intent(inout) :: its(nzbatchmx) ! On input,  = 0 indicates active zone
                                                ! On output, = 1 if zone fails to converge
 
     ! Local variables
@@ -244,7 +242,7 @@ Contains
     Use xnet_abundances, Only: y, ydot, yt, xext
     Use xnet_conditions, Only: t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, szbatch, &
-      & nzbatchmx, tid, gpu_queue
+      & nzbatchmx, gpu_queue
     Use xnet_integrate, Only: cross_sect, yderiv
     Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_nraph
@@ -255,7 +253,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: inr(1:nzbatchmx) ! On input,  = 0 indicates active zone
+    Integer, Intent(inout) :: inr(nzbatchmx) ! On input,  = 0 indicates active zone
                                                !            =-1 indicates inactive zone
                                                ! On output, > 0 indicates # NR iterations if converged
 
@@ -320,8 +318,7 @@ Contains
       !XDIR XUPDATE XASYNC(gpu_queue) &
       !XDIR XDEVICE(rebuild,eval_rates)
 
-      ! Calculate the reaction rates and abundance time derivatives. These module arrays
-      ! need explicit current-worker sections for the 1:nzbatchmx dummy bounds.
+      ! Update reaction rates, abundance time derivatives, and the Jacobian factorization
       Call cross_sect(mask_in = eval_rates)
       Call yderiv(mask_in = iterate)
       Call jacobian_build(diag_in = rdt,mult_in = mult, &
@@ -368,8 +365,7 @@ Contains
       EndIf
 
       ! Solve the jacobian and calculate the changes in abundances, dy
-      !Call jacobian_solve(kstep,yrhs,dy, &
-      !  & t9rhs(1:nzbatchmx),dt9(1:nzbatchmx),mask_in = iterate(1:nzbatchmx))
+      !Call jacobian_solve(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
       Call jacobian_bksub(kstep,yrhs,dy, &
         & t9rhs,dt9,mask_in = iterate)
 
@@ -495,12 +491,10 @@ Contains
     ! This routine initializes the BE data structures
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iconvc, tolc, tolm, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: iconvc, tolc, tolm, gpu_queue, nzbatchmx
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( .not. allocated(inr) ) Allocate (inr(nzbatchmx))
     If ( .not. allocated(mykts) ) Allocate (mykts(nzbatchmx))
     If ( .not. allocated(lzstep) ) Allocate (lzstep(nzbatchmx))
@@ -560,9 +554,7 @@ Contains
     !XDIR XCOPYIN(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
     !XDIR XCOPYIN(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
   End Subroutine be_init
 
@@ -573,9 +565,7 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( allocated(inr) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(inr,mykts,lzstep) &
@@ -605,9 +595,7 @@ Contains
     If ( allocated(eval_rates) ) Deallocate (eval_rates)
     If ( allocated(rebuild) ) Deallocate (rebuild)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine be_finalize

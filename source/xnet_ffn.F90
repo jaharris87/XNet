@@ -32,21 +32,19 @@ Module xnet_ffn
   Real(dp), Parameter :: lqkmin = -90.0, qkmin = 1.0e-90
   Real(dp), Parameter :: lrfmin = -30.0, rfmin = 1.0e-30
 
-#ifdef XNET_OMP
-  !$omp threadprivate(qkffn,phasei,dphaseidt9,rffn,dlnrffndt9)
-#endif
+  !XOMP threadprivate(qkffn,phasei,dphaseidt9,rffn,dlnrffndt9)
 
 Contains
 
   Subroutine ffn_workspace_initialize(nffn)
-    ! Allocate rate scratch for every member of the fixed worker team.
+    !-----------------------------------------------------------------------------------------------
+    ! Allocate per-zone FFN rate arrays on each thread and establish persistent device mappings.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzbatchmx, gpu_queue
     Implicit None
     Integer, Intent(in) :: nffn
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( nffn > 0 ) Then
       Allocate (qkffn(0:nffn,nzbatchmx))
     Else
@@ -61,9 +59,7 @@ Contains
     !XDIR XCOPYIN(qkffn,phasei,dphaseidt9) &
     !XDIR XCREATE(rffn,dlnrffndt9)
     !XDIR XWAIT(gpu_queue)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
     Return
   End Subroutine ffn_workspace_initialize
 
@@ -72,7 +68,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine decides whether to call the standard read or the logft table read
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, nzbatchmx
+    Use xnet_controls, Only: iweak0
     Implicit None
 
     ! Input variables
@@ -170,24 +166,22 @@ Contains
     ! This routine calculates the reaction rates for FFN weak rates
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: ln_2, ln_10, bok, m_e
-    Use xnet_controls, Only: iheat, lzactive, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: idiag, iheat, lun_diag, lzactive, gpu_queue, nzbatchmx
     Use xnet_conditions, Only: etae
     Use xnet_types, Only: dp
-    Use xnet_controls, Only: lun_diag, idiag
-
     Implicit None
 
     ! Input variables
     Integer, Intent(in)  :: nffn              ! Number of FFN rates
-    Real(dp), Intent(in) :: t9(1:nzbatchmx)   ! Temperature [GK]
-    Real(dp), Intent(in) :: ene(1:nzbatchmx)  ! Electron Density [g cm^{-3}]
+    Real(dp), Intent(in) :: t9(nzbatchmx)   ! Temperature [GK]
+    Real(dp), Intent(in) :: ene(nzbatchmx)  ! Electron Density [g cm^{-3}]
 
     ! Output variables
-    Real(dp), Intent(out) :: rf(nffn,1:nzbatchmx)       ! Temperature and density dependent FFN rates
-    Real(dp), Intent(out) :: dlnrfdt9(nffn,1:nzbatchmx) ! Temperature and density dependent log FFN rate derivatives
+    Real(dp), Intent(out) :: rf(nffn,nzbatchmx)       ! Temperature and density dependent FFN rates
+    Real(dp), Intent(out) :: dlnrfdt9(nffn,nzbatchmx) ! Temperature and density dependent log FFN rate derivatives
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: r1, r2, dr1, dr2, dr1_ec, dr2_ec
@@ -195,7 +189,7 @@ Contains
     Real(dp) :: rf_beta, rf_ec, cheme
     Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt, drec_dt
     Integer :: i, izb, k, le1, i1, i2, i3, i4
-    Integer :: lt1(1:nzbatchmx)
+    Integer :: lt1(nzbatchmx)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -452,12 +446,12 @@ Contains
   End Subroutine effphase
 
   Subroutine ffn_finalize
-    ! Release mappings established by read_reaction_data before CPU allocations.
+    !-----------------------------------------------------------------------------------------------
+    ! Remove device mappings before releasing FFN tables and rate work arrays.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(qkffn) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(qkffn,phasei,dphaseidt9,rffn,dlnrffndt9)
@@ -468,9 +462,7 @@ Contains
     If ( Allocated(dphaseidt9) ) Deallocate (dphaseidt9)
     If ( Allocated(rffn) ) Deallocate (rffn)
     If ( Allocated(dlnrffndt9) ) Deallocate (dlnrffndt9)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     If ( Allocated(ffnsum) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &

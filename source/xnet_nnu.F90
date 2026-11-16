@@ -37,20 +37,19 @@ Module xnet_nnu
   Real(dp), Allocatable :: sigmanu(:,:) ! dim(nnnu,ntnu)
   Real(dp), Allocatable :: rnnu(:,:,:)
 
-#ifdef XNET_OMP
-  !$omp threadprivate(tmevnu,fluxcms,ltnu,fluxnu,rnnu)
-#endif
+  !XOMP threadprivate(tmevnu,fluxcms,ltnu,fluxnu,rnnu)
 
 Contains
 
   Subroutine nnu_rates_initialize(nnnu)
+    !-----------------------------------------------------------------------------------------------
+    ! Allocate per-zone neutrino rate arrays on each thread and establish persistent device mappings.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzbatchmx, gpu_queue
     Implicit None
     Integer, Intent(in) :: nnnu
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (ltnu(nnuspec,nzbatchmx),fluxnu(nnuspec,nzbatchmx))
     Allocate (rnnu(max(1,nnnu),nnuspec,nzbatchmx))
     ltnu = 0.0
@@ -59,9 +58,7 @@ Contains
     !XDIR XCOPYIN(ltnu,fluxnu) &
     !XDIR XCREATE(rnnu)
     !XDIR XWAIT(gpu_queue)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
     Return
   End Subroutine nnu_rates_initialize
 
@@ -74,18 +71,14 @@ Contains
     Implicit None
     Integer, Intent(in) :: nhistory ! Allocated history points per zone
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     Allocate (tmevnu(nhistory,nnuspec,nzbatchmx),fluxcms(nhistory,nnuspec,nzbatchmx))
     tmevnu = 0.0_dp
     fluxcms = 0.0_dp
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(tmevnu,fluxcms)
     !XDIR XWAIT(gpu_queue)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine nnu_initialize
@@ -98,9 +91,7 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( allocated(tmevnu) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(tmevnu,fluxcms)
@@ -109,9 +100,7 @@ Contains
     If ( allocated(tmevnu) ) Deallocate (tmevnu)
     If ( allocated(fluxcms) ) Deallocate (fluxcms)
 
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine nnu_history_finalize
@@ -120,7 +109,6 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine reads the neutrino cross sections [in units of 10^-42 cm^2]
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzbatchmx
     Implicit None
 
     ! Input variables
@@ -150,7 +138,7 @@ Contains
     ! From this, the neutrino species involved is determined.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
-    Use xnet_controls, Only: idiag, lun_diag, tid, gpu_queue
+    Use xnet_controls, Only: idiag, lun_diag, gpu_queue
     Implicit None
 
     ! Input variables
@@ -259,20 +247,20 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: lzactive, ineutrino, idiag, lun_diag, szbatch, tid, gpu_queue, nzbatchmx
+    Use xnet_controls, Only: lzactive, ineutrino, idiag, lun_diag, szbatch, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: nnnu
-    Real(dp), Intent(in) :: time(1:nzbatchmx)
+    Real(dp), Intent(in) :: time(nzbatchmx)
 
     ! Output variables
-    Real(dp), Intent(out) :: rate(nnnu,nnuspec,1:nzbatchmx)
+    Real(dp), Intent(out) :: rate(nnnu,nnuspec,nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(1:nzbatchmx)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Real(dp) :: lsigmanu1, lsigmanu2
@@ -396,9 +384,7 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
     Call nnu_history_finalize
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( Allocated(ltnu) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(ltnu,fluxnu,rnnu)
@@ -407,9 +393,7 @@ Contains
     If ( allocated(ltnu) ) Deallocate (ltnu)
     If ( allocated(fluxnu) ) Deallocate (fluxnu)
     If ( allocated(rnnu) ) Deallocate (rnnu)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     If ( allocated(irl) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &

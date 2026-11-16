@@ -3,7 +3,7 @@ Module consumer_fixture
   Use, Intrinsic :: iso_fortran_env, Only: real64
   Implicit None
   Private
-  Public :: fixture_state, write_state, check
+  Public :: fixture_state, write_state, check, check_ye_consistency
 
 Contains
 
@@ -47,6 +47,29 @@ Contains
     EndDo
     Return
   End Subroutine write_state
+
+  Subroutine check_ye_consistency(ye,x,mass_number,charge_number,label,aux_x,aux_a,aux_z)
+    Implicit None
+    Real(real64), Intent(in) :: ye, x(:)
+    Integer, Intent(in) :: mass_number(:), charge_number(:)
+    Character(*), Intent(in) :: label
+    Real(real64), Intent(in), Optional :: aux_x, aux_a, aux_z
+    Real(real64) :: mass_sum, charge_sum, expected_ye, roundoff_bound
+
+    mass_sum = Sum(x)
+    charge_sum = Sum(x*Real(charge_number,real64)/Real(mass_number,real64))
+    If ( Present(aux_x) .and. Present(aux_a) .and. Present(aux_z) ) Then
+      mass_sum = mass_sum+aux_x
+      charge_sum = charge_sum+aux_x*aux_z/aux_a
+    EndIf
+    expected_ye = charge_sum/mass_sum
+    ! Allow only roundoff from the two positive sums, X/A conversion, and division.
+    roundoff_bound = 8.0_real64*Real(Size(x)+2,real64)*Epsilon(1.0_real64)*Max(Abs(ye),Abs(expected_ye))
+    If ( Abs(ye-expected_ye) > roundoff_bound ) Write(*,'(a,1x,a,4(1x,es26.17e3))') &
+      & 'YE_CONSISTENCY',Trim(label),ye,expected_ye,Abs(ye-expected_ye),roundoff_bound
+    Call check(Abs(ye-expected_ye) <= roundoff_bound,label//' Ye from accepted composition')
+    Return
+  End Subroutine check_ye_consistency
 
   Subroutine check(condition,message)
     Implicit None

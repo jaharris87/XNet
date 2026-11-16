@@ -112,16 +112,17 @@ $(BUILD_DIR)/cleanup/cleanup_consumer: $(BUILD_DIR)/cleanup/cleanup_consumer.o \
     $(BUILD_DIR)/cleanup/xnet_api.o $(BUILD_DIR)/cleanup/gpu_cleanup_stub.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
-# Exercise production resource cleanup with host-only CUDA/HIP vendor models.
+# Exercise production GPU resource handling with host-only runtime models.
 # The replacement interfaces and module outputs never enter normal callers.
 ifeq ($(findstring -DXNET_GPU,$(XNET_CPPFLAGS)),)
 test host-openmp-test: gpu-finalize-test
 GPU_FINALIZE_CUDA := $(BUILD_DIR)/gpu-finalize-cuda/consumer
 GPU_FINALIZE_HIP := $(BUILD_DIR)/gpu-finalize-hip/consumer
 GPU_FINALIZE_VENDOR := $(BUILD_DIR)/gpu-finalize-vendor.o
+GPU_FINALIZE_OPENACC := $(BUILD_DIR)/gpu-finalize-openacc/consumer
 
 .PHONY: gpu-finalize-test
-gpu-finalize-test: $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP)
+gpu-finalize-test: $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP) $(GPU_FINALIZE_OPENACC)
 	@set -e; for executable in $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP); do \
 	  for scenario in stream blas solver both borrowed mixed-blas mixed-solver \
 	    init-create-stream init-create-blas init-create-solver init-associate-blas init-associate-solver \
@@ -129,8 +130,13 @@ gpu-finalize-test: $(GPU_FINALIZE_CUDA) $(GPU_FINALIZE_HIP)
 	    "$$executable" "$$scenario"; \
 	  done; \
 	done
+	@set -e; for scenario in openacc-zero openacc-one openacc-positive openacc-sync openacc-noval \
+	  openacc-invalid2 openacc-invalid3 openacc-invalid5 openacc-sync-borrowed \
+	  openacc-noval-borrowed openacc-noval-rollback; do \
+	  "$(GPU_FINALIZE_OPENACC)" "$$scenario"; \
+	done
 
-$(BUILD_DIR)/gpu-finalize-cuda $(BUILD_DIR)/gpu-finalize-hip:
+$(BUILD_DIR)/gpu-finalize-cuda $(BUILD_DIR)/gpu-finalize-hip $(BUILD_DIR)/gpu-finalize-openacc:
 	mkdir -p '$@'
 
 $(GPU_FINALIZE_VENDOR): gpu_finalize_vendor.c | $(BUILD_DIR)
@@ -196,6 +202,44 @@ $(GPU_FINALIZE_HIP): $(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_consumer.o \
     $(BUILD_DIR)/gpu-finalize-hip/hipblasf.o $(BUILD_DIR)/gpu-finalize-hip/rocblasf.o \
     $(BUILD_DIR)/gpu-finalize-hip/rocsolverf.o $(BUILD_DIR)/gpu-finalize-hip/gpu_finalize_hipfort.o \
     $(GPU_FINALIZE_VENDOR) $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
+# OpenACC queue validation uses the production wrapper and host-only runtime declarations.
+$(BUILD_DIR)/gpu-finalize-openacc/%.f90: ../../source/%.F90 ../../source/xnet_macros.fh $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-openacc
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) -DXNET_GPU -DXNET_CUDA -DXNET_OACC -DTEST_OPENACC \
+	  '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_consumer.f90: gpu_finalize_consumer.F90 $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-openacc
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) -DXNET_GPU -DXNET_CUDA -DXNET_OACC -DTEST_OPENACC \
+	  '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_openacc.f90: gpu_finalize_openacc.F90 $(XNET_CONFIG) \
+    | $(BUILD_DIR)/gpu-finalize-openacc
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$<' > '$@.tmp' && mv '$@.tmp' '$@'
+
+$(BUILD_DIR)/gpu-finalize-openacc/%.o: $(BUILD_DIR)/gpu-finalize-openacc/%.f90 $(XNET_CONFIG)
+	cd '$(BUILD_DIR)/gpu-finalize-openacc' && $(XNET_FC) $(XNET_FFLAGS) -I. $(XNET_MODFLAGS) \
+	  -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_vendor.o: gpu_finalize_vendor.c \
+    | $(BUILD_DIR)/gpu-finalize-openacc
+	$(CC) -std=c99 -Wall -Wextra -DTEST_OPENACC -c '$<' -o '$@'
+
+$(BUILD_DIR)/gpu-finalize-openacc/openaccf.o: $(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_openacc.o
+
+$(BUILD_DIR)/gpu-finalize-openacc/xnet_gpu.o: $(BUILD_DIR)/gpu-finalize-openacc/cudaf.o \
+    $(BUILD_DIR)/gpu-finalize-openacc/cublasf.o $(BUILD_DIR)/gpu-finalize-openacc/cusolverf.o \
+    $(BUILD_DIR)/gpu-finalize-openacc/openaccf.o $(XNET_ARCHIVE)
+
+$(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_consumer.o: $(BUILD_DIR)/gpu-finalize-openacc/xnet_gpu.o
+
+$(GPU_FINALIZE_OPENACC): $(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_consumer.o \
+    $(BUILD_DIR)/gpu-finalize-openacc/xnet_gpu.o $(BUILD_DIR)/gpu-finalize-openacc/cudaf.o \
+    $(BUILD_DIR)/gpu-finalize-openacc/cublasf.o $(BUILD_DIR)/gpu-finalize-openacc/cusolverf.o \
+    $(BUILD_DIR)/gpu-finalize-openacc/openaccf.o $(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_openacc.o \
+    $(BUILD_DIR)/gpu-finalize-openacc/gpu_finalize_vendor.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
 
 endif

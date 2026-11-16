@@ -800,7 +800,7 @@ Contains
       EndIf
 
 #if defined(XNET_OACC)
-      If ( queue < int(acc_async_sync) ) Then
+      If ( queue < 0 .and. queue /= int(acc_async_sync) .and. queue /= int(acc_async_noval) ) Then
         thread_status = 1
         thread_message = 'Invalid OpenACC queue'
         Exit setup

@@ -105,6 +105,13 @@ GPU faults. The fake interfaces provide no numerical implementation and are
 not linked into normal consumers. MAGMA's void destructor is outside the
 failure-injection scope.
 
+The OpenACC model calls the production initializer and OpenACC wrapper with
+host-only runtime declarations. It checks nonnegative queue IDs, both named
+special async values, invalid negative IDs, borrowed resources and cleanup.
+Its default special values match NVIDIA's ordering. To check the reverse
+ordering, use a separate `BUILD_DIR` and set
+`XNET_CPP='cpp -DTEST_SWAP_ACC_SPECIALS'` when running `gpu-finalize-test`.
+
 `api_consumer.F90` imports only `xnet_api`, standard intrinsic modules, and a
 test fixture that contains no XNet imports. It links against `libxnet.a` and
 the exported external libraries; no loose production objects are linked.

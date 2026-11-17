@@ -20,6 +20,35 @@ endif
 all: $(PROGRAMS)
 gpu_consumer: $(BUILD_DIR)/gpu_consumer
 
+# Expose private BDF state only in this isolated test module directory. The numerical
+# routines are compiled from production source without replacing rates, EOS or solvers.
+STOP_TIME_DIR := $(BUILD_DIR)/stop-time
+.PHONY: stop-time-test
+stop-time-test: $(STOP_TIME_DIR)/stop_time_checks
+	OMP_NUM_THREADS=1 python3 -B run_stop_time_checks.py --executable '$<' \
+	  --net-setup '$(abspath $(dir $(XNET_ARCHIVE))/../bin/net_setup)' --work-dir '$(STOP_TIME_DIR)/runs'
+
+ifeq ($(findstring -DXNET_GPU,$(XNET_CPPFLAGS)),)
+test: stop-time-test
+endif
+
+$(STOP_TIME_DIR):
+	mkdir -p '$@'
+
+$(STOP_TIME_DIR)/xnet_integrate_bdf.f90: ../../source/xnet_integrate_bdf.F90 ../../source/xnet_macros.fh \
+    $(XNET_CONFIG) | $(STOP_TIME_DIR)
+	sed '/^  Private/d' '$<' | $(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) - > '$@'
+
+$(STOP_TIME_DIR)/xnet_integrate_bdf.o: $(STOP_TIME_DIR)/xnet_integrate_bdf.f90 $(XNET_CONFIG)
+	cd '$(STOP_TIME_DIR)' && $(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(STOP_TIME_DIR)/stop_time_checks.o: stop_time_checks.F90 $(STOP_TIME_DIR)/xnet_integrate_bdf.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) -I'$(STOP_TIME_DIR)' $(XNET_MODFLAGS) -c '$<' -o '$@'
+
+$(STOP_TIME_DIR)/stop_time_checks: $(STOP_TIME_DIR)/stop_time_checks.o \
+    $(STOP_TIME_DIR)/xnet_integrate_bdf.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)
+
 $(BUILD_DIR):
 	mkdir -p '$@'
 

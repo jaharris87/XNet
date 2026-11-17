@@ -75,6 +75,19 @@ partial histories after reported numerical failures. These are CPU software
 and same-source numerical comparisons; they do not qualify GPU output or an
 independent scientific reference.
 
+`make -C test/library XNET_CONFIG=... stop-time-test` runs the focused timestep
+checks included in the CPU `test` target. They reproduce a saved binary64
+stop-time undershoot and distinguish a selected final interval from a one-ulp
+shorter interval. The checks cover initial BE/BDF acceptance, active masks,
+constant steps, thermodynamic feature/variation reductions, BE retries and its
+derivative-based fallback, and BDF NR/error retries and Nordsieck scaling.
+The test recompiles the production BDF source with its `Private` declarations
+removed in an isolated module directory so it can inspect trial/history state;
+it uses the real alpha network, rates, EOS and dense solver. The existing BDF
+divide/multiply timestep rounding remains unchanged, including constructed
+one-ulp changes in either direction. These are software checks, not new
+scientific reference results or accelerator qualification.
+
 A separate host-only cleanup test recompiles the production API with a
 test GPU resource module in an isolated build subdirectory. It uses real
 CPU workspaces and finalizers, but injects two GPU cleanup failures. It

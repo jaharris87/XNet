@@ -165,8 +165,12 @@ Contains
           tdel(izb) = -tdel_old(izb)
         EndIf
 
-        ! Update trial time
-        tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+        ! Preserve a selected stop time; subtraction followed by addition can undershoot it.
+        If ( tdel(izb) == tdel_stop(izb) ) Then
+          tt(izb) = tstop(izb)
+        Else
+          tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+        EndIf
       EndIf
     EndDo
 
@@ -199,7 +203,7 @@ Contains
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
+      !XDIR XPRESENT(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,tdel_stop,dtherm)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) .and. nh(izb) > 1 ) Then
           Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
@@ -221,7 +225,11 @@ Contains
                 Exit
               EndIf
             EndDo
-            tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+            If ( tdel(izb) == tdel_stop(izb) ) Then
+              tt(izb) = tstop(izb)
+            Else
+              tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+            EndIf
           EndIf
 
           ! Limit timestep if fractional density change is larger than changeth (10% by default)
@@ -238,7 +246,11 @@ Contains
               Exit
             Else
               tdel(izb) = 0.5*tdel(izb)
-              tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+              If ( tdel(izb) == tdel_stop(izb) ) Then
+                tt(izb) = tstop(izb)
+              Else
+                tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+              EndIf
             EndIf
           EndDo
         EndIf

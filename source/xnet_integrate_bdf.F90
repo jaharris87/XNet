@@ -2062,7 +2062,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This subroutine rescales the Nordsieck vector and timestep for a new eta.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_conditions, Only: tdel, t, tt
+    Use xnet_conditions, Only: tdel, t, tt, tstop
     Implicit None
 
     ! Input variables
@@ -2070,17 +2070,21 @@ Contains
 
     ! Local variables
     Integer :: i, j, izb
+    Logical :: selected_stop
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-    !XDIR XPRESENT(mask,tdel,t,tt,eta,dt_scale,hvec,q,z,nscon)
+    !XDIR XPRESENT(mask,retry_ts,tdel,t,tt,tstop,eta,dt_scale,hvec,q,z,nscon) &
+    !XDIR XPRIVATE(selected_stop)
     Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
+        ! A rejected trial sets retry_ts; an initial adjustment keeps the selected stop.
+        selected_stop = .not. retry_ts(izb) .and. tt(izb) == tstop(izb) .and. tdel(izb) == tstop(izb)-t(izb)
         tdel(izb) = eta(izb) * dt_scale(izb)
         hvec(0,izb) = tdel(izb)
-        tt(izb) = t(izb) + tdel(izb)
+        If ( .not. selected_stop ) tt(izb) = t(izb) + tdel(izb)
         ! Scale Nordsieck vector to account for change in stepsize
         !XDIR XLOOP_INNER(2)
         Do j = 1, q(izb)

@@ -80,7 +80,8 @@ checks included in the CPU `test` target. They reproduce a saved binary64
 stop-time undershoot and distinguish a selected final interval from a one-ulp
 shorter interval. The checks cover initial BE/BDF acceptance, active masks,
 constant steps, thermodynamic feature/variation reductions, BE retries and its
-derivative-based fallback, and BDF NR/error retries and Nordsieck scaling.
+derivative-based fallback, and BDF NR/error retries, retry-state clearing and
+Nordsieck scaling.
 The test recompiles the production BDF source with its `Private` declarations
 removed in an isolated module directory so it can inspect trial/history state;
 it uses the real alpha network, rates, EOS and dense solver. The existing BDF

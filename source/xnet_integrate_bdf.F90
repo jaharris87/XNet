@@ -719,7 +719,7 @@ Contains
     Call bdf_adjust_order(kstep)
 
     ! Scale Nordsieck vector to account for change in stepsize
-    Call bdf_rescale(rescale(zb_lo:zb_hi),preserve_stop = .true.)
+    Call bdf_rescale(rescale(zb_lo:zb_hi))
 
     Return
   End Subroutine bdf_adjust
@@ -1417,7 +1417,7 @@ Contains
     Call bdf_adjust_order(kstep)
 
     ! Scale Nordsieck vector to account for change in stepsize
-    Call bdf_rescale(rescale(zb_lo:zb_hi),preserve_stop = .false.)
+    Call bdf_rescale(rescale(zb_lo:zb_hi))
 
     Return
   End Subroutine bdf_check
@@ -2037,7 +2037,7 @@ Contains
     Return
   End Subroutine bdf_adjust_order
 
-  Subroutine bdf_rescale(mask,preserve_stop)
+  Subroutine bdf_rescale(mask)
     !-----------------------------------------------------------------------------------------------
     ! This subroutine rescales the Nordsieck vector and timestep for a new eta.
     !-----------------------------------------------------------------------------------------------
@@ -2046,7 +2046,6 @@ Contains
 
     ! Input variables
     Logical, Intent(in) :: mask(zb_lo:zb_hi)
-    Logical, Intent(in) :: preserve_stop
 
     ! Local variables
     Integer :: i, j, izb
@@ -2056,12 +2055,12 @@ Contains
     !XDIR XCOPYIN(mask)
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
-    !XDIR XPRESENT(mask,tdel,t,tt,tstop,eta,dt_scale,hvec,q,z,nscon) &
+    !XDIR XPRESENT(mask,retry_ts,tdel,t,tt,tstop,eta,dt_scale,hvec,q,z,nscon) &
     !XDIR XPRIVATE(selected_stop)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        ! Initial adjustment keeps the selected endpoint; rejected trials must replace it.
-        selected_stop = preserve_stop .and. tt(izb) == tstop(izb) .and. tdel(izb) == tstop(izb)-t(izb)
+        ! A rejected trial sets retry_ts; an initial adjustment keeps the selected stop.
+        selected_stop = .not. retry_ts(izb) .and. tt(izb) == tstop(izb) .and. tdel(izb) == tstop(izb)-t(izb)
         tdel(izb) = eta(izb) * dt_scale(izb)
         hvec(0,izb) = tdel(izb)
         If ( .not. selected_stop ) tt(izb) = t(izb) + tdel(izb)

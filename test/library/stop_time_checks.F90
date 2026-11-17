@@ -137,7 +137,9 @@ Program stop_time_checks
   Call check(tt(1) == saved_stop,'flat multi-knot history keeps selected stop')
 
   Call reset_state
+  retry_ts = .true.
   Call bdf_reset
+  Call check(All(.not. retry_ts),'BDF reset clears preceding retry state')
   q = 2
   z(:,1,:) = 2.0_dp
   z(:,2,:) = 3.0_dp
@@ -202,6 +204,18 @@ Program stop_time_checks
     Call check(z(1,1,1) == 2.0_dp*eta(1) .and. z(1,2,1) == 3.0_dp*eta(1)**2, &
       & 'BDF retry restores and scales Nordsieck history')
     Call check(tt(2) == saved_stop .and. tdel(2) == remaining,'BDF retry leaves masked zone unchanged')
+
+    ! Successful completion clears the retry fact before the next initial adjustment.
+    nit_nr(1) = 1
+    acnrm(1) = 0.0_dp
+    Call bdf_check(2)
+    Call check(ierr_nr(1) == 0 .and. .not. retry_ts(1),'BDF success clears preceding rejected trial')
+    tdel_old(1) = tdel(1)
+    tdel(1) = remaining
+    tt(1) = saved_stop
+    ierr_ts(2:3) = 1
+    Call bdf_adjust(3)
+    Call check(tt(1) == saved_stop,'BDF next final adjustment follows successful retry')
   EndDo
 
   Call reset_state

@@ -3,9 +3,9 @@
 ! Shared evolution initialization, finalization, and batch reaction-network evolution for XNet.
 !
 ! Shared by the standalone driver (net.F90) and the embedded library API (xnet_api.F90).
-! Initialization and finalization appear first; full_net advances active zones from tstart to tstop using
-! Backward Euler (isolv = 1) or Gear BDF (isolv = 3), tracking nuclear energy generation and
-! weak-reaction neutrino losses.
+! Initialization and finalization appear first; full_net advances active zones from tstart to
+! tstop using Backward Euler (isolv = 1) or Gear BDF (isolv = 3), tracking nuclear energy
+! generation and weak-reaction neutrino losses.
 !
 ! Per-zone integration status its(izb):
 !   -1  Inactive zone, or active zone that has already reached tstop(izb).
@@ -15,7 +15,7 @@
 !
 ! Failure handling in full_net:
 ! - When optional ierr_out is present (library API): reports evolve_integrator_failure or
-!   evolve_step_limit (and the workspace index in failed_zone) to the caller without writing
+!   evolve_step_limit (and the batch index in failed_zone) to the caller without writing
 !   failure dump files or terminating the process.
 ! - When ierr_out is omitted (standalone driver): writes failure diagnostics and ab_fail_*/th_fail_*
 !   reproducer files before terminating via xnet_terminate.
@@ -54,24 +54,25 @@ Contains
   !=================================================================================================
   ! Evolution Initialization and Finalization
   !
-  ! The frontends first call initialize_network_data (reaction_data in xnet_data.F90). Standalone logs
-  ! its data description before initialize_evolve reads Jacobian/matching data and prepares the
-  ! evolution engine. These calls run once per initialized instance, not once per batch.
+  ! The frontends first call initialize_network_data (reaction_data in xnet_data.F90). Standalone
+  ! logs its data description before initialize_evolve reads Jacobian/matching data and prepares
+  ! the evolution state. These calls run once per initialized instance, not once per batch.
   !
-  ! finalize_evolve releases the engine, including the selected Jacobian provider. The frontends
-  ! then call finalize_network_data and controls_finalize. Network tables and controls outlive
-  ! the workspaces that use them; GPU resources remain available until all mappings are removed.
+  ! finalize_evolve releases the solver and zone state, including the selected Jacobian provider.
+  ! The frontends then call finalize_network_data and controls_finalize. Network tables and
+  ! controls outlive the work arrays that use them; GPU resources remain available until all
+  ! device mappings are removed.
   !=================================================================================================
 
   Subroutine initialize_evolve(data_dir,nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Read Jacobian/matching data and initialize rates, EOS, integrator, NSE and reusable zone
-    ! storage. Nuclear/reaction tables and controls must already be loaded. Each owner maps its
-    ! own arrays. Call outside parallel regions with the worker team configured by the frontend.
+    ! storage. Nuclear/reaction tables and controls must already be loaded. Each module maps its
+    ! own arrays. Call outside parallel regions with the OpenMP team configured by the frontend.
     !
     ! data_dir    Directory containing the preprocessed network.
     ! nhistory    Allocated history points per zone: nhmx for standalone trajectories, or
-    !             api_history_points for the library's start/end conditions.
+    !             api_history_points (2) for constant-condition library burns.
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_initialize
     Use xnet_conditions, Only: conditions_initialize
@@ -110,11 +111,11 @@ Contains
 
   Subroutine finalize_evolve
     !-----------------------------------------------------------------------------------------------
-    ! Release the evolution engine's integrator, NSE/EOS, Jacobian, rate-evaluation and zone
-    ! workspace. The selected Jacobian provider releases its own arrays and any library-owned
-    ! factors. Loaded network tables remain for finalize_network_data; controls and GPU resources
-    ! must remain available until both routines finish. Call outside parallel regions, after all
-    ! workers finish, with the same team used during initialization.
+    ! Release integrator, NSE/EOS, Jacobian, rate-evaluation and zone work arrays. The selected
+    ! Jacobian provider releases its own arrays and any library-owned factors. Loaded network
+    ! tables remain for finalize_network_data; controls and GPU resources must remain available
+    ! until both routines finish. Call outside parallel regions, after all threads finish, with
+    ! the same OpenMP team used during initialization.
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: abundances_finalize
     Use xnet_conditions, Only: conditions_finalize
@@ -150,16 +151,16 @@ Contains
 
   Subroutine full_net(kstep,denu,ierr_out,failed_zone)
     !-----------------------------------------------------------------------------------------------
-    ! Evolve active zones in the calling worker bank (lzactive(zb_lo:zb_hi)) from tstart to tstop.
+    ! Evolve the active zones of the current batch (lzactive) from tstart to tstop.
     ! The caller supplies the starting composition, thermodynamic state/history, active mask,
     ! and any output files required by itsout. On success, y, t, t9, rho and ye hold the final state.
     !
     ! kstep        Largest step count at which a zone finished (at least 1).
-    ! denu         Time-integrated weak-reaction neutrino energy loss [erg/g], by workspace slot.
+    ! denu         Time-integrated weak-reaction neutrino energy loss [erg/g] of each zone.
     ! ierr_out     Optional completion status; presence selects caller-handled failure.
-    ! failed_zone  Optional workspace slot of the first reported failure, or zero.
+    ! failed_zone  Optional batch index izb of the first reported failure, or zero.
     !
-    ! Energy workspace (per zone):
+    ! Local energy arrays (per zone):
     !   enm       Current nuclear mass-excess energy [erg/g].
     !   en0       Initial mass-excess energy [erg/g].
     !   enold     Mass-excess energy before the current step [erg/g].
@@ -174,8 +175,8 @@ Contains
     Use xnet_abundances, Only: yo, y, yt, ystart, ydot
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, &
       & rho, rhoo, rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9start, rhostart, yestart
-    Use xnet_controls, Only: idiag, iheat, isolv, kstmx, kmon, ktot, lun_diag, &
-      & lzactive, szbatch, zb_lo, zb_hi, gpu_queue
+    Use xnet_controls, Only: idiag, iheat, isolv, kstmx, kmon, ktot, lun_diag, lzactive, szbatch, nzbatchmx, &
+      & gpu_queue
     Use xnet_integrate, Only: timestep
     Use xnet_integrate_be, Only: solve_be
     Use xnet_integrate_bdf, Only: solve_bdf
@@ -186,20 +187,20 @@ Contains
 
     ! Output arguments
     Integer, Intent(out) :: kstep
-    Real(dp), Intent(out) :: denu(zb_lo:zb_hi)
+    Real(dp), Intent(out) :: denu(nzbatchmx)
 
     ! Optional output arguments (present for embedded API calls; omitted for standalone driver)
     Integer, Optional, Intent(out) :: ierr_out, failed_zone
 
     ! Local variables
-    Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
-    Real(dp) :: enold(zb_lo:zb_hi), en0(zb_lo:zb_hi)
-    Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
-    Real(dp) :: sqnu(zb_lo:zb_hi)
+    Real(dp) :: enm(nzbatchmx), enb(nzbatchmx)
+    Real(dp) :: enold(nzbatchmx), en0(nzbatchmx)
+    Real(dp) :: delta_en(nzbatchmx), edot(nzbatchmx)
+    Real(dp) :: sqnu(nzbatchmx)
     Integer :: k, izb, izone
-    Integer :: its(zb_lo:zb_hi), zone_final_step(zb_lo:zb_hi)
+    Integer :: its(nzbatchmx), zone_final_step(nzbatchmx)
     Integer :: failure_status, failure_zone
-    Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
+    Logical :: lzsolve(nzbatchmx), lzoutput(nzbatchmx)
 
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
@@ -212,9 +213,9 @@ Contains
     If ( present(failed_zone) ) failed_zone = 0
 
     zone_final_step = 0
-    lzsolve         = lzactive(zb_lo:zb_hi)
+    lzsolve         = lzactive
     lzoutput        = lzsolve
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( lzsolve(izb) ) Then
         its(izb) = zone_converged
       Else
@@ -227,14 +228,13 @@ Contains
     !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
 
     ! 2. Evaluate initial nuclear binding energy and initialize working state
-    ! Pass the explicit worker slice y(:,zb_lo:zb_hi) to match the zb_lo:zb_hi dummy bounds.
-    Call benuc(y(:,zb_lo:zb_hi),enb,enm)
+    Call benuc(y,enb,enm)
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
     !XDIR XPRESENT(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       tdel_old(izb)  = tdel(izb)
       tdel_next(izb) = tdel(izb)
       nto(izb)       = nt(izb)
@@ -272,9 +272,9 @@ Contains
       ! Device-resident API burns populate start arrays on the accelerator; refresh host before printing.
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(tstart,t9start,rhostart,yestart,ystart)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( lzactive(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,2i6,4es14.7)") &
             & 'Start',izone,kstep,tstart(izb),t9start(izb),rhostart(izb),yestart(izb)
           Write(lun_diag,"(4(a5,es14.7,1x))") (nname(k),aa(k)*ystart(k,izb),k=1,ny)
@@ -300,7 +300,7 @@ Contains
       If ( present(ierr_out) ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(its)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( lzactive(izb) .and. its(izb) > 0 ) Then
             failure_status = evolve_integrator_failure
             failure_zone   = izb
@@ -314,8 +314,8 @@ Contains
       If ( idiag >= 1 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
-        Do izb = zb_lo, zb_hi
-          izone = izb + szbatch - zb_lo
+        Do izb = 1, nzbatchmx
+          izone = szbatch + izb - 1
           If ( its(izb) == zone_converged ) Then
             Write(lun_diag,"(2(a,i5),5es14.7)") &
               & 'KStep ',kstep,' Zone ',izone,t(izb),tdel(izb),t9(izb),rho(izb),ye(izb)
@@ -336,7 +336,7 @@ Contains
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(enm,enold) &
       !XDIR XPRESENT(its,t,tstop,zone_final_step,lzsolve,lzoutput)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( its(izb) == zone_converged ) Then
           enold(izb) = enm(izb)
           ! Zone reached stop time: still emit ts_output for this final step, then stop solving
@@ -356,12 +356,12 @@ Contains
       EndDo
 
       ! Compute nuclear energy release and weak-reaction neutrino energy loss for converged zones
-      Call benuc(yt(:,zb_lo:zb_hi),enb,enm,mask_in = lzoutput)
-      Call enudot(yt(:,zb_lo:zb_hi),sqnu,mask_in = lzoutput)
+      Call benuc(yt,enb,enm,mask_in = lzoutput)
+      Call enudot(yt,sqnu,mask_in = lzoutput)
 
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(lzoutput,enm,enold,en0,delta_en,edot,denu,sqnu,tdel)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( lzoutput(izb) ) Then
           delta_en(izb) = enm(izb) - en0(izb)
           edot(izb)     = -(enm(izb) - enold(izb)) / tdel(izb)
@@ -380,7 +380,7 @@ Contains
     ! 5. Verify that all active zones reached tstop; report or dump any failure
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(its,zone_final_step,t,tdel)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( lzactive(izb) ) Then
         If ( t(izb) < tstop(izb) .or. its(izb) > 0 ) Then
           If ( present(ierr_out) ) Then
@@ -416,13 +416,13 @@ Contains
 
   Subroutine terminate_on_zone_failure(izb)
     !-----------------------------------------------------------------------------------------------
-    ! Standalone failure handler: report the unreached stop time for workspace slot izb, write
+    ! Standalone failure handler: report the unreached stop time for zone izb of the batch, write
     ! ab_fail_* and th_fail_* reproducer inputs, flush diagnostics, and terminate XNet.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: yo, xext
     Use xnet_conditions, Only: t, tdel, tstart, tstop, t9start, rhostart, yestart
-    Use xnet_controls, Only: lun_diag, lun_stdout, szbatch, zb_lo, zone_id
+    Use xnet_controls, Only: lun_diag, lun_stdout, szbatch, zone_id
     Use xnet_output, Only: write_xnet_th, write_xnet_inab
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -437,7 +437,7 @@ Contains
     Character(128) :: ab_fname, th_fname
     Integer :: izone, nstep_est, ierr
 
-    izone = izb + szbatch - zb_lo
+    izone = szbatch + izb - 1
     Write(lun_stdout,"(a,i5,a,3(es12.4,a))") &
       & 'Zone ',izone,' Evolution stopped at time= ',t(izb),' with timestep= ',tdel(izb), &
       & ', stop time= ',tstop(izb),' not reached!'

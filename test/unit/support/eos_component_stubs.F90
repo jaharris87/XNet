@@ -6,11 +6,9 @@ Module xnet_controls
   Integer :: iheat = 1
   Integer :: iscrn = 1
   Integer :: lun_diag = error_unit
-  Integer :: nzevolve = 0
+  Integer :: nzbatchmx = 0
   Integer :: tid = 1
   Integer :: gpu_queue = 1
-  Integer :: zb_lo = 1
-  Integer :: zb_hi = 1
   Logical, Allocatable, Target :: lzactive(:)
 End Module xnet_controls
 

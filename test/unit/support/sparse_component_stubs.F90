@@ -19,6 +19,9 @@ Module reaction_data
   Real(dp), Allocatable :: b1(:,:), b2(:,:), b3(:,:), b4(:,:)
   Real(dp), Allocatable :: dcsect1dt9(:,:), dcsect2dt9(:,:)
   Real(dp), Allocatable :: dcsect3dt9(:,:), dcsect4dt9(:,:)
+#ifdef XNET_OMP
+  !$omp threadprivate(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+#endif
 End Module reaction_data
 
 Module xnet_abundances
@@ -26,6 +29,9 @@ Module xnet_abundances
   Implicit None
 
   Real(dp), Allocatable :: yt(:,:)
+#ifdef XNET_OMP
+  !$omp threadprivate(yt)
+#endif
 End Module xnet_abundances
 
 Module xnet_conditions
@@ -33,6 +39,9 @@ Module xnet_conditions
   Implicit None
 
   Real(dp), Allocatable :: cv(:)
+#ifdef XNET_OMP
+  !$omp threadprivate(cv)
+#endif
 End Module xnet_conditions
 
 Module xnet_controls
@@ -46,17 +55,17 @@ Module xnet_controls
   Integer :: lun_stdout = output_unit
   Integer :: nzbatch = 0
   Integer :: nzbatchmx = 0
-  Integer :: nzevolve = 0
   Integer :: szbatch = 1
   Integer :: tid = 1
   Integer :: gpu_queue = 1
-  Integer :: zb_hi = 1
-  Integer :: zb_lo = 1
 #ifdef XNET_OMP
-  !$omp threadprivate(tid,szbatch,zb_lo,zb_hi)
+  !$omp threadprivate(tid,szbatch)
 #endif
   Integer, Allocatable :: kmon(:,:), ktot(:,:)
   Logical, Allocatable, Target :: lzactive(:)
+#ifdef XNET_OMP
+  !$omp threadprivate(kmon,ktot,lzactive)
+#endif
 End Module xnet_controls
 
 Module xnet_parallel

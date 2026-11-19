@@ -339,10 +339,10 @@ Contains
     Write(*,'(a,1x,i0,1x,a,1x,i0,1x,*(l1))') 'GPU_OUTPUT_CALL',output_call,Trim(label),n,active(:n)
     Do lane = 1, n
       If ( .not. active(lane) ) Cycle
-      Write(filename,'(a,i0,a,i0)') 'ts_call',output_call,'_lane',lane
+      Write(filename,'(a,i0,a,i0)') 'ts_call',output_call,'_zone',lane
       Inquire(file=Trim(filename),opened=opened)
       Call check(.not. opened,'binary output closed: '//Trim(filename))
-      Write(filename,'(a,i0,a,i0)') 'ev_call',output_call,'_lane',lane
+      Write(filename,'(a,i0,a,i0)') 'ev_call',output_call,'_zone',lane
       Inquire(file=Trim(filename),opened=opened)
       Call check(.not. opened,'ASCII output closed: '//Trim(filename))
     EndDo

@@ -4,6 +4,8 @@
 ! the same nuclei (forward and reverse reactions as well as reactions with multiple components).
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_match
   !-------------------------------------------------------------------------------------------------
   ! This module contains the data necessary to match up reactions.
@@ -71,13 +73,9 @@ Contains
     Call parallel_bcast(iwflx)
     Call parallel_bcast(descx)
 
-#ifdef XNET_OMP
-    !$omp parallel default(shared)
-#endif
+    !XOMP parallel default(shared)
     If ( idiag >= 0 ) Write(lun_diag,*) 'Match',mflx
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     Return
   End Subroutine read_match_data

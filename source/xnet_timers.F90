@@ -3,6 +3,8 @@
 ! Per-thread wall-clock accumulators and summary reporting for XNet execution stages.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_timers
   Use xnet_types, Only: dp
   Implicit None
@@ -34,12 +36,10 @@ Module xnet_timers
   Real(dp) :: timer_output  = 0.0_dp ! Timed sections of ts_output and final_output
   Real(dp) :: start_timer   = 0.0_dp ! Scratch timestamp at the beginning of a timed interval
   Real(dp) :: stop_timer    = 0.0_dp ! Scratch timestamp at the end of a timed interval
-#ifdef XNET_OMP
-  !$omp threadprivate(timer_burner,timer_xnet,timer_setup,timer_csect,timer_deriv,timer_jacob,timer_decmp, &
-  !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_prescrn,timer_eos,timer_output, &
-  !$omp   timer_nse,timer_nseinit,timer_nsesolv,timer_nsenrap,timer_nsels,timer_nseeval,timer_nsescrn, &
-  !$omp   start_timer,stop_timer)
-#endif
+  !XOMP threadprivate(timer_burner,timer_xnet,timer_setup,timer_csect,timer_deriv,timer_jacob,timer_decmp, &
+  !XOMP   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_prescrn,timer_eos,timer_output, &
+  !XOMP   timer_nse,timer_nseinit,timer_nsesolv,timer_nsenrap,timer_nsels,timer_nseeval,timer_nsescrn, &
+  !XOMP   start_timer,stop_timer)
 
 Contains
 

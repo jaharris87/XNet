@@ -7,7 +7,7 @@ Program stop_time_checks
   Use xnet_conditions, Only: t, tt, to, tstop, tdel, tdel_old, tdel_next, tdelstart, &
     & t9, t9o, t9t, t9dot, rho, rhoo, rhot, ye, yeo, yet, nt, nto, ntt, ints, intso, &
     & nh, th, t9h, rhoh, yeh, cv, etae, detaedt9
-  Use xnet_controls, Only: zb_lo, zb_hi, szbatch, lzactive, iheat, kitmx, iconvc, &
+  Use xnet_controls, Only: szbatch, lzactive, iheat, kitmx, iconvc, &
     & changemx, changemxt, kmon, ktot
   Use xnet_integrate, Only: timestep
   Use xnet_integrate_be, Only: solve_be, be_init, be_finalize
@@ -286,8 +286,6 @@ Contains
 
   Subroutine reset_state
     Implicit None
-    zb_lo = 1
-    zb_hi = 3
     szbatch = 1
     lzactive = .true.
     iheat = 0

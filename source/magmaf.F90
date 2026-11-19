@@ -7,6 +7,8 @@
 !
 ! JAH: this file combines magma2.f90, magma2_common.f90, and magma2_dfortran.f90 from magma 2.3.0
 
+#include "xnet_macros.fh"
+
 module xnet_magmaf
 
 use iso_c_binding
@@ -17,9 +19,7 @@ integer(c_int) :: magma_device
 
 integer :: mymagma_queue
 type(c_ptr) :: magma_queue
-#ifdef XNET_OMP
-!$omp threadprivate(magma_queue,mymagma_queue)
-#endif
+!XOMP threadprivate(magma_queue,mymagma_queue)
 
 integer :: nmagma_queue
 type(c_ptr) :: magma_queue_array_cptr

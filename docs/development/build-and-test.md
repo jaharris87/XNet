@@ -197,6 +197,15 @@ defaults unchanged. The main selection variables include:
 - `MATRIX_SOLVER` for the Jacobian and linear solver implementation;
 - `EOS` for the equation-of-state implementation.
 
+OpenMP target GPU builds require `OPENMP_MODE=OFF` for both the standalone
+programs and the library. Make rejects `GPU_MODE=ON`, `OPENMP_OL_MODE=ON` and
+`OPENMP_MODE=ON` together. Host parallel regions and threadprivate declarations use the `XOMP` sentinel in
+`xnet_macros.fh`, enabled by `XNET_OMP` when `OPENMP_MODE=ON`; accelerator
+directives use `XDIR` independently. With `OPENMP_MODE=OFF`, XNet's host teams
+and threadprivate state are disabled even when the compiler enables OpenMP
+for target offload. The application may use OpenMP elsewhere. CPU batch
+threading and CUDA/OpenACC selection remain separate.
+
 Each selected path requires its compiler, headers, libraries, and runtime.
 Validate support and numerical behavior for the exact combination used.
 

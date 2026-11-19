@@ -27,26 +27,29 @@ Module xnet_eos
     Module Procedure salpeter_ratio_vector
   End Interface
 
+  !XOMP threadprivate(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+
 Contains
 
   Subroutine eos_initialize
     !-----------------------------------------------------------------------------------------------
     ! Initialize thermodynamics and allocate XNet-owned scratch.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzevolve, tid, gpu_queue
+    Use xnet_controls, Only: gpu_queue, nzbatchmx
     Use nuclear_data, Only: ny, nname, aa, zz
     Use xnet_eos_interface, Only: xnet_eos_interface_initialize
     Implicit None
 
     Call xnet_eos_interface_initialize(ny,nname(1:ny),aa,zz)
 
-    Allocate (ye(nzevolve))
-    Allocate (ytot(nzevolve))
-    Allocate (abar(nzevolve))
-    Allocate (zbar(nzevolve))
-    Allocate (z2bar(nzevolve))
-    Allocate (zibar(nzevolve))
-    Allocate (sratio(nzevolve))
+    !XOMP parallel default(shared)
+    Allocate (ye(nzbatchmx))
+    Allocate (ytot(nzbatchmx))
+    Allocate (abar(nzbatchmx))
+    Allocate (zbar(nzbatchmx))
+    Allocate (z2bar(nzbatchmx))
+    Allocate (zibar(nzbatchmx))
+    Allocate (sratio(nzbatchmx))
     ye = 0.0
     ytot = 0.0
     abar = 0.0
@@ -57,6 +60,8 @@ Contains
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+
+    !XOMP end parallel
 
     Return
   End Subroutine eos_initialize
@@ -134,29 +139,29 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, lun_diag, lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(zb_lo:zb_hi), rho(zb_lo:zb_hi), y(ny,zb_lo:zb_hi)
-    Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9(nzbatchmx), rho(nzbatchmx), y(ny,nzbatchmx)
+    Real(dp), Intent(in) :: xext(nzbatchmx), aext(nzbatchmx), zext(nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ye(zb_lo:zb_hi), cv(zb_lo:zb_hi)
-    Real(dp), Intent(inout) :: etae(zb_lo:zb_hi), detaedt9(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: ye(nzbatchmx), cv(nzbatchmx)
+    Real(dp), Intent(inout) :: etae(nzbatchmx), detaedt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb, nspecies
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -168,14 +173,14 @@ Contains
     !XDIR XCOPYIN(mask,t9,rho,y,xext,aext,zext)
 
     ! Calculate Ye
-    Call y_moment(y,ye,ytot(zb_lo:zb_hi), &
-      & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
+    Call y_moment(y,ye,ytot, &
+      & abar,zbar,z2bar,zibar, &
+      & xext,aext,zext,mask_in = mask_in)
 
     ! Call the eos
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,rho,y,xext,aext,zext,ye,abar,zbar,cv,etae,detaedt9)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         Call eosx(nspecies,t9(izb),rho(izb),ye(izb),abar(izb),zbar(izb),y(:,izb), &
           & xext(izb),aext(izb),zext(izb),cv(izb),etae(izb),detaedt9(izb))
@@ -185,7 +190,7 @@ Contains
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(t9,rho,ye,cv,etae,detaedt9)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           Write(lun_diag,"(a,6es23.15)") 'EOS',t9(izb),rho(izb),ye(izb),cv(izb),etae(izb),detaedt9(izb)
         EndIf
@@ -244,32 +249,32 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: idiag, lun_diag, lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Use xnet_util, Only: plasma
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(zb_lo:zb_hi), rho(zb_lo:zb_hi), y(ny,zb_lo:zb_hi)
-    Real(dp), Intent(in) :: etae(zb_lo:zb_hi), detaedt9(zb_lo:zb_hi)
-    Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9(nzbatchmx), rho(nzbatchmx), y(ny,nzbatchmx)
+    Real(dp), Intent(in) :: etae(nzbatchmx), detaedt9(nzbatchmx)
+    Real(dp), Intent(in) :: xext(nzbatchmx), aext(nzbatchmx), zext(nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ztilde(zb_lo:zb_hi), zinter(zb_lo:zb_hi)
-    Real(dp), Intent(inout) :: lambda0(zb_lo:zb_hi), gammae(zb_lo:zb_hi)
-    Real(dp), Intent(inout) :: dztildedt9(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: ztilde(nzbatchmx), zinter(nzbatchmx)
+    Real(dp), Intent(inout) :: lambda0(nzbatchmx), gammae(nzbatchmx)
+    Real(dp), Intent(inout) :: dztildedt9(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -278,18 +283,18 @@ Contains
     !XDIR XCOPYIN(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
     ! Calculate Ye
-    Call y_moment(y,ye(zb_lo:zb_hi),ytot(zb_lo:zb_hi), &
-      & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
+    Call y_moment(y,ye,ytot, &
+      & abar,zbar,z2bar,zibar, &
+      & xext,aext,zext,mask_in = mask_in)
 
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
-    Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
+    Call salpeter_ratio(etae,sratio,dztildedt9,mask_in = mask_in)
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,rho,y,etae,detaedt9) &
     !XDIR XPRESENT(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar,sratio)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         ztilde(izb) = sqrt(z2bar(izb) + sratio(izb)*zbar(izb)) ! DGC, Eq. 4
         dztildedt9(izb) = 0.5*zbar(izb)/ztilde(izb) * dztildedt9(izb)*detaedt9(izb)
@@ -302,7 +307,7 @@ Contains
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(t9,rho,ye,z2bar,zbar,sratio,ztilde,lambda0,gammae)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           Write(lun_diag,"(a14,9es23.15)") 'EOS Screen', &
             & t9(izb),rho(izb),ye(izb),z2bar(izb),zbar(izb),sratio(izb), &
@@ -369,27 +374,27 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid, gpu_queue
+    Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: eta(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: eta(nzbatchmx)
 
     ! Input/Output variables
-    Real(dp), Intent(inout) :: ratio(zb_lo:zb_hi), dratiodeta(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: ratio(nzbatchmx), dratiodeta(nzbatchmx)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
     Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
+      mask => mask_in
     Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+      mask => lzactive
     EndIf
     If ( .not. any(mask) ) Return
 
@@ -400,7 +405,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ratio,dratiodeta) &
     !XDIR XPRESENT(mask,eta)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         Call salpeter_ratio_scalar(eta(izb),ratio(izb),dratiodeta(izb))
       EndIf
@@ -414,16 +419,18 @@ Contains
   End Subroutine salpeter_ratio_vector
 
   Subroutine eos_finalize
-    ! Release XNet-owned composition scratch and the selected adapter's storage.
+    !-----------------------------------------------------------------------------------------------
+    ! Remove device mappings before releasing composition arrays and the selected EOS interface.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Use xnet_eos_interface, Only: xnet_eos_interface_finalize
     Implicit None
+    !XOMP parallel default(shared)
     If ( Allocated(ye) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
       !XDIR XDELETE(ye,ytot,abar,zbar,z2bar,zibar,sratio)
       !XDIR XWAIT(gpu_queue)
     EndIf
-    Call xnet_eos_interface_finalize
     If ( Allocated(ye) ) Deallocate (ye)
     If ( Allocated(ytot) ) Deallocate (ytot)
     If ( Allocated(abar) ) Deallocate (abar)
@@ -431,6 +438,9 @@ Contains
     If ( Allocated(z2bar) ) Deallocate (z2bar)
     If ( Allocated(zibar) ) Deallocate (zibar)
     If ( Allocated(sratio) ) Deallocate (sratio)
+    !XOMP end parallel
+
+    Call xnet_eos_interface_finalize
     Return
   End Subroutine eos_finalize
 

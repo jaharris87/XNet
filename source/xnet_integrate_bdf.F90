@@ -29,8 +29,7 @@
 
 Module xnet_integrate_bdf
   Use nuclear_data, Only: ny
-  Use xnet_controls, Only: idiag, iheat, iscrn, nzevolve, szbatch, zb_lo, zb_hi, lzactive, tid, gpu_queue, &
-    & lun_diag, lun_stdout
+  Use xnet_controls, Only: idiag, iheat, iscrn, szbatch, lzactive, gpu_queue, nzbatchmx, lun_diag, lun_stdout
   Use xnet_types, Only: dp
   Implicit None
   Private
@@ -150,6 +149,12 @@ Module xnet_integrate_bdf
   Private :: bdf_correct, bdf_eta, bdf_stab
   Private :: bdf_stab_detect, bdf_adjust_order, bdf_rescale, bdf_restore, pascal_build, normw
 
+  !XOMP threadprivate(bdf_active,retry_ts,ierr_nr,ierr_ts,nit_nrslv,nit_nr,nit_ts,nerr_ts,ncf_ts,q,deltaq,q_age)
+  !XOMP threadprivate(j_age,p_age,nscon,sddat,z,z0,zt0,hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio)
+  !XOMP threadprivate(ewt,acor,acorp,acnrm,crate,tq,tq2save,ydot0,t9dot0,restore,rescale,rebuild,refactor,iterate)
+  !XOMP threadprivate(converged,eval_rates,diag,mult,yrhs,dy,t9rhs,dt9,dvec,del,delp,dcon,errorq,acorhat,detect)
+  !XOMP threadprivate(ldflag)
+
 Contains
 
   Subroutine solve_bdf(kstep,ierr)
@@ -167,7 +172,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: ierr(zb_lo:zb_hi) ! On input,  = BDF_STATUS_SUCCESS indicates active zone
+    Integer, Intent(inout) :: ierr(nzbatchmx) ! On input,  = BDF_STATUS_SUCCESS indicates active zone
                                                 ! On output, = BDF_STATUS_FAIL    if zone fails to converge
 
     ! Local variables
@@ -186,7 +191,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ydot,ydot0,t9dot,t9dot0,eta_next) &
     !XDIR XPRESENT(ierr,ierr_nr,ierr_ts,nit_ts,nerr_ts,ncf_ts)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
 
       ! Copy status flag to local copy
       ierr_ts(izb) = ierr(izb)
@@ -220,7 +225,7 @@ Contains
     If ( kstep /= 1 ) Call bdf_adjust(kstep)
 
     Do kts = 1, max_it_ts
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         bdf_active(izb) = ( ierr_nr(izb) == BDF_STATUS_FAIL )
       EndDo
       !XDIR XUPDATE XASYNC(gpu_queue) &
@@ -233,7 +238,7 @@ Contains
       ! Check for errors and prepare for next attempt if necessary
       Call bdf_check(kstep)
 
-      If ( .not. any( ierr_nr(zb_lo:zb_hi) == BDF_STATUS_FAIL ) ) Exit
+      If ( .not. any( ierr_nr == BDF_STATUS_FAIL ) ) Exit
 
     EndDo
 
@@ -247,7 +252,7 @@ Contains
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt) &
     !XDIR XPRESENT(aa,zz,xext,aext,zext) &
     !XDIR XPRIVATE(atot,ztot)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
 
       ! Set the factor for the next timestep
       tdel_next(izb) = eta(izb) * tdel(izb)
@@ -295,8 +300,8 @@ Contains
     If ( idiag >= 0 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ierr_nr,ierr_ts)
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
+      Do izb = 1, nzbatchmx
+        izone = szbatch + izb - 1
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS .and. idiag >= 2 ) Then
           !XDIR XUPDATE XWAIT(gpu_queue) &
           !XDIR XHOST(nit_ts(izb),nit_nr(izb))
@@ -357,18 +362,23 @@ Contains
       atol(neq) = 1.0e-99_dp
     EndIf
 
-    If ( .not. allocated(bdf_active) ) Allocate (bdf_active(nzevolve))
-    If ( .not. allocated(retry_ts) ) Allocate (retry_ts(nzevolve))
+    !XDIR XENTER_DATA XASYNC(gpu_queue) &
+    !XDIR XCOPYIN(A_pascal,Ainv_pascal,rtol,atol)
+    !XDIR XWAIT(gpu_queue)
+
+    !XOMP parallel default(shared)
+    If ( .not. allocated(bdf_active) ) Allocate (bdf_active(nzbatchmx))
+    If ( .not. allocated(retry_ts) ) Allocate (retry_ts(nzbatchmx))
     bdf_active = .false.
     retry_ts = .false.
 
-    If ( .not. allocated(nit_nrslv) ) Allocate (nit_nrslv(nzevolve))
-    If ( .not. allocated(nit_nr) ) Allocate (nit_nr(nzevolve))
-    If ( .not. allocated(nit_ts) ) Allocate (nit_ts(nzevolve))
-    If ( .not. allocated(ierr_nr) ) Allocate (ierr_nr(nzevolve))
-    If ( .not. allocated(ierr_ts) ) Allocate (ierr_ts(nzevolve))
-    If ( .not. allocated(nerr_ts) ) Allocate (nerr_ts(nzevolve))
-    If ( .not. allocated(ncf_ts) ) Allocate (ncf_ts(nzevolve))
+    If ( .not. allocated(nit_nrslv) ) Allocate (nit_nrslv(nzbatchmx))
+    If ( .not. allocated(nit_nr) ) Allocate (nit_nr(nzbatchmx))
+    If ( .not. allocated(nit_ts) ) Allocate (nit_ts(nzbatchmx))
+    If ( .not. allocated(ierr_nr) ) Allocate (ierr_nr(nzbatchmx))
+    If ( .not. allocated(ierr_ts) ) Allocate (ierr_ts(nzbatchmx))
+    If ( .not. allocated(nerr_ts) ) Allocate (nerr_ts(nzbatchmx))
+    If ( .not. allocated(ncf_ts) ) Allocate (ncf_ts(nzbatchmx))
     nit_nrslv = 0
     nit_nr = 0
     nit_ts = 0
@@ -377,12 +387,12 @@ Contains
     nerr_ts = 0
     ncf_ts = 0
 
-    If ( .not. allocated(q) ) Allocate (q(nzevolve))
-    If ( .not. allocated(deltaq) ) Allocate (deltaq(nzevolve))
-    If ( .not. allocated(j_age) ) Allocate (j_age(nzevolve))
-    If ( .not. allocated(p_age) ) Allocate (p_age(nzevolve))
-    If ( .not. allocated(q_age) ) Allocate (q_age(nzevolve))
-    If ( .not. allocated(nscon) ) Allocate (nscon(nzevolve))
+    If ( .not. allocated(q) ) Allocate (q(nzbatchmx))
+    If ( .not. allocated(deltaq) ) Allocate (deltaq(nzbatchmx))
+    If ( .not. allocated(j_age) ) Allocate (j_age(nzbatchmx))
+    If ( .not. allocated(p_age) ) Allocate (p_age(nzbatchmx))
+    If ( .not. allocated(q_age) ) Allocate (q_age(nzbatchmx))
+    If ( .not. allocated(nscon) ) Allocate (nscon(nzbatchmx))
     q = 1
     deltaq = 0
     j_age = max_j_age + 1 ! This forces a rebuild/refactor on first step
@@ -390,25 +400,25 @@ Contains
     q_age = 0
     nscon = 0
 
-    If ( .not. allocated(sddat) ) Allocate (sddat(5,3,nzevolve))
+    If ( .not. allocated(sddat) ) Allocate (sddat(5,3,nzbatchmx))
     sddat = 0.0_dp
 
-    If ( .not. allocated(z)) Allocate (z(neq,0:max_order,nzevolve))
-    If ( .not. allocated(z0)) Allocate (z0(neq,0:max_order,nzevolve))
-    If ( .not. allocated(zt0) ) Allocate (zt0(neq,0:max_order,nzevolve))
+    If ( .not. allocated(z)) Allocate (z(neq,0:max_order,nzbatchmx))
+    If ( .not. allocated(z0)) Allocate (z0(neq,0:max_order,nzbatchmx))
+    If ( .not. allocated(zt0) ) Allocate (zt0(neq,0:max_order,nzbatchmx))
     z = 0.0_dp
     z0 = 0.0_dp
     zt0 = 0.0_dp
 
-    If ( .not. allocated(hvec) ) Allocate (hvec(0:max_order,nzevolve))
-    If ( .not. allocated(lvec) ) Allocate (lvec(0:max_order,nzevolve))
-    If ( .not. allocated(dt_scale) ) Allocate (dt_scale(nzevolve))
-    If ( .not. allocated(etaq) ) Allocate (etaq(-1:1,nzevolve))
-    If ( .not. allocated(eta) ) Allocate (eta(nzevolve))
-    If ( .not. allocated(eta_next) ) Allocate (eta_next(nzevolve))
-    If ( .not. allocated(gam) ) Allocate (gam(nzevolve))
-    If ( .not. allocated(gamhat) ) Allocate (gamhat(nzevolve))
-    If ( .not. allocated(gamratio) ) Allocate (gamratio(nzevolve))
+    If ( .not. allocated(hvec) ) Allocate (hvec(0:max_order,nzbatchmx))
+    If ( .not. allocated(lvec) ) Allocate (lvec(0:max_order,nzbatchmx))
+    If ( .not. allocated(dt_scale) ) Allocate (dt_scale(nzbatchmx))
+    If ( .not. allocated(etaq) ) Allocate (etaq(-1:1,nzbatchmx))
+    If ( .not. allocated(eta) ) Allocate (eta(nzbatchmx))
+    If ( .not. allocated(eta_next) ) Allocate (eta_next(nzbatchmx))
+    If ( .not. allocated(gam) ) Allocate (gam(nzbatchmx))
+    If ( .not. allocated(gamhat) ) Allocate (gamhat(nzbatchmx))
+    If ( .not. allocated(gamratio) ) Allocate (gamratio(nzbatchmx))
     hvec = 0.0_dp
     lvec = 0.0_dp
     dt_scale = 0.0_dp
@@ -419,13 +429,13 @@ Contains
     gamhat = 0.0_dp
     gamratio = 0.0_dp
 
-    If ( .not. allocated(ewt) ) Allocate (ewt(neq,nzevolve))
-    If ( .not. allocated(acor) ) Allocate (acor(neq,nzevolve))
-    If ( .not. allocated(acorp) ) Allocate (acorp(neq,nzevolve))
-    If ( .not. allocated(acnrm) ) Allocate (acnrm(nzevolve))
-    If ( .not. allocated(crate) ) Allocate (crate(nzevolve))
-    If ( .not. allocated(tq) ) Allocate (tq(-1:2,nzevolve))
-    If ( .not. allocated(tq2save) ) Allocate (tq2save(nzevolve))
+    If ( .not. allocated(ewt) ) Allocate (ewt(neq,nzbatchmx))
+    If ( .not. allocated(acor) ) Allocate (acor(neq,nzbatchmx))
+    If ( .not. allocated(acorp) ) Allocate (acorp(neq,nzbatchmx))
+    If ( .not. allocated(acnrm) ) Allocate (acnrm(nzbatchmx))
+    If ( .not. allocated(crate) ) Allocate (crate(nzbatchmx))
+    If ( .not. allocated(tq) ) Allocate (tq(-1:2,nzbatchmx))
+    If ( .not. allocated(tq2save) ) Allocate (tq2save(nzbatchmx))
     ewt = 0.0_dp
     acor = 0.0_dp
     acorp = 0.0_dp
@@ -434,18 +444,18 @@ Contains
     tq = 0.0_dp
     tq2save = 0.0_dp
 
-    If ( .not. allocated(ydot0) ) Allocate (ydot0(ny,nzevolve))
-    If ( .not. allocated(t9dot0) ) Allocate (t9dot0(nzevolve))
+    If ( .not. allocated(ydot0) ) Allocate (ydot0(ny,nzbatchmx))
+    If ( .not. allocated(t9dot0) ) Allocate (t9dot0(nzbatchmx))
     ydot0 = 0.0_dp
     t9dot0 = 0.0_dp
 
-    If ( .not. allocated(restore) ) Allocate (restore(nzevolve))
-    If ( .not. allocated(rescale) ) Allocate (rescale(nzevolve))
-    If ( .not. allocated(rebuild) ) Allocate (rebuild(nzevolve))
-    If ( .not. allocated(refactor) ) Allocate (refactor(nzevolve))
-    If ( .not. allocated(iterate) ) Allocate (iterate(nzevolve))
-    If ( .not. allocated(converged) ) Allocate (converged(nzevolve))
-    If ( .not. allocated(eval_rates) ) Allocate (eval_rates(nzevolve))
+    If ( .not. allocated(restore) ) Allocate (restore(nzbatchmx))
+    If ( .not. allocated(rescale) ) Allocate (rescale(nzbatchmx))
+    If ( .not. allocated(rebuild) ) Allocate (rebuild(nzbatchmx))
+    If ( .not. allocated(refactor) ) Allocate (refactor(nzbatchmx))
+    If ( .not. allocated(iterate) ) Allocate (iterate(nzbatchmx))
+    If ( .not. allocated(converged) ) Allocate (converged(nzbatchmx))
+    If ( .not. allocated(eval_rates) ) Allocate (eval_rates(nzbatchmx))
     restore = .false.
     rescale = .false.
     rebuild = .false.
@@ -454,16 +464,16 @@ Contains
     converged = .false.
     eval_rates = .false.
 
-    If ( .not. allocated(diag) ) Allocate (diag(nzevolve))
-    If ( .not. allocated(mult) ) Allocate (mult(nzevolve))
-    If ( .not. allocated(yrhs) ) Allocate (yrhs(ny,nzevolve))
-    If ( .not. allocated(dy) ) Allocate (dy(ny,nzevolve))
-    If ( .not. allocated(t9rhs) ) Allocate (t9rhs(nzevolve))
-    If ( .not. allocated(dt9) ) Allocate (dt9(nzevolve))
-    If ( .not. allocated(dvec) ) Allocate (dvec(neq,nzevolve))
-    If ( .not. allocated(del) ) Allocate (del(nzevolve))
-    If ( .not. allocated(delp) ) Allocate (delp(nzevolve))
-    If ( .not. allocated(dcon) ) Allocate (dcon(nzevolve))
+    If ( .not. allocated(diag) ) Allocate (diag(nzbatchmx))
+    If ( .not. allocated(mult) ) Allocate (mult(nzbatchmx))
+    If ( .not. allocated(yrhs) ) Allocate (yrhs(ny,nzbatchmx))
+    If ( .not. allocated(dy) ) Allocate (dy(ny,nzbatchmx))
+    If ( .not. allocated(t9rhs) ) Allocate (t9rhs(nzbatchmx))
+    If ( .not. allocated(dt9) ) Allocate (dt9(nzbatchmx))
+    If ( .not. allocated(dvec) ) Allocate (dvec(neq,nzbatchmx))
+    If ( .not. allocated(del) ) Allocate (del(nzbatchmx))
+    If ( .not. allocated(delp) ) Allocate (delp(nzbatchmx))
+    If ( .not. allocated(dcon) ) Allocate (dcon(nzbatchmx))
     diag = 0.0_dp
     mult = 0.0_dp
     yrhs = 0.0_dp
@@ -475,18 +485,18 @@ Contains
     delp = 0.0_dp
     dcon = 0.0_dp
 
-    If ( .not. allocated(errorq) ) Allocate (errorq(-1:1,nzevolve))
-    If ( .not. allocated(acorhat) ) Allocate (acorhat(neq,nzevolve))
+    If ( .not. allocated(errorq) ) Allocate (errorq(-1:1,nzbatchmx))
+    If ( .not. allocated(acorhat) ) Allocate (acorhat(neq,nzbatchmx))
     errorq = 0.0_dp
     acorhat = 0.0_dp
 
-    If ( .not. allocated(detect) ) Allocate (detect(nzevolve))
-    If ( .not. allocated(ldflag) ) Allocate (ldflag(nzevolve))
+    If ( .not. allocated(detect) ) Allocate (detect(nzbatchmx))
+    If ( .not. allocated(ldflag) ) Allocate (ldflag(nzbatchmx))
     detect = .false.
     ldflag = 0
 
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
-    !XDIR XCOPYIN(A_pascal,Ainv_pascal,rtol,atol,bdf_active,retry_ts) &
+    !XDIR XCOPYIN(bdf_active,retry_ts) &
     !XDIR XCOPYIN(nit_nrslv,nit_nr,nit_ts,ierr_nr,ierr_ts,nerr_ts,ncf_ts) &
     !XDIR XCOPYIN(q,deltaq,j_age,p_age,q_age,nscon,sddat,z,z0,zt0) &
     !XDIR XCOPYIN(hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio) &
@@ -494,6 +504,8 @@ Contains
     !XDIR XCOPYIN(restore,rescale,rebuild,refactor,iterate,converged,eval_rates) &
     !XDIR XCOPYIN(diag,mult,yrhs,dy,t9rhs,dt9,dvec,del,delp,dcon) &
     !XDIR XCOPYIN(errorq,acorhat,detect,ldflag)
+
+    !XOMP end parallel
 
     Return
   End Subroutine bdf_init
@@ -505,9 +517,10 @@ Contains
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
-    If ( allocated(A_pascal) ) Then
+    !XOMP parallel default(shared)
+    If ( allocated(bdf_active) ) Then
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(A_pascal,Ainv_pascal,rtol,atol,bdf_active,retry_ts) &
+      !XDIR XDELETE(bdf_active,retry_ts) &
       !XDIR XDELETE(nit_nrslv,nit_nr,nit_ts,ierr_nr,ierr_ts,nerr_ts,ncf_ts) &
       !XDIR XDELETE(q,deltaq,j_age,p_age,q_age,nscon,sddat,z,z0,zt0) &
       !XDIR XDELETE(hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio) &
@@ -517,10 +530,6 @@ Contains
       !XDIR XDELETE(errorq,acorhat,detect,ldflag)
       !XDIR XWAIT(gpu_queue)
     EndIf
-    If ( allocated(A_pascal) ) Deallocate (A_pascal)
-    If ( allocated(Ainv_pascal) ) Deallocate (Ainv_pascal)
-    If ( allocated(rtol) ) Deallocate (rtol)
-    If ( allocated(atol) ) Deallocate (atol)
     If ( allocated(bdf_active) ) Deallocate (bdf_active)
     If ( allocated(retry_ts) ) Deallocate (retry_ts)
     If ( allocated(nit_nrslv) ) Deallocate (nit_nrslv)
@@ -580,6 +589,18 @@ Contains
     If ( allocated(detect) ) Deallocate (detect)
     If ( allocated(ldflag) ) Deallocate (ldflag)
 
+    !XOMP end parallel
+
+    If ( allocated(A_pascal) ) Then
+      !XDIR XEXIT_DATA XASYNC(gpu_queue) &
+      !XDIR XDELETE(A_pascal,Ainv_pascal,rtol,atol)
+      !XDIR XWAIT(gpu_queue)
+    EndIf
+    If ( allocated(A_pascal) ) Deallocate (A_pascal)
+    If ( allocated(Ainv_pascal) ) Deallocate (Ainv_pascal)
+    If ( allocated(rtol) ) Deallocate (rtol)
+    If ( allocated(atol) ) Deallocate (atol)
+
     Return
   End Subroutine bdf_finalize
 
@@ -601,7 +622,7 @@ Contains
     !XDIR XPRESENT(q,deltaq,j_age,p_age,q_age,nscon,sddat,z,z0,zt0) &
     !XDIR XPRESENT(hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio) &
     !XDIR XPRESENT(ewt,acor,acorp,acnrm,crate,tq,tq2save,ydot0,t9dot0)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       bdf_active(izb) = .false.
       retry_ts(izb) = .false.
 
@@ -705,7 +726,7 @@ Contains
     ! See if stepsize has changed from last step
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(rescale,ierr_ts,tdel,tdel_old,eta)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       rescale(izb) = .false.
       If ( ierr_ts(izb) == BDF_STATUS_SUCCESS ) Then
         If ( abs(tdel(izb)/tdel_old(izb) - 1.0_dp) > epsilon(0.0_dp) ) Then
@@ -719,7 +740,7 @@ Contains
     Call bdf_adjust_order(kstep)
 
     ! Scale Nordsieck vector to account for change in stepsize
-    Call bdf_rescale(rescale(zb_lo:zb_hi))
+    Call bdf_rescale(rescale)
 
     Return
   End Subroutine bdf_adjust
@@ -743,7 +764,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(bdf_active) &
     !XDIR XPRESENT(z,z0,zt0,q,A_pascal)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( bdf_active(izb) ) Then
         !XDIR XLOOP_INNER(2)
         Do j = 0, max_order
@@ -766,8 +787,8 @@ Contains
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(q,tdel,z,zt0,yt,ydot,t9t,t9dot)
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
+      Do izb = 1, nzbatchmx
+        izone = szbatch + izb - 1
         Write(lun_diag,"(a,2i5,i3,1es12.4)") 'BDF Predict',kstep,izone,q(izb),tdel(izb)
         Write(lun_diag,"(2x,a5,6es15.7)") (nname(i), &
           zt0(i,0,izb),z(i,0,izb),yt(i,izb), &
@@ -822,7 +843,7 @@ Contains
     !XDIR XPRESENT(lvec,hvec,q,tq,gam,gamhat,gamratio,tdel) &
     !XDIR XPRIVATE(hsum,xi_inv,xistar_inv,alpha0,alpha0_hat,c,cinv) &
     !XDIR XPRIVATE(a1,a2,a3,a4,a5,a6)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( bdf_active(izb) ) Then
 
         ! Compute lvec and tq
@@ -905,9 +926,9 @@ Contains
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(bdf_active,q,tdel,tt,hvec,tq,ewt)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( bdf_active(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,2i5,i3,7es12.4)") 'BDF Update',kstep,izone,q(izb),tdel(izb),tt(izb)
           Write(lun_diag,"(2x,a5,6es12.4)") ' H',(hvec(i,izb),i=0,max_order)
           Write(lun_diag,"(2x,a5,4es12.4)") 'TQ',(tq(i,izb),i=-1,2)
@@ -957,7 +978,7 @@ Contains
     !XDIR XPRESENT(bdf_active,yt,t9t,zt0,acor,nit_nr,nit_nrslv) &
     !XDIR XPRESENT(rebuild,refactor,iterate,converged,retry_ts) &
     !XDIR XPRESENT(p_age,j_age,gam,gamratio,crate,delp,diag,mult)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( bdf_active(izb) ) Then
         !XDIR XLOOP_INNER(1)
         Do i = 1, ny
@@ -988,8 +1009,8 @@ Contains
     EndDo
     !XDIR XUPDATE XWAIT(gpu_queue) &
     !XDIR XHOST(iterate,refactor,rebuild)
-    If ( iheat == 0 ) Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi), &
-      rhot(zb_lo:zb_hi),mask_in = retry_ts(zb_lo:zb_hi))
+    If ( iheat == 0 ) Call t9rhofind(kstep,tt,ntt,t9t, &
+      rhot,mask_in = retry_ts)
 
     ! Do the NR iteration
     Do kit = 1, max_it_nrslv
@@ -997,7 +1018,7 @@ Contains
       ! Increment NR counter
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,nit_nr,nit_nrslv)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( iterate(izb) ) Then
           nit_nr(izb) = nit_nr(izb) + 1
           nit_nrslv(izb) = nit_nrslv(izb) + 1
@@ -1005,7 +1026,7 @@ Contains
       EndDo
 
       ! Only re-evaluate rates if first iteration or if need to re-evaluate Jacobian
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( iheat > 0 ) Then
           eval_rates(izb) = iterate(izb)
         ElseIf ( kit == 1 ) Then
@@ -1017,18 +1038,18 @@ Contains
       !XDIR XUPDATE XASYNC(gpu_queue) &
       !XDIR XDEVICE(eval_rates)
 
-      ! Update abundance derivatives and build Jacobian using only this worker's bank.
-      Call cross_sect(mask_in = eval_rates(zb_lo:zb_hi))
-      Call yderiv(mask_in = iterate(zb_lo:zb_hi))
-      Call jacobian_build(mask_in = rebuild(zb_lo:zb_hi))
-      Call jacobian_scale(diag(zb_lo:zb_hi),mult(zb_lo:zb_hi),mask_in = refactor(zb_lo:zb_hi))
-      Call jacobian_decomp(kstep,mask_in = refactor(zb_lo:zb_hi))
+      ! Update reaction rates, abundance derivatives, and the Jacobian factorization
+      Call cross_sect(mask_in = eval_rates)
+      Call yderiv(mask_in = iterate)
+      Call jacobian_build(mask_in = rebuild)
+      Call jacobian_scale(diag,mult,mask_in = refactor)
+      Call jacobian_decomp(kstep,mask_in = refactor)
 
       If ( idiag >= 4 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(refactor,rebuild,nit_nr,gam,gamratio,p_age,j_age)
-        Do izb = zb_lo, zb_hi
-          izone = izb + szbatch - zb_lo
+        Do izb = 1, nzbatchmx
+          izone = szbatch + izb - 1
           If ( refactor(izb) ) Write(lun_diag,"(a,3i5,2es14.7,i5)") &
             'BDF Refactor',kstep,izone,nit_nr(izb),gam(izb),abs(gamratio(izb)-1.0_dp),p_age(izb)
           If ( rebuild(izb) ) Write(lun_diag,"(a,3i5,2es14.7,i5)") &
@@ -1041,7 +1062,7 @@ Contains
       !XDIR XPRESENT(gam,gamhat,gamratio,crate,p_age,j_age,lvec,acor) &
       !XDIR XPRESENT(yrhs,ydot,t9rhs,t9dot,zt0) &
       !XDIR XPRIVATE(cstar)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
 
         ! Reset Jacobian age
         If ( refactor(izb) ) Then
@@ -1071,9 +1092,9 @@ Contains
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(iterate,nit_nr,gam,gamratio,tdel) &
         !XDIR XHOST(yrhs,ydot,yt,zt0,t9rhs,t9dot,t9t)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( iterate(izb) ) Then
-            izone = izb + szbatch - zb_lo
+            izone = szbatch + izb - 1
             Write(lun_diag,"(a,3i5,3es14.7)") &
               'BDF RHS',kstep,izone,nit_nr(izb),gam(izb),gamratio(izb),tdel(izb)
             Write(lun_diag,"(2x,a5,4es23.15)") &
@@ -1085,14 +1106,14 @@ Contains
       EndIf
 
       ! Solve using factorized Newton matrix
-      Call jacobian_bksub(kstep,yrhs(:,zb_lo:zb_hi),dy(:,zb_lo:zb_hi), &
-        & t9rhs(zb_lo:zb_hi),dt9(zb_lo:zb_hi),mask_in = iterate(zb_lo:zb_hi))
+      Call jacobian_bksub(kstep,yrhs,dy, &
+        & t9rhs,dt9,mask_in = iterate)
 
       ! Apply the iterative correction
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,aa,yt,dy,t9t,dt9,zt0) &
       !XDIR XPRESENT(acor,dvec,ewt,del,delp,crate,dcon,tq,nit_nr)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( iterate(izb) ) Then
 
           ! Prevent abundance from becoming too small
@@ -1122,9 +1143,9 @@ Contains
       If ( idiag >= 3 ) Then
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(iterate,nit_nr,dy,y,dt9,t9t,yt,del,dcon,crate)
-        Do izb = zb_lo, zb_hi
+        Do izb = 1, nzbatchmx
           If ( iterate(izb) ) Then
-            izone = izb + szbatch - zb_lo
+            izone = szbatch + izb - 1
             If ( idiag >= 4 ) Then
               idymx = maxloc(dy(:,izb),dim=1)
               Write(lun_diag,"(a10,3i5,a5,2es23.15)") &
@@ -1144,7 +1165,7 @@ Contains
       !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
       !XDIR XPRESENT(iterate,converged,refactor,rebuild,nit_nr,nit_nrslv,j_age) &
       !XDIR XPRESENT(dcon,acor,acnrm,ewt,del,delp,gamratio,yt,t9t,zt0)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( iterate(izb) ) Then
           converged(izb) = ( dcon(izb) < tol_nr )
 
@@ -1193,15 +1214,15 @@ Contains
       !XDIR XHOST(iterate,refactor,rebuild)
 
       ! Check that all zones are converged
-      If ( .not. any(iterate(zb_lo:zb_hi)) ) Exit
+      If ( .not. any(iterate) ) Exit
 
     EndDo
     
     If ( idiag >= 2 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(converged,nit_nr,nit_nrslv,dcon,gamratio,crate,j_age,p_age)
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
+      Do izb = 1, nzbatchmx
+        izone = szbatch + izb - 1
         If ( converged(izb) ) Then
           Write(lun_diag,"(a,2i5,2i3,3es12.4,2i3)") &
             'BDF NR Conv',kstep,izone,nit_nr(izb),nit_nrslv(izb),dcon(izb),gamratio(izb),crate(izb),j_age(izb),p_age(izb)
@@ -1241,7 +1262,7 @@ Contains
     !XDIR XPRESENT(nit_nr,nit_nrslv,nit_ts,ncf_ts,ierr_nr,ierr_ts,nerr_ts) &
     !XDIR XPRESENT(eta,eta_next,q,tq,q_age,deltaq,acnrm) &
     !XDIR XPRESENT(y,ydot0,t9,t9dot0,z,t,tdel,kmon,ktot)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       restore(izb) = .false.
       rescale(izb) = .false.
       retry_ts(izb) = .false.
@@ -1378,11 +1399,11 @@ Contains
 
     ! Log the failed integration attempts
     If ( idiag >= 1 ) Then
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         !XDIR XUPDATE XWAIT(gpu_queue) &
         !XDIR XHOST(nit_nr,nit_ts,ncf_ts,t,tdel,tq,acnrm,nerr_ts,eta,q,retry_ts)
         If ( bdf_active(izb) ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           If ( nit_nr(izb) > max_it_nr ) Then
             If ( nit_ts(izb) >= max_it_ts ) Then
               Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Too many TS failures)'
@@ -1411,13 +1432,13 @@ Contains
     EndIf
 
     ! Undo previous step
-    Call bdf_restore(restore(zb_lo:zb_hi))
+    Call bdf_restore(restore)
 
     ! Reduce order
     Call bdf_adjust_order(kstep)
 
     ! Scale Nordsieck vector to account for change in stepsize
-    Call bdf_rescale(rescale(zb_lo:zb_hi))
+    Call bdf_rescale(rescale)
 
     Return
   End Subroutine bdf_check
@@ -1444,7 +1465,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr_nr,q,acor,lvec,hvec,q_age,j_age,p_age,nscon) &
     !XDIR XPRESENT(yt,t9t,z,zt0)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
 
         ! Apply corrections to Nordsieck vector
@@ -1476,9 +1497,9 @@ Contains
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ierr_nr,q,acnrm,acor,zt0,z,yt,lvec,ydot,tdel,t9t,t9dot)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,2i5,i3,1es12.4)") 'BDF Correct',kstep,izone,q(izb),acnrm(izb)
           Write(lun_diag,"(2x,a5,8es15.7)") (nname(i), &
             acor(i,izb),zt0(i,0,izb),z(i,0,izb),yt(i,izb), &
@@ -1517,9 +1538,9 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr_nr,eta,etaq,eta_next,tq,tq2save,z,hvec,ewt) &
     !XDIR XPRESENT(q,q_age,deltaq,acor,acorp,acorhat,acnrm,errorq,nscon)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
-        izone = izb + szbatch - zb_lo
+        izone = szbatch + izb - 1
         !XDIR XLOOP_INNER(1)
         Do i = -1, 1
           errorq(i,izb) = 0.0_dp
@@ -1600,10 +1621,10 @@ Contains
     If ( idiag >= 2 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ierr_nr,eta_next,errorq,etaq,q_age,q,deltaq,eta)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
           If ( eta_next(izb) > 1.0_dp ) Then
-            izone = izb + szbatch - zb_lo
+            izone = szbatch + izb - 1
             If ( idiag >= 3 ) Then
               Do i = -1, 1
                 If ( abs(errorq(i,izb)) > 0.0_dp ) Write(lun_diag,"(a,sp,i2,s,a,2es23.15)") &
@@ -1638,7 +1659,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(ierr_nr,q,deltaq,sddat,acnrm,tq,z,ewt,nscon,detect) &
     !XDIR XPRIVATE(sq,sqm1,sqm2,fact)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
         If ( q(izb) >= 3 ) Then
           !XDIR XLOOP_INNER(1)
@@ -1659,10 +1680,10 @@ Contains
       detect(izb) = ( ierr_nr(izb) == BDF_STATUS_SUCCESS .and. &
         q(izb) >= 3 .and. deltaq(izb) >= 0 .and. nscon(izb) >= q(izb)+5 )
     EndDo
-    Call bdf_stab_detect(detect(zb_lo:zb_hi),ldflag(zb_lo:zb_hi))
+    Call bdf_stab_detect(detect,ldflag)
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(detect,ldflag,deltaq,eta,eta_next,etaq,nscon)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( detect(izb) ) Then
         If ( ldflag(izb) > 3 ) Then
           deltaq(izb) = -1
@@ -1675,9 +1696,9 @@ Contains
     If ( idiag >= 2 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(ldflag,q,eta,ldflag)
-      Do izb = zb_lo, zb_hi
+      Do izb = 1, nzbatchmx
         If ( ldflag(izb) > 3 ) Then
-          izone = izb + szbatch - zb_lo
+          izone = szbatch + izb - 1
           Write(lun_diag,"(a,2i5,i3,es12.4,sp,i3,s)") &
             'BDF Stab',kstep,izone,q(izb),eta(izb),ldflag(izb)
         EndIf
@@ -1695,10 +1716,10 @@ Contains
     Implicit None
 
     ! Input variables
-    Logical, Intent(in) :: mask(zb_lo:zb_hi)
+    Logical, Intent(in) :: mask(nzbatchmx)
 
     ! Output variables
-    Integer, Intent(out) :: kflag(zb_lo:zb_hi)
+    Integer, Intent(out) :: kflag(nzbatchmx)
 
     ! Local variables
     Real(dp), Parameter :: rrcut = 0.98_dp
@@ -1723,7 +1744,7 @@ Contains
     !XDIR XPRIVATE(tem,sqmax,saqk,s,sqmaxk,saqj,sqmin) &
     !XDIR XPRIVATE(ratp,ratm,qfac1,qfac2,bb,rrb) &
     !XDIR XPRIVATE(rsa,rsb,rsc,rsd,rd1a,rd1b,rd1c,rd2a,rd2b,rd3a,cest1,corr1)
-    loop0: Do izb = zb_lo, zb_hi
+    loop0: Do izb = 1, nzbatchmx
       kflag(izb) = 0
       If ( mask(izb) ) Then
         zone: Do
@@ -1959,8 +1980,8 @@ Contains
     If ( idiag >= 2 ) Then
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(deltaq,q)
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
+      Do izb = 1, nzbatchmx
+        izone = szbatch + izb - 1
         If ( deltaq(izb) /= 0 ) Write(lun_diag,"(a,2i5,i3,sp,i3,s)") &
           'BDF Order Change',kstep,izone,q(izb)+deltaq(izb),deltaq(izb)
       EndDo
@@ -1969,7 +1990,7 @@ Contains
     !XDIR XLOOP(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(tdel,deltaq,q,q_age,lvec,hvec,acor,z) &
     !XDIR XPRIVATE(alpha0,alpha1,prod,xi,xiold,hsum,a1)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( deltaq(izb) == -1 ) Then
 
         ! Decrease order
@@ -2045,7 +2066,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Logical, Intent(in) :: mask(zb_lo:zb_hi)
+    Logical, Intent(in) :: mask(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, izb
@@ -2057,7 +2078,7 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,retry_ts,tdel,t,tt,tstop,eta,dt_scale,hvec,q,z,nscon) &
     !XDIR XPRIVATE(selected_stop)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         ! A rejected trial sets retry_ts; an initial adjustment keeps the selected stop.
         selected_stop = .not. retry_ts(izb) .and. tt(izb) == tstop(izb) .and. tdel(izb) == tstop(izb)-t(izb)
@@ -2089,7 +2110,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Logical, Intent(in) :: mask(zb_lo:zb_hi)
+    Logical, Intent(in) :: mask(nzbatchmx)
 
     ! Local variables
     Integer :: i, j, izb
@@ -2099,7 +2120,7 @@ Contains
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,z,z0)
-    Do izb = zb_lo, zb_hi
+    Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
         !XDIR XLOOP_INNER(2)
         Do j = 0, max_order

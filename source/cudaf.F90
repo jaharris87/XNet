@@ -3,6 +3,8 @@
 ! This file contains the module defining Fortran interfaces for the CUDA Runtime API
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 module xnet_cudaf
   !-------------------------------------------------------------------------------------------------
   ! Interface to CUDA Runtime API
@@ -10,9 +12,7 @@ module xnet_cudaf
   use, intrinsic :: iso_c_binding
 
   type(c_ptr), target :: stream = c_null_ptr
-#ifdef XNET_OMP
-  !$omp threadprivate(stream)
-#endif
+  !XOMP threadprivate(stream)
 
   enum, bind(c) !:: cudaMemcpyKind
     enumerator :: cudaMemcpyHostToHost = 0

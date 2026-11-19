@@ -11,6 +11,8 @@ packages, including FLASH, CHIMERA and several other codes.
 
 The [v9 development plan](docs/development/v9-plan.md) describes the current
 configuration, application-interface, CPU/GPU measurement, and release work.
+See the [v9 migration and release notes](docs/v9-release-notes.md) for the
+principal changes, migration steps and execution limits.
 
 Building XNet
 -------------

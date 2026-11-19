@@ -147,7 +147,11 @@ The [single-case diagnostic](https://github.com/jaharris87/XNet/issues/192#issue
 and [#195's full CPU suite at `b8607a4e`](https://github.com/jaharris87/XNet/pull/195#issuecomment-6786074563)
 completed with this setting; the latter completed all 28 commands, including
 serial/two/four-worker comparisons, histories, failures and lifecycle checks.
-Applicable current-candidate NVIDIA execution remains pending after maintenance.
+The later [worker-storage candidate checks at `2d74d79c`](https://github.com/jaharris87/XNet/pull/204#issuecomment-6965021134)
+completed all 38 public CPU/GPU processes with this host-worker setting.
+Their numerical comparisons and [maintainer dispositions](https://github.com/jaharris87/XNet/pull/204#issuecomment-7017135890)
+remain specific to the recorded inputs, sources and configurations; completion
+does not mean that every historical-reference comparison passed.
 
 [`OMP_STACKSIZE`](https://www.openmp.org/spec-html/5.1/openmpse63.html) controls
 stacks for threads created by the OpenMP runtime, not the initial thread's

@@ -596,3 +596,32 @@ def test_highest_timestep_output_level_completes(
     assert " <-> " in diagnostic
     assert "End     " in diagnostic
     assert "Counters:" in diagnostic
+
+
+@pytest.mark.parametrize(
+    ("configuration", "prefix", "detail"),
+    (
+        ("&xnet_controls\n unknown_setting = 1\n/\n",
+         "Malformed or unknown xnet_controls namelist, iostat=", "controls.nml: "),
+        ("&xnet_controls\n inab_files = 'a'\n/\n",
+         "Dynamically sized controls require explicit positive indices",
+         "line 2: assign"),
+        (None, "Failed to open controls file: controls.nml", "tools/convert_control.py"),
+    ),
+)
+def test_controls_error_context(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path,
+    configuration: str | None, prefix: str, detail: str,
+) -> None:
+    if configuration is None:
+        (tmp_path / "control").write_text("legacy input\n", encoding="utf-8")
+    else:
+        (tmp_path / "controls.nml").write_text(configuration, encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, tmp_path, xnet_timeout)
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert prefix in output
+    assert detail in output
+    if "iostat=" in prefix:
+        # Runtime IOMSG wording varies by compiler, but must add diagnostic text.
+        assert output.split(detail, 1)[1].splitlines()[0].strip()

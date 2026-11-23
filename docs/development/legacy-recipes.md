@@ -2,7 +2,7 @@
 
 `test/test_xnet.sh` and `test/test_xnet.csh` assemble historical positional
 `control` inputs. They are recipe records, not current namelist launchers.
-The [offline converter](runtime-configuration.md#converting-v8-ascii-controls)
+The [offline converter](../running-xnet.md#converting-v8-ascii-controls)
 covers the 26 tracked `test/Test_Problems/setup_*` recipes and eight retained
 `test/regression/cases/*/control` fixtures without evolving networks.
 

@@ -402,6 +402,7 @@ Contains
       Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
         & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,aux_x(:n),aux_a(:n),aux_z(:n), &
         & max_steps_taken=steps,data_on_device=.true.)
+      Call check(All(loss == -1.0_dp),Trim(label)//' unchanged host loss mirror')
       ! No stream wait here: the API must finish its device outputs before returning.
       !XDIR XUPDATE XHOST(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
     ElseIf ( phase == 1 ) Then
@@ -658,6 +659,7 @@ Contains
       aux_x(1) = aux_x(2)
       Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters, &
         & timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken=steps,data_on_device=.true.)
+      Call check(All(loss == -1.0_dp),Trim(label)//' unchanged rejected host loss mirror')
       ! Release the mappings without copying or inspecting rejected scientific results.
       !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
       If ( ierr /= xnet_invalid ) Write(*,'(a,i0,2a)') 'Unexpected status ',ierr,': ',Trim(message)

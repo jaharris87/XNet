@@ -265,7 +265,12 @@ Contains
     ! Initialize host outputs
     If ( present(max_steps_taken) ) max_steps_taken = 0
     timing = xnet_timing_t()
+#ifdef XNET_GPU
+    If ( .not. on_device ) neutrino_loss = 0.0_dp
+#else
+    ! Preserve host diagnostic clearing for unsupported CPU device-array requests.
     neutrino_loss = 0.0_dp
+#endif
     counters = 0
     message = ' '
 
@@ -908,7 +913,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Validate active scientific inputs after checking extents and any required device mappings.
     ! A temporary verdict array also carries the host active mask; no module work arrays are needed.
-    ! Clear device loss here; the public entry point has already cleared the host output.
+    ! Clear device loss here; host-mode loss was cleared by the public entry point.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
     Use nuclear_data, Only: ny

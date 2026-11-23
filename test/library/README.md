@@ -89,6 +89,19 @@ divide/multiply timestep rounding remains unchanged, including constructed
 one-ulp changes in either direction. These are software checks, not new
 scientific reference results or accelerator qualification.
 
+`make -C test/library XNET_CONFIG=... diagnostic-test` checks the weak-rate
+switch on a mixed active mask, two low-temperature warnings, LU matrix and
+status diagnostics, and the pre-step abundance written by the standalone
+failure handler. The runner expects the final failure exit status 1 and
+checks the generated abundance and thermodynamic files. It exposes only that
+private handler in an isolated copy of the production evolution module. This
+check is included in the CPU `test` target. It can also use a dense GPU archive;
+GPU builds assert device execution and poison host matrix and abundance
+mirrors before diagnostic reads. Native accelerator compilation and execution
+must be recorded separately from CPU results. The hardware GPU consumer also
+checks the host loss mirror before updating resident results, including
+all-inactive and rejected-input calls.
+
 A separate host-only cleanup test recompiles the production API with a
 test GPU resource module in an isolated build subdirectory. It uses real
 CPU workspaces and finalizers, but injects two GPU cleanup failures. It

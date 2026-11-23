@@ -422,7 +422,7 @@ Contains
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: yo, xext
     Use xnet_conditions, Only: t, tdel, tstart, tstop, t9start, rhostart, yestart
-    Use xnet_controls, Only: lun_diag, lun_stdout, szbatch, zone_id
+    Use xnet_controls, Only: lun_diag, lun_stdout, szbatch, zone_id, gpu_queue
     Use xnet_output, Only: write_xnet_th, write_xnet_inab
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -444,6 +444,8 @@ Contains
     nstep_est = int(min((tstop(izb) - t(izb)) / tdel(izb), real(huge(nstep_est),dp)))
     Write(lun_stdout,"(a,i12,a)") 'Approximately ',nstep_est,' more steps needed'
 
+    ! Preserve the pre-step dump convention, using the current device copy of yo.
+    !XDIR XUPDATE XWAIT(gpu_queue) XHOST(yo)
     nname_out(1:ny) = nname(1:ny)
     nname_out(ny+1) = '  Aux'
     yout(1:ny)      = yo(:,izb)

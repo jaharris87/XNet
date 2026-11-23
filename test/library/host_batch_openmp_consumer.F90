@@ -85,6 +85,8 @@ Program host_batch_openmp_consumer
   controls%nnucout = Size(output_names)
   controls%output_nuclei = output_names
   Call check(Size(controls%output_nuclei) == Size(output_names),'output species array size')
+  ! Check NUL bytes independently of the name constant used for assignment and comparison.
+  Call check(All(Index(controls%output_nuclei,Achar(0)) == 0),'output species contain no NUL bytes')
   Call check(All(controls%output_nuclei == output_names),'output species initialization')
   controls%t9nse = 11.0_dp
   If ( Trim(data_dir) == 'Data_SN160' ) controls%iscrn = 1

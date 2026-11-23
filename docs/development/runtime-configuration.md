@@ -155,3 +155,13 @@ place of a required value are errors. Conversion establishes input translation,
 not physical equivalence or availability of the named files. See the
 [historical recipe inventory](legacy-recipes.md) and
 [conversion checks](../../test/migration/README.md).
+
+## Weak-rate table limits
+
+FFN table interpolation holds the nearest edge value outside
+`T9 = 0.01..100` (GK) and `log10(rho*Ye) = 1..11` (`rho*Ye` in g/cm^3),
+independently on each axis. Table-derived temperature slopes are zero strictly
+outside the temperature grid; endpoints use the adjacent interior slope.
+For logft data, only the tabulated factors are held: capture phase space and
+its temperature derivative continue to use the actual thermodynamic state,
+so the total logft capture rate can still vary beyond a table edge.

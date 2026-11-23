@@ -29,7 +29,7 @@ stop-time-test: $(STOP_TIME_DIR)/stop_time_checks
 	  --net-setup '$(abspath $(dir $(XNET_ARCHIVE))/../bin/net_setup)' --work-dir '$(STOP_TIME_DIR)/runs'
 
 ifeq ($(findstring -DXNET_GPU,$(XNET_CPPFLAGS)),)
-test: stop-time-test
+test: stop-time-test diagnostic-test
 endif
 
 $(STOP_TIME_DIR):
@@ -340,3 +340,33 @@ else
 host-batch-openmp-overlap-test:
 	@echo 'overlap test requires a CPU OPENMP_MODE=ON library' >&2; exit 2
 endif
+
+# Expose only the standalone failure handler through an isolated production module copy.
+DIAGNOSTIC_DIR := $(BUILD_DIR)/diagnostics
+.PHONY: diagnostic-test
+diagnostic-test: $(DIAGNOSTIC_DIR)/diagnostic_checks
+	OMP_NUM_THREADS=1 python3 -B run_diagnostic_checks.py --executable '$<' \
+	  --net-setup '$(abspath $(dir $(XNET_ARCHIVE))/../bin/net_setup)' --work-dir '$(DIAGNOSTIC_DIR)/runs'
+
+$(DIAGNOSTIC_DIR):
+	mkdir -p '$@'
+
+$(DIAGNOSTIC_DIR)/xnet_evolve.f90: ../../source/xnet_evolve.F90 ../../source/xnet_macros.fh \
+    $(XNET_CONFIG) | $(DIAGNOSTIC_DIR)
+	sed 's/^  Private$$/  Private; Public :: terminate_on_zone_failure/' '$<' > '$@.exposed'
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$@.exposed' > '$@'
+
+$(DIAGNOSTIC_DIR)/xnet_evolve.o: $(DIAGNOSTIC_DIR)/xnet_evolve.f90 $(XNET_CONFIG)
+	cd '$(DIAGNOSTIC_DIR)' && $(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -c '$(notdir $<)' -o '$(notdir $@)'
+
+$(DIAGNOSTIC_DIR)/diagnostic_checks.f90: diagnostic_checks.F90 ../../source/xnet_macros.fh \
+    $(XNET_CONFIG) | $(DIAGNOSTIC_DIR)
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$<' > '$@'
+
+$(DIAGNOSTIC_DIR)/diagnostic_checks.o: $(DIAGNOSTIC_DIR)/diagnostic_checks.f90 \
+    $(DIAGNOSTIC_DIR)/xnet_evolve.o $(XNET_CONFIG)
+	$(XNET_FC) $(XNET_FFLAGS) -I'$(DIAGNOSTIC_DIR)' $(XNET_MODFLAGS) -c '$<' -o '$@'
+
+$(DIAGNOSTIC_DIR)/diagnostic_checks: $(DIAGNOSTIC_DIR)/diagnostic_checks.o \
+    $(DIAGNOSTIC_DIR)/xnet_evolve.o $(XNET_ARCHIVE)
+	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)

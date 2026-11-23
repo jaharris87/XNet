@@ -186,12 +186,18 @@ Contains
     ! Find min/max Z/A in network (A>1)
     iza_min = minloc( zz(:)/aa(:), 1, mask = ia(:) > 1 )
     iza_max = maxloc( zz(:)/aa(:), 1, mask = ia(:) > 1 )
+    ! A network containing only free nucleons still supplies valid guess species.
+    If ( iza_min == 0 ) iza_min = minloc( zz(:)/aa(:), 1 )
+    If ( iza_max == 0 ) iza_max = maxloc( zz(:)/aa(:), 1 )
     za_min = zz(iza_min)/aa(iza_min)
     za_max = zz(iza_max)/aa(iza_max)
 
     ! Find min/max Z/A for Z>=20 nuclei
     ihvy_min = minloc( zz(:)/aa(:), 1, mask = iz(:) >= 20 )
     ihvy_max = ny + 1 - maxloc( zz(ny:1:-1)/aa(ny:1:-1), 1, mask = iz(ny:1:-1) >= 20 )
+
+    If ( ihvy_min == 0 ) ihvy_min = iza_min
+    If ( ihvy_max > ny ) ihvy_max = iza_max
 
     ! Find min/max Z/A for common Fe/Ni nuclei
     ife_min = minloc( zz(:)/aa(:), 1, ( iz(:) == 26 .or. iz(:) == 28 ) .and. &
@@ -200,6 +206,9 @@ Contains
     ife_max = ny + 1 - maxloc( zz(ny:1:-1)/aa(ny:1:-1), 1, ( iz(ny:1:-1) == 26 .or. iz(ny:1:-1) == 28) .and. &
       &                                                    ( ia(ny:1:-1) == 52 .or. ia(ny:1:-1) == 54 .or. &
       &                                                      ia(ny:1:-1) == 56 .or. ia(ny:1:-1) == 58) )
+
+    If ( ife_min == 0 ) ife_min = ihvy_min
+    If ( ife_max > ny ) ife_max = ihvy_max
 
     i_nn = 0 ; i_pp = 0 ; i_he4 = 0 ; i_si28 = 0 ; i_ni56 = 0
     Do i = 1, ny
@@ -217,13 +226,15 @@ Contains
       Write(lun_stdout,'(2(a,a5))') 'Could not find ','p','; setting i_pp to max Z/A: ',nname(iza_max)
       i_pp = iza_max
     EndIf
+    ! These public diagnostic indices must be valid before Ye is known. The guess
+    ! routine selects a species near the current Ye when He4 or Si28 is absent.
     If ( i_he4 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','he4','; setting i_he4 to closest Z/A to Ye: ',nname(iye_za)
-      i_he4 = iye_za
+      Write(lun_stdout,'(2(a,a5))') 'Could not find ','he4','; setting i_he4 to max B/A: ',nname(ibe)
+      i_he4 = ibe
     EndIf
     If ( i_si28 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','si28','; setting i_si28 to closest heavy Z/A to Ye: ',nname(iye_hvy)
-      i_si28 = iye_hvy
+      Write(lun_stdout,'(2(a,a5))') 'Could not find ','si28','; setting i_si28 to max B/A: ',nname(ibe)
+      i_si28 = ibe
     EndIf
     If ( i_ni56 == 0 ) Then
       Write(lun_stdout,'(2(a,a5))') 'Could not find ','ni56','; setting i_ni56 to max B/A: ',nname(ibe)
@@ -300,6 +311,11 @@ Contains
     If ( iye_hvy_l < 1 ) Then
       iye_hvy_l = ihvy_min
     EndIf
+    ! Without heavy nuclei, use the available species selected for this Ye.
+    If ( .Not. any(iz(:) >= 20) ) Then
+      iye_hvy_l = iye_za_l
+      iye_hvy_u = iye_za_u
+    EndIf
     zatst = zz(iye_hvy_l)/aa(iye_hvy_l)
     If ( abs(zatst - yense) < abs(zz(iye_hvy_u)/aa(iye_hvy_u) - yense) ) Then
       iye_hvy = iye_hvy_l
@@ -323,6 +339,11 @@ Contains
     &                           ia(:) == 56 .or. ia(:) == 58 ) )
     If ( iye_fe_l < 1 ) Then
       iye_fe_l = ihvy_min
+    EndIf
+    If ( .Not. any((iz(:) == 26 .OR. iz(:) == 28) .AND. &
+      & (ia(:) == 52 .OR. ia(:) == 54 .OR. ia(:) == 56 .OR. ia(:) == 58)) ) Then
+      iye_fe_l = iye_hvy_l
+      iye_fe_u = iye_hvy_u
     EndIf
     zatst = zz(iye_fe_l)/aa(iye_fe_l)
     If ( abs(zatst - yense) < abs(zz(iye_fe_u)/aa(iye_fe_u) - yense) ) Then
@@ -563,7 +584,14 @@ Contains
     Real(dp), Parameter :: xmax = 1.0_dp, xmin = 0.0_dp
     Real(dp) :: bkt, c1, c2, det, lhs(2,2), rhs(2)
     Real(dp) :: za_ye(2)
-    Integer :: i, ii, iye(2)
+    Integer :: i, ii, iye(2), ihe4_guess, isi28_guess
+
+    ! Missing reference nuclei use the closest available species for this query,
+    ! rather than the initialization-time diagnostic placeholders.
+    ihe4_guess = i_he4
+    If ( iz(i_he4) /= 2 .OR. ia(i_he4) /= 4 ) ihe4_guess = iye_za
+    isi28_guess = i_si28
+    If ( iz(i_si28) /= 14 .OR. ia(i_si28) /= 28 ) isi28_guess = iye_hvy
 
     If ( present(uvec_in) ) Then
       uvec(:) = uvec_in(:)
@@ -620,7 +648,7 @@ Contains
         iye(1) = i_ni56
         iye(2) = iye_fe_l
       ElseIf ( iguess == 3 ) Then
-        iye(1) = i_he4
+        iye(1) = ihe4_guess
         iye(2) = iye_fe_l
       ElseIf ( iguess == 4 ) Then
         iye(:) = i_ni56
@@ -640,7 +668,7 @@ Contains
       ElseIf ( iguess == 2 ) Then
         iye(:) = i_ni56
       ElseIf ( iguess == 3 ) Then
-        iye(1) = i_he4
+        iye(1) = ihe4_guess
         iye(2) = i_pp
       ElseIf ( iguess == 4 ) Then
         iye(1) = i_ni56
@@ -664,9 +692,9 @@ Contains
       ElseIf ( iguess == 4 ) Then
         iye(:) = iye_hvy_u
       ElseIf ( iguess == 5 ) Then
-        iye(:) = i_si28
+        iye(:) = isi28_guess
       ElseIf ( iguess == 6 ) Then
-        iye(:) = i_he4
+        iye(:) = ihe4_guess
       Else
         iye(1) = i_nn
         iye(2) = i_pp

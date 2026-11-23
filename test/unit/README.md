@@ -233,3 +233,24 @@ They do not qualify MPI, accelerators, optional external sparse solvers, other
 compilers, production nuclear-data quality, or long scientific calculations.
 Passing the suite demonstrates the named component and interoperability
 behavior only.
+
+## NSE index safety
+
+`make -C test/unit CMODE=DEBUG nse-index-test` checks the full independent NSE
+network, CNO, and subsets without heavy nuclei, He4/Si28, common Fe/Ni nuclei,
+or bound nuclei. Each network is initialized, solved, and finalized twice.
+The tests check finite normalized mass fractions and charge at three Ye values,
+repeatability, valid public indices, and finite chemical-potential guesses from
+all six heuristics. Only `nse_guess` is exposed in the test copy of the module;
+the production interface is unchanged. These checks establish software behavior
+for restricted networks, not independent scientific accuracy of their NSE states.
+The existing independent NSE validation supplies the ordinary-network comparison.
+
+Run the same index checks with host worker scratch enabled in a separate directory:
+
+```sh
+OMP_NUM_THREADS=2 OMP_DYNAMIC=FALSE make -C test/unit CMODE=DEBUG \
+    OPENMP_MODE=ON BUILD_DIR=build/nse-debug-omp nse-index-test
+```
+
+The output records the number of workers that executed the checks.

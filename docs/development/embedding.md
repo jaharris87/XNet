@@ -438,7 +438,7 @@ solver storage or require applications to inspect `sunet` or `netwinv`.
 | `density` | Positive finite g/cm^3; held constant during the burn. |
 | `temperature` | Positive finite K, in/out. With `iheat<=0`, its caller value is preserved on successful return; with `iheat>0`, temperature is coupled implicitly. Internal/output `T9` uses GK. |
 | `mass_fraction(species,zone)` | Nonnegative finite raw `X`; row `i` corresponds to `network%names(i)`. No normalization or automatic application-species mapping. Internal abundances are `Y=X/A`. |
-| `ye` | Finite input in `[0,1]`, in/out. Successful steps recompute it from the accepted composition, including with fixed temperature. |
+| `ye` | Finite input in `(0,1]`, in/out. Active composition, including auxiliary matter, must have positive electron fraction. Successful steps recompute it from the accepted composition, including with fixed temperature. |
 | `aux_x`, `aux_a`, `aux_z` | Fixed reservoir mass fraction, mass number and charge. `0<=aux_x<=1`, `0<=aux_z<=aux_a`; positive mass requires positive A. Zero auxiliary mass means no reservoir. |
 | `restart_dt_s` | Nonnegative seconds, in/out; a startup hint and historical timestep result, as described below. |
 | `neutrino_loss` | Integrated weak-reaction neutrino energy loss in erg/g; separate from unsupported incident-neutrino histories. |
@@ -928,7 +928,7 @@ Call xnet_nse_composition(density=density_scalar,temperature=temperature_scalar,
 Import `xnet_nse_composition` from `xnet_api`. Declare the three scalar inputs
 and `nse_fraction(:)` as `Real(dp)` and
 allocate the result to `size(network%names)`. Density is finite positive
-g/cm^3, temperature finite positive K, and Ye finite in `[0,1]`. The current
+g/cm^3, temperature finite positive K, and Ye finite in `(0,1]`. The current
 network and screening controls apply. Queries obey the same lifetime and CPU
 thread rules as burns; GPU-library queries are serialized host calls with
 no device-residency flag. They do not load EOS tables again.

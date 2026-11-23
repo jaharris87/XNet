@@ -140,7 +140,7 @@ Contains
     ! Reads the initial abundance file for the zone unless t9start > t9nse and the trajectory
     ! already supplies a valid electron fraction in (0, 1).
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
+    Use nuclear_data, Only: ny, zz
     Use xnet_abundances, Only: y_moment, ystart, xext, aext, zext
     Use xnet_conditions, Only: nstart, tstart, t9start, rhostart, yestart, nh, th, yeh
     Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, szbatch, nzbatchmx, lzactive, iaux
@@ -210,6 +210,11 @@ Contains
             & xext_loc,aext_loc,zext_loc,xnorm,ierr)
           If ( ierr /= 0 ) Then
             Call xnet_terminate('Failed to open initial abundance file: '//trim(inab_file(izone)),ierr)
+          EndIf
+
+          If ( .not. any(yin > 0.0_dp .and. zz > 0.0_dp) ) Then
+            If ( iaux(izb) == 0 .or. .not. (xext_loc > 0.0_dp .and. zext_loc > 0.0_dp) ) &
+              & Call xnet_terminate('Initial composition must have positive electron fraction: '//trim(inab_file(izone)))
           EndIf
 
           If ( iaux(izb) == 0 ) Then

@@ -27,6 +27,25 @@ def run(command: list[str], cwd: Path, log: Path, stdin: str | None = None,
     return result.stdout
 
 
+def check_zero_electrons(xnet_exe: Path, data: Path, table: Path, work: Path) -> None:
+    """A supplied positive Ye must not conceal a pure-neutron composition."""
+    for supplied_ye in (0.0, 0.5):
+        case = work / f"zero-electrons-{supplied_ye}"
+        case.mkdir()
+        (case / data.name).symlink_to(data, target_is_directory=True)
+        (case / table.name).symlink_to(table)
+        (case / "ab_neutrons").write_text(f"Pure neutrons\nn 1.0\nye {supplied_ye}\n")
+        (case / "thermo").write_text("Constant conditions\n0.0\n0.1\n0.0\n"
+                                    "0.0 1.75 1.0e7 0.5\n0.1 1.75 1.0e7 0.5\n")
+        (case / "controls.nml").write_text(
+            f"&xnet_controls\n data_dir='{data.name}', idiag=-2, t9nse=11.0,\n"
+            " inab_files(1)='ab_neutrons', thermo_files(1)='thermo',\n/\n")
+        output = run([str(xnet_exe)], case, case / "xnet.log", expect_failure=True)
+        if "Initial composition must have positive electron fraction" not in output:
+            raise RuntimeError(f"zero-electron input failed for the wrong reason; see {case / 'xnet.log'}")
+    print("PASS standalone rejects zero-electron composition with zero or positive supplied Ye", flush=True)
+
+
 def check_fatal_burns(failure_exe: Path, xnet_exe: Path, data: Path, table: Path, work: Path) -> None:
     """Use real controls/networks to reach integrator-reported and outer step-limit failure."""
     for solver, solver_name in ((1, "BE"), (3, "BDF")):
@@ -273,6 +292,7 @@ def main() -> None:
         nse_result = "; NSE/copy/reinitialize pass" if network == "SN160" else ""
         print(f"PASS {label}: five burn calls equal direct full_net; lifecycle/validation/metadata pass{nse_result}",
               flush=True)
+    check_zero_electrons(xnet_exe, networks["SN160"], table, work)
     check_fatal_burns(failure_exe, xnet_exe, networks["alpha"], table, work)
     print("Real serial CPU library consumer checks passed", flush=True)
 

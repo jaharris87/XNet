@@ -119,6 +119,7 @@ Module xnet_api
   Integer, Parameter :: zone_aux_out_of_range = 4
   Integer, Parameter :: zone_aux_needs_a      = 5
   Integer, Parameter :: zone_no_mass          = 6
+  Integer, Parameter :: zone_no_charge        = 7
 
 Contains
 
@@ -381,8 +382,8 @@ Contains
       message = 'NSE density, temperature and Ye must be finite'
       Return
     EndIf
-    If ( density <= 0.0_dp .or. temperature <= 0.0_dp .or. ye < 0.0_dp .or. ye > 1.0_dp ) Then
-      message = 'NSE density and temperature must be positive and Ye must be in [0,1]'
+    If ( density <= 0.0_dp .or. temperature <= 0.0_dp .or. ye <= 0.0_dp .or. ye > 1.0_dp ) Then
+      message = 'NSE density and temperature must be positive and Ye must be in (0,1]'
       Return
     EndIf
     Call nse_solve(density,temperature*kelvin_to_gk,ye)
@@ -911,7 +912,7 @@ Contains
     ! Clear device loss here; the public entry point has already cleared the host output.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
-    Use nuclear_data, Only: ny
+    Use nuclear_data, Only: ny, zz
     Use xnet_controls, Only: gpu_queue
     Implicit None
 
@@ -931,6 +932,7 @@ Contains
     Integer :: nz, izone, k
     Integer, Allocatable :: validation(:)
     Real(dp), Allocatable :: mass_sum(:)
+    Logical, Allocatable :: has_charge(:)
     Real(dp) :: total_mass
     Logical :: finite_state, negative_mass
 
@@ -952,7 +954,7 @@ Contains
       Return
     EndIf
 
-    Allocate (validation(nz),mass_sum(nz))
+    Allocate (validation(nz),mass_sum(nz),has_charge(nz))
     validation = zone_inactive
     Where ( active ) validation = zone_ok
 
@@ -973,16 +975,17 @@ Contains
     Else
       ! Scientific arrays are caller-mapped. Only the temporary validation storage is owned here.
       !XDIR XENTER_DATA XASYNC(gpu_queue) &
-      !XDIR XCOPYIN(validation) XCREATE(mass_sum)
+      !XDIR XCOPYIN(validation) XCREATE(mass_sum,has_charge)
     EndIf
 
     ! Check the primary state in either memory space, without reading inactive zones.
     !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
     !XDIR XPRIVATE(total_mass,finite_state,negative_mass) &
-    !XDIR XPRESENT(validation,mass_sum,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
+    !XDIR XPRESENT(validation,mass_sum,has_charge,zz,density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss)
     Do izone = 1, nz
       If ( on_device ) neutrino_loss(izone) = 0.0_dp
       mass_sum(izone) = 0.0_dp
+      has_charge(izone) = .false.
       If ( validation(izone) == zone_inactive .or. validation(izone) == zone_not_finite ) Cycle
       finite_state = .true.
       If ( on_device ) Then
@@ -999,7 +1002,7 @@ Contains
       If ( .not. finite_state ) Then
         validation(izone) = zone_not_finite
       ElseIf ( density(izone) <= 0.0_dp .or. temperature(izone) <= 0.0_dp .or. &
-        & ye(izone) < 0.0_dp .or. ye(izone) > 1.0_dp .or. restart_dt_s(izone) < 0.0_dp .or. negative_mass ) Then
+        & ye(izone) <= 0.0_dp .or. ye(izone) > 1.0_dp .or. restart_dt_s(izone) < 0.0_dp .or. negative_mass ) Then
         ! Primary-state errors take precedence over any auxiliary nonfinite values.
         validation(izone) = zone_out_of_range
       Else
@@ -1008,6 +1011,8 @@ Contains
         !XDIR XLOOP_SERIAL(1)
         Do k = 1, ny
           total_mass = total_mass + mass_fraction(k,izone)
+          ! For nonnegative abundances, positive Ye requires some charged matter.
+          If ( mass_fraction(k,izone) > 0.0_dp .and. zz(k) > 0.0_dp ) has_charge(izone) = .true.
         EndDo
         mass_sum(izone) = total_mass
       EndIf
@@ -1016,7 +1021,7 @@ Contains
     If ( present(aux_x) ) Then
       !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
       !XDIR XPRIVATE(finite_state) &
-      !XDIR XPRESENT(validation,mass_sum,aux_x,aux_a,aux_z)
+      !XDIR XPRESENT(validation,mass_sum,has_charge,aux_x,aux_a,aux_z)
       Do izone = 1, nz
         If ( validation(izone) /= zone_ok ) Cycle
         finite_state = .true.
@@ -1031,13 +1036,21 @@ Contains
           validation(izone) = zone_aux_needs_a
         ElseIf ( mass_sum(izone) + aux_x(izone) <= 0.0_dp ) Then
           validation(izone) = zone_no_mass
+        ElseIf ( .not. has_charge(izone) ) Then
+          If ( .not. (aux_x(izone) > 0.0_dp .and. aux_z(izone) > 0.0_dp) ) &
+            & validation(izone) = zone_no_charge
         EndIf
       EndDo
     Else
       !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
-      !XDIR XPRESENT(validation,mass_sum)
+      !XDIR XPRESENT(validation,mass_sum,has_charge)
       Do izone = 1, nz
-        If ( validation(izone) == zone_ok .and. mass_sum(izone) <= 0.0_dp ) validation(izone) = zone_no_mass
+        If ( validation(izone) /= zone_ok ) Cycle
+        If ( mass_sum(izone) <= 0.0_dp ) Then
+          validation(izone) = zone_no_mass
+        ElseIf ( .not. has_charge(izone) ) Then
+          validation(izone) = zone_no_charge
+        EndIf
       EndDo
     EndIf
 
@@ -1045,7 +1058,7 @@ Contains
       !XDIR XUPDATE XWAIT(gpu_queue) &
       !XDIR XHOST(validation)
       !XDIR XEXIT_DATA XASYNC(gpu_queue) &
-      !XDIR XDELETE(validation,mass_sum)
+      !XDIR XDELETE(validation,mass_sum,has_charge)
       !XDIR XWAIT(gpu_queue)
     EndIf
 
@@ -1055,7 +1068,7 @@ Contains
       message = zone_error_message(validation(izone))
       Exit
     EndDo
-    Deallocate (validation,mass_sum)
+    Deallocate (validation,mass_sum,has_charge)
 
     Return
   End Subroutine validate_inputs
@@ -1081,6 +1094,8 @@ Contains
       text = 'Positive auxiliary mass requires positive A'
     Case (zone_no_mass)
       text = 'Active-zone composition must contain positive mass'
+    Case (zone_no_charge)
+      text = 'Active-zone composition must have positive electron fraction'
     Case Default
       text = ' '
     End Select

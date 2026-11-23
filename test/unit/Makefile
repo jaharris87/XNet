@@ -154,7 +154,7 @@ BUILD_NET_OBJECTS := \
 .PHONY: test eos-test screening-test real-ma48-test real-pardiso-mkl-test clean production-xnet model-input-test \
   surrogate-underflow-trap-test surrogate-verifier sparse-lifecycle-openmp-test real-pardiso-mkl-openmp-test
 
-test: eos-test screening-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
+test: eos-test screening-test ffn-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
     $(CONTROLS_TEST_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
     $(SURROGATE_UNDERFLOW_TEST) \
     $(SPARSE_DATA_EXE) \
@@ -857,3 +857,18 @@ $(BUILD_NET_BUILD_DIR)/reaclib_reader.o: $(BUILD_NET_SOURCE_DIR)/reaclib_reader.
 
 clean:
 	rm -rf build
+
+# FFN interpolation uses the production modules already built for preprocessing.
+FFN_TEST_EXE := $(PREPROCESS_BUILD_DIR)/ffn_tests
+FFN_TEST_OBJECTS := $(addprefix $(PREPROCESS_BUILD_DIR)/,xnet_types.o xnet_constants.o \
+  xnet_parallel_stubs.o xnet_util.o xnet_controls.o xnet_conditions.o xnet_fd.o xnet_ffn.o test_xnet_ffn.o)
+
+.PHONY: ffn-test
+ffn-test: $(FFN_TEST_EXE)
+	@$(FFN_TEST_EXE)
+
+$(PREPROCESS_BUILD_DIR)/test_xnet_ffn.o: test_xnet_ffn.F90 $(PREPROCESS_BUILD_DIR)/xnet_ffn.o
+	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
+
+$(FFN_TEST_EXE): $(FFN_TEST_OBJECTS)
+	$(LDR) -o $@ $^ $(LDFLAGS)

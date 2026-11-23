@@ -17,6 +17,7 @@ Contains
       & new_unittest('initial abundance reader missing file outputs', test_missing_file_outputs), &
       & new_unittest('initial abundance reader valid file', test_valid_file), &
       & new_unittest('partial final abundance record', test_partial_record), &
+      & new_unittest('zero-charge reader input before normalization', test_neutral_file), &
       & new_unittest('trajectory reader normal EOF status', test_thermo_eof) ]
 
     Return
@@ -137,6 +138,30 @@ Contains
     Call check(error,yein,0.5_dp)
     Return
   End Subroutine test_partial_record
+
+  Subroutine test_neutral_file(error)
+    Use, Intrinsic :: ieee_arithmetic, Only: ieee_is_finite
+    Use model_input_ascii, Only: read_inab_file
+    Use nuclear_data, Only: initialize_nuclear_fixture
+    Implicit None
+    Type(error_type), Allocatable, Intent(out) :: error
+    Character(80) :: description
+    Real(dp) :: yein, yin(2), xext, aext, zext, xnet
+    Integer :: ierr, lun
+
+    Call initialize_nuclear_fixture
+    Open(newunit=lun,file='model-input-neutral',status='replace')
+    Write(lun,'(a)') 'out-of-network neutrons'
+    Write(lun,'(a)') 'n 1.0 ye 0.0 xx 0.0 xx 0.0'
+    Close(lun)
+    Call read_inab_file('model-input-neutral',description,yein,yin,xext,aext,zext,xnet,ierr)
+    Open(newunit=lun,file='model-input-neutral',status='old')
+    Close(lun,status='delete')
+    Call check(error,ierr /= 0)
+    If ( allocated(error) ) Return
+    Call check(error,all(ieee_is_finite(yin)))
+    Return
+  End Subroutine test_neutral_file
 
   Subroutine test_thermo_eof(error)
     Use model_input_ascii, Only: read_thermo_file

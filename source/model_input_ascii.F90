@@ -140,7 +140,7 @@ Contains
     ! Reads the initial abundance file for the zone unless t9start > t9nse and the trajectory
     ! already supplies a valid electron fraction in (0, 1).
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
+    Use nuclear_data, Only: ny, zz
     Use xnet_abundances, Only: y_moment, ystart, xext, aext, zext
     Use xnet_conditions, Only: nstart, tstart, t9start, rhostart, yestart, nh, th, yeh
     Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, szbatch, nzbatchmx, lzactive, iaux
@@ -210,6 +210,11 @@ Contains
             & xext_loc,aext_loc,zext_loc,xnorm,ierr)
           If ( ierr /= 0 ) Then
             Call xnet_terminate('Failed to open initial abundance file: '//trim(inab_file(izone)),ierr)
+          EndIf
+
+          If ( .not. any(yin > 0.0_dp .and. zz > 0.0_dp) ) Then
+            If ( iaux(izb) == 0 .or. .not. (xext_loc > 0.0_dp .and. zext_loc > 0.0_dp) ) &
+              & Call xnet_terminate('Initial composition must have positive electron fraction: '//trim(inab_file(izone)))
           EndIf
 
           If ( iaux(izb) == 0 ) Then
@@ -345,7 +350,10 @@ Contains
         & sum(yin(:)),xnet,xnet,znet
 
       ! Account for out-of-network species via an auxiliary nucleus or normalize in-network mass
-      If ( yext > 0.0_dp .and. xnet < 1.0_dp .and. znet < yein ) Then
+      If ( znet <= 0.0_dp .and. yein <= 0.0_dp ) Then
+        ierr = 1
+        Write(lun_stderr,'(2a)') 'Initial composition must have positive electron fraction: ',trim(inab_file)
+      ElseIf ( yext > 0.0_dp .and. xnet < 1.0_dp .and. znet < yein ) Then
         xext = 1.0_dp - xnet
         aext = xext / yext
         If ( yein <= 0.0_dp .or. yein >= 1.0_dp ) Then
@@ -357,6 +365,9 @@ Contains
         EndIf
         If ( idiag >= 1 ) Write(lun_diag,"(a,4es15.7)") 'yext, xext, aext, zext: ', &
           & yext,xext,aext,zext
+      ElseIf ( xnet <= 0.0_dp ) Then
+        ierr = 1
+        Write(lun_stderr,'(2a)') 'Initial abundance file contains no in-network mass: ',trim(inab_file)
       Else
         xext = 0.0_dp
         aext = 1.0_dp

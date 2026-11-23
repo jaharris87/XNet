@@ -232,6 +232,33 @@ end module
     )
 
 
+def check_helmholtz_openmp(work: pathlib.Path, environment: Mapping[str, str]) -> None:
+    # HELMHOLTZ has shared external COMMON-block storage. Reject XNet's host
+    # OpenMP mode for this provider before source paths or product rules run.
+    helmholtz_source = work / "helmholtz.F90"
+    helmholtz_source.write_text("! Make selection fixture; no compilation.\n", encoding="utf-8")
+    external_source = work / "application-eos.F90"
+    external_source.write_text("! Make selection fixture; no compilation.\n", encoding="utf-8")
+    common = ("MACHINE=generic", "PE_ENV=GNU", "MPI_MODE=OFF", "GPU_MODE=OFF",
+              "OPENACC_MODE=OFF", "OPENMP_OL_MODE=OFF", "MATRIX_SOLVER=dense",
+              f"HELMHOLTZ_PATH={work}")
+    for goal in ("xnet", "libxnet", "print-CPP_DEFINITION_FLAGS"):
+        result = make(f"BUILD_DIR={work / ('helmholtz-openmp-' + goal)}", *common,
+                      "EOS=HELMHOLTZ", "OPENMP_MODE=ON", "-n", goal,
+                      environment=environment)
+        require_failure(result, "EOS=HELMHOLTZ does not support OPENMP_MODE=ON")
+    supported = (("HELMHOLTZ", "OFF"), ("STARKILLER", "OFF"),
+                 ("STARKILLER", "ON"), ("EXTERNAL", "OFF"),
+                 ("EXTERNAL", "ON"))
+    for eos, host_openmp in supported:
+        options = (*common, f"BUILD_DIR={work / ('eos-' + eos.lower() + '-' + host_openmp.lower())}",
+                   f"EOS={eos}", f"OPENMP_MODE={host_openmp}")
+        if eos == "EXTERNAL":
+            options += (f"EOS_SOURCE={external_source}",)
+        require_success(make(*options, "-n", "print-CPP_DEFINITION_FLAGS",
+                             environment=environment))
+
+
 def check_library_selection(
     work: pathlib.Path, environment: Mapping[str, str], ma48_dir: pathlib.Path
 ) -> None:
@@ -531,6 +558,7 @@ def main() -> int:
             assert (optimized / "bin" / executable).is_file()
 
         check_external_eos(work, generic_environment)
+        check_helmholtz_openmp(work, generic_environment)
 
         config = (optimized / "config.txt").read_text(encoding="utf-8")
         assert config.startswith("XNET_CONFIG_SCHEMA=1\n")

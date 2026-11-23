@@ -44,6 +44,9 @@ endif
 ifneq ($(filter $(EOS),$(VALID_EOS)),$(EOS))
   $(error unsupported EOS '$(EOS)')
 endif
+ifeq ($(EOS)$(OPENMP_MODE),HELMHOLTZON)
+  $(error EOS=HELMHOLTZ does not support OPENMP_MODE=ON; use OPENMP_MODE=OFF or EOS=STARKILLER)
+endif
 ifneq ($(filter $(MATRIX_SOLVER),$(VALID_SOLVER)),$(MATRIX_SOLVER))
   $(error unsupported MATRIX_SOLVER '$(MATRIX_SOLVER)')
 endif

@@ -353,7 +353,8 @@ $(DIAGNOSTIC_DIR):
 
 $(DIAGNOSTIC_DIR)/xnet_evolve.f90: ../../source/xnet_evolve.F90 ../../source/xnet_macros.fh \
     $(XNET_CONFIG) | $(DIAGNOSTIC_DIR)
-	sed '/^  Private/a\  Public :: terminate_on_zone_failure' '$<' | $(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) - > '$@'
+	sed 's/^  Private$$/  Private; Public :: terminate_on_zone_failure/' '$<' > '$@.exposed'
+	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$@.exposed' > '$@'
 
 $(DIAGNOSTIC_DIR)/xnet_evolve.o: $(DIAGNOSTIC_DIR)/xnet_evolve.f90 $(XNET_CONFIG)
 	cd '$(DIAGNOSTIC_DIR)' && $(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -c '$(notdir $<)' -o '$(notdir $@)'

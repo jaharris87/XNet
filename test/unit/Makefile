@@ -16,6 +16,7 @@ SURROGATE_CHECK_EXE := $(BUILD_DIR)/surrogate_check_tests
 UNDERFLOW_BUILD_DIR := $(BUILD_DIR)/underflow
 UNDERFLOW_SURROGATE_CHECK_EXE := $(UNDERFLOW_BUILD_DIR)/surrogate_check_tests
 UNDERFLOW_MODULE_FLAGS := -J$(UNDERFLOW_BUILD_DIR) -I$(UNDERFLOW_BUILD_DIR) -I$(XNET_DIR)
+NSE_INDEX_EXE := $(BUILD_DIR)/nse_index_tests
 NSE_VALIDATION_EXE := $(BUILD_DIR)/nse_scientific_validation_tests
 NSE_VALIDATION_DIR := $(ROOT_DIR)/test/nse_validation
 NSE_VALIDATION_NETWORK_DIR := $(NSE_VALIDATION_DIR)/network
@@ -152,9 +153,9 @@ BUILD_NET_OBJECTS := \
 .DEFAULT_GOAL := test
 
 .PHONY: test eos-test screening-test real-ma48-test real-pardiso-mkl-test clean production-xnet model-input-test \
-  surrogate-underflow-trap-test surrogate-verifier sparse-lifecycle-openmp-test real-pardiso-mkl-openmp-test
+  surrogate-underflow-trap-test surrogate-verifier sparse-lifecycle-openmp-test real-pardiso-mkl-openmp-test nse-index-test
 
-test: eos-test screening-test ffn-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
+test: eos-test screening-test ffn-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_VALIDATION_EXE) $(NSE_INDEX_EXE) $(PREPROCESS_DIRECT_EXE) \
     $(CONTROLS_TEST_EXE) $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) surrogate-verifier \
     $(SURROGATE_UNDERFLOW_TEST) \
     $(SPARSE_DATA_EXE) \
@@ -169,6 +170,8 @@ test: eos-test screening-test ffn-test $(TEST_EXE) $(SURROGATE_CHECK_EXE) $(NSE_
 	  $(abspath ../Data_SN231) $(abspath $(HELM_TABLE))
 	@PYTHONDONTWRITEBYTECODE=1 python3 $(NSE_VALIDATION_DIR)/test_reference_tooling.py
 	@$(NSE_VALIDATION_EXE) $(NSE_VALIDATION_NETWORK_DIR) $(NSE_VALIDATION_REFERENCE)
+	@$(NSE_INDEX_EXE) $(NSE_VALIDATION_NETWORK_DIR)/netwinv
+	@$(NSE_INDEX_EXE) $(ROOT_DIR)/test/Data_CNO/netwinv
 	@bash run_preprocess_contracts.sh $(PREPROCESS_FIXTURE_DIR) $(PREPROCESS_WORK_DIR) \
 	  $(abspath $(PREPROCESS_DIRECT_EXE)) $(abspath $(PREPROCESS_NET_SETUP_EXE)) \
 	  $(abspath $(PREPROCESS_VERIFY_EXE))
@@ -250,6 +253,17 @@ $(TEST_EXE): $(OBJECTS)
 
 $(NSE_VALIDATION_EXE): $(NSE_VALIDATION_OBJECTS)
 	$(LDR) -o $@ $(NSE_VALIDATION_OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+
+$(NSE_INDEX_EXE): $(filter-out $(BUILD_DIR)/test_xnet_contracts.o,$(OBJECTS)) $(BUILD_DIR)/test_nse_indices.o
+	$(LDR) -o $@ $^ $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+
+$(BUILD_DIR)/test_nse_indices.o: test_nse_indices.F90 $(BUILD_DIR)/xnet_nse.o | $(BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
+
+nse-index-test: $(NSE_INDEX_EXE)
+	$(NSE_INDEX_EXE) $(NSE_VALIDATION_NETWORK_DIR)/netwinv
+	$(NSE_INDEX_EXE) $(ROOT_DIR)/test/Data_CNO/netwinv
+
 
 $(SURROGATE_CHECK_EXE): $(SURROGATE_CHECK_OBJECTS)
 	$(LDR) -o $@ $(SURROGATE_CHECK_OBJECTS) $(LDFLAGS)
@@ -357,8 +371,9 @@ $(BUILD_DIR)/xnet_nnu.o: $(XNET_DIR)/xnet_nnu.F90 \
     $(BUILD_DIR)/xnet_test_stubs.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
-$(NSE_TEST_SOURCE): $(XNET_DIR)/xnet_nse.F90 | $(BUILD_DIR)
-	cp $< $@
+$(NSE_TEST_SOURCE): $(XNET_DIR)/xnet_nse.F90 Makefile | $(BUILD_DIR)
+	# Expose only the initial-guess routine in the test copy.
+	sed 's/Public :: nse_initialize, nse_solve, nse_finalize/&, nse_guess/' $< > $@
 
 $(BUILD_DIR)/xnet_nse.o: $(NSE_TEST_SOURCE) $(XNET_DIR)/xnet_macros.fh \
     $(BUILD_DIR)/xnet_constants.o $(BUILD_DIR)/xnet_test_stubs.o \

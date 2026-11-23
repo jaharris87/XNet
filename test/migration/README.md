@@ -49,4 +49,4 @@ cover absent optional titles at 999 records (EOF defaults) versus 1000/1001
 records (unsupported v8 fall-through, rejected before creating output), a title
 at record 1000, and longer files containing all optional titles. The converter
 deliberately rejects several v8-accepted or undefined forms; the supported
-subset is described in the [migration guide](../../docs/development/runtime-configuration.md#converting-v8-ascii-controls).
+subset is described in the [migration guide](../../docs/running-xnet.md#converting-v8-ascii-controls).

@@ -234,7 +234,7 @@ recipe, not a support claim.
 
 `make -j libxnet` builds `lib/libxnet.a`, module files, and `xnet-config.mk`
 under the selected build directory. The archive excludes the standalone and
-utility main programs. See [the Fortran library API guide](embedding.md) for the public API,
+utility main programs. See [the Fortran library API guide](../library-api.md) for the public API,
 tested configurations, data conventions, external linking, and the remaining
 fatal error paths.
 
@@ -291,7 +291,7 @@ timeouts, reference provenance, and comparison policy.
 The stand-alone driver reads `controls.nml` from its working directory. Its
 `xnet_controls` namelist, compiled defaults, layering rules, and migration from
 historical controls are documented in
-[`runtime-configuration.md`](runtime-configuration.md). The driver does not
+[running standalone XNet](../running-xnet.md). The driver does not
 select the former positional `control` parser.
 
 Historical problems retain their source inputs for provenance, but maintained
@@ -307,7 +307,7 @@ generated results, or comparison data before changing them.
 
 The older shell drivers are historical recipe producers: they assemble
 positional `control` files, which the current executable does not read. Use the
-[offline converter](runtime-configuration.md#converting-v8-ascii-controls) to
+[offline converter](../running-xnet.md#converting-v8-ascii-controls) to
 migrate an assembled input; conversion alone does not validate a physical run.
 The drivers also have unreliable pass/fail reporting.
 

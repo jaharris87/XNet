@@ -1,4 +1,10 @@
-! Thermodynamics adapter for the bundled Starkiller Helmholtz EOS.
+!***************************************************************************************************
+! xnet_eos_starkiller.F90
+! xnet_eos_interface provider for the bundled Starkiller Helmholtz EoS (tools/starkiller-helmholtz).
+! It shows the interface an application implements for EOS=EXTERNAL, including the device
+! directive on the evaluation routine.
+!***************************************************************************************************
+
 #include "xnet_macros.fh"
 
 Module xnet_eos_interface

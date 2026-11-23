@@ -12,7 +12,7 @@ FENCE = f"```fortran\n{SOURCE}```\n"
 
 class QuickstartSelectionTests(unittest.TestCase):
     def test_current_guide(self):
-        guide = Path(__file__).resolve().parents[2] / "docs/development/embedding.md"
+        guide = Path(__file__).resolve().parents[2] / "docs/library-api.md"
         source = extract_quickstart(guide.read_text())
         self.assertTrue(source.startswith("Program quickstart\n"))
         self.assertTrue(source.endswith("End Program quickstart\n"))

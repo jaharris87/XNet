@@ -53,7 +53,7 @@ $(BUILD_DIR):
 	mkdir -p '$@'
 
 # Compile the guide's named program, rather than maintaining a second example.
-$(BUILD_DIR)/quickstart.f90: ../../docs/development/embedding.md extract_quickstart.py | $(BUILD_DIR)
+$(BUILD_DIR)/quickstart.f90: ../../docs/library-api.md extract_quickstart.py | $(BUILD_DIR)
 	python3 -B extract_quickstart.py '$<' '$@'
 
 $(BUILD_DIR)/quickstart.o: $(BUILD_DIR)/quickstart.f90 $(XNET_CONFIG)

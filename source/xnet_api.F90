@@ -15,7 +15,7 @@
 !
 ! Public entry points appear first; private setup, batch execution, validation, output and timing
 ! helpers follow. Application examples and the full argument reference are in
-! docs/development/embedding.md. Application code needs only Use xnet_api, Only: ... .
+! docs/library-api.md. Application code needs only Use xnet_api, Only: ... .
 !***************************************************************************************************
 
 #include "xnet_macros.fh"

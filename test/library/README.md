@@ -14,7 +14,7 @@ Use a different caller `BUILD_DIR` when checking another production
 configuration, for example `BUILD_DIR=build-debug` for a debug archive.
 
 The normal `test` target also extracts `Program quickstart` from the Fortran
-fence in the [library guide](../../docs/development/embedding.md), compiles it
+fence in the [library guide](../../docs/library-api.md), compiles it
 with `xnet-config.mk`, and runs it with copies of the four documented alpha
 ASCII inputs. Missing, duplicate or incomplete examples fail selection. Its
 owned runs and process log are under `BUILD_DIR/quickstart-runs/`; the guide's

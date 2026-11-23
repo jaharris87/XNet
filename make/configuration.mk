@@ -73,6 +73,9 @@ else
   ifneq ($(words $(filter ON,$(OPENACC_MODE) $(OPENMP_OL_MODE))),1)
     $(error GPU_MODE=ON requires exactly one accelerator directive mode)
   endif
+  ifeq ($(OPENMP_OL_MODE)$(OPENMP_MODE),ONON)
+    $(error OpenMP target GPU builds require OPENMP_MODE=OFF; the application may use OpenMP elsewhere)
+  endif
   ifeq ($(GPU_BACKEND),CUDA)
     ifeq ($(filter $(GPU_LAPACK_VER),CUBLAS MAGMA),)
       $(error CUDA requires GPU_LAPACK_VER=CUBLAS or MAGMA)

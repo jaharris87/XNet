@@ -87,6 +87,10 @@ def check_host_openmp_flags(
             "print-GPU_DIRECTIVE_FLAGS", "print-CPP_DEFINITION_FLAGS",
             environment=dict(clean_environment, **extra_environment),
         )
+        if host == "ON" and "OPENMP_OL_MODE=ON" in options:
+            require_failure(result, "OpenMP target GPU builds require OPENMP_MODE=OFF")
+            assert not (flags_work / name).exists(), result.stdout + result.stderr
+            continue
         require_success(result)
         values = dict(line.split(" = ", 1) for line in result.stdout.splitlines()
                       if " = " in line)
@@ -101,13 +105,27 @@ def check_host_openmp_flags(
             macro = "-DXNET_OMP_OL" if "OPENMP_OL_MODE=ON" in options else "-DXNET_OACC"
             assert macro in definitions, (name, result.stdout)
         if "OPENMP_OL_MODE=ON" in options:
-            # CCE spells both contributions -fopenmp. Presence alone could
-            # accept the host flag after the provider append was suppressed.
-            assert compiled_flags.count("-fopenmp") == 1 + (host == "ON"), (name, result.stdout)
+            # CCE still needs the directive flag with XNet's host teams disabled.
+            assert compiled_flags.count("-fopenmp") == 1, (name, result.stdout)
         for definition in caller_defines:
             assert definition in definitions, (name, result.stdout)
         if caller_defines:
             assert "-O1" in compiled_flags, (name, result.stdout)
+
+    # Reject the combined selector before provider paths or product recipes,
+    # for standalone and library builds as well as configuration queries.
+    for backend, lapack in (("CUDA", "CUBLAS"), ("HIP", "ROCM")):
+        for goal in ("xnet", "libxnet", "print-CPP_DEFINITION_FLAGS"):
+            build = flags_work / f"target-host-{backend}-{goal}"
+            result = make(
+                f"BUILD_DIR={build}", "MACHINE=generic", "PE_ENV=GNU", "MPI_MODE=OFF",
+                "GPU_MODE=ON", f"GPU_BACKEND={backend}", f"GPU_LAPACK_VER={lapack}",
+                "OPENACC_MODE=OFF", "OPENMP_OL_MODE=ON", "OPENMP_MODE=ON",
+                f"HIPFORT_DIR={flags_work / 'missing-hipfort'}", "-n", goal,
+                environment=clean_environment,
+            )
+            require_failure(result, "OpenMP target GPU builds require OPENMP_MODE=OFF")
+            assert not build.exists(), result.stdout + result.stderr
 
 
 def check_external_eos(work: pathlib.Path, environment: Mapping[str, str]) -> None:

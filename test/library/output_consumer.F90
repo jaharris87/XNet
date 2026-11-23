@@ -85,17 +85,17 @@ Program output_consumer
     Call check(Index(message,'Zone 2, zone_id [i,j,k,block] = [') == 1,'failure preserves original lane/IDs')
     Call check(Index(message,'host must terminate') > 0,'failure requires host termination')
     Call check(steps == 0,'failed burn does not report successful completion')
-    Call assert_closed('ts_call1_lane2')
-    Call assert_closed('ev_call1_lane2')
+    Call assert_closed('ts_call1_zone2')
+    Call assert_closed('ev_call1_zone2')
     Write(*,'(a)') 'OUTPUT_FATAL_CHECKS_PASSED'
     ! The failed instance is not reused, and its physical outputs are not consumed.
     Stop
   EndIf
 
   If ( mode == 'open_failure' .or. mode == 'ascii_open_failure' .or. mode == 'collision' ) Then
-    filename = 'ts_call1_lane3'
-    If ( mode == 'ascii_open_failure' ) filename = 'ev_call1_lane3'
-    If ( mode == 'collision' ) filename = 'ts_call1_lane1'
+    filename = 'ts_call1_zone3'
+    If ( mode == 'ascii_open_failure' ) filename = 'ev_call1_zone3'
+    If ( mode == 'collision' ) filename = 'ts_call1_zone1'
     Open(newunit=unit,file=Trim(filename),status='new',action='write')
     Write(unit,'(a)') 'DO NOT CLOBBER'
     Close(unit)
@@ -106,9 +106,9 @@ Program output_consumer
     Call check(ierr == xnet_invalid,'existing output path is a checked error')
     Call check(Index(message,Trim(filename)) > 0,'open error identifies concrete filename')
     Call check(All(x == saved_x) .and. All(temperature == saved_temperature),'open error preserves caller state')
-    Call assert_closed('ts_call1_lane1')
-    Call assert_closed('ts_call1_lane3')
-    Call assert_closed('ev_call1_lane1')
+    Call assert_closed('ts_call1_zone1')
+    Call assert_closed('ts_call1_zone3')
+    Call assert_closed('ev_call1_zone1')
     Call assert_closed(Trim(filename))
     Call burn('after_open_error',lanes,0.02_dp)
     Call check(ierr == xnet_success,'valid burn after checked open failure')
@@ -166,12 +166,12 @@ Contains
   End Subroutine initialize
 
   Subroutine check_empty_output_mask
-    Use xnet_controls, Only: zb_lo, zb_hi
+    Use xnet_controls, Only: nzbatchmx
     Use xnet_output, Only: ts_output
     Use xnet_timers, Only: timer_output
     Implicit None
-    Real(dp) :: zeros(zb_lo:zb_hi), before
-    Logical :: empty_mask(zb_lo:zb_hi)
+    Real(dp) :: zeros(1:nzbatchmx), before
+    Logical :: empty_mask(1:nzbatchmx)
 
     zeros = 0.0_dp
     empty_mask = .false.
@@ -240,12 +240,12 @@ Contains
       output_call = output_call + 1
       Do j = 1, n
         If ( .not. active(j) ) Cycle
-        Write(filename,'(a,i0,a,i0)') 'ts_call',output_call,'_lane',j
+        Write(filename,'(a,i0,a,i0)') 'ts_call',output_call,'_zone',j
         ! Failed open attempts consume an output-call number; that mode checks paths separately.
         If ( mode /= 'open_failure' .and. mode /= 'collision' ) Then
           Call assert_closed(Trim(filename))
           If ( level >= 2 .and. .not. direct ) Then
-            Write(filename,'(a,i0,a,i0)') 'ev_call',output_call,'_lane',j
+            Write(filename,'(a,i0,a,i0)') 'ev_call',output_call,'_zone',j
             Call assert_closed(Trim(filename))
           EndIf
         EndIf
@@ -261,16 +261,15 @@ Contains
     Use xnet_abundances, Only: y, ystart, xext, aext, zext
     Use xnet_conditions, Only: t, t9, rho, ye_work=>ye, tdel, tdel_old, nt, nstart, tstart, tstop, &
       & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh
-    Use xnet_controls, Only: lzactive, szbatch, nzbatch, iaux, ktot, lun_ts, lun_ev, nzevolve, &
-      & descript, kstmx, kitmx, iweak0, iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, tdel_maxmult, &
-      & iheat, isolv
+    Use xnet_controls, Only: lzactive, szbatch, nzbatch, iaux, ktot, lun_ts, lun_ev, descript, kstmx, kitmx, iweak0,&
+      & iscrn, iconvc, changemx, tolm, tolc, yacc, ymin, tdel_maxmult, iheat, isolv, nzbatchmx
     Use xnet_evolve, Only: full_net
     Use xnet_flux, Only: flx, ifl_orig, ifl_term
     Use xnet_match, Only: mflx
     Implicit None
     Integer, Intent(in) :: n
     Real(dp), Intent(in) :: duration
-    Real(dp) :: denu(nzevolve)
+    Real(dp) :: denu(nzbatchmx)
     Integer :: j, status, failed_zone, sequence
     Character(80) :: input_description(2), reference_description
 
@@ -329,7 +328,7 @@ Contains
     reference_description = data_dir
     Do j = 1, n
       If ( .not. active(j) ) Cycle
-      Write(filename,'(a,i0,a,i0)') 'ts_call',sequence,'_lane',j
+      Write(filename,'(a,i0,a,i0)') 'ts_call',sequence,'_zone',j
       Open(newunit=lun_ts(j),file=Trim(filename),status='new',form='unformatted',action='write')
       Write(lun_ts(j)) descript,reference_description
       Write(lun_ts(j)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv

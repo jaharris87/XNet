@@ -116,7 +116,7 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
         for lane, enabled in enumerate(mask, 1):
             if enabled != "T":
                 continue
-            filename = f"ts_call{sequence}_lane{lane}"
+            filename = f"ts_call{sequence}_zone{lane}"
             expected_inventory.add(filename)
             trace = binary(directory / filename)
             require(trace["a"] == a and trace["z"] == z and trace["ny"] == len(names),

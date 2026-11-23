@@ -13,6 +13,11 @@ struct resource {
 };
 static struct resource resources[RESOURCE_LIMIT];
 static int used, invalid_calls, sync_calls;
+#ifdef TEST_OPENACC
+static void *openacc_stream;
+static int openacc_queries;
+static long long openacc_last_queue;
+#endif
 static int creates[KINDS], destroys[KINDS], failures[KINDS];
 static int create_failures[KINDS], associate_failures[KINDS];
 
@@ -143,6 +148,11 @@ int vendor_reset(void)
     memset(create_failures, 0, sizeof create_failures);
     memset(associate_failures, 0, sizeof associate_failures);
     used = invalid_calls = sync_calls = 0;
+#ifdef TEST_OPENACC
+    openacc_stream = NULL;
+    openacc_queries = 0;
+    openacc_last_queue = 0;
+#endif
     return 0;
 }
 
@@ -209,3 +219,32 @@ int rocblas_set_pointer_mode(void *h, int mode)
     struct resource *r = find(h, SOLVER);
     return r && r->live && mode >= 0 ? 0 : invalid("set pointer mode");
 }
+
+#ifdef TEST_OPENACC
+/* Queue validation belongs to production gpu_init, not this double. Even an
+ * invalid queue obtains a stream here if production validation lets it through.
+ * The tests require invalid values to be rejected before any runtime lookup. */
+void *acc_get_cuda_stream(long long queue)
+{
+    ++openacc_queries;
+    openacc_last_queue = queue;
+    if (!openacc_stream) openacc_stream = allocate(STREAM, 1, NULL);
+    return openacc_stream;
+}
+int vendor_acc_queries(void) { return openacc_queries; }
+long long vendor_acc_last_queue(void) { return openacc_last_queue; }
+void acc_set_cuda_stream(long long queue, void *stream)
+{
+    (void)queue;
+    openacc_stream = stream;
+}
+int acc_get_default_async(void) { return 7; }
+void acc_set_default_async(int queue) { (void)queue; }
+int acc_on_device(int type) { return type == 2; }
+int acc_is_present(void *pointer, size_t bytes)
+{
+    (void)pointer;
+    (void)bytes;
+    return 0;
+}
+#endif

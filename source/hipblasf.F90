@@ -3,6 +3,8 @@
 ! This file contains the module defining Fortran interfaces for the hipBLAS library
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 module xnet_hipblasf
   !-------------------------------------------------------------------------------------------------
   ! Interface to hipBLAS routines
@@ -35,8 +37,6 @@ module xnet_hipblasf
     hipblasDdgmm
 
   type(c_ptr) :: hipblas_handle = c_null_ptr
-#ifdef XNET_OMP
-  !$omp threadprivate(hipblas_handle)
-#endif
+  !XOMP threadprivate(hipblas_handle)
 
 end module xnet_hipblasf

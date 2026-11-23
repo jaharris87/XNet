@@ -3,6 +3,8 @@
 ! This file contains the module defining Fortran interfaces for the cuSOLVER library
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 module xnet_cusolverf
   !-------------------------------------------------------------------------------------------------
   ! Interface to cuSOLVER routines
@@ -10,9 +12,7 @@ module xnet_cusolverf
   use, intrinsic :: iso_c_binding
 
   type(c_ptr) :: cusolver_handle = c_null_ptr
-#ifdef XNET_OMP
-  !$omp threadprivate(cusolver_handle)
-#endif
+  !XOMP threadprivate(cusolver_handle)
 
   enum, bind(c) !:: cusolverStatus_t
     enumerator :: CUSOLVER_STATUS_SUCCESS = 0

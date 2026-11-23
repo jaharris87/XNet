@@ -68,14 +68,14 @@ callers. The current executable uses `apply_standalone_controls` to enforce its
 file-input requirements and copy the value into the existing module execution
 state. The `xnet_api` lifecycle provides initialization, constant-condition
 batched burns, scalar NSE composition queries, and cleanup for a dense
-instance. A CPU OpenMP build assigns disjoint batch banks and NSE scratch to
-application workers; the application owns the batch loop. Initialization and
-finalization stay outside the fixed worker team. GPU host calls remain
-serialized. CPU and GPU paths share control application,
+instance. A CPU OpenMP build gives each thread its own work arrays and NSE
+scratch; the application owns the batch loop. Initialization and finalization
+run on the initial thread outside application parallel regions. GPU host
+calls remain serialized. CPU and GPU paths share control application,
 network preprocessing and abundance/condition allocation with the standalone
 driver. API burns can write separate per-call timestep histories through the
 existing output routines. Both drivers use `xnet_output` to open binary and ASCII
-files, write their headers, and close the current worker's files. Each driver
+files, write their headers, and close the current thread's files. Each driver
 chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
 [the Fortran library API guide](embedding.md) for status and ownership limits.
@@ -85,7 +85,7 @@ Both frontends load tables with `initialize_network_data` in `reaction_data`
 in `xnet_evolve` once during initialization. The latter reads Jacobian and
 matching data, initializes screening, fluxes, EOS, the selected BE/BDF integrator
 and NSE, and allocates reusable composition, condition and neutrino-history
-storage for all worker batches. Each owning module maps its own arrays.
+storage for every thread's batches. Each module maps its own arrays.
 
 `nhistory` counts allocated history points per zone: standalone passes `nhmx`;
 the API passes `api_history_points` for the start and end of a constant-condition
@@ -129,10 +129,34 @@ in `source/net.F90`. The following files explain the state shared by both paths:
 
 Keep the two composition conventions distinct: standalone abundance files and
 internal arrays use molar abundances `Y = X/A`; `xnet_burn_batch` accepts mass
-fractions `X`. Workspace index `izb` selects a slot in the current worker bank
-`zb_lo:zb_hi`. The corresponding input-zone ordinal is
-`izone = izb + szbatch - zb_lo`; diagnostic mesh labels are the separate
-`zone_id(:,izb)` tuple.
+fractions `X`.
+
+Zones are evolved in batches of up to `nzbatchmx`. Per-zone work arrays are
+indexed by `izb = 1:nzbatchmx`, the position of a zone in the current batch.
+CPU OpenMP builds declare these arrays `THREADPRIVATE` under `XNET_OMP`, so
+each thread has its own descriptors and allocations. Each module allocates,
+maps and releases its per-thread arrays inside parallel regions during setup
+and cleanup. Network tables, output-species selections, BDF coefficient tables
+and external EOS initialization remain shared once per MPI rank.
+
+`nzbatchmx` is the allocated capacity per thread. In the API, the submitted
+size is `nz = size(active)`, including inactive entries, while
+`nzbatch = count(active)` counts the zones to evolve. The API copies all `nz`
+entries into `lzactive(1:nz)` and keeps the same column positions in the
+caller's arrays, even when the mask has gaps. In the standalone driver,
+`nzbatch` is the number of zones in the current batch, and entries
+`1:nzbatch` are active. The standalone zone number is
+`izone = szbatch + izb - 1`, where `szbatch` is the first zone number in that
+batch. The separate `zone_id(:,izb)` tuple holds mesh labels for diagnostics;
+it is not used for array indexing. The `itsout >= 3` progress line keeps
+`(tid-1)*nzbatchmx+izb` in its first column to preserve the diagnostic format.
+
+Host parallel regions and threadprivate declarations use the `XOMP` sentinel in `xnet_macros.fh`, selected
+by `XNET_OMP`; accelerator directives use `XDIR` independently. OpenMP target
+GPU builds require `OPENMP_MODE=OFF` for standalone programs and the library.
+This disables XNet's host teams and threadprivate state even when the compiler
+enables OpenMP for target offload. Application OpenMP elsewhere remains
+independent. CPU batch threading and CUDA/OpenACC selection remain separate.
 
 ## Per-timestep flow
 

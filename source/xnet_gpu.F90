@@ -150,29 +150,21 @@ Module xnet_gpu
   Integer :: active_device = -1
   Logical :: owns_stream = .false.
   ! OpenACC owns queue streams; XNet must never destroy those streams.
-#ifdef XNET_OMP
-  !$omp threadprivate(stream,gpu_initialized,active_device,owns_stream)
-#endif
+  !XOMP threadprivate(stream,gpu_initialized,active_device,owns_stream)
 
 #if defined(XNET_CUDA)
   Logical :: owns_cublas = .false.
   Logical :: owns_cusolver = .false.
-#ifdef XNET_OMP
-  !$omp threadprivate(owns_cublas,owns_cusolver)
-#endif
+  !XOMP threadprivate(owns_cublas,owns_cusolver)
 #elif defined(XNET_HIP)
   Logical :: owns_hipblas = .false.
   Logical :: owns_rocblas = .false.
-#ifdef XNET_OMP
-  !$omp threadprivate(owns_hipblas,owns_rocblas)
-#endif
+  !XOMP threadprivate(owns_hipblas,owns_rocblas)
 #endif
 
 #if defined(XNET_LA_MAGMA)
   Logical :: owns_magma_queue = .false.
-#ifdef XNET_OMP
-  !$omp threadprivate(owns_magma_queue)
-#endif
+  !XOMP threadprivate(owns_magma_queue)
 #endif
 
   !-------------------------------------------------------------------------------------------------
@@ -246,13 +238,9 @@ Contains
       Return
     EndIf
 
-#ifdef XNET_OMP
-    !$omp parallel if(.not. present(gpu_context)) default(shared)
-#endif
+    !XOMP parallel if(.not. present(gpu_context)) default(shared)
     Call init_thread_resources(device,gpu_context,init_status,init_message)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
 
     mydevice = device
     If ( init_status /= 0 ) Then
@@ -264,13 +252,9 @@ Contains
     If ( .not. present(gpu_context) ) Then
       mydevice = -1
       deviceCount = 0
-#ifdef XNET_OMP
-      !$omp parallel default(shared)
-#endif
+      !XOMP parallel default(shared)
       gpu_queue = tid
-#ifdef XNET_OMP
-      !$omp end parallel
-#endif
+      !XOMP end parallel
     EndIf
 #endif
 
@@ -306,9 +290,7 @@ Contains
 
 #if defined(XNET_GPU)
     remaining_active = .false.
-#ifdef XNET_OMP
-    !$omp parallel default(shared) private(thread_status,thread_message)
-#endif
+    !XOMP parallel default(shared) private(thread_status,thread_message)
     Call finalize_thread_resources(thread_status,thread_message)
 
     !$omp critical(xnet_gpu_finalize_status)
@@ -318,9 +300,7 @@ Contains
     EndIf
     If ( gpu_initialized ) remaining_active = .true.
     !$omp end critical(xnet_gpu_finalize_status)
-#ifdef XNET_OMP
-    !$omp end parallel
-#endif
+    !XOMP end parallel
     If ( .not. remaining_active ) mydevice = -1
 #endif
 
@@ -820,7 +800,7 @@ Contains
       EndIf
 
 #if defined(XNET_OACC)
-      If ( queue < int(acc_async_sync) ) Then
+      If ( queue < 0 .and. queue /= int(acc_async_sync) .and. queue /= int(acc_async_noval) ) Then
         thread_status = 1
         thread_message = 'Invalid OpenACC queue'
         Exit setup
@@ -975,9 +955,7 @@ Contains
       EndIf
       !$omp end critical(xnet_gpu_init_status)
     EndIf
-#ifdef XNET_OMP
-    !$omp barrier
-#endif
+    !XOMP barrier
 
     ! Keep partial ownership too: the same finalizer must be able to retry failed rollback.
     resources_created = create_stream

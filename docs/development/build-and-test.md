@@ -130,6 +130,38 @@ make --no-print-directory print-CMODE
 make --no-print-directory print-MATRIX_SOLVER
 ```
 
+## Perlmutter NVIDIA CPU OpenMP stack workaround
+
+For Perlmutter NVIDIA/LibSci dense CPU OpenMP runs, set this in the launch
+environment before starting the process:
+
+```sh
+export OMP_STACKSIZE=16M
+```
+
+This is the [maintainer-selected tested workaround](https://github.com/jaharris87/XNet/issues/192#issuecomment-6805620878),
+not a measured minimum or a project-wide build or runtime default. The tested
+configuration used NVHPC 26.5, PrgEnv-nvidia 8.7.0, CPE and LibSci 26.03,
+`EOS=STARKILLER`, `MATRIX_SOLVER=dense`, `OPENMP_MODE=ON`, and MPI/GPU off.
+The [single-case diagnostic](https://github.com/jaharris87/XNet/issues/192#issuecomment-6784278301)
+and [#195's full CPU suite at `b8607a4e`](https://github.com/jaharris87/XNet/pull/195#issuecomment-6786074563)
+completed with this setting; the latter completed all 28 commands, including
+serial/two/four-worker comparisons, histories, failures and lifecycle checks.
+The later [worker-storage candidate checks at `2d74d79c`](https://github.com/jaharris87/XNet/pull/204#issuecomment-6965021134)
+completed all 38 public CPU/GPU processes with this host-worker setting.
+Their numerical comparisons and [maintainer dispositions](https://github.com/jaharris87/XNet/pull/204#issuecomment-7017135890)
+remain specific to the recorded inputs, sources and configurations; completion
+does not mean that every historical-reference comparison passed.
+
+[`OMP_STACKSIZE`](https://www.openmp.org/spec-html/5.1/openmpse63.html) controls
+stacks for threads created by the OpenMP runtime, not the initial thread's
+process-stack limit. Check and record that limit separately (`ulimit -s` in
+Bash); increasing the process-stack limit does not replace this worker-stack
+setting. This host-worker workaround is not a GPU device-stack setting. The
+original timeout and LibSci fault remain under [#192](https://github.com/jaharris87/XNet/issues/192);
+the successful runs do not establish their full cause or explain private
+application failures.
+
 ## Configuration changes and clean builds
 
 Each build directory contains predictable `obj/`, `mod/`, `pp/`, and
@@ -168,6 +200,15 @@ defaults unchanged. The main selection variables include:
   libraries;
 - `MATRIX_SOLVER` for the Jacobian and linear solver implementation;
 - `EOS` for the equation-of-state implementation.
+
+OpenMP target GPU builds require `OPENMP_MODE=OFF` for both the standalone
+programs and the library. Make rejects `GPU_MODE=ON`, `OPENMP_OL_MODE=ON` and
+`OPENMP_MODE=ON` together. Host parallel regions and threadprivate declarations use the `XOMP` sentinel in
+`xnet_macros.fh`, enabled by `XNET_OMP` when `OPENMP_MODE=ON`; accelerator
+directives use `XDIR` independently. With `OPENMP_MODE=OFF`, XNet's host teams
+and threadprivate state are disabled even when the compiler enables OpenMP
+for target offload. The application may use OpenMP elsewhere. CPU batch
+threading and CUDA/OpenACC selection remain separate.
 
 Each selected path requires its compiler, headers, libraries, and runtime.
 Validate support and numerical behavior for the exact combination used.
@@ -264,9 +305,11 @@ generated results, or comparison data before changing them.
 
 ## Legacy shell test drivers
 
-The older shell drivers remain useful for investigation and historical problem
-runs, but they are secondary to the maintained pytest suite and have unreliable
-pass/fail reporting.
+The older shell drivers are historical recipe producers: they assemble
+positional `control` files, which the current executable does not read. Use the
+[offline converter](runtime-configuration.md#converting-v8-ascii-controls) to
+migrate an assembled input; conversion alone does not validate a physical run.
+The drivers also have unreliable pass/fail reporting.
 
 `test/test_xnet.sh`:
 

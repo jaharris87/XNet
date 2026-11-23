@@ -13,6 +13,23 @@ make -C test/library XNET_CONFIG=../../build/library-test/xnet-config.mk test
 Use a different caller `BUILD_DIR` when checking another production
 configuration, for example `BUILD_DIR=build-debug` for a debug archive.
 
+The normal `test` target also extracts `Program quickstart` from the Fortran
+fence in the [library guide](../../docs/development/embedding.md), compiles it
+with `xnet-config.mk`, and runs it with copies of the four documented alpha
+ASCII inputs. Missing, duplicate or incomplete examples fail selection. Its
+owned runs and process log are under `BUILD_DIR/quickstart-runs/`; the guide's
+source is the only implementation of the example. Run just this check with
+`make -C test/library XNET_CONFIG=... quickstart-test`.
+
+Both hosted GNU workflows reuse their serial build for this suite and build a
+separate GNU OPT dense/STARKILLER CPU `OPENMP_MODE=ON` archive for
+`host-batch-openmp-test`. Their component job keeps the full OPT suite, then
+runs the existing EOS and screening targets with `CMODE=DEBUG` in its separate
+mode directory. MPI, device execution, private providers and facility checks
+remain outside these jobs. Failure uploads add
+only library logs and JSON summaries from the two CI caller directories,
+capped at 1 MiB per file and 10 MiB overall, alongside the existing build logs.
+
 Python 3 is required; there are no additional Python packages. The production
 Starkiller EOS table must be present at its normal repository path. The tests
 use the real dense serial CPU archive and selected EOS; the numerical callers
@@ -58,6 +75,20 @@ partial histories after reported numerical failures. These are CPU software
 and same-source numerical comparisons; they do not qualify GPU output or an
 independent scientific reference.
 
+`make -C test/library XNET_CONFIG=... stop-time-test` runs the focused timestep
+checks included in the CPU `test` target. They reproduce a saved binary64
+stop-time undershoot and distinguish a selected final interval from a one-ulp
+shorter interval. The checks cover initial BE/BDF acceptance, active masks,
+constant steps, thermodynamic feature/variation reductions, BE retries and its
+derivative-based fallback, and BDF NR/error retries, retry-state clearing and
+Nordsieck scaling.
+The test recompiles the production BDF source with its `Private` declarations
+removed in an isolated module directory so it can inspect trial/history state;
+it uses the real alpha network, rates, EOS and dense solver. The existing BDF
+divide/multiply timestep rounding remains unchanged, including constructed
+one-ulp changes in either direction. These are software checks, not new
+scientific reference results or accelerator qualification.
+
 A separate host-only cleanup test recompiles the production API with a
 test GPU resource module in an isolated build subdirectory. It uses real
 CPU workspaces and finalizers, but injects two GPU cleanup failures. It
@@ -87,6 +118,13 @@ before any owned allocation. These tests require a C compiler
 GPU faults. The fake interfaces provide no numerical implementation and are
 not linked into normal consumers. MAGMA's void destructor is outside the
 failure-injection scope.
+
+The OpenACC model calls the production initializer and OpenACC wrapper with
+host-only runtime declarations. It checks nonnegative queue IDs, both named
+special async values, invalid negative IDs, borrowed resources and cleanup.
+Its default special values match NVIDIA's ordering. To check the reverse
+ordering, use a separate `BUILD_DIR` and set
+`XNET_CPP='cpp -DTEST_SWAP_ACC_SPECIALS'` when running `gpu-finalize-test`.
 
 `api_consumer.F90` imports only `xnet_api`, standard intrinsic modules, and a
 test fixture that contains no XNet imports. It links against `libxnet.a` and
@@ -142,6 +180,14 @@ processes. Inactive caller state must remain unchanged and its loss/counters
 must be zero. Metadata names and order are compared with the staged `sunet`;
 all A/Z and energy values are compared with the legacy nuclear-data arrays.
 
+Successful active lanes also compare returned Ye with
+`(sum(X*Z/A) + aux_x*aux_z/aux_a)/(sum(X) + aux_x)`, using public network
+metadata and the submitted auxiliary inputs. Calls without auxiliary arguments
+omit those terms. The arithmetic bound is
+`8*(species_count+2)*epsilon(binary64)*max(abs(Ye),abs(expected_Ye))`;
+it allows rounding in the composition sums and conversions, not integration
+error. This check uses no EOS routine or same-archive reference result.
+
 Validation checks cover invalid controls, duplicate initialization, unsupported
 neutrino capture histories, invalid extents, incomplete auxiliary
 arguments, NaN/Inf input, negative fractions/restart hints, invalid Ye, and an
@@ -196,6 +242,20 @@ make BUILD_NAME=library-batch-omp OPENMP_MODE=ON -j libxnet net_setup
 make -C test/library XNET_CONFIG=../../build/library-batch-omp/xnet-config.mk \
   BUILD_DIR=build-batch-omp host-batch-openmp-test
 ```
+
+For Perlmutter NVIDIA/LibSci dense CPU checks, select `PE_ENV=NVIDIA` and
+`LAPACK_VER=LIBSCI` for the archive and `HOST_OPENMP_FLAGS=-mp=multicore` for
+the caller. Set the tested workaround in the launch environment before
+running the target inside the approved compute allocation:
+
+```sh
+export OMP_STACKSIZE=16M
+```
+
+The [Perlmutter stack guidance](../../docs/development/build-and-test.md#perlmutter-nvidia-cpu-openmp-stack-workaround)
+records the tested NVHPC/CPE/LibSci versions, the separate initial-thread
+process-stack limit and pending current-candidate checks. `16M` is a tested
+workaround value, not a measured minimum or a global default.
 
 The runner checks actual teams of two and four workers with dynamic teams
 disabled and no nested execution. Every worker makes repeated batch calls;
@@ -273,6 +333,8 @@ libraries, `GPU_BACKEND=HIP`, `GPU_LAPACK_VER=ROCM`, `OPENACC_MODE=OFF`, and
 `OPENMP_OL_MODE=ON`, with the installed `HIPFORT_DIR` and `ROCM_DIR`. These
 are build selections, not a claim that every compiler/library combination
 works. Consult the current facility instructions for modules and placement.
+These GPU recipes use `OPENMP_MODE=OFF`; the CPU worker-stack workaround
+above is not a GPU device-stack setting.
 
 The exported `XNET_CPPFLAGS` supplies `xnet_macros.fh`'s include directory and
 the archive's actual accelerator definitions. The caller Makefile uses those
@@ -373,6 +435,12 @@ result. Device outputs are read immediately after the API returns without
 another stream wait, including in the persistent chains. Timings must be
 finite and nonnegative; they are not compared across calls.
 
+Every successful active GPU lane also uses the composition-based Ye check
+above, including the resident chains, producer calls and one-lane allocations.
+Auxiliary inputs are saved before poisoning the host arrays. The application
+outer-batch OpenMP caller retains each batch's auxiliary inputs for the same
+check. Inactive and unsubmitted lanes keep their state-preservation checks.
+
 GPU physical-output comparisons allow for floating-point ordering differences
 from atomic updates and reductions. Temperature and Ye use `rtol=1e-7` and
 `abs(a-b) <= rtol*max(abs(a),abs(b))`; mass fractions use
@@ -459,3 +527,11 @@ checks also confirm that the application maximum-thread setting is unchanged.
 An explicitly requested multi-thread case fails when compiled without host
 OpenMP. These optional checks do not change the default caller flags or claim
 concurrent library entry, application GPU execution or performance.
+
+The CPU `host-batch-openmp-test` also runs `worker_storage_consumer` on alpha
+and SN160 with capacities 4/16 and one/two/four workers. It inspects production
+array shapes, non-zone lower bounds, distinct worker addresses, shared nuclear
+tables, dense matrix/RHS/pivot strides and host pointer arrays. Worker canaries,
+a short call, idle workers and repeated initialize/finalize lifetimes check
+storage isolation and release. This checks CPU ownership, not native device
+mapping, allocator/RSS costs or performance.

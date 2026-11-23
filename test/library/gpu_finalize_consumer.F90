@@ -3,6 +3,9 @@
 ! errors. These checks do not establish recovery from a real GPU failure.
 Module gpu_finalize_vendor
   Use, Intrinsic :: iso_c_binding, Only: C_INT, C_PTR
+#ifdef TEST_OPENACC
+  Use, Intrinsic :: iso_c_binding, Only: C_LONG_LONG
+#endif
   Implicit None
   Integer, Parameter :: resource_stream = 1, resource_blas = 2, resource_solver = 3, caller_solver = 4
   Interface
@@ -46,6 +49,14 @@ Module gpu_finalize_vendor
     End Function
     Subroutine vendor_release_borrowed() Bind(C)
     End Subroutine
+#ifdef TEST_OPENACC
+    Integer(C_INT) Function vendor_acc_queries() Bind(C)
+      Import C_INT
+    End Function
+    Integer(C_LONG_LONG) Function vendor_acc_last_queue() Bind(C)
+      Import C_LONG_LONG
+    End Function
+#endif
   End Interface
 End Module gpu_finalize_vendor
 
@@ -53,6 +64,12 @@ Program gpu_finalize_consumer
   Use, Intrinsic :: iso_c_binding, Only: C_PTR, C_NULL_PTR, C_Associated
   Use xnet_gpu, Only: gpu_init, gpu_finalize, xnet_gpu_t, mydevice, stream
   Use xnet_controls, Only: tid, myid
+#ifdef TEST_OPENACC
+  Use xnet_controls, Only: gpu_queue
+  Use xnet_openaccf, Only: acc_async_sync, acc_async_noval, acc_get_cuda_stream
+  Use iso_c_binding, Only: C_LONG_LONG
+  Use gpu_finalize_vendor, Only: vendor_acc_queries, vendor_acc_last_queue
+#endif
 #if defined(XNET_HIP)
   Use xnet_rocblasf, Only: rocblas_handle
   Use xnet_rocsolverf, Only: rocsolver_handle
@@ -68,6 +85,30 @@ Program gpu_finalize_consumer
   Call Get_Command_Argument(1,scenario)
   Call require(vendor_reset() == 0,'initial vendor state')
   Select Case (Trim(scenario))
+#ifdef TEST_OPENACC
+  Case ('openacc-zero')
+    Call openacc_queue(0,.true.,.false.)
+  Case ('openacc-one')
+    Call openacc_queue(1,.true.,.false.)
+  Case ('openacc-positive')
+    Call openacc_queue(7,.true.,.false.)
+  Case ('openacc-sync')
+    Call openacc_queue(int(acc_async_sync),.true.,.false.)
+  Case ('openacc-noval')
+    Call openacc_queue(int(acc_async_noval),.true.,.false.)
+  Case ('openacc-invalid2')
+    Call openacc_queue(-2,.false.,.false.)
+  Case ('openacc-invalid3')
+    Call openacc_queue(-3,.false.,.false.)
+  Case ('openacc-invalid5')
+    Call openacc_queue(-5,.false.,.false.)
+  Case ('openacc-sync-borrowed')
+    Call openacc_queue(int(acc_async_sync),.true.,.true.)
+  Case ('openacc-noval-borrowed')
+    Call openacc_queue(int(acc_async_noval),.true.,.true.)
+  Case ('openacc-noval-rollback')
+    Call openacc_rollback()
+#endif
   Case ('stream')
     Call retry_one(resource_stream)
   Case ('blas')
@@ -368,6 +409,86 @@ Contains
     Call check_destroys([1,1,1])
     Return
   End Subroutine malformed_initialization
+
+#ifdef TEST_OPENACC
+  Subroutine openacc_queue(queue,valid,borrowed)
+    Implicit None
+    Integer, Intent(in) :: queue
+    Logical, Intent(in) :: valid, borrowed
+    Type(xnet_gpu_t) :: context
+    Integer :: ierr, attempt, queries, counts(3), live(3)
+    Character(512) :: message
+
+    context%queue = queue
+    counts = [0,1,1]
+    live = [1,0,0]
+    If ( borrowed ) Then
+      context%stream = acc_get_cuda_stream(int(queue,C_LONG_LONG))
+      Call supply_handle(context,resource_blas,vendor_borrow(resource_blas,context%stream))
+      Call supply_handle(context,resource_solver,vendor_borrow(resource_solver,context%stream))
+      counts = 0
+      live = 1
+    EndIf
+    Do attempt = 1, 2
+      queries = vendor_acc_queries()
+      Call gpu_init(context,ierr,message)
+      Print '(A,I0,A,I0,2A)', 'OpenACC queue=',queue,' status=',ierr,' message=',Trim(message)
+      If ( valid ) Then
+        Call require(ierr == 0 .and. Len_Trim(message) == 0,'named/nonnegative queue initializes')
+        Call require(gpu_queue == queue,'submitted queue is preserved')
+        Call require(vendor_acc_queries() == queries+1,'one runtime queue lookup')
+        Call require(vendor_acc_last_queue() == int(queue,C_LONG_LONG),'runtime receives submitted queue')
+        Call check_creates(attempt*counts)
+        Call finish(0)
+        Call check_destroys(attempt*counts)
+        Call check_live(live)
+        queries = vendor_acc_queries()
+        Call finish(0)
+        Call check_destroys(attempt*counts)
+        Call require(vendor_acc_queries() == queries,'repeated finalization performs no queue lookup')
+      Else
+        Call require(ierr == 1 .and. Trim(message) == 'Invalid OpenACC queue','invalid negative queue diagnostic')
+        Call require(vendor_acc_queries() == queries,'invalid queue rejected before runtime lookup')
+        Call check_creates([0,0,0])
+        Call finish(0)
+        Call check_destroys([0,0,0])
+        Call check_live([0,0,0])
+      EndIf
+    EndDo
+    ! This releases runtime/caller-owned model resources, independently of XNet destructors.
+    Call vendor_release_borrowed()
+    Return
+  End Subroutine openacc_queue
+
+  Subroutine openacc_rollback()
+    Implicit None
+    Type(xnet_gpu_t) :: context
+    Integer :: ierr
+    Character(512) :: message
+
+    context%queue = int(acc_async_noval)
+    Call vendor_fail_associate(resource_solver,1)
+    Call vendor_fail(resource_solver,1)
+    Call gpu_init(context,ierr,message)
+    Call require(ierr /= 0 .and. Index(message,'status 63') > 0,'handle initialization error survives rollback')
+    Call check_creates([0,1,1])
+    Call check_destroys([0,1,1])
+    Call check_live([1,0,1])
+    Call reject_reinitialize(context,[0,1,1])
+    Call finish(0)
+    Call check_destroys([0,1,2])
+    Call check_live([1,0,0])
+    Call finish(0)
+    Call check_destroys([0,1,2])
+    Call initialize(context)
+    Call finish(0)
+    Call check_creates([0,2,2])
+    Call check_destroys([0,2,3])
+    Call check_live([1,0,0])
+    Call vendor_release_borrowed()
+    Return
+  End Subroutine openacc_rollback
+#endif
 
   Subroutine retry_one(kind)
     Implicit None

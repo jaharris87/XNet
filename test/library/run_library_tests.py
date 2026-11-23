@@ -29,8 +29,9 @@ def run(command: list[str], cwd: Path, log: Path, stdin: str | None = None,
 
 def check_zero_electrons(xnet_exe: Path, data: Path, table: Path, work: Path) -> None:
     """A supplied positive Ye must not conceal a pure-neutron composition."""
-    for supplied_ye in (0.0, 0.5):
-        case = work / f"zero-electrons-{supplied_ye}"
+    supplied_values = (0.0, 0.5) if 'n' in (data / 'sunet').read_text().split() else (0.0,)
+    for supplied_ye in supplied_values:
+        case = work / f"{data.name}-zero-electrons-{supplied_ye}"
         case.mkdir()
         (case / data.name).symlink_to(data, target_is_directory=True)
         (case / table.name).symlink_to(table)
@@ -43,7 +44,7 @@ def check_zero_electrons(xnet_exe: Path, data: Path, table: Path, work: Path) ->
         output = run([str(xnet_exe)], case, case / "xnet.log", expect_failure=True)
         if "Initial composition must have positive electron fraction" not in output:
             raise RuntimeError(f"zero-electron input failed for the wrong reason; see {case / 'xnet.log'}")
-    print("PASS standalone rejects zero-electron composition with zero or positive supplied Ye", flush=True)
+    print("PASS standalone rejects zero-electron composition", flush=True)
 
 
 def check_fatal_burns(failure_exe: Path, xnet_exe: Path, data: Path, table: Path, work: Path) -> None:
@@ -293,6 +294,7 @@ def main() -> None:
         print(f"PASS {label}: five burn calls equal direct full_net; lifecycle/validation/metadata pass{nse_result}",
               flush=True)
     check_zero_electrons(xnet_exe, networks["SN160"], table, work)
+    check_zero_electrons(xnet_exe, networks["alpha"], table, work)
     check_fatal_burns(failure_exe, xnet_exe, networks["alpha"], table, work)
     print("Real serial CPU library consumer checks passed", flush=True)
 

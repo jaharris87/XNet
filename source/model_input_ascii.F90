@@ -350,7 +350,10 @@ Contains
         & sum(yin(:)),xnet,xnet,znet
 
       ! Account for out-of-network species via an auxiliary nucleus or normalize in-network mass
-      If ( yext > 0.0_dp .and. xnet < 1.0_dp .and. znet < yein ) Then
+      If ( znet <= 0.0_dp .and. yein <= 0.0_dp ) Then
+        ierr = 1
+        Write(lun_stderr,'(2a)') 'Initial composition must have positive electron fraction: ',trim(inab_file)
+      ElseIf ( yext > 0.0_dp .and. xnet < 1.0_dp .and. znet < yein ) Then
         xext = 1.0_dp - xnet
         aext = xext / yext
         If ( yein <= 0.0_dp .or. yein >= 1.0_dp ) Then
@@ -362,6 +365,9 @@ Contains
         EndIf
         If ( idiag >= 1 ) Write(lun_diag,"(a,4es15.7)") 'yext, xext, aext, zext: ', &
           & yext,xext,aext,zext
+      ElseIf ( xnet <= 0.0_dp ) Then
+        ierr = 1
+        Write(lun_stderr,'(2a)') 'Initial abundance file contains no in-network mass: ',trim(inab_file)
       Else
         xext = 0.0_dp
         aext = 1.0_dp

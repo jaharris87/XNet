@@ -215,6 +215,11 @@ underlying EOS objects and dependencies.
 Initialize and finalize with no calls in flight. In every model the
 application owns the batch loop and the scientific arrays.
 
+`EOS=HELMHOLTZ` uses shared COMMON-block storage and requires
+`OPENMP_MODE=OFF`; Make rejects its use with XNet host OpenMP enabled.
+`EOS=STARKILLER` supports XNet CPU OpenMP batches. An application-supplied
+`EOS=EXTERNAL` provider must support concurrent evaluations for that mode.
+
 ## CPU OpenMP batches
 
 Build a separate CPU library configuration:
@@ -439,16 +444,23 @@ nothing about XNet's internal storage; applications need not read `sunet` or
 | `density` | g/cm^3, positive and finite, constant during the burn. |
 | `temperature` | K, positive and finite, in/out. Returned unchanged unless `iheat>0`, which evolves it. XNet uses T9 (GK) internally and in histories. |
 | `mass_fraction(species,zone)` | Mass fractions `X`, nonnegative and finite, in/out. Not normalized or reordered. XNet evolves `Y = X/A`. |
-| `ye` | In `[0,1]`, in/out. Returned from the accepted composition, including weak-reaction changes. |
+| `ye` | Finite input in `(0,1]`, in/out. Returned from the accepted composition, including weak-reaction changes. |
 | `aux_x`, `aux_a`, `aux_z` | Mass fraction, mass number and charge of a fixed auxiliary reservoir; `0<=aux_x<=1`, `0<=aux_z<=aux_a`, and `aux_a>0` when `aux_x>0`. Zero `aux_x` means no reservoir. |
 | `restart_dt_s` | s, nonnegative, in/out; see [restart hints](#first-and-later-calls-restart-hints). |
 | `neutrino_loss` | Out: neutrino energy loss integrated over the burn, erg/g, from FFN-format weak rates with tabulated neutrino energies read from `netweak`. REACLIB-format weak reactions contribute zero; a network without FFN entries returns zero. |
 | `timing` | Out: stage durations in s; see [timings](#counters-and-timings). |
 | `network` metadata | Copied names and integer A and Z; `binding_energy_mev` and `mass_excess_mev` in MeV per nucleus. |
 
-Each active zone must contain positive mass, counting any auxiliary
-reservoir. XNet does not require `sum(X) + aux_x = 1` or compare input Ye with
-the composition. Returned Ye is
+The [weak-rate table limits](running-xnet.md#weak-rate-table-limits) describe
+FFN edge holding and the actual-state phase space used for logft capture.
+
+Each active zone must contain positive mass and positive electron content,
+counting any auxiliary reservoir. At least one network species with positive
+charge must have positive mass fraction, or the auxiliary reservoir must have
+both positive mass fraction and positive charge. Zero-electron compositions
+are rejected even when the supplied Ye is positive; there is no additional
+positive cutoff. XNet does not require `sum(X) + aux_x = 1` or compare input
+Ye with the composition. Returned Ye is
 
 ```text
 Ye = (sum(Z*Y) + aux_x*aux_z/aux_a) / (sum(A*Y) + aux_x)
@@ -821,10 +833,14 @@ Call xnet_nse_composition(density=density_scalar,temperature=temperature_scalar,
 ```
 
 The inputs are `Real(dp)` scalars: density in g/cm^3 and temperature in K,
-both positive and finite, and Ye in `[0,1]`. Allocate `nse_fraction` to
+both positive and finite, and finite Ye in `(0,1]`. Allocate `nse_fraction` to
 `size(network%names)`. The network and screening controls apply. Queries
 follow the same lifetime and threading rules as burns; on GPU builds they are
 serialized host calls with no device option.
+
+When reference nuclei used for an initial NSE guess are absent, XNet uses
+available network species selected for the query Ye. This avoids invalid
+species indices; it does not guarantee convergence for every network or state.
 
 The result is `A*ynse` in network order, not normalized, without the
 auxiliary reservoir, and its sum need not be one. Invalid values or extent

@@ -79,6 +79,23 @@ names and prefixed vendor modules.
   [#204](https://github.com/jaharris87/XNet/pull/204).
 - The reaction flux in the first (time zero) record of a standalone history
   is now zero; previously it could hold the final flux of an earlier batch.
+- FFN interpolation now holds table values at both temperature and density
+  edges instead of extrapolating or reading past the tables. Logft capture
+  phase space still uses the actual thermodynamic state; see
+  [weak-rate table limits](running-xnet.md#weak-rate-table-limits)
+  ([#225](https://github.com/jaharris87/XNet/pull/225)).
+- NSE initial guesses use available species selected for the query Ye when
+  reference nuclei are absent, avoiding invalid species indices
+  ([#228](https://github.com/jaharris87/XNet/pull/228)).
+- Library burns and NSE queries reject supplied Ye outside `(0,1]`. Burns
+  also require positive electron content in the composition, including any
+  auxiliary reservoir. Standalone abundance input rejects zero-electron
+  compositions before normalization
+  ([#231](https://github.com/jaharris87/XNet/pull/231)).
+- GPU diagnostics now perform low-temperature warning I/O on the host and
+  refresh host copies for failure dumps and dense-factorization diagnostics.
+  Device-resident loss output no longer writes the caller's host mirror
+  ([#227](https://github.com/jaharris87/XNet/pull/227)).
 
 ## Checked configurations
 
@@ -113,6 +130,9 @@ requirement.
   neither supported nor checked.
 - OpenMP-target GPU builds require `OPENMP_MODE=OFF`, also for standalone
   programs.
+- The shared COMMON-block `EOS=HELMHOLTZ` provider requires
+  `OPENMP_MODE=OFF`; Make rejects it with host OpenMP enabled
+  ([#229](https://github.com/jaharris87/XNet/pull/229)).
 - Open questions: instantaneous energy-generation output
   ([#62](https://github.com/jaharris87/XNet/issues/62)), a check of finite,
   nonnegative per-call timings that failed once in a CPU OpenMP run

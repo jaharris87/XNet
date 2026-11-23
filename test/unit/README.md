@@ -241,7 +241,10 @@ network, CNO, and subsets without heavy nuclei, He4/Si28, common Fe/Ni nuclei,
 or bound nuclei. Each network is initialized, solved, and finalized twice.
 The tests check finite normalized mass fractions and charge at three Ye values,
 repeatability, valid public indices, and finite chemical-potential guesses from
-all six heuristics. Only `nse_guess` is exposed in the test copy of the module;
+all six heuristics. Before each direct guess, the composition is cleared; the
+missing-He4/Si28 heuristics must put positive mass at the closest available Z/A
+for the query, rather than pass solely because a fixed seed is finite.
+Only `nse_guess` is exposed in the test copy of the module;
 the production interface is unchanged. These checks establish software behavior
 for restricted networks, not independent scientific accuracy of their NSE states.
 The existing independent NSE validation supplies the ordinary-network comparison.

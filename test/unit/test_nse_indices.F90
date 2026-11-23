@@ -8,7 +8,7 @@ Program nse_index_tests
   Use xnet_constants, Only: avn, bip1, five3rd
   Use xnet_controls, Only: iscrn
   Use xnet_nse, Only: i_nn, i_pp, i_he4, i_si28, i_ni56, nse_initialize, &
-    & nse_finalize, nse_solve, nse_guess, xnse
+    & nse_finalize, nse_solve, nse_guess, xnse, ynse
   Use xnet_types, Only: dp
   Implicit None
 
@@ -105,7 +105,25 @@ Program nse_index_tests
         ! Force later heuristics even when the first solve guess converges. This
         ! checks valid finite guesses, not convergence of each individual guess.
         Do guess = 1, 6
+          xnse = 0.0_dp
+          ynse = 0.0_dp
           Call nse_guess(guess,uvec)
+          ! A fixed maximum-binding seed is finite too. Require positive support
+          ! at the nearest available Z/A for the missing-He4/Si28 heuristics.
+          If ( guess == 3 .AND. j /= 2 .AND. .Not. any(iz == 2 .AND. ia == 4) ) Then
+            If ( minval(abs(zz/aa-ye),mask=xnse > 0.0_dp) > &
+              & closest_distance(ye,0) + 10.0_dp*epsilon(ye) ) Then
+              Write(*,'(a,f6.3)') 'FAIL missing-He4 query seed at Ye=',ye
+              failures = failures + 1
+            EndIf
+          EndIf
+          If ( guess == 5 .AND. j == 2 .AND. .Not. any(iz == 14 .AND. ia == 28) ) Then
+            If ( minval(abs(zz/aa-ye),mask=xnse > 0.0_dp) > &
+              & closest_distance(ye,20) + 10.0_dp*epsilon(ye) ) Then
+              Write(*,'(a,f6.3)') 'FAIL missing-Si28 query seed at Ye=',ye
+              failures = failures + 1
+            EndIf
+          EndIf
           If ( .Not. all(ieee_is_finite(uvec)) ) failures = failures + 1
         EndDo
       EndDo
@@ -129,4 +147,20 @@ Program nse_index_tests
     Write(*,'(a,i0,a,i0,a,i0)') 'PASS NSE indices mode=',mode,' ny=',ny,' workers=',workers
     Deallocate(ia,iz,aa,zz,nn,mm,be,mex,nname,angm,g,t9i,reference,zseq,zseq53,zseqi)
   EndDo
+Contains
+
+  Real(dp) Function closest_distance(ye,min_charge) Result(distance)
+    ! Independent distance criterion; ties may select any equally close species.
+    Real(dp), Intent(in) :: ye
+    Integer, Intent(in) :: min_charge
+
+    If ( any(ia > 1 .AND. iz >= min_charge) ) Then
+      distance = minval(abs(zz/aa-ye),mask=ia > 1 .AND. iz >= min_charge)
+    ElseIf ( any(ia > 1) ) Then
+      distance = minval(abs(zz/aa-ye),mask=ia > 1)
+    Else
+      distance = minval(abs(zz/aa-ye))
+    EndIf
+  End Function closest_distance
+
 End Program nse_index_tests

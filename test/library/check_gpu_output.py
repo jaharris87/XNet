@@ -52,6 +52,10 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
             "expected one itsout=2 GPU case")
     solver, heat = map(int, cases[0][2:])
     require(solver in (1, 3) and heat in (0, 1), "invalid GPU case controls")
+    for marker in ("GPU_INVALID_OUTPUT_REJECTED", "GPU_INVALID_OUTPUT_RECOVERED"):
+        require([words for words in lines if words[0] == marker] ==
+                [[marker, owner] for owner in ("owned", "borrowed")],
+                f"missing/duplicate invalid output initialization checks: {marker}")
     result = states(text)
     calls = expected_calls()
     short_allocations = [words for words in lines if words[0] == "GPU_SHORT_ALLOCATION"]

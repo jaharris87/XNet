@@ -587,7 +587,7 @@ Contains
     Return
   End Subroutine read_nuclear_data
 
-  Subroutine format_nuclear_data(lun_out,data_dir)
+  Subroutine format_nuclear_data(lun_out,data_dir,show_progress)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads from the file netwinv, the nuclei included along with the nuclear data
     ! which will be needed for later calculations. This data includes the atomic number, the number
@@ -604,6 +604,7 @@ Contains
     ! Input variables
     Integer, Intent(in) :: lun_out
     Character(*), Intent(in) :: data_dir
+    Logical, Intent(in) :: show_progress
 
     ! Local variables
     Character(5), Allocatable :: nname_test(:)
@@ -615,7 +616,7 @@ Contains
     ! Check and read sunet
     Call check_nuclear_inputs(data_dir)
     Call read_sunet(data_dir)
-    Write(lun_out,*) ny
+    If ( show_progress ) Write(lun_out,*) ny
     Allocate (nname_test(0:ny))
     nname_test = nname
     ny_test = ny

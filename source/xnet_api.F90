@@ -536,7 +536,7 @@ Contains
     If ( controls%iprocess > 0 ) Then
       Call check_network_files(controls%data_dir,ascii_files,ierr,message)
       If ( ierr /= xnet_success ) Return
-      Call net_preprocess(lun_stdout,controls%data_dir,controls%data_dir)
+      Call net_preprocess(lun_stdout,controls%data_dir,controls%data_dir,show_progress=controls%idiag >= 0)
     EndIf
     Call check_network_files(controls%data_dir,required_files,ierr,message)
     Return

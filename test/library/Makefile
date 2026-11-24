@@ -283,6 +283,13 @@ test host-openmp-test: all quickstart-test
 	python3 run_output_tests.py --consumer $(BUILD_DIR)/output_consumer --preprocess $(BUILD_DIR)/preprocess_consumer \
 	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/output-runs
 
+.PHONY: preprocess-progress-test
+preprocess-progress-test: $(BUILD_DIR)/preprocess_consumer
+	python3 run_preprocess_progress_tests.py --consumer $(BUILD_DIR)/preprocess_consumer \
+	  --net-setup $(dir $(XNET_ARCHIVE))../bin/net_setup --work-dir $(BUILD_DIR)/preprocess-progress-runs
+
+test: preprocess-progress-test
+
 # The application owns the parallel batch loop; this target needs a CPU OPENMP_MODE=ON archive.
 host-batch-openmp-test: $(BUILD_DIR)/host_batch_openmp_consumer $(BUILD_DIR)/worker_storage_consumer
 	python3 run_host_batch_openmp_tests.py --consumer $(BUILD_DIR)/host_batch_openmp_consumer \

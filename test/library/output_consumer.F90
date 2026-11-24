@@ -30,6 +30,7 @@ Program output_consumer
   Call Get_Command_Argument(5,mode)
   direct = Trim(mode) == 'reference'
   Call set_xnet_controls_defaults(controls)
+  Call check(controls%nnucout == 0 .and. Size(controls%output_nuclei) == 0,'default output species selection')
   controls%data_dir = data_dir
   controls%nzbatchmx = lanes
   controls%isolv = solver
@@ -39,15 +40,6 @@ Program output_consumer
   controls%bin_file_base = 'ts'
   controls%ev_file_base = 'ev'
   controls%description = [Character(80) :: 'API output regression', 'constant conditions', 'public C/O fixture']
-  If ( mode == 'species0' ) Then
-    Call check(controls%nnucout == 0 .and. Size(controls%output_nuclei) == 0,'default output species selection')
-  ElseIf ( mode == 'species1' ) Then
-    controls%nnucout = 1
-    controls%output_nuclei = [Character(5) :: 'c12']
-  Else
-    controls%nnucout = 3
-    controls%output_nuclei = [Character(5) :: 'c12', 'o16', 'badxx']
-  EndIf
   controls%t9nse = 11.0_dp
   If ( solver == 3 ) Then
     controls%kitmx = 10
@@ -64,6 +56,25 @@ Program output_consumer
       controls%tolc = 1.0e-100_dp
       controls%yacc = 1.0e-100_dp
     EndIf
+  EndIf
+  ! Invalid output names must return to the host, release setup state, and allow retry.
+  controls%output_nuclei = [Character(5) :: 'badxx']
+  controls%nnucout = 1
+  Call xnet_initialize(controls,network,ierr,message)
+  Call check(ierr == xnet_invalid,'unknown output species rejected during initialization')
+  Call check(Index(message,'Unknown output_nuclei species: badxx') == 1,'unknown output species diagnostic')
+  Call check(.not. Allocated(network%names),'rejected initialization did not publish network metadata')
+  Call xnet_finalize(ierr,message)
+  Call check(ierr == xnet_success,'finalize after rejected initialization')
+  If ( mode == 'species0' ) Then
+    controls%nnucout = 0
+    controls%output_nuclei = [Character(5) :: ]
+  ElseIf ( mode == 'species1' ) Then
+    controls%nnucout = 1
+    controls%output_nuclei = [Character(5) :: 'c12']
+  Else
+    controls%nnucout = 3
+    controls%output_nuclei = [Character(5) :: 'c12', 'o16', 'ni56']
   EndIf
   Call initialize
   Allocate(x(Size(network%names),lanes),saved_x(Size(network%names),lanes))

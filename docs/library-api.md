@@ -592,7 +592,7 @@ These fields behave differently from standalone runs:
 | `iheat` | `>0` evolves temperature; otherwise the caller's temperature is returned unchanged. |
 | `idiag` | Diagnostics go to standard output; there is no `net_diag` file. |
 | `itsout`, `bin_file_base`, `ev_file_base` | Write [per-call histories](#per-call-histories). |
-| `output_nuclei` | Mapped at initialization even when `itsout=0`. A name missing from the network prints a warning and selects the last species. |
+| `output_nuclei` | Mapped at initialization even when `itsout=0`. A name missing from the network rejects initialization with `xnet_invalid` before evolution setup. |
 
 ## Per-call histories
 

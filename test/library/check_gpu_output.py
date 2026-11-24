@@ -83,7 +83,7 @@ def check_run(directory: Path, text: str, threads: int = 0) -> dict[str, int]:
                 row[0].is_integer() and row[1].is_integer() and 0 <= row[1] <= row[0]
                 for row in values), "invalid species metadata")
     a, z = tuple(row[0] for row in values), tuple(row[1] for row in values)
-    selected = [names.index("c12"), names.index("o16"), len(names)-1]
+    selected = [names.index("c12"), names.index("o16"), names.index("ni56")]
     density_rows = [words for words in lines if words[0] == "DENSITY"]
     step_rows = [words for words in lines if words[0] == "STEPS"]
     require(len(density_rows) == len(step_rows) == len(calls) and

@@ -210,17 +210,23 @@ def test_xnse_multirow_output_association(
         ("1.0E+07 9.0 1.01\n", "NSE ERROR: NR Failed"),
     ],
 )
+@pytest.mark.parametrize("idiag", (-1, 1))
 def test_xnse_rejects_bad_state_rows(
     xnse_executable: Path,
     tmp_path: Path,
     input_text: str,
     expected_message: str,
+    idiag: int,
 ) -> None:
     work_directory = _prepare_work_directory(tmp_path)
+    controls = work_directory / "controls.nml"
+    controls.write_text(controls.read_text().replace("idiag = 1,", f"idiag = {idiag},"))
     result = _run_xnse(xnse_executable, work_directory, input_text)
 
     assert result.returncode != 0
     assert expected_message in result.stdout + result.stderr
+    if expected_message.startswith("NSE ERROR:"):
+        assert "XNet error:" in result.stdout + result.stderr
     diagnostic_path = work_directory / "nse_diag01"
     if diagnostic_path.exists():
         assert not STATE_ROW.search(diagnostic_path.read_text(encoding="utf-8"))

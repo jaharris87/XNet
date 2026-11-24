@@ -71,7 +71,9 @@ networks. Time-series tests compare all binary timestep records against direct
 `full_net` output and check ASCII columns, species lookup, physical results,
 counters, masks, repeated and short calls, separate filenames across
 initialization lifetimes, checked open failures, no clobbering, and closed
-partial histories after reported numerical failures. These are CPU software
+partial histories after reported numerical failures. Unknown output species reject
+initialization; the checks cover cleanup and successful initialization after correction,
+including a simulated GPU cleanup failure. These are CPU software
 and same-source numerical comparisons; they do not qualify GPU output or an
 independent scientific reference.
 
@@ -499,8 +501,7 @@ checks. With `itsout=2`, every successful active burn logs its input and file
 sequence and checks that the API closed its binary/ASCII units. The same host,
 resident, continued-device, short-allocation and borrowed-resource calls produce
 28 separate call sets with 94 binary and 94 ASCII files; inactive and invalid
-calls create none. The selected ASCII species are C12, O16 and the existing missing-name
-fallback to the final species.
+calls create none. The selected ASCII species are C12, O16 and Ni56.
 
 On an approved compute allocation, run in a new directory with the selected
 network and EOS table staged as for the existing GPU checks. Capture the direct

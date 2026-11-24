@@ -40,7 +40,7 @@ Program gpu_consumer
   Real(dp), Parameter :: loss_rtol = 1.0e-6_dp
   Character(8), Parameter :: phase_names(phases) = [Character(8) :: 'first','repeat','short','hole','inactive']
   ! CCE 20.0.0 loses the inline character constructor; a parameter preserves its values.
-  Character(5), Parameter :: output_names(3) = [Character(5) :: 'c12','o16','badxx']
+  Character(5), Parameter :: output_names(3) = [Character(5) :: 'c12','o16','ni56']
   Type :: result_t
     Real(dp), Allocatable :: x(:,:)
     Real(dp) :: temperature(lanes), ye(lanes), loss(lanes)

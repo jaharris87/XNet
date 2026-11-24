@@ -219,25 +219,25 @@ Contains
       If ( iz(i) == 28 .and. ia(i) == 56 ) i_ni56 = i
     EndDo
     If ( i_nn == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','n','; setting i_nn to min Z/A: ',nname(iza_min)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','n','; setting i_nn to min Z/A: ',nname(iza_min)
       i_nn = iza_min
     EndIf
     If ( i_pp == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','p','; setting i_pp to max Z/A: ',nname(iza_max)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','p','; setting i_pp to max Z/A: ',nname(iza_max)
       i_pp = iza_max
     EndIf
     ! These public diagnostic indices must be valid before Ye is known. The guess
     ! routine selects a species near the current Ye when He4 or Si28 is absent.
     If ( i_he4 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','he4','; setting i_he4 to max B/A: ',nname(ibe)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','he4','; setting i_he4 to max B/A: ',nname(ibe)
       i_he4 = ibe
     EndIf
     If ( i_si28 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','si28','; setting i_si28 to max B/A: ',nname(ibe)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','si28','; setting i_si28 to max B/A: ',nname(ibe)
       i_si28 = ibe
     EndIf
     If ( i_ni56 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','ni56','; setting i_ni56 to max B/A: ',nname(ibe)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','ni56','; setting i_ni56 to max B/A: ',nname(ibe)
       i_ni56 = ibe
     EndIf
 

@@ -138,10 +138,11 @@ Contains
     ! Supplied GPU handles remain caller-owned.
     ! Reader, allocation, EOS and solver failures can still terminate.
     !-----------------------------------------------------------------------------------------------
-    Use reaction_data, Only: initialize_network_data
-    Use xnet_controls, Only: apply_xnet_controls
+    Use reaction_data, Only: initialize_network_data, finalize_network_data
+    Use xnet_controls, Only: apply_xnet_controls, controls_finalize
     Use xnet_evolve, Only: initialize_evolve
     Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
+    Use xnet_output, Only: map_output_nuc
     Implicit None
 
     ! Required arguments
@@ -196,6 +197,19 @@ Contains
     ! Load nuclear/reaction tables and initialize the evolution engine with persistent
     ! zone workspace and two history endpoints (tstart and tstop).
     Call initialize_network_data(controls%data_dir,api_data_description)
+    Call map_output_nuc(ierr,message)
+    If ( ierr /= 0 ) Then
+      ierr = xnet_invalid
+      ! Evolution has not been initialized. Release tables and per-worker controls before GPU resources.
+      Call finalize_network_data
+      Call controls_finalize
+      Call gpu_finalize(cleanup_status,cleanup_message)
+      If ( cleanup_status /= xnet_success ) Then
+        api_state = api_cleanup_pending
+        message = trim(message)//'; '//trim(cleanup_message)
+      EndIf
+      Return
+    EndIf
     Call initialize_evolve(controls%data_dir,api_history_points)
     Call copy_network_data(network)
 

@@ -62,7 +62,8 @@ Save the following as `quickstart.f90` in that working directory:
 Program quickstart
   Use, Intrinsic :: iso_fortran_env, Only: error_unit, output_unit
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, &
-    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success
+    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success, &
+    & xnet_count_timesteps, xnet_count_newton
   Implicit None
 
   Integer, Parameter :: nzones = 1, message_length = 512
@@ -115,6 +116,8 @@ Program quickstart
   Call check_status(operation='burn',status=ierr,detail=message)
   Write(output_unit,'(a,es13.5,a,i0)') 'evolve seconds: ',timing%evolve, &
     & '; accepted outer steps: ',max_steps_taken
+  Write(output_unit,'(a,i0,a,i0)') 'timestep attempts: ',counters(xnet_count_timesteps,1), &
+    & '; Newton iterations: ',counters(xnet_count_newton,1)
   Write(output_unit,'(a,es13.5)') 'returned Ye: ',ye(1)
 
   Call xnet_finalize(ierr=ierr,message=message)
@@ -491,15 +494,16 @@ call either way, so BDF callers should normally pass zero.
 
 ### Counters and timings
 
-`counters(:,zone)` is reset for each call:
+`counters(:,zone)` is reset for each call. Import these public integer row
+indices from `xnet_api` to select a count in the `(5,nz)` array:
 
-| Row | Count |
-| --- | --- |
-| 1 | Internal timestep attempts, including retries. |
-| 2 | Newton iterations, including failed attempts. |
-| 3 | Jacobian builds. |
-| 4 | Derivative evaluations. |
-| 5 | Rate evaluations. |
+| Constant | Row | Count |
+| --- | --- | --- |
+| `xnet_count_timesteps` | 1 | Internal timestep attempts, including retries. |
+| `xnet_count_newton` | 2 | Newton iterations, including failed attempts. |
+| `xnet_count_jacobians` | 3 | Jacobian builds. |
+| `xnet_count_derivatives` | 4 | Derivative evaluations. |
+| `xnet_count_rates` | 5 | Rate evaluations. |
 
 Optional `max_steps_taken` returns the largest number of accepted outer
 steps in the batch (`kstep` in `full_net`). Unlike row 1 it excludes retries;

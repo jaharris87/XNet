@@ -41,6 +41,16 @@ Module xnet_api
   Integer, Parameter, Public :: xnet_step_limit         = 5
 
   !-------------------------------------------------------------------------------------------------
+  ! Public row indices for xnet_burn_batch counters(5,nz)
+  !-------------------------------------------------------------------------------------------------
+  ! Timestep attempts include retries; max_steps_taken counts accepted outer steps instead.
+  Integer, Parameter, Public :: xnet_count_timesteps   = 1
+  Integer, Parameter, Public :: xnet_count_newton      = 2 ! Includes failed attempts.
+  Integer, Parameter, Public :: xnet_count_jacobians   = 3
+  Integer, Parameter, Public :: xnet_count_derivatives = 4
+  Integer, Parameter, Public :: xnet_count_rates       = 5
+
+  !-------------------------------------------------------------------------------------------------
   ! Public types and procedures
   !-------------------------------------------------------------------------------------------------
   Public :: dp

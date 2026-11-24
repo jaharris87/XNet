@@ -718,7 +718,7 @@ application's OpenACC queue association unchanged, and creates only what is
 missing. Finalize before destroying supplied resources or EOS data.
 XNet frees what it created and forgets what it borrowed; it does not reset
 the device, finalize the vendor runtime or touch application MPI. Do not set
-XNet's GPU module variables directly or call `gpu_init`/`gpu_finalize`.
+XNet's GPU module variables directly or call `gpu_initialize`/`gpu_finalize`.
 
 For OpenACC, the supplied `queue` must use the same stream as any supplied
 handles and `stream`. Usually supply only the queue and let XNet obtain its

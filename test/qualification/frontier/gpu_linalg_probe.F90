@@ -7,7 +7,7 @@ Program frontier_gpu_linalg_probe
   Use, Intrinsic :: iso_fortran_env, Only: output_unit
   Use xnet_controls, Only: myid, nproc, tid, nthread
   Use xnet_gpu, Only: &
-    & device_is_present, deviceCount, gpu_finalize, gpu_init, mydevice, on_device
+    & device_is_present, deviceCount, gpu_finalize, gpu_initialize, mydevice, on_device
   Use xnet_linalg, Only: LinearSolveBatched
   Use xnet_types, Only: dp
   Implicit None
@@ -51,7 +51,7 @@ Program frontier_gpu_linalg_probe
   matrix_original = matrix
   rhs_original = rhs
 
-  Call gpu_init()
+  Call gpu_initialize()
 
   offloaded = .false.
   !$omp target map(from:offloaded)

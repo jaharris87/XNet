@@ -158,7 +158,7 @@ Program screening_test_runner
   Use, Intrinsic :: iso_fortran_env, Only: error_unit
   Use nuclear_data, Only: izmax, zseq, zseq53, zseqi
   Use xnet_constants, Only: five3rd, thbim1
-  Use xnet_screening, Only: screening_init, screening_finalize
+  Use xnet_screening, Only: screening_initialize, screening_finalize
   Use xnet_types, Only: dp
   Use test_xnet_screening, Only: collect_screening_tests
   Use testdrive, Only: run_testsuite
@@ -170,7 +170,7 @@ Program screening_test_runner
   EndDo
   zseq53 = zseq**five3rd
   zseqi = zseq**thbim1
-  Call screening_init
+  Call screening_initialize
   stat = 0
   Call run_testsuite(collect_screening_tests,error_unit,stat,parallel=.False.)
   Call screening_finalize

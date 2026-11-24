@@ -1272,7 +1272,7 @@ Contains
     ! This routine calculates screening factors (i.e. Coulomb corrections) for NSE in a manner that
     ! is consistent with XNet reaction network screening calculation.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_eos, Only: eos_interface, eos_screen
+    Use xnet_eos, Only: eos_update, eos_screen
     Implicit None
 
     ! Local variables
@@ -1305,7 +1305,7 @@ Contains
       xext = 0.0
       aext = 1.0
       zext = 0.0
-      call eos_interface(t9nse,rhonse,ynse,ztot,cv,etae,detaedt9,xext,aext,zext)
+      call eos_update(t9nse,rhonse,ynse,ztot,cv,etae,detaedt9,xext,aext,zext)
       Call eos_screen(t9nse,rhonse,ynse,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9, &
         xext,aext,zext)
 

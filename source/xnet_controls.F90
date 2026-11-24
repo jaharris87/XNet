@@ -5,7 +5,7 @@
 ! Two configuration paths share this module:
 ! - Library API (xnet_api): Call set_xnet_controls_defaults, override fields on xnet_controls_t,
 !   and pass the structure to xnet_initialize, which validates and applies it via
-!   apply_xnet_controls.
+!   controls_initialize.
 ! - Standalone Driver (net): Call read_controls, which reads controls.nml (and any layered
 !   include_files), normalizes per-zone input filenames, validates standalone requirements,
 !   broadcasts the resolved structure across MPI ranks, and applies it via
@@ -110,7 +110,7 @@ Module xnet_controls
   !-------------------------------------------------------------------------------------------------
   ! Runtime Control State and Zone Batching
   !-------------------------------------------------------------------------------------------------
-  ! Populated by apply_xnet_controls / apply_standalone_controls and released by controls_finalize.
+  ! Populated by controls_initialize / apply_standalone_controls and released by controls_finalize.
   ! Per-zone arrays have capacity nzbatchmx and use izb for the position within the batch.
   ! Under OpenMP these arrays are threadprivate, so each thread has its own batch.
   ! nzbatch counts active zones; lzactive can contain inactive zones between active ones.
@@ -333,7 +333,7 @@ Contains
     Return
   End Subroutine validate_standalone_controls
 
-  Subroutine apply_xnet_controls(controls,ierr,message)
+  Subroutine controls_initialize(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Validate controls and copy them into the module runtime state. Each thread then allocates
     ! its per-zone flags, counters and file units and maps the arrays needed on the device.
@@ -421,7 +421,7 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine apply_xnet_controls
+  End Subroutine controls_initialize
 
   Subroutine apply_standalone_controls(controls,data_dir)
     !-----------------------------------------------------------------------------------------------
@@ -444,7 +444,7 @@ Contains
     Call validate_standalone_controls(controls,ierr,message)
     If ( ierr /= 0 ) Call xnet_terminate(trim(message))
 
-    Call apply_xnet_controls(controls,ierr,message)
+    Call controls_initialize(controls,ierr,message)
     If ( ierr /= 0 ) Call xnet_terminate(trim(message))
 
     data_dir = controls%data_dir

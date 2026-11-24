@@ -21,7 +21,7 @@ Module xnet_match
 
 Contains
 
-  Subroutine read_match_data(data_dir)
+  Subroutine match_initialize(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads in the reaction matching data and allocates the necessary arrays.
     !-----------------------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine read_match_data
+  End Subroutine match_initialize
 
   Subroutine match_finalize
     ! Release XNet-owned CPU allocations.

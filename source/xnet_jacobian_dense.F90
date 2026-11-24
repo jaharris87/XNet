@@ -53,7 +53,7 @@ Module xnet_jacobian
 
 Contains
 
-  Subroutine read_jacobian_data(data_dir)
+  Subroutine jacobian_initialize(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
@@ -121,7 +121,7 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine read_jacobian_data
+  End Subroutine jacobian_initialize
 
   Subroutine jacobian_finalize
     !-----------------------------------------------------------------------------------------------

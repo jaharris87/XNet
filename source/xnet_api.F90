@@ -148,10 +148,10 @@ Contains
     ! Supplied GPU handles remain caller-owned.
     ! Reader, allocation, EOS and solver failures can still terminate.
     !-----------------------------------------------------------------------------------------------
-    Use reaction_data, Only: initialize_network_data, finalize_network_data
-    Use xnet_controls, Only: apply_xnet_controls, controls_finalize
-    Use xnet_evolve, Only: initialize_evolve
-    Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
+    Use reaction_data, Only: network_data_initialize, network_data_finalize
+    Use xnet_controls, Only: controls_initialize, controls_finalize
+    Use xnet_evolve, Only: evolve_initialize
+    Use xnet_gpu, Only: gpu_initialize, gpu_finalize, mydevice
     Use xnet_output, Only: map_output_nuc
     Implicit None
 
@@ -178,14 +178,14 @@ Contains
     If ( ierr /= xnet_success ) Return
 
     ! Initialize thread IDs and diagnostic units; record the actual OpenMP team size.
-    Call initialize_thread_state
+    Call thread_state_initialize
 
-    ! A default GPU context tells gpu_init to use the current application device;
+    ! A default GPU context tells gpu_initialize to use the current application device;
     ! with no supplied handles, XNet creates the resources it needs on that device.
     ! CPU builds return success without creating GPU resources.
     gpu = xnet_gpu_t()
     If ( present(gpu_context) ) gpu = gpu_context
-    Call gpu_init(gpu,ierr,message)
+    Call gpu_initialize(gpu,ierr,message)
     If ( ierr /= xnet_success ) Then
       ! Failed initialization may still own resources whose rollback must be retried.
       If ( mydevice >= 0 ) api_state = api_cleanup_pending
@@ -194,7 +194,7 @@ Contains
 
     ! Validate controls and copy them into the XNet runtime state;
     ! allocate and initialize internal bookkeeping.
-    Call apply_xnet_controls(controls,ierr,message)
+    Call controls_initialize(controls,ierr,message)
     If ( ierr /= xnet_success ) Then
       Call gpu_finalize(cleanup_status,cleanup_message)
       If ( cleanup_status /= xnet_success ) Then
@@ -206,12 +206,12 @@ Contains
 
     ! Load nuclear/reaction tables and initialize the evolution engine with persistent
     ! zone workspace and two history endpoints (tstart and tstop).
-    Call initialize_network_data(controls%data_dir,api_data_description)
+    Call network_data_initialize(controls%data_dir,api_data_description)
     Call map_output_nuc(ierr,message)
     If ( ierr /= 0 ) Then
       ierr = xnet_invalid
       ! Evolution has not been initialized. Release tables and per-worker controls before GPU resources.
-      Call finalize_network_data
+      Call network_data_finalize
       Call controls_finalize
       Call gpu_finalize(cleanup_status,cleanup_message)
       If ( cleanup_status /= xnet_success ) Then
@@ -220,7 +220,7 @@ Contains
       EndIf
       Return
     EndIf
-    Call initialize_evolve(controls%data_dir,api_history_points)
+    Call evolve_initialize(controls%data_dir,api_history_points)
     Call copy_network_data(network)
 
     api_state = api_ready
@@ -433,9 +433,9 @@ Contains
     ! Call outside application parallel regions, with no work in flight and the initialized team.
     ! After successful cleanup, repeated calls succeed without repeating teardown.
     !-----------------------------------------------------------------------------------------------
-    Use reaction_data, Only: finalize_network_data
+    Use reaction_data, Only: network_data_finalize
     Use xnet_controls, Only: controls_finalize
-    Use xnet_evolve, Only: finalize_evolve
+    Use xnet_evolve, Only: evolve_finalize
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
     Implicit None
 
@@ -453,8 +453,8 @@ Contains
     If ( api_state == api_ready ) Then
       Call gpu_check_device(ierr,message)
       If ( ierr /= xnet_success ) Return
-      Call finalize_evolve
-      Call finalize_network_data
+      Call evolve_finalize
+      Call network_data_finalize
       Call controls_finalize
       api_state = api_cleanup_pending
     EndIf
@@ -590,7 +590,7 @@ Contains
     Return
   End Subroutine check_network_files
 
-  Subroutine initialize_thread_state
+  Subroutine thread_state_initialize
     !-----------------------------------------------------------------------------------------------
     ! Initialize XNet thread IDs and diagnostic units; record the actual OpenMP team size.
     ! The application controls OpenMP settings. Serial builds use one thread.
@@ -611,7 +611,7 @@ Contains
     lun_diag = lun_stdout
     !XOMP end parallel
     Return
-  End Subroutine initialize_thread_state
+  End Subroutine thread_state_initialize
 
   Subroutine copy_network_data(network)
     !-----------------------------------------------------------------------------------------------

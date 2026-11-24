@@ -23,7 +23,7 @@ Contains
     Real(real64), Target, Intent(in) :: a
     dev_ptr_dp = C_LOC(a)
   End Function
-  Subroutine gpu_init(resources,ierr,message)
+  Subroutine gpu_initialize(resources,ierr,message)
     Type(xnet_gpu_t), Intent(in) :: resources
     Integer, Intent(out) :: ierr
     Character(*), Intent(out) :: message

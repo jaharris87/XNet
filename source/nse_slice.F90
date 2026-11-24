@@ -7,13 +7,13 @@
 
 Program nse_slice
   Use, Intrinsic :: iso_fortran_env, Only: iostat_end
-  Use nuclear_data, Only: ny, aa, zz, benuc, nname, read_nuclear_data
-  Use reaction_data, Only: read_reaction_data
+  Use nuclear_data, Only: ny, aa, zz, benuc, nname, nuclear_data_initialize
+  Use reaction_data, Only: reaction_data_initialize
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, iprocess, iscrn, isolv, itsout, iweak0, &
     & changemx, tolm, tolc, yacc, ymin, tdel_maxmult, kstmx, kitmx, bin_file_base, lun_diag, &
     & lun_stdin, lun_stdout, read_controls, myid, nproc
   Use xnet_eos, Only: eos_initialize
-  Use xnet_match, Only: read_match_data
+  Use xnet_match, Only: match_initialize
   Use xnet_nse, Only: xnse, ynse, i_nn, i_pp, i_he4, i_ni56, knrtot, nse_initialize, nse_solve
   Use xnet_parallel, Only: parallel_initialize, parallel_finalize, parallel_myproc, parallel_nprocs
   Use xnet_preprocess, Only: net_preprocess
@@ -84,11 +84,11 @@ Program nse_slice
   If ( iprocess > 0 ) Call net_preprocess(lun_stdout,data_dir,data_dir)
 
   ! Read nuclear dataset
-  Call read_nuclear_data(data_dir,data_desc)
-  Call read_reaction_data(data_dir)
+  Call nuclear_data_initialize(data_dir,data_desc)
+  Call reaction_data_initialize(data_dir)
 
   ! Read data on matching forward and reverse reactions
-  Call read_match_data(data_dir)
+  Call match_initialize(data_dir)
 
   ! Initialize EoS for screening
   If ( iscrn > 0 ) Call eos_initialize

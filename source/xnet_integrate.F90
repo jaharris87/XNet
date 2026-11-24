@@ -343,7 +343,7 @@ Contains
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_conditions, Only: t9t, rhot, yet, cv, etae, detaedt9
     Use xnet_controls, Only: lzactive, gpu_queue, nzbatchmx
-    Use xnet_eos, Only: eos_interface
+    Use xnet_eos, Only: eos_update
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_eos
     Use xnet_types, Only: dp
     Implicit None
@@ -368,7 +368,7 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask)
 
-    Call eos_interface(t9t,rhot,yt, &
+    Call eos_update(t9t,rhot,yt, &
       & yet,cv,etae,detaedt9, &
       & xext,aext,zext,mask_in = mask_in)
 

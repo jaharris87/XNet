@@ -62,7 +62,7 @@ End Module gpu_finalize_vendor
 
 Program gpu_finalize_consumer
   Use, Intrinsic :: iso_c_binding, Only: C_PTR, C_NULL_PTR, C_Associated
-  Use xnet_gpu, Only: gpu_init, gpu_finalize, xnet_gpu_t, mydevice, stream
+  Use xnet_gpu, Only: gpu_initialize, gpu_finalize, xnet_gpu_t, mydevice, stream
   Use xnet_controls, Only: tid, myid
 #ifdef TEST_OPENACC
   Use xnet_controls, Only: gpu_queue
@@ -216,7 +216,7 @@ Contains
     Type(xnet_gpu_t), Intent(in) :: context
     Integer :: ierr
     Character(512) :: message
-    Call gpu_init(context,ierr,message)
+    Call gpu_initialize(context,ierr,message)
     If ( ierr /= 0 ) Print '(A)', Trim(message)
     Call require(ierr == 0,'initialization succeeds')
     Return
@@ -262,7 +262,7 @@ Contains
     Integer, Intent(in) :: expected_creates(3)
     Integer :: ierr
     Character(512) :: message
-    Call gpu_init(context,ierr,message)
+    Call gpu_initialize(context,ierr,message)
     Call require(ierr == 2 .and. Index(message,'already initialized') > 0, &
       & 'initialization is rejected while cleanup remains pending')
     Call check_creates(expected_creates)
@@ -301,7 +301,7 @@ Contains
       Write(status_text,'(I0)') 80+kind
     EndIf
     If ( cleanup_kind > 0 ) Call vendor_fail(cleanup_kind,2)
-    Call gpu_init(context,ierr,message)
+    Call gpu_initialize(context,ierr,message)
     Call require(ierr /= 0,'injected resource initialization failure is reported')
     Call require(Index(message,'status '//Trim(status_text)) > 0,'initialization diagnostic survives rollback')
     Call check_creates(creates)
@@ -355,7 +355,7 @@ Contains
     Character(512) :: message
     Call vendor_fail_associate(resource_solver,1)
     Call vendor_fail(resource_solver,-1)
-    Call gpu_init(context,ierr,message)
+    Call gpu_initialize(context,ierr,message)
     Call require(ierr /= 0,'initialization reports persistent rollback failure')
     Call check_creates([1,1,1])
     Call check_destroys([0,1,1])
@@ -394,7 +394,7 @@ Contains
     context%stream = vendor_borrow(resource_stream,C_NULL_PTR)
     other_stream = vendor_borrow(resource_stream,C_NULL_PTR)
     Call supply_handle(context,resource_blas,vendor_borrow(resource_blas,other_stream))
-    Call gpu_init(context,ierr,message)
+    Call gpu_initialize(context,ierr,message)
     Call require(ierr /= 0 .and. Index(message,'do not match') > 0,'mismatched borrowed stream is rejected')
     Call check_creates([0,0,0])
     Call check_destroys([0,0,0])
@@ -431,7 +431,7 @@ Contains
     EndIf
     Do attempt = 1, 2
       queries = vendor_acc_queries()
-      Call gpu_init(context,ierr,message)
+      Call gpu_initialize(context,ierr,message)
       Print '(A,I0,A,I0,2A)', 'OpenACC queue=',queue,' status=',ierr,' message=',Trim(message)
       If ( valid ) Then
         Call require(ierr == 0 .and. Len_Trim(message) == 0,'named/nonnegative queue initializes')
@@ -469,7 +469,7 @@ Contains
     context%queue = int(acc_async_noval)
     Call vendor_fail_associate(resource_solver,1)
     Call vendor_fail(resource_solver,1)
-    Call gpu_init(context,ierr,message)
+    Call gpu_initialize(context,ierr,message)
     Call require(ierr /= 0 .and. Index(message,'status 63') > 0,'handle initialization error survives rollback')
     Call check_creates([0,1,1])
     Call check_destroys([0,1,1])

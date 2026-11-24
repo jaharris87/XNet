@@ -60,14 +60,14 @@ Module xnet_jacobian
   End Interface xnet_pardiso
 
   Interface xnet_pardisoinit
-    Module Procedure pardisoinit61
+    Module Procedure pardiso61_initialize
   End Interface xnet_pardisoinit
 
   !XOMP threadprivate(dydotdy,tvals,perm)
 
 Contains
 
-  Subroutine pardisoinit61(error)
+  Subroutine pardiso61_initialize(error)
     Implicit None
     Integer, Intent(out) :: error
     Interface
@@ -85,7 +85,7 @@ Contains
     call pardisoinit(pt,mtype,solver,iparm,dparm,error)
     iparm(3) = 1 ! Set # of OpenMP threads for PARDISO to use
     Return
-  End Subroutine pardisoinit61
+  End Subroutine pardiso61_initialize
 
   Subroutine pardiso61(mnum,a,b,x,error)
     Use xnet_types, Only: dp
@@ -122,7 +122,7 @@ Contains
     Return
   End Subroutine pardiso61
 
-  Subroutine read_jacobian_data(data_dir)
+  Subroutine jacobian_initialize(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
@@ -287,7 +287,7 @@ Contains
     !$omp end parallel
 
     Return
-  End Subroutine read_jacobian_data
+  End Subroutine jacobian_initialize
 
   Subroutine jacobian_finalize
     !-----------------------------------------------------------------------------------------------

@@ -45,8 +45,8 @@ Module xnet_evolve
   !-------------------------------------------------------------------------------------------------
   ! Public procedures
   !-------------------------------------------------------------------------------------------------
-  Public :: initialize_evolve
-  Public :: finalize_evolve
+  Public :: evolve_initialize
+  Public :: evolve_finalize
   Public :: full_net
 
 Contains
@@ -54,17 +54,17 @@ Contains
   !=================================================================================================
   ! Evolution Initialization and Finalization
   !
-  ! The frontends first call initialize_network_data (reaction_data in xnet_data.F90). Standalone
-  ! logs its data description before initialize_evolve reads Jacobian/matching data and prepares
+  ! The frontends first call network_data_initialize (reaction_data in xnet_data.F90). Standalone
+  ! logs its data description before evolve_initialize reads Jacobian/matching data and prepares
   ! the evolution state. These calls run once per initialized instance, not once per batch.
   !
-  ! finalize_evolve releases the solver and zone state, including the selected Jacobian provider.
-  ! The frontends then call finalize_network_data and controls_finalize. Network tables and
+  ! evolve_finalize releases the solver and zone state, including the selected Jacobian provider.
+  ! The frontends then call network_data_finalize and controls_finalize. Network tables and
   ! controls outlive the work arrays that use them; GPU resources remain available until all
   ! device mappings are removed.
   !=================================================================================================
 
-  Subroutine initialize_evolve(data_dir,nhistory)
+  Subroutine evolve_initialize(data_dir,nhistory)
     !-----------------------------------------------------------------------------------------------
     ! Read Jacobian/matching data and initialize rates, EOS, integrator, NSE and reusable zone
     ! storage. Nuclear/reaction tables and controls must already be loaded. Each module maps its
@@ -78,40 +78,40 @@ Contains
     Use xnet_conditions, Only: conditions_initialize
     Use xnet_controls, Only: isolv
     Use xnet_eos, Only: eos_initialize
-    Use xnet_flux, Only: flux_init
-    Use xnet_integrate_be, Only: be_init
-    Use xnet_integrate_bdf, Only: bdf_init
-    Use xnet_jacobian, Only: read_jacobian_data
-    Use xnet_match, Only: read_match_data
+    Use xnet_flux, Only: flux_initialize
+    Use xnet_integrate_be, Only: be_initialize
+    Use xnet_integrate_bdf, Only: bdf_initialize
+    Use xnet_jacobian, Only: jacobian_initialize
+    Use xnet_match, Only: match_initialize
     Use xnet_nnu, Only: nnu_initialize
     Use xnet_nse, Only: nse_initialize
-    Use xnet_screening, Only: screening_init
+    Use xnet_screening, Only: screening_initialize
     Implicit None
 
     ! Input arguments
     Character(*), Intent(in) :: data_dir
     Integer, Intent(in) :: nhistory
 
-    Call read_jacobian_data(data_dir)
-    Call read_match_data(data_dir)
-    Call screening_init
-    Call flux_init
+    Call jacobian_initialize(data_dir)
+    Call match_initialize(data_dir)
+    Call screening_initialize
+    Call flux_initialize
     Call eos_initialize
-    If ( isolv == 1 ) Call be_init
-    If ( isolv == 3 ) Call bdf_init
+    If ( isolv == 1 ) Call be_initialize
+    If ( isolv == 3 ) Call bdf_initialize
     Call nse_initialize
     Call abundances_initialize
     Call conditions_initialize(nhistory)
     Call nnu_initialize(nhistory)
 
     Return
-  End Subroutine initialize_evolve
+  End Subroutine evolve_initialize
 
-  Subroutine finalize_evolve
+  Subroutine evolve_finalize
     !-----------------------------------------------------------------------------------------------
     ! Release integrator, NSE/EOS, Jacobian, rate-evaluation and zone work arrays. The selected
     ! Jacobian provider releases its own arrays and any library-owned factors. Loaded network
-    ! tables remain for finalize_network_data; controls and GPU resources must remain available
+    ! tables remain for network_data_finalize; controls and GPU resources must remain available
     ! until both routines finish. Call outside parallel regions, after all threads finish, with
     ! the same OpenMP team used during initialization.
     !-----------------------------------------------------------------------------------------------
@@ -141,7 +141,7 @@ Contains
     Call conditions_finalize
 
     Return
-  End Subroutine finalize_evolve
+  End Subroutine evolve_finalize
 
   !=================================================================================================
   ! Batch Reaction-Network Evolution

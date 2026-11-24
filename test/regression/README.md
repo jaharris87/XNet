@@ -210,7 +210,7 @@ solver behavior. Holding block size at 1 keeps batching out of the integrator
 comparison; no evidence from the isolated runs indicated a BDF semantic
 dependency on the legacy block size of 4. Testing `szbatch > 1` remains
 separate work. `source/xnet_evolve.F90` imports `solve_bdf` and dispatches
-`isolv == 3` to it, its `initialize_evolve` calls `bdf_init` for the same
+`isolv == 3` to it, its `evolve_initialize` calls `bdf_initialize` for the same
 choice, and the normal root-level production build contains
 `xnet_integrate_bdf.o`. `source/xnet_controls.F90` replaces both input
 abundance- and temperature-change timestep limits with the effective value

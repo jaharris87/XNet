@@ -1,13 +1,13 @@
 Program verify_build_net_readers
-  Use nuclear_data, Only: aa, angm, g, mex, nname, nn, ny, read_nuclear_data, zz
+  Use nuclear_data, Only: aa, angm, g, mex, nname, nn, ny, nuclear_data_initialize, zz
   Use reaction_data, Only: ires1, ires2, ires3, ires4, irev1, irev2, iwk1, iwk2, &
     & mu1, mu2, n1i, n2i, n10, n11, n20, n21, n22, nan, nreac, q1, q2, rc1, rc2, &
-    & read_reaction_data
+    & reaction_data_initialize
   Use xnet_controls, Only: idiag, iheat, iscrn, iweak0, nzbatchmx, szbatch, tid
   Use xnet_jacobian, Only: cidx, l1s, l2s, l3s, l4s, lval, ns11, ns21, ns22, pb, &
-    & read_jacobian_data, ridx
+    & jacobian_initialize, ridx
   Use xnet_match, Only: descx, ifl1, ifl2, iwflx, mflx, nflx, qflx, &
-    & read_match_data
+    & match_initialize
   Use xnet_types, Only: dp
   Implicit None
 
@@ -32,10 +32,10 @@ Program verify_build_net_readers
 
 
 
-  Call read_nuclear_data(trim(data_dir),data_desc)
-  Call read_reaction_data(trim(data_dir))
-  Call read_match_data(trim(data_dir))
-  Call read_jacobian_data(trim(data_dir))
+  Call nuclear_data_initialize(trim(data_dir),data_desc)
+  Call reaction_data_initialize(trim(data_dir))
+  Call match_initialize(trim(data_dir))
+  Call jacobian_initialize(trim(data_dir))
 
   Call require(trim(data_desc) == 'build_net synthetic fixture', &
     & 'production nuclear reader returned the wrong description')

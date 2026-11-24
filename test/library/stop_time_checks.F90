@@ -10,7 +10,7 @@ Program stop_time_checks
   Use xnet_controls, Only: szbatch, lzactive, iheat, kitmx, iconvc, &
     & changemx, changemxt, kmon, ktot
   Use xnet_integrate, Only: timestep
-  Use xnet_integrate_be, Only: solve_be, be_init, be_finalize
+  Use xnet_integrate_be, Only: solve_be, be_initialize, be_finalize
   Use xnet_integrate_bdf, Only: solve_bdf, bdf_reset, bdf_adjust, bdf_check, q, z, z0, dt_scale, hvec, eta, &
     & ierr_ts, ierr_nr, bdf_active, nit_nr, nit_nrslv, tq, acnrm, retry_ts
   Implicit None
@@ -40,7 +40,7 @@ Program stop_time_checks
   If ( ierr /= xnet_success ) Write(*,'(a)') Trim(message)
   Call check(ierr == xnet_success,'initialize real alpha network')
   If ( ierr /= xnet_success ) Stop 1
-  Call be_init
+  Call be_initialize
   carbon = 0
   Do k = 1, ny
     If ( Trim(Adjustl(nname(k))) == 'c12' ) carbon = k

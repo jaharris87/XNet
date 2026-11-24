@@ -120,6 +120,14 @@ Module xnet_gpu
   Implicit None
   Private
 
+  ! GPU lifecycle statuses are returned directly through xnet_api. Keep values aligned with
+  ! xnet_success, xnet_invalid, xnet_lifecycle_error and xnet_unsupported there; importing
+  ! xnet_api here would create a circular module dependency. Vendor runtime codes stay separate.
+  Integer, Parameter :: gpu_success         = 0
+  Integer, Parameter :: gpu_invalid         = 1
+  Integer, Parameter :: gpu_lifecycle_error = 2
+  Integer, Parameter :: gpu_unsupported     = 3
+
   !-------------------------------------------------------------------------------------------------
   ! Public module state and types
   !-------------------------------------------------------------------------------------------------
@@ -176,7 +184,7 @@ Module xnet_gpu
     Module Procedure dev_ptr_cptr
   End Interface dev_ptr
 
-  Public :: gpu_init
+  Public :: gpu_initialize
   Public :: gpu_finalize
   Public :: gpu_check_device
   Public :: device_is_present
@@ -191,7 +199,7 @@ Contains
   ! Public Lifecycle and Device Verification Routines
   !=================================================================================================
 
-  Subroutine gpu_init(gpu_context,ierr,message)
+  Subroutine gpu_initialize(gpu_context,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Initialize GPU execution.
     ! - When gpu_context is omitted (standalone mode): selects a device per rank (myid mod count)
@@ -216,12 +224,12 @@ Contains
     Character(512) :: cleanup_message
 #endif
 
-    init_status = 0
+    init_status = gpu_success
     init_message = ' '
 
 #if defined(XNET_GPU)
     If ( gpu_initialized .or. mydevice >= 0 ) Then
-      init_status = 2
+      init_status = gpu_lifecycle_error
       init_message = 'GPU resources are already initialized'
       Call report_gpu_status(init_status,init_message,ierr,message)
       Return
@@ -233,20 +241,20 @@ Contains
       Call select_standalone_device(device,init_status,init_message)
     EndIf
 
-    If ( init_status /= 0 ) Then
+    If ( init_status /= gpu_success ) Then
       Call report_gpu_status(init_status,init_message,ierr,message)
       Return
     EndIf
 
     !XOMP parallel if(.not. present(gpu_context)) default(shared)
-    Call init_thread_resources(device,gpu_context,init_status,init_message)
+    Call thread_resources_initialize(device,gpu_context,init_status,init_message)
     !XOMP end parallel
 
     mydevice = device
-    If ( init_status /= 0 ) Then
+    If ( init_status /= gpu_success ) Then
       ! Roll back after the team joins; failed handles retain their stream and ownership.
       Call gpu_finalize(cleanup_status,cleanup_message)
-      If ( cleanup_status /= 0 ) init_message = trim(init_message)//'; '//trim(cleanup_message)
+      If ( cleanup_status /= gpu_success ) init_message = trim(init_message)//'; '//trim(cleanup_message)
     EndIf
 #else
     If ( .not. present(gpu_context) ) Then
@@ -261,7 +269,7 @@ Contains
     Call report_gpu_status(init_status,init_message,ierr,message)
 
     Return
-  End Subroutine gpu_init
+  End Subroutine gpu_initialize
 
   Subroutine gpu_finalize(ierr,message)
     !-----------------------------------------------------------------------------------------------
@@ -285,16 +293,16 @@ Contains
     Logical :: remaining_active
 #endif
 
-    finalize_status = 0
+    finalize_status = gpu_success
     finalize_message = ' '
 
 #if defined(XNET_GPU)
     remaining_active = .false.
     !XOMP parallel default(shared) private(thread_status,thread_message)
-    Call finalize_thread_resources(thread_status,thread_message)
+    Call thread_resources_finalize(thread_status,thread_message)
 
     !$omp critical(xnet_gpu_finalize_status)
-    If ( thread_status /= 0 .and. finalize_status == 0 ) Then
+    If ( thread_status /= gpu_success .and. finalize_status == gpu_success ) Then
       finalize_status = thread_status
       finalize_message = thread_message
     EndIf
@@ -325,20 +333,20 @@ Contains
     Integer :: device
 
 #if defined(XNET_GPU)
-    ierr = 2
+    ierr = gpu_lifecycle_error
     message = ' '
     If ( .not. gpu_initialized ) Then
       message = 'Initialize GPU resources before using them'
       Return
     EndIf
     Call gpu_current_device(device,ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= gpu_success ) Return
     If ( device /= active_device ) Then
-      ierr = 1
+      ierr = gpu_invalid
       message = 'The GPU device changed while XNet was initialized'
     EndIf
 #else
-    ierr = 0
+    ierr = gpu_success
     message = ' '
 #endif
 
@@ -511,7 +519,7 @@ Contains
 
     If ( present(ierr) ) ierr = status_in
     If ( present(message) ) message = message_in
-    If ( status_in /= 0 .and. .not. present(ierr) ) Call xnet_terminate(trim(message_in),status_in)
+    If ( status_in /= gpu_success .and. .not. present(ierr) ) Call xnet_terminate(trim(message_in),status_in)
 
     Return
   End Subroutine report_gpu_status
@@ -531,14 +539,14 @@ Contains
 #endif
 
     device = -1
-    ierr = 1
+    ierr = gpu_invalid
     message = ' '
 #if defined(XNET_CUDA)
     status = cudaGetDevice(current_device)
 #elif defined(XNET_HIP)
     status = hipGetDevice(current_device)
 #else
-    ierr = 3
+    ierr = gpu_unsupported
     message = 'GPU calls require a CUDA or HIP runtime'
     Return
 #endif
@@ -554,7 +562,7 @@ Contains
       Return
     EndIf
 #endif
-    ierr = 0
+    ierr = gpu_success
 #endif
 
     Return
@@ -591,17 +599,17 @@ Contains
     Character(*), Intent(out) :: message
 
     device = -1
-    ierr = 0
+    ierr = gpu_success
     message = ' '
 #if defined(XNET_LA_MAGMA)
-    ierr = 3
+    ierr = gpu_unsupported
     message = 'GPU resource values are not currently supported by the MAGMA backend'
     Return
 #endif
     Call gpu_current_device(device,ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= gpu_success ) Return
     If ( gpu_context%device >= 0 .and. gpu_context%device /= device ) Then
-      ierr = 1
+      ierr = gpu_invalid
       message = 'Supplied GPU device does not match the current application device'
     EndIf
 
@@ -622,7 +630,7 @@ Contains
     Integer(C_INT) :: status
 
     device = -1
-    ierr = 0
+    ierr = gpu_success
     message = ' '
 #if defined(XNET_CUDA)
     status = cudaGetDeviceCount(deviceCount)
@@ -630,12 +638,12 @@ Contains
     status = hipGetDeviceCount(deviceCount)
 #endif
     If ( status /= 0 ) Then
-      ierr = 1
+      ierr = gpu_invalid
       Write(message,'(A,I0)') 'Cannot query the GPU count, status ',status
       Return
     EndIf
     If ( deviceCount <= 0 ) Then
-      ierr = 1
+      ierr = gpu_invalid
       message = 'No GPU found'
       Return
     EndIf
@@ -646,7 +654,7 @@ Contains
     status = hipSetDevice(int(device,C_INT))
 #endif
     If ( status /= 0 ) Then
-      ierr = 1
+      ierr = gpu_invalid
       Write(message,'(A,I0)') 'Cannot select the standalone GPU device, status ',status
       Return
     EndIf
@@ -683,11 +691,11 @@ Contains
     Integer, Intent(out) :: thread_status
     Character(*), Intent(out) :: thread_message
 
-    thread_status = 0
+    thread_status = gpu_success
     thread_message = ' '
     If ( .not. c_associated(handle) ) Return
     If ( query_status /= 0 ) Then
-      thread_status = 1
+      thread_status = gpu_invalid
       Write(thread_message,'(A,I0)') 'Cannot query the supplied '//trim(label)//' stream, status ',query_status
       Return
     EndIf
@@ -696,17 +704,17 @@ Contains
       stream_known = .true.
     EndIf
     If ( .not. same_c_ptr(handle_stream,work_stream) ) Then
-      thread_status = 1
+      thread_status = gpu_invalid
       thread_message = 'Supplied '//trim(label)//' handle and GPU stream do not match'
     EndIf
 
     Return
   End Subroutine check_handle_stream
 
-  Subroutine init_thread_resources(device,gpu_context,init_status,init_message)
+  Subroutine thread_resources_initialize(device,gpu_context,init_status,init_message)
     !-----------------------------------------------------------------------------------------------
     ! Validate borrowed handles, allocate any missing stream/handles on the calling thread, and
-    ! install their ownership state. The outer gpu_init joins the team before attempting rollback.
+    ! install their ownership state. The outer gpu_initialize joins the team before attempting rollback.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -736,7 +744,7 @@ Contains
     Logical :: create_magma_queue
 #endif
 
-    thread_status = 0
+    thread_status = gpu_success
     thread_message = ' '
     queue = tid
     work_stream = C_NULL_PTR
@@ -763,7 +771,7 @@ Contains
     ! cleanly to the team synchronization and rollback section below.
     setup: Do
       If ( gpu_initialized ) Then
-        thread_status = 2
+        thread_status = gpu_lifecycle_error
         thread_message = 'GPU resources are already initialized on a host thread'
         Exit setup
       EndIf
@@ -788,7 +796,7 @@ Contains
         status = hipSetDevice(int(device,C_INT))
 #endif
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot select the standalone GPU device, status ',status
           Exit setup
         EndIf
@@ -801,14 +809,14 @@ Contains
 
 #if defined(XNET_OACC)
       If ( queue < 0 .and. queue /= int(acc_async_sync) .and. queue /= int(acc_async_noval) ) Then
-        thread_status = 1
+        thread_status = gpu_invalid
         thread_message = 'Invalid OpenACC queue'
         Exit setup
       EndIf
       handle_stream = acc_get_cuda_stream(int(queue,C_LONG_LONG))
       If ( stream_known ) Then
         If ( .not. same_c_ptr(handle_stream,work_stream) ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           thread_message = 'Supplied OpenACC queue and GPU stream do not match'
           Exit setup
         EndIf
@@ -824,32 +832,32 @@ Contains
         status = cublasGetStream_v2(work_cublas,handle_stream)
         Call check_handle_stream(work_cublas,status,handle_stream,'cuBLAS', &
           & work_stream,stream_known,thread_status,thread_message)
-        If ( thread_status /= 0 ) Exit setup
+        If ( thread_status /= gpu_success ) Exit setup
       EndIf
       If ( c_associated(work_cusolver) ) Then
         status = cusolverDnGetStream(work_cusolver,handle_stream)
         Call check_handle_stream(work_cusolver,status,handle_stream,'cuSOLVER', &
           & work_stream,stream_known,thread_status,thread_message)
-        If ( thread_status /= 0 ) Exit setup
+        If ( thread_status /= gpu_success ) Exit setup
       EndIf
 #elif defined(XNET_HIP)
       If ( c_associated(work_hipblas) ) Then
         status = hipblasGetStream(work_hipblas,handle_stream)
         Call check_handle_stream(work_hipblas,status,handle_stream,'hipBLAS', &
           & work_stream,stream_known,thread_status,thread_message)
-        If ( thread_status /= 0 ) Exit setup
+        If ( thread_status /= gpu_success ) Exit setup
       EndIf
       If ( c_associated(work_rocblas) ) Then
         status = rocblas_get_stream(work_rocblas,handle_stream)
         Call check_handle_stream(work_rocblas,status,handle_stream,'rocBLAS', &
           & work_stream,stream_known,thread_status,thread_message)
-        If ( thread_status /= 0 ) Exit setup
+        If ( thread_status /= gpu_success ) Exit setup
       EndIf
       If ( c_associated(work_rocsolver) ) Then
         status = rocblas_get_stream(work_rocsolver,handle_stream)
         Call check_handle_stream(work_rocsolver,status,handle_stream,'rocSOLVER', &
           & work_stream,stream_known,thread_status,thread_message)
-        If ( thread_status /= 0 ) Exit setup
+        If ( thread_status /= gpu_success ) Exit setup
       EndIf
 #endif
 
@@ -861,7 +869,7 @@ Contains
         status = hipStreamCreate(work_stream)
 #endif
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot create the XNet GPU stream, status ',status
           Exit setup
         EndIf
@@ -873,14 +881,14 @@ Contains
       If ( .not. c_associated(work_cublas) ) Then
         status = cublasCreate_v2(work_cublas)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot create the XNet cuBLAS handle, status ',status
           Exit setup
         EndIf
         create_cublas = .true.
         status = cublasSetStream_v2(work_cublas,work_stream)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot associate the XNet cuBLAS stream, status ',status
           Exit setup
         EndIf
@@ -888,14 +896,14 @@ Contains
       If ( .not. c_associated(work_cusolver) ) Then
         status = cusolverDnCreate(work_cusolver)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot create the XNet cuSOLVER handle, status ',status
           Exit setup
         EndIf
         create_cusolver = .true.
         status = cusolverDnSetStream(work_cusolver,work_stream)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot associate the XNet cuSOLVER stream, status ',status
           Exit setup
         EndIf
@@ -904,14 +912,14 @@ Contains
       If ( .not. c_associated(work_hipblas) ) Then
         status = hipblasCreate(work_hipblas)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot create the XNet hipBLAS handle, status ',status
           Exit setup
         EndIf
         create_hipblas = .true.
         status = hipblasSetStream(work_hipblas,work_stream)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot associate the XNet hipBLAS stream, status ',status
           Exit setup
         EndIf
@@ -919,14 +927,14 @@ Contains
       If ( .not. c_associated(work_rocblas) ) Then
         status = rocblas_create_handle(work_rocblas)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot create the XNet rocBLAS handle, status ',status
           Exit setup
         EndIf
         create_rocblas = .true.
         status = rocblas_set_stream(work_rocblas,work_stream)
         If ( status /= 0 ) Then
-          thread_status = 1
+          thread_status = gpu_invalid
           Write(thread_message,'(A,I0)') 'Cannot associate the XNet rocBLAS stream, status ',status
           Exit setup
         EndIf
@@ -938,7 +946,7 @@ Contains
 #if defined(XNET_LA_MAGMA)
       Call magma_queue_create_from_cuda(int(device,C_INT),work_stream,work_cublas,C_NULL_PTR,work_magma_queue)
       If ( .not. c_associated(work_magma_queue) ) Then
-        thread_status = 1
+        thread_status = gpu_invalid
         thread_message = 'Cannot create the XNet MAGMA queue'
         Exit setup
       EndIf
@@ -947,9 +955,9 @@ Contains
       Exit setup
     EndDo setup
 
-    If ( thread_status /= 0 ) Then
+    If ( thread_status /= gpu_success ) Then
       !$omp critical(xnet_gpu_init_status)
-      If ( init_status == 0 ) Then
+      If ( init_status == gpu_success ) Then
         init_status = thread_status
         init_message = thread_message
       EndIf
@@ -967,7 +975,7 @@ Contains
 #if defined(XNET_LA_MAGMA)
     resources_created = resources_created .or. create_magma_queue
 #endif
-    If ( init_status == 0 .or. resources_created ) Then
+    If ( init_status == gpu_success .or. resources_created ) Then
 #if defined(XNET_CUDA)
       cublas_handle = work_cublas
       cusolver_handle = work_cusolver
@@ -985,7 +993,7 @@ Contains
       owns_rocblas = create_rocblas
 #endif
 #if defined(XNET_OACC)
-      If ( init_status == 0 .and. .not. present(gpu_context) ) Then
+      If ( init_status == gpu_success .and. .not. present(gpu_context) ) Then
         acc_queue = int(queue,C_LONG_LONG)
         Call acc_set_cuda_stream(int(acc_async_sync,C_LONG_LONG),work_stream)
       EndIf
@@ -1001,9 +1009,9 @@ Contains
     EndIf
 
     Return
-  End Subroutine init_thread_resources
+  End Subroutine thread_resources_initialize
 
-  Subroutine finalize_thread_resources(thread_status,thread_message)
+  Subroutine thread_resources_finalize(thread_status,thread_message)
     !-----------------------------------------------------------------------------------------------
     ! Synchronize the thread stream and destroy owned handles/streams in dependency order.
     !-----------------------------------------------------------------------------------------------
@@ -1019,12 +1027,12 @@ Contains
     Type(C_PTR) :: work_rocblas, work_rocsolver
 #endif
 
-    thread_status = 0
+    thread_status = gpu_success
     thread_message = ' '
     If ( .not. gpu_initialized ) Return
 
     Call gpu_check_device(thread_status,thread_message)
-    If ( thread_status /= 0 ) Return
+    If ( thread_status /= gpu_success ) Return
 
 #if defined(XNET_CUDA)
     status = cudaStreamSynchronize(stream)
@@ -1032,7 +1040,7 @@ Contains
     status = hipStreamSynchronize(stream)
 #endif
     If ( status /= 0 ) Then
-      thread_status = 1
+      thread_status = gpu_invalid
       Write(thread_message,'(A,I0)') 'Cannot synchronize the XNet GPU stream, status ',status
       Return
     EndIf
@@ -1050,7 +1058,7 @@ Contains
         cusolver_handle = C_NULL_PTR
         owns_cusolver = .false.
       Else
-        thread_status = 1
+        thread_status = gpu_invalid
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet cuSOLVER handle, status ',status
       EndIf
     EndIf
@@ -1059,8 +1067,8 @@ Contains
       If ( status == 0 ) Then
         cublas_handle = C_NULL_PTR
         owns_cublas = .false.
-      ElseIf ( thread_status == 0 ) Then
-        thread_status = 1
+      ElseIf ( thread_status == gpu_success ) Then
+        thread_status = gpu_invalid
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet cuBLAS handle, status ',status
       EndIf
     EndIf
@@ -1075,7 +1083,7 @@ Contains
         rocblas_handle = C_NULL_PTR
         owns_rocblas = .false.
       Else
-        thread_status = 1
+        thread_status = gpu_invalid
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet rocBLAS handle, status ',status
       EndIf
     EndIf
@@ -1084,15 +1092,15 @@ Contains
       If ( status == 0 ) Then
         hipblas_handle = C_NULL_PTR
         owns_hipblas = .false.
-      ElseIf ( thread_status == 0 ) Then
-        thread_status = 1
+      ElseIf ( thread_status == gpu_success ) Then
+        thread_status = gpu_invalid
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet hipBLAS handle, status ',status
       EndIf
     EndIf
 #endif
 
     ! Failed handles may still reference this stream; keep stream state intact for a cleanup retry.
-    If ( thread_status /= 0 ) Return
+    If ( thread_status /= gpu_success ) Return
 
     If ( owns_stream ) Then
 #if defined(XNET_CUDA)
@@ -1101,7 +1109,7 @@ Contains
       status = hipStreamDestroy(stream)
 #endif
       If ( status /= 0 ) Then
-        thread_status = 1
+        thread_status = gpu_invalid
         Write(thread_message,'(A,I0)') 'Cannot destroy the XNet GPU stream, status ',status
         Return
       EndIf
@@ -1125,7 +1133,7 @@ Contains
     gpu_initialized = .false.
 
     Return
-  End Subroutine finalize_thread_resources
+  End Subroutine thread_resources_finalize
 #endif
 
 End Module xnet_gpu

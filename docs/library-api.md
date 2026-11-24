@@ -24,6 +24,16 @@ HIP/ROCm. One initialized network per process is supported.
 from that batch is usable and the application must shut down. Some errors
 still stop the process inside XNet; see [status and shutdown](#status-and-shutdown).
 
+**Contents:** [CPU quickstart](#cpu-quickstart) ·
+[Execution models](#choosing-an-execution-model) ·
+[CPU OpenMP](#cpu-openmp-batches) · [Mapped GPU batch](#mapped-gpu-batch) ·
+[Inputs and results](#batch-inputs-and-returned-values) ·
+[Status and shutdown](#status-and-shutdown) · [Controls](#controls-in-the-library) ·
+[Histories](#per-call-histories) · [GPU resources](#gpu-builds-and-resources) ·
+[Application EOS](#application-eos-interface) · [NSE](#nse-composition-queries) ·
+[Updating a caller](#updating-a-development-caller) ·
+[CHIMERA and Flash-X](#application-notes-chimera-and-flash-x)
+
 ## CPU quickstart
 
 Build from the repository root:
@@ -62,7 +72,8 @@ Save the following as `quickstart.f90` in that working directory:
 Program quickstart
   Use, Intrinsic :: iso_fortran_env, Only: error_unit, output_unit
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, &
-    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success
+    & set_xnet_controls_defaults, xnet_initialize, xnet_burn_batch, xnet_finalize, xnet_success, &
+    & xnet_count_timesteps, xnet_count_newton
   Implicit None
 
   Integer, Parameter :: nzones = 1, message_length = 512
@@ -115,6 +126,8 @@ Program quickstart
   Call check_status(operation='burn',status=ierr,detail=message)
   Write(output_unit,'(a,es13.5,a,i0)') 'evolve seconds: ',timing%evolve, &
     & '; accepted outer steps: ',max_steps_taken
+  Write(output_unit,'(a,i0,a,i0)') 'timestep attempts: ',counters(xnet_count_timesteps,1), &
+    & '; Newton iterations: ',counters(xnet_count_newton,1)
   Write(output_unit,'(a,es13.5)') 'returned Ye: ',ye(1)
 
   Call xnet_finalize(ierr=ierr,message=message)
@@ -491,15 +504,16 @@ call either way, so BDF callers should normally pass zero.
 
 ### Counters and timings
 
-`counters(:,zone)` is reset for each call:
+`counters(:,zone)` is reset for each call. Import these public integer row
+indices from `xnet_api` to select a count in the `(5,nz)` array:
 
-| Row | Count |
-| --- | --- |
-| 1 | Internal timestep attempts, including retries. |
-| 2 | Newton iterations, including failed attempts. |
-| 3 | Jacobian builds. |
-| 4 | Derivative evaluations. |
-| 5 | Rate evaluations. |
+| Constant | Row | Count |
+| --- | --- | --- |
+| `xnet_count_timesteps` | 1 | Internal timestep attempts, including retries. |
+| `xnet_count_newton` | 2 | Newton iterations, including failed attempts. |
+| `xnet_count_jacobians` | 3 | Jacobian builds. |
+| `xnet_count_derivatives` | 4 | Derivative evaluations. |
+| `xnet_count_rates` | 5 | Rate evaluations. |
 
 Optional `max_steps_taken` returns the largest number of accepted outer
 steps in the batch (`kstep` in `full_net`). Unlike row 1 it excludes retries;
@@ -592,7 +606,7 @@ These fields behave differently from standalone runs:
 | `iheat` | `>0` evolves temperature; otherwise the caller's temperature is returned unchanged. |
 | `idiag` | Diagnostics go to standard output; there is no `net_diag` file. |
 | `itsout`, `bin_file_base`, `ev_file_base` | Write [per-call histories](#per-call-histories). |
-| `output_nuclei` | Mapped at initialization even when `itsout=0`. A name missing from the network prints a warning and selects the last species. |
+| `output_nuclei` | Mapped at initialization even when `itsout=0`. A name missing from the network rejects initialization with `xnet_invalid` before evolution setup. |
 
 ## Per-call histories
 
@@ -704,7 +718,7 @@ application's OpenACC queue association unchanged, and creates only what is
 missing. Finalize before destroying supplied resources or EOS data.
 XNet frees what it created and forgets what it borrowed; it does not reset
 the device, finalize the vendor runtime or touch application MPI. Do not set
-XNet's GPU module variables directly or call `gpu_init`/`gpu_finalize`.
+XNet's GPU module variables directly or call `gpu_initialize`/`gpu_finalize`.
 
 For OpenACC, the supplied `queue` must use the same stream as any supplied
 handles and `stream`. Usually supply only the queue and let XNet obtain its

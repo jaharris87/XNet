@@ -9,7 +9,7 @@
 Module nuclear_data
   !-------------------------------------------------------------------------------------------------
   ! This module contains the essential data for each included species. Their array sizes are set in
-  ! the routine read_nuclear_data.
+  ! the routine nuclear_data_initialize.
   !-------------------------------------------------------------------------------------------------
   Use xnet_types, Only: dp
   Implicit None
@@ -35,7 +35,7 @@ Module nuclear_data
   !-------------------------------------------------------------------------------------------------
   ! This module contains the nuclear partition function data. g is the interpolation data (ng,ny),
   ! gg is the current parition function, and angm is the J. gg(0) and angm(0) are placeholders for
-  ! non-nuclei. The array sizes are set in read_nuclear_data.
+  ! non-nuclei. The array sizes are set in nuclear_data_initialize.
   !-------------------------------------------------------------------------------------------------
   Integer, Parameter    :: ng = 24      ! Number of grid points for partition function data
   Integer, Allocatable  :: it9i(:)      ! Raw partition function temperature grid from file
@@ -454,7 +454,7 @@ Contains
     Return
   End Subroutine read_netwinv
 
-  Subroutine read_nuclear_data(data_dir,data_desc)
+  Subroutine nuclear_data_initialize(data_dir,data_desc)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads, from the file netwinv, the nuclei included along with the nuclear data
     ! which will be needed for later calculations. This data includes the atomic number, the number
@@ -585,7 +585,7 @@ Contains
 
 
     Return
-  End Subroutine read_nuclear_data
+  End Subroutine nuclear_data_initialize
 
   Subroutine format_nuclear_data(lun_out,data_dir)
     !-----------------------------------------------------------------------------------------------
@@ -773,13 +773,13 @@ Module reaction_data
 
 Contains
 
-  Subroutine initialize_network_data(data_dir,data_description)
+  Subroutine network_data_initialize(data_dir,data_description)
     !-----------------------------------------------------------------------------------------------
     ! Read species metadata and reaction tables in that order. The frontends call this after
     ! applying controls and before evolution initialization. Standalone logs data_description before
-    ! initialize_evolve reads the reaction-matching data and writes its diagnostic summary.
+    ! evolve_initialize reads the reaction-matching data and writes its diagnostic summary.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: read_nuclear_data
+    Use nuclear_data, Only: nuclear_data_initialize
     Implicit None
 
     ! Input arguments
@@ -788,16 +788,16 @@ Contains
     ! Output arguments
     Character(80), Intent(out) :: data_description
 
-    Call read_nuclear_data(data_dir,data_description)
-    Call read_reaction_data(data_dir)
+    Call nuclear_data_initialize(data_dir,data_description)
+    Call reaction_data_initialize(data_dir)
 
     Return
-  End Subroutine initialize_network_data
+  End Subroutine network_data_initialize
 
-  Subroutine finalize_network_data
+  Subroutine network_data_finalize
     !-----------------------------------------------------------------------------------------------
     ! Release the weak/neutrino rates, reaction tables and nuclear data initialized by
-    ! initialize_network_data. Zone and solver cleanup must finish first; controls and GPU
+    ! network_data_initialize. Zone and solver cleanup must finish first; controls and GPU
     ! resources remain available until these data owners have removed their device mappings.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: nuclear_data_finalize
@@ -811,9 +811,9 @@ Contains
     Call nuclear_data_finalize
 
     Return
-  End Subroutine finalize_network_data
+  End Subroutine network_data_finalize
 
-  Subroutine read_reaction_data(data_dir)
+  Subroutine reaction_data_initialize(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! This routine reads in the necessary reaction data.
     !-----------------------------------------------------------------------------------------------
@@ -1123,13 +1123,13 @@ Contains
     !XDIR XCOPYIN(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XCOPYIN(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
     !XDIR XCOPYIN(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !XDIR XCOPYIN(iffn,ffnsum,ffnenu) &
+    !XDIR XCOPYIN(ffnsum,ffnenu) &
     !XDIR XCOPYIN(has_logft,ffn_ec,ffn_beta,ffn_qval) &
-    !XDIR XCOPYIN(innu,sigmanu)
+    !XDIR XCOPYIN(sigmanu)
     !XDIR XWAIT(gpu_queue)
 
     Return
-  End Subroutine read_reaction_data
+  End Subroutine reaction_data_initialize
 
   Subroutine enudot(y,sqnu,mask_in)
     !-----------------------------------------------------------------------------------------------
@@ -1229,8 +1229,7 @@ Contains
       !XDIR XDELETE(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
       !XDIR XDELETE(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
       !XDIR XDELETE(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
-      !XDIR XDELETE(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-      !XDIR XDELETE(iffn,innu)
+      !XDIR XDELETE(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44)
       !XDIR XWAIT(gpu_queue)
     EndIf
     If ( Allocated(n1i) ) Deallocate (n1i)

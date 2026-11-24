@@ -40,7 +40,7 @@ make -C test/unit screening-test
 make -C test/unit screening-test CMODE=DEBUG
 ```
 
-It calls production `screening_init` and `screening` with controlled plasma
+It calls production `screening_initialize` and `screening` with controlled plasma
 inputs. Triple-alpha, p+alpha+alpha, and n+p+alpha strong-screening exponents
 are compared with sequential two-reactant screening, whose intermediate
 Coulomb free energies cancel. This implements the N-body relation in

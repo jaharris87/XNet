@@ -42,25 +42,32 @@ Contains
   ! Time-Series File Lifecycle
   !=================================================================================================
 
-  Subroutine map_output_nuc
+  Subroutine map_output_nuc(ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Map the configured condensed ASCII output species names (output_nuc(1:nnucout)) to active
-    ! network indices in inucout(1:nnucout). Any species name not present in the loaded network
-    ! logs a warning to lun_stdout and falls back to the final network species (ny).
+    ! network indices in inucout(1:nnucout). Reject species absent from the loaded network
+    ! before either frontend initializes evolution.
     ! An empty selection (nnucout = 0) requires no work, regardless of the output level.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, index_from_name
-    Use xnet_controls, Only: nnucout, output_nuc, inucout, lun_stdout
+    Use xnet_controls, Only: nnucout, output_nuc, inucout
     Implicit None
+
+    ! Output arguments
+    Integer, Intent(out) :: ierr
+    Character(*), Intent(out) :: message
 
     ! Local variables
     Integer :: i, inuc
 
+    ierr = 0
+    message = ' '
     Do i = 1, nnucout
       Call index_from_name(output_nuc(i),inuc)
       If ( inuc < 1 .or. inuc > ny ) Then
-        Write(lun_stdout,*) 'Output Nuc:',i,output_nuc(i),' not found'
-        inucout(i) = ny
+        ierr = 1
+        message = 'Unknown output_nuclei species: '//trim(adjustl(output_nuc(i)))
+        Return
       Else
         inucout(i) = inuc
       EndIf

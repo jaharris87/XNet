@@ -51,7 +51,7 @@ Module xnet_eos
 
 Contains
 
-  Subroutine eos_interface(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext)
+  Subroutine eos_update(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext)
     Implicit None
 
     Real(dp), Intent(in) :: aext, rho, t9, xext, y(:), zext
@@ -63,7 +63,7 @@ Contains
     ye = sum(zz*y) + xext*zext/aext
 
     Return
-  End Subroutine eos_interface
+  End Subroutine eos_update
 
   Subroutine eos_screen(t9,rho,y,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9, &
     & xext,aext,zext)

@@ -16,19 +16,19 @@ Program net
   Use model_input_ascii, Only: load_initial_abundances, read_thermo_file
   Use nuclear_data, Only: ny, nname
 !$ Use omp_lib
-  Use reaction_data, Only: initialize_network_data, finalize_network_data
+  Use reaction_data, Only: network_data_initialize, network_data_finalize
   Use xnet_abundances, Only: ystart, y, xext, zext, aext
   Use xnet_conditions, Only: t, tdel, t9, rho, ye, nt, nstart, tstart, tstop, tdelstart, &
     & t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
   Use xnet_controls, Only: idiag, iprocess, itsout, szone, nzone, zone_id, kstmx, ev_file_base, bin_file_base, &
     & thermo_file, inab_file, lun_diag, lun_stdout, tid, gpu_queue, nthread, nzbatchmx, nzbatch, szbatch, lzactive, &
     & myid, nproc, read_controls, write_controls, controls_finalize
-  Use xnet_evolve, Only: full_net, initialize_evolve, finalize_evolve
+  Use xnet_evolve, Only: full_net, evolve_initialize, evolve_finalize
   Use xnet_flux, Only: flx_int
-  Use xnet_gpu, Only: gpu_init, gpu_finalize
+  Use xnet_gpu, Only: gpu_initialize, gpu_finalize
   Use xnet_match, Only: mflx, nflx
   Use xnet_nnu, Only: tmevnu, fluxcms
-  Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
+  Use xnet_output, Only: map_output_nuc, open_ts_file, open_ev_file, close_output_files
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, &
     & parallel_nprocs, parallel_IOProcessor
   Use xnet_preprocess, Only: net_preprocess
@@ -45,6 +45,7 @@ Program net
   Real(dp), Allocatable :: dyf(:), flx_diff(:), denu(:)
 
   ! Input data and trajectory descriptions
+  Character(256) :: message
   Character(80) :: data_desc, data_dir
   Character(80), Allocatable :: abund_desc(:), thermo_desc(:)
 
@@ -59,16 +60,19 @@ Program net
   myid  = parallel_myproc()
   nproc = parallel_nprocs()
 
+  ! Offload may enable compiler OpenMP without enabling XNet host threading.
+  nthread = 1
   !XOMP parallel default(shared)
   tid = 1
-  !$ tid = omp_get_thread_num() + 1
-  !$omp single
-  nthread = 1
-  !$ nthread = omp_get_num_threads()
-  !$omp end single
+#ifdef XNET_OMP
+  tid = omp_get_thread_num() + 1
+  !XOMP single
+  nthread = omp_get_num_threads()
+  !XOMP end single
+#endif
   !XOMP end parallel
 
-  Call gpu_init()
+  Call gpu_initialize()
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
@@ -112,9 +116,11 @@ Program net
   !-------------------------------------------------------------------------------------------------
   ! 4. Load network data and initialize the evolution engine
   !-------------------------------------------------------------------------------------------------
-  Call initialize_network_data(data_dir,data_desc)
+  Call network_data_initialize(data_dir,data_desc)
+  Call map_output_nuc(ierr,message)
+  If ( ierr /= 0 ) Call xnet_terminate(trim(message))
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
-  Call initialize_evolve(data_dir,nhmx)
+  Call evolve_initialize(data_dir,nhmx)
 
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
@@ -253,8 +259,8 @@ Program net
   ! 6. Release workspaces, GPU handles, and MPI resources
   !-------------------------------------------------------------------------------------------------
   ! Release the shared zone, solver and network state before controls and GPU/MPI shutdown.
-  Call finalize_evolve
-  Call finalize_network_data
+  Call evolve_finalize
+  Call network_data_finalize
   Call controls_finalize
   Call gpu_finalize()
   Call parallel_finalize()

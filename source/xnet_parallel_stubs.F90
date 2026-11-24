@@ -294,9 +294,9 @@ contains
     character(len=*), optional :: str
     integer, optional :: errorcode
     if ( present(str) ) then
-       print*, 'parallel_abort(): ', str
+       print*, 'XNet error: ', str
     else
-       print*, 'parallel_abort() !!!'
+       print*, 'XNet error: unspecified failure'
     end if
     stop 1
   end subroutine parallel_abort
@@ -334,7 +334,7 @@ contains
   pure function parallel_null_communicator() result(r)
     integer :: r
     !
-    ! Just gotta return something that isn't m_comm.
+    ! Return a value different from m_comm.
     !
     r = (m_comm - 1)
   end function parallel_null_communicator
@@ -343,7 +343,7 @@ contains
     integer              :: comm
     integer, intent(in)  :: procs(:)
     !
-    ! We're running in serial.  Just return m_comm
+    ! Serial execution: return m_comm
     !
     comm = m_comm
   end function parallel_create_communicator

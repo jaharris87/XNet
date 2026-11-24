@@ -65,7 +65,8 @@ BUILD_NET_MODULE_FLAGS := -J$(BUILD_NET_BUILD_DIR) -I$(BUILD_NET_BUILD_DIR)
 BUILD_NET_EXE := $(BUILD_NET_BUILD_DIR)/build_net
 BUILD_NET_WORK_DIR := $(abspath $(BUILD_DIR)/build-net-work)
 PRODUCTION_BUILD_NAME := unit-$(shell echo $(CMODE) | tr A-Z a-z)
-PRODUCTION_XNET_EXE := $(ROOT_DIR)/build/$(PRODUCTION_BUILD_NAME)/bin/xnet
+PRODUCTION_BUILD_DIR := $(ROOT_DIR)/build/$(PRODUCTION_BUILD_NAME)
+PRODUCTION_XNET_EXE := $(PRODUCTION_BUILD_DIR)/bin/xnet
 MODEL_INPUT_BUILD_DIR := $(BUILD_DIR)/model-input
 MODEL_INPUT_MODULE_FLAGS := -J$(MODEL_INPUT_BUILD_DIR) -I$(MODEL_INPUT_BUILD_DIR) -I$(XNET_DIR)
 MODEL_INPUT_TEST_EXE := $(MODEL_INPUT_BUILD_DIR)/model_input_contract_tests
@@ -329,8 +330,8 @@ $(BUILD_NET_BUILD_DIR):
 	mkdir -p $@
 
 production-xnet: | $(BUILD_DIR)
-	$(MAKE) -C $(ROOT_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) clean
-	$(MAKE) -C $(ROOT_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) -j CMODE=$(CMODE) xnet
+	$(MAKE) -C $(ROOT_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) BUILD_DIR=$(PRODUCTION_BUILD_DIR) clean
+	$(MAKE) -C $(ROOT_DIR) BUILD_NAME=$(PRODUCTION_BUILD_NAME) BUILD_DIR=$(PRODUCTION_BUILD_DIR) -j CMODE=$(CMODE) xnet
 
 $(BUILD_DIR)/testdrive.o: vendor/test-drive/testdrive.F90 | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
@@ -342,7 +343,7 @@ $(BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+$(BUILD_DIR)/xnet_surrogate_checks.o: support/xnet_surrogate_checks.F90 \
     $(BUILD_DIR)/xnet_constants.o $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
@@ -401,7 +402,7 @@ $(UNDERFLOW_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(UNDERFLOW_BUILD_DIR)/xnet_types.o | $(UNDERFLOW_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
 
-$(UNDERFLOW_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+$(UNDERFLOW_BUILD_DIR)/xnet_surrogate_checks.o: support/xnet_surrogate_checks.F90 \
     $(UNDERFLOW_BUILD_DIR)/xnet_constants.o $(UNDERFLOW_BUILD_DIR)/xnet_types.o \
     | $(UNDERFLOW_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
@@ -440,7 +441,7 @@ $(SURROGATE_VERIFY_EXE): $(SURROGATE_VERIFY_OBJECTS)
 
 surrogate-verifier: $(SURROGATE_VERIFY_OBJECTS)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) \
-	  -c $(XNET_DIR)/xnet_surrogate_checks.F90 \
+	  -c support/xnet_surrogate_checks.F90 \
 	  -o $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) \
 	  -c support/verify_surrogate_candidate.F90 \
@@ -461,7 +462,7 @@ $(PREPROCESS_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_types.o | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
-$(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+$(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o: support/xnet_surrogate_checks.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_constants.o $(PREPROCESS_BUILD_DIR)/xnet_types.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@

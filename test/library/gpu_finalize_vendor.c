@@ -221,7 +221,7 @@ int rocblas_set_pointer_mode(void *h, int mode)
 }
 
 #ifdef TEST_OPENACC
-/* Queue validation belongs to production gpu_init, not this double. Even an
+/* Queue validation belongs to production gpu_initialize, not this double. Even an
  * invalid queue obtains a stream here if production validation lets it through.
  * The tests require invalid values to be rejected before any runtime lookup. */
 void *acc_get_cuda_stream(long long queue)

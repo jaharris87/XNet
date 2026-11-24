@@ -219,25 +219,25 @@ Contains
       If ( iz(i) == 28 .and. ia(i) == 56 ) i_ni56 = i
     EndDo
     If ( i_nn == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','n','; setting i_nn to min Z/A: ',nname(iza_min)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','n','; setting i_nn to min Z/A: ',nname(iza_min)
       i_nn = iza_min
     EndIf
     If ( i_pp == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','p','; setting i_pp to max Z/A: ',nname(iza_max)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','p','; setting i_pp to max Z/A: ',nname(iza_max)
       i_pp = iza_max
     EndIf
     ! These public diagnostic indices must be valid before Ye is known. The guess
     ! routine selects a species near the current Ye when He4 or Si28 is absent.
     If ( i_he4 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','he4','; setting i_he4 to max B/A: ',nname(ibe)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','he4','; setting i_he4 to max B/A: ',nname(ibe)
       i_he4 = ibe
     EndIf
     If ( i_si28 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','si28','; setting i_si28 to max B/A: ',nname(ibe)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','si28','; setting i_si28 to max B/A: ',nname(ibe)
       i_si28 = ibe
     EndIf
     If ( i_ni56 == 0 ) Then
-      Write(lun_stdout,'(2(a,a5))') 'Could not find ','ni56','; setting i_ni56 to max B/A: ',nname(ibe)
+      If ( idiag >= 0 ) Write(lun_stdout,'(2(a,a5))') 'Could not find ','ni56','; setting i_ni56 to max B/A: ',nname(ibe)
       i_ni56 = ibe
     EndIf
 
@@ -423,7 +423,7 @@ Contains
     info0 = info
     uvec0(:) = uvec(:)
 
-    ! Now use XNet's screening to match network
+    ! Now use XNet screening to match the network
     If ( iscrn > 0 ) Then
       use_CP98 = .false.
       If ( info0 > 0 ) Then
@@ -1272,7 +1272,7 @@ Contains
     ! This routine calculates screening factors (i.e. Coulomb corrections) for NSE in a manner that
     ! is consistent with XNet reaction network screening calculation.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_eos, Only: eos_interface, eos_screen
+    Use xnet_eos, Only: eos_update, eos_screen
     Implicit None
 
     ! Local variables
@@ -1305,7 +1305,7 @@ Contains
       xext = 0.0
       aext = 1.0
       zext = 0.0
-      call eos_interface(t9nse,rhonse,ynse,ztot,cv,etae,detaedt9,xext,aext,zext)
+      call eos_update(t9nse,rhonse,ynse,ztot,cv,etae,detaedt9,xext,aext,zext)
       Call eos_screen(t9nse,rhonse,ynse,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9, &
         xext,aext,zext)
 

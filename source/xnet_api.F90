@@ -41,6 +41,16 @@ Module xnet_api
   Integer, Parameter, Public :: xnet_step_limit         = 5
 
   !-------------------------------------------------------------------------------------------------
+  ! Public row indices for xnet_burn_batch counters(5,nz)
+  !-------------------------------------------------------------------------------------------------
+  ! Timestep attempts include retries; max_steps_taken counts accepted outer steps instead.
+  Integer, Parameter, Public :: xnet_count_timesteps   = 1
+  Integer, Parameter, Public :: xnet_count_newton      = 2 ! Includes failed attempts.
+  Integer, Parameter, Public :: xnet_count_jacobians   = 3
+  Integer, Parameter, Public :: xnet_count_derivatives = 4
+  Integer, Parameter, Public :: xnet_count_rates       = 5
+
+  !-------------------------------------------------------------------------------------------------
   ! Public types and procedures
   !-------------------------------------------------------------------------------------------------
   Public :: dp
@@ -138,10 +148,11 @@ Contains
     ! Supplied GPU handles remain caller-owned.
     ! Reader, allocation, EOS and solver failures can still terminate.
     !-----------------------------------------------------------------------------------------------
-    Use reaction_data, Only: initialize_network_data
-    Use xnet_controls, Only: apply_xnet_controls
-    Use xnet_evolve, Only: initialize_evolve
-    Use xnet_gpu, Only: gpu_init, gpu_finalize, mydevice
+    Use reaction_data, Only: network_data_initialize, network_data_finalize
+    Use xnet_controls, Only: controls_initialize, controls_finalize
+    Use xnet_evolve, Only: evolve_initialize
+    Use xnet_gpu, Only: gpu_initialize, gpu_finalize, mydevice
+    Use xnet_output, Only: map_output_nuc
     Implicit None
 
     ! Required arguments
@@ -167,14 +178,14 @@ Contains
     If ( ierr /= xnet_success ) Return
 
     ! Initialize thread IDs and diagnostic units; record the actual OpenMP team size.
-    Call initialize_thread_state
+    Call thread_state_initialize
 
-    ! A default GPU context tells gpu_init to use the current application device;
+    ! A default GPU context tells gpu_initialize to use the current application device;
     ! with no supplied handles, XNet creates the resources it needs on that device.
     ! CPU builds return success without creating GPU resources.
     gpu = xnet_gpu_t()
     If ( present(gpu_context) ) gpu = gpu_context
-    Call gpu_init(gpu,ierr,message)
+    Call gpu_initialize(gpu,ierr,message)
     If ( ierr /= xnet_success ) Then
       ! Failed initialization may still own resources whose rollback must be retried.
       If ( mydevice >= 0 ) api_state = api_cleanup_pending
@@ -183,7 +194,7 @@ Contains
 
     ! Validate controls and copy them into the XNet runtime state;
     ! allocate and initialize internal bookkeeping.
-    Call apply_xnet_controls(controls,ierr,message)
+    Call controls_initialize(controls,ierr,message)
     If ( ierr /= xnet_success ) Then
       Call gpu_finalize(cleanup_status,cleanup_message)
       If ( cleanup_status /= xnet_success ) Then
@@ -195,8 +206,21 @@ Contains
 
     ! Load nuclear/reaction tables and initialize the evolution engine with persistent
     ! zone workspace and two history endpoints (tstart and tstop).
-    Call initialize_network_data(controls%data_dir,api_data_description)
-    Call initialize_evolve(controls%data_dir,api_history_points)
+    Call network_data_initialize(controls%data_dir,api_data_description)
+    Call map_output_nuc(ierr,message)
+    If ( ierr /= 0 ) Then
+      ierr = xnet_invalid
+      ! Evolution has not been initialized. Release tables and per-worker controls before GPU resources.
+      Call network_data_finalize
+      Call controls_finalize
+      Call gpu_finalize(cleanup_status,cleanup_message)
+      If ( cleanup_status /= xnet_success ) Then
+        api_state = api_cleanup_pending
+        message = trim(message)//'; '//trim(cleanup_message)
+      EndIf
+      Return
+    EndIf
+    Call evolve_initialize(controls%data_dir,api_history_points)
     Call copy_network_data(network)
 
     api_state = api_ready
@@ -287,7 +311,7 @@ Contains
 
     ! 2. Verify GPU device state and device-array mappings when requested
     Call gpu_check_device(ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= xnet_success ) Return
     If ( on_device ) Then
 #ifdef XNET_OMP_OL
       ! OpenMP target work is not ordered on the vendor stream of the application.
@@ -300,7 +324,7 @@ Contains
 #endif
       Call check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
         & ierr,message,aux_x,aux_a,aux_z)
-      If ( ierr /= 0 ) Return
+      If ( ierr /= xnet_success ) Return
     EndIf
 
     ! 3. Validate batch extents, duration, and active scientific inputs
@@ -375,7 +399,7 @@ Contains
     If ( ierr /= xnet_success ) Return
 
     Call gpu_check_device(ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= xnet_success ) Return
 
     ierr = xnet_invalid
     If ( size(mass_fraction) /= ny ) Then
@@ -409,9 +433,9 @@ Contains
     ! Call outside application parallel regions, with no work in flight and the initialized team.
     ! After successful cleanup, repeated calls succeed without repeating teardown.
     !-----------------------------------------------------------------------------------------------
-    Use reaction_data, Only: finalize_network_data
+    Use reaction_data, Only: network_data_finalize
     Use xnet_controls, Only: controls_finalize
-    Use xnet_evolve, Only: finalize_evolve
+    Use xnet_evolve, Only: evolve_finalize
     Use xnet_gpu, Only: gpu_check_device, gpu_finalize
     Implicit None
 
@@ -429,8 +453,8 @@ Contains
     If ( api_state == api_ready ) Then
       Call gpu_check_device(ierr,message)
       If ( ierr /= xnet_success ) Return
-      Call finalize_evolve
-      Call finalize_network_data
+      Call evolve_finalize
+      Call network_data_finalize
       Call controls_finalize
       api_state = api_cleanup_pending
     EndIf
@@ -488,7 +512,7 @@ Contains
 #endif
 
     Call validate_xnet_controls(controls,ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= xnet_success ) Return
     ierr = xnet_invalid
     If ( len_trim(controls%data_dir) == 0 ) Then
       message = 'data_dir is required'
@@ -566,10 +590,11 @@ Contains
     Return
   End Subroutine check_network_files
 
-  Subroutine initialize_thread_state
+  Subroutine thread_state_initialize
     !-----------------------------------------------------------------------------------------------
     ! Initialize XNet thread IDs and diagnostic units; record the actual OpenMP team size.
     ! The application controls OpenMP settings. Serial builds use one thread.
+    ! XNET_OMP guards host thread IDs even when offload enables compiler OpenMP independently.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: tid, nthread, lun_diag, lun_stdout
     Implicit None
@@ -578,15 +603,15 @@ Contains
     !XOMP parallel default(shared)
     tid = 1
 #ifdef XNET_OMP
-    tid = omp_get_thread_num()+1
-    !$omp single
+    tid = omp_get_thread_num() + 1
+    !XOMP single
     nthread = omp_get_num_threads()
-    !$omp end single
+    !XOMP end single
 #endif
     lun_diag = lun_stdout
     !XOMP end parallel
     Return
-  End Subroutine initialize_thread_state
+  End Subroutine thread_state_initialize
 
   Subroutine copy_network_data(network)
     !-----------------------------------------------------------------------------------------------
@@ -646,7 +671,7 @@ Contains
   Subroutine evolve_batch(dt_s,on_device,active,density,temperature,electron_fraction,mass_fraction,restart_dt_s, &
     & neutrino_loss,aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Load the batch into the calling thread's work arrays, evolve once, and return results in the
+    ! Load the batch into the work arrays of the calling thread, evolve once, and return results in the
     ! requested memory space.
     ! The caller has validated inputs and selected at least one active zone.
     ! Use host values when on_device is false, even if device mappings already exist.
@@ -696,7 +721,7 @@ Contains
       !XDIR XDEVICE(lzactive)
     EndIf
 
-    ! Zone izb of the batch is column izb of the caller's arrays.
+    ! Zone izb of the batch is column izb of the caller arrays.
     ! Reset inactive and unused zones without reading their scientific inputs.
     ! XIF(on_device) selects the device or host copy of every array in these loops.
     !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
@@ -839,7 +864,7 @@ Contains
         Return
       EndIf
     EndIf
-    tid = omp_get_thread_num()+1
+    tid = omp_get_thread_num() + 1
 #endif
 
     If ( tid < 1 .or. tid > nthread .or. .not. allocated(ynse) ) Then
@@ -886,6 +911,8 @@ Contains
       message = 'Inconsistent batch dimensions or batch larger than nzbatchmx'
       Return
     EndIf
+    ! Fortran need not short-circuit logical expressions. Reject nonfinite duration before
+    ! the ordered comparison so a NaN does not reach dt_s <= 0.
     If ( .not. ieee_is_finite(dt_s) ) Then
       message = 'Burn duration must be finite and positive'
       Return
@@ -1234,7 +1261,7 @@ Contains
     ! in the current batch. Reserve a unique process-wide call number under a short
     ! critical region while keeping file writes and evolution outside the critical region.
     ! Each call has its own 0..dt_s history. The filename identifies the position in the batch;
-    ! the binary header records the caller's zone ID.
+    ! the binary header records the caller zone ID.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: itsout, lzactive, bin_file_base, ev_file_base, zone_id, nzbatchmx
     Use xnet_flux, Only: flx
@@ -1271,6 +1298,7 @@ Contains
     EndIf
 
     ! Open ts/ev files for each active zone.
+    output_status = 0
     Do izb = 1, nzbatchmx
       If ( .not. lzactive(izb) ) Cycle
       Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_zone',izb

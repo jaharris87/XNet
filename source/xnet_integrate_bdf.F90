@@ -143,7 +143,7 @@ Module xnet_integrate_bdf
   Integer, Parameter :: BDF_STATUS_SUCCESS =  0
   Integer, Parameter :: BDF_STATUS_FAIL    =  1
 
-  Public :: solve_bdf, bdf_init, bdf_finalize
+  Public :: solve_bdf, bdf_initialize, bdf_finalize
 
   Private :: bdf_reset, bdf_adjust, bdf_update, bdf_predict, bdf_step, bdf_check
   Private :: bdf_correct, bdf_eta, bdf_stab
@@ -325,7 +325,7 @@ Contains
     Return
   End Subroutine solve_bdf
 
-  Subroutine bdf_init
+  Subroutine bdf_initialize
     !-----------------------------------------------------------------------------------------------
     ! This routine initializes the BDF data structures and prepares for the first integration step.
     !-----------------------------------------------------------------------------------------------
@@ -508,11 +508,11 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine bdf_init
+  End Subroutine bdf_initialize
 
   Subroutine bdf_finalize
     !-----------------------------------------------------------------------------------------------
-    ! This routine releases the device mappings and CPU workspace allocated by bdf_init.
+    ! This routine releases the device mappings and CPU workspace allocated by bdf_initialize.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None
@@ -997,7 +997,7 @@ Contains
       refactor(izb) = ( bdf_active(izb) .and. &
         ( retry_ts(izb) .or. p_age(izb) > max_p_age .or. abs(gamratio(izb)-1.0_dp) > dgmaxp ) )
 
-      ! Determine which zones' Jacobians need to be rebuilt
+      ! Determine which zones need rebuilt Jacobians
       rebuild(izb) = ( refactor(izb) .and. j_age(izb) > max_j_age )
 
       iterate(izb) = bdf_active(izb)
@@ -1594,7 +1594,7 @@ Contains
             deltaq(izb) = +1
           EndIf
 
-          ! Don't increase stepsize if eta < eta_thresh
+          ! Do not increase stepsize if eta < eta_thresh
           If ( eta(izb) <= eta_thresh ) Then
             eta(izb) = 1.0_dp
             deltaq(izb) = 0

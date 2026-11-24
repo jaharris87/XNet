@@ -1,197 +1,99 @@
-"""
-Module to read XNet ts files 
-"""
-def read_ts_file(file_name, debug=False, last = False, print_positions=False):
-    """
-    Inputs > file_name, name of input file 
-    Outputs< zz, proton number of every species in network 
-             aa, atomic mass number of every species in the network
-             xmf, mass fraction as a function of time, for every species
-             time, elapsed time as a function of time
-             temperature, temperature (in GK) as a function of time
-             density, mass density (in g/cm3) as a function of time
-             timestep, timestep as a function of time
-             edot, energy generation rate as a function of time
-             flx_end, initial and final species for each reaction flux in the network
-             flx, reaction fluxes as a function of time
-    """
-    #print(file_name)
-    #print("If plotting fails, try uncommenting all lines marked MODIFICATION FOR AUSTIN'S FILES.")
+"""Read XNet unformatted sequential time-series histories."""
 
+
+def read_ts_file(file_name, debug=False, last=False, print_positions=False):
+    """Return zz, aa, X, time, T9, rho, dt, edot, flux endpoints and flux.
+
+    Supports native-endian 4-byte record markers and integers, and 8-byte
+    reals. Other compiler record conventions and byte orders are unsupported.
+    Current step records include sqnu (not returned); the older five-scalar
+    layout, also written by nse_slice, remains readable. Malformed or truncated
+    records raise ValueError when read. ``last=True`` checks the headers and
+    final row without scanning intervening steps.
+    """
     import numpy as np
-    
-    # Open file_name
 
     with open(file_name, 'rb') as file_id:
-        if print_positions:
-            print("Position at opening")
-            print(file_id.tell())
-    # Read Run Descriptions
-    
-        read_desc=np.empty(80,dtype='str')
-    
-        record_length1 =np.fromfile(file_id,dtype='uint32',count=1)
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        desc = read_desc
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        desc=desc+read_desc
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        desc=desc+read_desc
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        data_desc= read_desc
-        #print(desc, data_desc)
-        record_length2 =np.fromfile(file_id,dtype='uint32',count=1)
-        if print_positions:
-            print("Position after reading run descriptions")
-            print(file_id.tell())
- 
-   #Read Run Settings
-    
-        record_length1 =np.fromfile(file_id,dtype='uint32',count=1)
-        kstmx          =np.fromfile(file_id,dtype='int32',count=1)[0]
-        kitmx          =np.fromfile(file_id,dtype='int32',count=1)
-        iweak          =np.fromfile(file_id,dtype='int32',count=1)
-        iscrn          =np.fromfile(file_id,dtype='int32',count=1)
-        iconvc         =np.fromfile(file_id,dtype='int32',count=1)
-        changemx       =np.fromfile(file_id,dtype='float64',count=1)
-        tolm           =np.fromfile(file_id,dtype='float64',count=1)
-        tolc           =np.fromfile(file_id,dtype='float64',count=1)
-        yacc           =np.fromfile(file_id,dtype='float64',count=1)
-        ymin           =np.fromfile(file_id,dtype='float64',count=1)
-        tdel_mm        =np.fromfile(file_id,dtype='float64',count=1)
-        iheat          =np.fromfile(file_id,dtype='int32',count=1)
-        isolv          =np.fromfile(file_id,dtype='int32',count=1)
-        record_length2 =np.fromfile(file_id,dtype='uint32',count=1)
-        if print_positions:
-            print("Position after reading run settings")
-            print(file_id.tell())
-    
-    # Read Abundance Info
-    
-        record_length1 =np.fromfile(file_id,dtype='uint32',count=1)
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        abund_file     =read_desc
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        abund_desc     =read_desc
-        record_length2 =np.fromfile(file_id,dtype='uint32',count=1)
-        if print_positions:
-            print("Position after reading abundance info")
-            print(file_id.tell())
-
-    # Read Thermodynamic Info
-    
-        record_length1 =np.fromfile(file_id,dtype='uint32',count=1)
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        thermo_file    =read_desc
-        read_desc      =np.fromfile(file_id,dtype='uint8',count=80).tostring()
-        thermo_desc    =read_desc
-        record_length2 =np.fromfile(file_id,dtype='uint32',count=1)
-        if print_positions:
-            print("Position after reading thermodynamic info")
-            print(file_id.tell()    )
-    
-    # Read Nuclear Info
-    
-        record_length1 =np.fromfile(file_id,dtype='uint32',count=1)
-        ny             =np.fromfile(file_id,dtype='int32',count=1)[0]
-        zz             =np.fromfile(file_id,dtype='float64',count=ny)
-        aa             =np.fromfile(file_id,dtype='float64',count=ny)
-        record_length2 =np.fromfile(file_id,dtype='uint32',count=1)
-        if print_positions:
-            print("Position after reading nuclear info")
-            print(file_id.tell())
-
-    # Read Flux Info
-    
-        record_length1   =np.fromfile(file_id,dtype='uint32',count=1)
-        nflx             =np.fromfile(file_id,dtype='int32',count=1)[0]
-        flx_end      =np.zeros((nflx,2),dtype='int32')
-        if nflx>0:
-            flx_end[:,0] =np.fromfile(file_id,dtype='int32',count=nflx)
-            flx_end[:,1] =np.fromfile(file_id,dtype='int32',count=nflx)
-        record_length2   =np.fromfile(file_id,dtype='uint32',count=1)
-        if print_positions:
-            print("Position after reading flux info")
-            print(file_id.tell())
-    
-    # Size data arrays
-        if last:
-           kstmx_size = 1
-        else:
-           kstmx_size = kstmx
-        time        = np.zeros(kstmx_size,dtype='float64')
-        temperature = np.zeros(kstmx_size,dtype='float64')
-        density     = np.zeros(kstmx_size,dtype='float64')
-        timestep    = np.zeros(kstmx_size,dtype='float64')
-        edot        = np.zeros(kstmx_size,dtype='float64')
-        xmf         = np.zeros((kstmx_size,ny),dtype='float64')
-        flx     = np.zeros((kstmx_size,nflx))
-        if print_positions:
-            print("Position after sizing data arrays")
-            print(file_id.tell())
-
-    # Read data from each timestep
-        # size of data (Byte) for one timestep:
-        entry_size=nflx*8  + ny*8   +  3*4    + 5*8
-        #          float64   float64   int32   float64
-        if last:
-            file_id.seek(-entry_size, 2)
+        def read_record(expected=None, eof=False):
+            position = file_id.tell()
+            marker = file_id.read(4)
+            if not marker and eof:
+                return None
+            if len(marker) != 4:
+                raise ValueError("Missing record marker at byte %d" % position)
+            size = int(np.frombuffer(marker, dtype='uint32')[0])
+            if expected is not None and size != expected:
+                raise ValueError("Unexpected record length at byte %d: %d != %d; "
+                                 "requires native byte order and 4-byte markers"
+                                 % (position, size, expected))
+            payload = file_id.read(size)
+            if len(payload) != size or file_id.read(4) != marker:
+                raise ValueError("Truncated record or mismatched markers at byte %d" % position)
             if print_positions:
-               print("Reading last entry starting at position")
-               print(file_id.tell())
+                print("Position after record:", file_id.tell())
+            return payload
 
-        for k in range(kstmx-1):
-        
-            record_length1 =np.fromfile(file_id,dtype='uint32',count=1)
-    
-    # If end of file, exit
-            if record_length1.size == 0:
-               break
-            else:
-    # Otherwise read data
-    
-               kstep          =np.fromfile(file_id,dtype='int32',count=1)
-               time[k]        =np.fromfile(file_id,dtype='float64',count=1)
-               temperature[k] =np.fromfile(file_id,dtype='float64',count=1)
-               density[k]     =np.fromfile(file_id,dtype='float64',count=1)
-               timestep[k]    =np.fromfile(file_id,dtype='float64',count=1)
-               edot[k]        =np.fromfile(file_id,dtype='float64',count=1)
-               xmf[k,:]       =np.fromfile(file_id,dtype='float64',count=ny)
-               if nflx>0 : #MODIFICATION FOR AUSTIN'S FILES
-                  flx[k,:]   =np.fromfile(file_id,dtype='float64',count=nflx) #MODIFICATION FOR AUSTIN'S FILES
-               record_length2 =np.fromfile(file_id,dtype='uint32',count=1)
-               if debug:
-                   print (k, kstep, time[k])
-               if print_positions:
-                   print("Position after line")
-                   print(file_id.tell())
-    
-    # Calculate # of timesteps
-    
-    nstep = k+1
-    
-    # Remove empty timesteps
-    
-    time        = time[0:nstep-1]
-    temperature = temperature[0:nstep-1]
-    density     =density[0:nstep-1]
-    timestep    =timestep[0:nstep-1]
-    edot        =edot[0:nstep-1]
-    xmf         =xmf[0:nstep-1,:]
-    if nflx>0 :
-        flx     =flx[0:nstep-1,:]
+        read_record(320)  # Three run descriptions and the network description.
+        read_record(76)   # Run settings.
+        read_record(160)  # Initial abundance source and description.
+        read_record(160)  # Thermodynamic source and description.
 
-    # Convert abundance to mass fraction
-    
-    xmf = xmf * aa #MODIFICATION FOR AUSTIN'S FILES
+        payload = read_record()
+        if len(payload) < 4:
+            raise ValueError("Missing nuclear species count")
+        ny = int(np.frombuffer(payload, dtype='int32', count=1)[0])
+        if ny < 0 or len(payload) != 4 + 16 * ny:
+            raise ValueError("Invalid nuclear information record")
+        zz = np.frombuffer(payload, dtype='float64', count=ny, offset=4).copy()
+        aa = np.frombuffer(payload, dtype='float64', count=ny, offset=4 + 8 * ny).copy()
 
-    with open(file_name, 'rb') as file_id:
-        if print_positions:
-            file_id.seek(0, 2)
-            print(file_id.tell())
+        payload = read_record()
+        if len(payload) < 4:
+            raise ValueError("Missing flux count")
+        nflx = int(np.frombuffer(payload, dtype='int32', count=1)[0])
+        if nflx < 0 or len(payload) != 4 + 8 * nflx:
+            raise ValueError("Invalid flux information record")
+        flx_end = np.frombuffer(payload, dtype='int32', offset=4).reshape(2, nflx).T.copy()
 
+        start = file_id.tell()
+        marker = file_id.read(4)
+        file_id.seek(start)
+        nscalar = 6
+        if marker:
+            if len(marker) != 4:
+                raise ValueError("Truncated step record marker")
+            size = int(np.frombuffer(marker, dtype='uint32')[0])
+            if size == 4 + 8 * (5 + ny + nflx):
+                nscalar = 5
+            elif size != 4 + 8 * (6 + ny + nflx):
+                raise ValueError("Unsupported step record length: %d" % size)
+            if last:
+                file_id.seek(0, 2)
+                if (file_id.tell() - start) % (size + 8):
+                    raise ValueError("Truncated step records")
+                file_id.seek(-(size + 8), 2)
+
+        rows = []
+        size = 4 + 8 * (nscalar + ny + nflx)
+        while True:
+            payload = read_record(size, eof=True)
+            if payload is None:
+                break
+            rows.append(np.frombuffer(payload, dtype='float64', offset=4))
+            if debug:
+                print(len(rows) - 1, np.frombuffer(payload, dtype='int32', count=1)[0], rows[-1][0])
+            if last:
+                break
+
+    values = np.asarray(rows).reshape(len(rows), nscalar + ny + nflx)
+    time, temperature, density = values[:, :3].T
+    # sqnu precedes dt and edot in current histories; keep the caller tuple.
+    timestep, edot = values[:, nscalar-2:nscalar].T
+    xmf = values[:, nscalar:nscalar+ny] * aa
+    flx = values[:, nscalar+ny:]
     return zz, aa, xmf, time, temperature, density, timestep, edot, flx_end, flx
-    
+
+
 def build_element_symbol():
     """
     Builds symbols for Chemical Elements

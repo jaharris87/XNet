@@ -462,6 +462,8 @@ Contains
       EndIf
     EndIf
 
+    Deallocate(part)
+
     Return
   End Subroutine normalize_path
 

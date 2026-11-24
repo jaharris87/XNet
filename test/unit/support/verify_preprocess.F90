@@ -1,14 +1,14 @@
 Program verify_preprocess
   Use, Intrinsic :: iso_fortran_env, Only: iostat_end
-  Use nuclear_data, Only: aa, angm, be, g, mex, nname, nn, ny, read_nuclear_data, t9i, zz
+  Use nuclear_data, Only: aa, angm, be, g, mex, nname, nn, ny, nuclear_data_initialize, t9i, zz
   Use reaction_data, Only: a1, a2, a3, a4, ires1, ires2, ires3, ires4, irev1, irev2, irev3, irev4, &
     & iwk1, iwk2, iwk3, iwk4, &
     & mu1, mu2, mu3, mu4, n1i, n2i, n3i, n4i, n10, n11, n20, n21, n22, n30, n31, n32, n33, &
-    & n40, n41, n42, n43, n44, nan, nreac, q1, q2, q3, q4, rc1, rc2, rc3, rc4, read_reaction_data
+    & n40, n41, n42, n43, n44, nan, nreac, q1, q2, q3, q4, rc1, rc2, rc3, rc4, reaction_data_initialize
   Use xnet_controls, Only: idiag, iheat, iscrn, iweak0, nzbatchmx, szbatch, tid
   Use xnet_jacobian, Only: cidx, l1s, l2s, l3s, l4s, lval, ns11, ns21, ns22, ns31, ns32, ns33, &
-    & ns41, ns42, ns43, ns44, pb, read_jacobian_data, ridx
-  Use xnet_match, Only: descx, ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx, qflx, read_match_data
+    & ns41, ns42, ns43, ns44, pb, jacobian_initialize, ridx
+  Use xnet_match, Only: descx, ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx, qflx, match_initialize
   Use xnet_types, Only: dp
   Implicit None
 
@@ -37,11 +37,11 @@ Program verify_preprocess
 
 
 
-  Call read_nuclear_data(trim(data_dir),data_desc)
+  Call nuclear_data_initialize(trim(data_dir),data_desc)
   Call require(trim(data_desc) == expected_description,'production net_desc description mismatch')
-  Call read_reaction_data(trim(data_dir))
-  Call read_match_data(trim(data_dir))
-  Call read_jacobian_data(trim(data_dir))
+  Call reaction_data_initialize(trim(data_dir))
+  Call match_initialize(trim(data_dir))
+  Call jacobian_initialize(trim(data_dir))
   Call check_generated_artifacts(trim(data_dir),chapter,chapter_start,chapter_end)
   Call validate_loaded(ok,message)
   Call require(ok,'positive semantic validation: '//trim(message))

@@ -19,7 +19,7 @@ Module xnet_flux
 
 Contains
 
-  Subroutine flux_init
+  Subroutine flux_initialize
     !-----------------------------------------------------------------------------------------------
     ! This routine allocates the flux arrays and determines the double counting factors necessary for
     ! reactions with identical reactants.
@@ -64,7 +64,7 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine flux_init
+  End Subroutine flux_initialize
 
   Subroutine flux(mask_in)
     !-----------------------------------------------------------------------------------------------

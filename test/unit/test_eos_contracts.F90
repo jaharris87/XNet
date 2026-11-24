@@ -92,7 +92,7 @@ Module test_eos_contracts
     & set_interface_fixture, set_scientific_fixture
   Use testdrive, Only: check, error_type, new_unittest, unittest_type
   Use xnet_constants, Only: amu
-  Use xnet_eos, Only: eos_interface, eos_screen
+  Use xnet_eos, Only: eos_update, eos_screen
   Use xnet_types, Only: dp
   Implicit None
   Private
@@ -141,14 +141,14 @@ Contains
     cv = sentinel
     etae = sentinel
     detaedt9 = sentinel
-    Call eos_interface(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext,mask)
+    Call eos_update(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext,mask)
 
     Do zone = 1, nzone, 2
       If ( zone == 1 .and. trim(effectiveness_mutation) == 'argument_swap' ) Then
-        Call eos_interface(rho(zone),t9(zone),y(:,zone),scalar_ye,scalar_cv, &
+        Call eos_update(rho(zone),t9(zone),y(:,zone),scalar_ye,scalar_cv, &
           & scalar_etae,scalar_detaedt9,xext(zone),aext(zone),zext(zone))
       Else
-        Call eos_interface(t9(zone),rho(zone),y(:,zone),scalar_ye,scalar_cv, &
+        Call eos_update(t9(zone),rho(zone),y(:,zone),scalar_ye,scalar_cv, &
           & scalar_etae,scalar_detaedt9,xext(zone),aext(zone),zext(zone))
       EndIf
       Call check_close(error,ye(zone),scalar_ye)
@@ -173,7 +173,7 @@ Contains
     repeat_cv = sentinel
     repeat_etae = sentinel
     repeat_detaedt9 = sentinel
-    Call eos_interface(t9,rho,y,repeat_ye,repeat_cv,repeat_etae,repeat_detaedt9, &
+    Call eos_update(t9,rho,y,repeat_ye,repeat_cv,repeat_etae,repeat_detaedt9, &
       & xext,aext,zext,mask)
     Call check_repeatable(error,ye,repeat_ye)
     If ( allocated(error) ) Return
@@ -206,7 +206,7 @@ Contains
     cv = 0.0_dp
     etae = 0.0_dp
     detaedt9 = 0.0_dp
-    Call eos_interface(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext,all_active)
+    Call eos_update(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext,all_active)
 
     ztilde = sentinel
     zinter = sentinel
@@ -287,7 +287,7 @@ Contains
 
     Call set_scientific_fixture(t9,rho,y)
     Do state = 1, nstate
-      Call eos_interface(t9(state),rho(state),y(:,state),ye,cv,etae,detaedt9, &
+      Call eos_update(t9(state),rho(state),y(:,state),ye,cv,etae,detaedt9, &
         & 0.0_dp,1.0_dp,0.0_dp)
       cv_reference = cv_reference_cgs(state)*amu*1.0e9_dp
       detaedt9_reference = detaedt_reference_per_k(state)*1.0e9_dp

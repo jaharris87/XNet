@@ -69,7 +69,7 @@ Module xnet_jacobian
 
 Contains
 
-  Subroutine read_jacobian_data(data_dir)
+  Subroutine jacobian_initialize(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
@@ -258,13 +258,13 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine read_jacobian_data
+  End Subroutine jacobian_initialize
 
   Subroutine jacobian_finalize
     !-----------------------------------------------------------------------------------------------
     ! MA48 keeps its factors in arrays supplied by XNet. Release the factors and work arrays
     ! for each thread, then the shared Jacobian/layout arrays. Call outside parallel regions
-    ! with the same OpenMP team used by read_jacobian_data.
+    ! with the same OpenMP team used by jacobian_initialize.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 

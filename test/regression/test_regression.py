@@ -625,3 +625,58 @@ def test_controls_error_context(
     if "iostat=" in prefix:
         # Runtime IOMSG wording varies by compiler, but must add diagnostic text.
         assert output.split(detail, 1)[1].splitlines()[0].strip()
+
+
+@pytest.mark.parametrize("index", (17, 18))
+def test_namelist_rejects_excessive_includes_with_long_path(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path, index: int,
+) -> None:
+    work_directory = tmp_path / "long-include"
+    work_directory.mkdir()
+    child = Path("a" * 120) / ("b" * 120) / "child.nml"
+    (work_directory / child).parent.mkdir(parents=True)
+    (work_directory / "controls.nml").write_text(
+        f"&xnet_controls\n include_files(1) = '{child}'\n/\n", encoding="utf-8"
+    )
+    (work_directory / child).write_text(
+        f"&xnet_controls\n include_files({index}) = 'extra.nml'\n/\n", encoding="utf-8"
+    )
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "XNet error:" in output
+    assert "Controls file has more than 16 direct includes:" in output
+    assert "End of record" not in output
+
+
+@pytest.mark.parametrize("idiag", (-1, 0))
+def test_nse_seed_diagnostics_respect_quiet_mode(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path, idiag: int,
+) -> None:
+    work_directory = _prepared_configuration_work_directory(tmp_path, f"nse-seeds-{idiag}")
+    configuration = _minimal_standalone_configuration().replace(
+        "&xnet_controls", f"&xnet_controls\n idiag = {idiag},"
+    )
+    (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert ("Could not find" in output) == (idiag >= 0)
+
+
+@pytest.mark.parametrize("idiag", (-1, 0))
+def test_unknown_output_species_rejected_before_evolution(
+    xnet_executable: Path, xnet_timeout: float, tmp_path: Path, idiag: int,
+) -> None:
+    work_directory = _prepared_configuration_work_directory(tmp_path, f"bad-output-{idiag}")
+    configuration = _minimal_standalone_configuration().replace(
+        "&xnet_controls", f"&xnet_controls\n idiag = {idiag}, nnucout = 1, output_nuclei(1) = 'badxx',"
+    )
+    (work_directory / "controls.nml").write_text(configuration, encoding="utf-8")
+    result = _run_raw_configuration(xnet_executable, work_directory, xnet_timeout)
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "XNet error:" in output
+    assert "Unknown output_nuclei species: badxx" in output
+    assert not list(work_directory.glob("ts_*"))
+    assert not list(work_directory.glob("ev_*"))

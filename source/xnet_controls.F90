@@ -5,7 +5,7 @@
 ! Two configuration paths share this module:
 ! - Library API (xnet_api): Call set_xnet_controls_defaults, override fields on xnet_controls_t,
 !   and pass the structure to xnet_initialize, which validates and applies it via
-!   apply_xnet_controls.
+!   controls_initialize.
 ! - Standalone Driver (net): Call read_controls, which reads controls.nml (and any layered
 !   include_files), normalizes per-zone input filenames, validates standalone requirements,
 !   broadcasts the resolved structure across MPI ranks, and applies it via
@@ -110,7 +110,7 @@ Module xnet_controls
   !-------------------------------------------------------------------------------------------------
   ! Runtime Control State and Zone Batching
   !-------------------------------------------------------------------------------------------------
-  ! Populated by apply_xnet_controls / apply_standalone_controls and released by controls_finalize.
+  ! Populated by controls_initialize / apply_standalone_controls and released by controls_finalize.
   ! Per-zone arrays have capacity nzbatchmx and use izb for the position within the batch.
   ! Under OpenMP these arrays are threadprivate, so each thread has its own batch.
   ! nzbatch counts active zones; lzactive can contain inactive zones between active ones.
@@ -174,8 +174,6 @@ Module xnet_controls
   !XOMP threadprivate(lun_diag)
 
   ! Standalone input file controls
-  Character(80) :: inab_file_base      ! Legacy initial-abundance filename prefix
-  Character(80) :: thermo_file_base    ! Legacy thermodynamic-trajectory filename prefix
   Character(80), Allocatable :: inab_file(:)   ! Per-zone initial-abundance filenames (1:nzone)
   Character(80), Allocatable :: thermo_file(:) ! Per-zone thermodynamic-trajectory filenames (1:nzone)
   Integer, Allocatable :: iaux(:)      ! Allow auxiliary nuclei when reading abundance files (nzbatchmx)
@@ -335,7 +333,7 @@ Contains
     Return
   End Subroutine validate_standalone_controls
 
-  Subroutine apply_xnet_controls(controls,ierr,message)
+  Subroutine controls_initialize(controls,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Validate controls and copy them into the module runtime state. Each thread then allocates
     ! its per-zone flags, counters and file units and maps the arrays needed on the device.
@@ -423,7 +421,7 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine apply_xnet_controls
+  End Subroutine controls_initialize
 
   Subroutine apply_standalone_controls(controls,data_dir)
     !-----------------------------------------------------------------------------------------------
@@ -446,7 +444,7 @@ Contains
     Call validate_standalone_controls(controls,ierr,message)
     If ( ierr /= 0 ) Call xnet_terminate(trim(message))
 
-    Call apply_xnet_controls(controls,ierr,message)
+    Call controls_initialize(controls,ierr,message)
     If ( ierr /= 0 ) Call xnet_terminate(trim(message))
 
     data_dir = controls%data_dir
@@ -815,8 +813,8 @@ Contains
         Deallocate (line)
         Return
       ElseIf ( largest_include_index > max_includes_per_file+1 ) Then
-        Write(message,'(a,i0,a)') 'Controls file has more than ',max_includes_per_file, &
-          & ' direct includes: '//trim(normalized_filename)
+        Write(number_string,'(i0)') max_includes_per_file
+        message = 'Controls file has more than '//trim(number_string)//' direct includes: '//trim(normalized_filename)
         Close(lun)
         Deallocate (line)
         Return
@@ -891,8 +889,8 @@ Contains
       Deallocate (inab_files,thermo_files,output_nuclei)
       Return
     ElseIf ( len_trim(include_files(max_includes_per_file+1)) /= 0 ) Then
-      Write(message,'(a,i0,a)') 'Controls file has more than ',max_includes_per_file, &
-        & ' direct includes: '//trim(normalized_filename)
+      Write(number_string,'(i0)') max_includes_per_file
+      message = 'Controls file has more than '//trim(number_string)//' direct includes: '//trim(normalized_filename)
       Deallocate (inab_files,thermo_files,output_nuclei)
       Return
     EndIf

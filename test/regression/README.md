@@ -9,6 +9,33 @@ self-heating calculations, the `batch_alpha` serial zone-batching case, and one
 SN160 trajectory initialized through NSE. A separate process test exercises
 the standalone `xnse` program.
 
+## Bundled history readers
+
+`test_history_readers.py` additionally requires NumPy, which the bundled
+readers already use; these tests skip when NumPy is absent. Run them with:
+
+```bash
+python3 -m pytest test/regression/test_history_readers.py --xnet-executable=/path/to/xnet
+```
+
+The test writes fresh one-zone public alpha histories with zero, two (reordered),
+and fourteen selected ASCII species. It compares all scalar columns and selected
+mass fractions between binary and ASCII output at their printed precision,
+checks the final state against the diagnostic, and exercises `last=True`,
+empty and single-step histories, zero fluxes, and the older five-scalar binary
+layout using modified copies of fresh records. Corrupt record trailers,
+truncation, foreign byte order, and eight-byte markers must raise `ValueError`.
+
+`read_ts_file` supports native-endian four-byte sequential record markers and
+integers with eight-byte reals. It consumes the current `sqnu` scalar without
+adding it to the established ten-item return tuple. The five-scalar layout
+still written by `nse_slice` is recognized by its record length. Other compiler
+record conventions (including split subrecords), byte orders, and layouts are
+unsupported. `last=True` checks the headers, file-length alignment, and final
+record; it does not scan intervening step records. The ASCII reader follows
+the fixed widths in `xnet_output`, handles any selected species count, and
+exposes the two iteration counters as `I` and `t` in the structured data.
+
 ## Prerequisites and command
 
 Use Python 3.11 or newer and install the single test dependency:
@@ -183,7 +210,7 @@ solver behavior. Holding block size at 1 keeps batching out of the integrator
 comparison; no evidence from the isolated runs indicated a BDF semantic
 dependency on the legacy block size of 4. Testing `szbatch > 1` remains
 separate work. `source/xnet_evolve.F90` imports `solve_bdf` and dispatches
-`isolv == 3` to it, its `initialize_evolve` calls `bdf_init` for the same
+`isolv == 3` to it, its `evolve_initialize` calls `bdf_initialize` for the same
 choice, and the normal root-level production build contains
 `xnet_integrate_bdf.o`. `source/xnet_controls.F90` replaces both input
 abundance- and temperature-change timestep limits with the effective value

@@ -1,8 +1,7 @@
 !***************************************************************************************************
 ! eos_helm.f90 10/18/17
 ! Interface to HELMHOLTZ EoS.
-! This file contains routines which calculate EoS quantites needed to calculate screening
-! corrections for reaction rates.
+! This file supplies EoS quantities for reaction-rate screening and self-heating.
 !***************************************************************************************************
 
 #include "xnet_macros.fh"
@@ -13,7 +12,7 @@ Module xnet_eos
   include 'vector_eos.dek'
   Real(dp), Allocatable :: ye(:), ytot(:), abar(:), zbar(:), z2bar(:), zibar(:), sratio(:)
 
-  Interface eos_interface
+  Interface eos_update
     Module Procedure eos_interface_scalar
     Module Procedure eos_interface_vector
   End Interface
@@ -99,6 +98,7 @@ Contains
       detaedt9 = detat_row(1) * 1e9
     EndIf
 
+    Return
   End Subroutine eosx
 
   Subroutine eos_interface_scalar(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext)

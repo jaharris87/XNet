@@ -342,7 +342,7 @@ $(BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+$(BUILD_DIR)/xnet_surrogate_checks.o: support/xnet_surrogate_checks.F90 \
     $(BUILD_DIR)/xnet_constants.o $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
@@ -401,7 +401,7 @@ $(UNDERFLOW_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(UNDERFLOW_BUILD_DIR)/xnet_types.o | $(UNDERFLOW_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
 
-$(UNDERFLOW_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+$(UNDERFLOW_BUILD_DIR)/xnet_surrogate_checks.o: support/xnet_surrogate_checks.F90 \
     $(UNDERFLOW_BUILD_DIR)/xnet_constants.o $(UNDERFLOW_BUILD_DIR)/xnet_types.o \
     | $(UNDERFLOW_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) -ffpe-trap=underflow $(UNDERFLOW_MODULE_FLAGS) -c $< -o $@
@@ -440,7 +440,7 @@ $(SURROGATE_VERIFY_EXE): $(SURROGATE_VERIFY_OBJECTS)
 
 surrogate-verifier: $(SURROGATE_VERIFY_OBJECTS)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) \
-	  -c $(XNET_DIR)/xnet_surrogate_checks.F90 \
+	  -c support/xnet_surrogate_checks.F90 \
 	  -o $(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) \
 	  -c support/verify_surrogate_candidate.F90 \
@@ -461,7 +461,7 @@ $(PREPROCESS_BUILD_DIR)/xnet_constants.o: $(XNET_DIR)/xnet_constants.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_types.o | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@
 
-$(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o: $(XNET_DIR)/xnet_surrogate_checks.F90 \
+$(PREPROCESS_BUILD_DIR)/xnet_surrogate_checks.o: support/xnet_surrogate_checks.F90 \
     $(PREPROCESS_BUILD_DIR)/xnet_constants.o $(PREPROCESS_BUILD_DIR)/xnet_types.o \
     | $(PREPROCESS_BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(PREPROCESS_MODULE_FLAGS) -c $< -o $@

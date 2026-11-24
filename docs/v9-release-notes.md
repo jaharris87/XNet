@@ -145,5 +145,5 @@ requirement.
   ([#186](https://github.com/jaharris87/XNet/issues/186)), GPU sparse solvers
   and fTimer timers; see the [development plan](development/v9-plan.md).
 
-The experimental surrogate checks in `source/xnet_surrogate_checks.F90` are
+The experimental surrogate checks in `test/unit/support/xnet_surrogate_checks.F90` are
 exercised by component tests but are not built into the programs or library.

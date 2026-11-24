@@ -44,7 +44,7 @@ Module xnet_screening
 
 Contains
 
-  Subroutine screening_init
+  Subroutine screening_initialize
     !-----------------------------------------------------------------------------------------------
     ! This routine allocates and initializes screening arrays
     !-----------------------------------------------------------------------------------------------
@@ -155,7 +155,7 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine screening_init
+  End Subroutine screening_initialize
 
   Subroutine screening(mask_in)
     !-----------------------------------------------------------------------------------------------

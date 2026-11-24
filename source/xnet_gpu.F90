@@ -176,7 +176,7 @@ Module xnet_gpu
     Module Procedure dev_ptr_cptr
   End Interface dev_ptr
 
-  Public :: gpu_init
+  Public :: gpu_initialize
   Public :: gpu_finalize
   Public :: gpu_check_device
   Public :: device_is_present
@@ -191,7 +191,7 @@ Contains
   ! Public Lifecycle and Device Verification Routines
   !=================================================================================================
 
-  Subroutine gpu_init(gpu_context,ierr,message)
+  Subroutine gpu_initialize(gpu_context,ierr,message)
     !-----------------------------------------------------------------------------------------------
     ! Initialize GPU execution.
     ! - When gpu_context is omitted (standalone mode): selects a device per rank (myid mod count)
@@ -239,7 +239,7 @@ Contains
     EndIf
 
     !XOMP parallel if(.not. present(gpu_context)) default(shared)
-    Call init_thread_resources(device,gpu_context,init_status,init_message)
+    Call thread_resources_initialize(device,gpu_context,init_status,init_message)
     !XOMP end parallel
 
     mydevice = device
@@ -261,7 +261,7 @@ Contains
     Call report_gpu_status(init_status,init_message,ierr,message)
 
     Return
-  End Subroutine gpu_init
+  End Subroutine gpu_initialize
 
   Subroutine gpu_finalize(ierr,message)
     !-----------------------------------------------------------------------------------------------
@@ -291,7 +291,7 @@ Contains
 #if defined(XNET_GPU)
     remaining_active = .false.
     !XOMP parallel default(shared) private(thread_status,thread_message)
-    Call finalize_thread_resources(thread_status,thread_message)
+    Call thread_resources_finalize(thread_status,thread_message)
 
     !$omp critical(xnet_gpu_finalize_status)
     If ( thread_status /= 0 .and. finalize_status == 0 ) Then
@@ -703,10 +703,10 @@ Contains
     Return
   End Subroutine check_handle_stream
 
-  Subroutine init_thread_resources(device,gpu_context,init_status,init_message)
+  Subroutine thread_resources_initialize(device,gpu_context,init_status,init_message)
     !-----------------------------------------------------------------------------------------------
     ! Validate borrowed handles, allocate any missing stream/handles on the calling thread, and
-    ! install their ownership state. The outer gpu_init joins the team before attempting rollback.
+    ! install their ownership state. The outer gpu_initialize joins the team before attempting rollback.
     !-----------------------------------------------------------------------------------------------
     Implicit None
 
@@ -1001,9 +1001,9 @@ Contains
     EndIf
 
     Return
-  End Subroutine init_thread_resources
+  End Subroutine thread_resources_initialize
 
-  Subroutine finalize_thread_resources(thread_status,thread_message)
+  Subroutine thread_resources_finalize(thread_status,thread_message)
     !-----------------------------------------------------------------------------------------------
     ! Synchronize the thread stream and destroy owned handles/streams in dependency order.
     !-----------------------------------------------------------------------------------------------
@@ -1125,7 +1125,7 @@ Contains
     gpu_initialized = .false.
 
     Return
-  End Subroutine finalize_thread_resources
+  End Subroutine thread_resources_finalize
 #endif
 
 End Module xnet_gpu

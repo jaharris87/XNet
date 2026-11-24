@@ -143,7 +143,7 @@ Module xnet_integrate_bdf
   Integer, Parameter :: BDF_STATUS_SUCCESS =  0
   Integer, Parameter :: BDF_STATUS_FAIL    =  1
 
-  Public :: solve_bdf, bdf_init, bdf_finalize
+  Public :: solve_bdf, bdf_initialize, bdf_finalize
 
   Private :: bdf_reset, bdf_adjust, bdf_update, bdf_predict, bdf_step, bdf_check
   Private :: bdf_correct, bdf_eta, bdf_stab
@@ -325,7 +325,7 @@ Contains
     Return
   End Subroutine solve_bdf
 
-  Subroutine bdf_init
+  Subroutine bdf_initialize
     !-----------------------------------------------------------------------------------------------
     ! This routine initializes the BDF data structures and prepares for the first integration step.
     !-----------------------------------------------------------------------------------------------
@@ -508,11 +508,11 @@ Contains
     !XOMP end parallel
 
     Return
-  End Subroutine bdf_init
+  End Subroutine bdf_initialize
 
   Subroutine bdf_finalize
     !-----------------------------------------------------------------------------------------------
-    ! This routine releases the device mappings and CPU workspace allocated by bdf_init.
+    ! This routine releases the device mappings and CPU workspace allocated by bdf_initialize.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None

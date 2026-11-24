@@ -2,8 +2,8 @@ Program legacy_reference
   ! Independent caller of the legacy setup and evolution path.  Keep the controls and workspace
   ! allocation here so comparisons also exercise initialization by the public library interface.
   Use consumer_fixture, Only: fixture_state, write_state, check
-  Use nuclear_data, Only: ny, aa, nname, ia, iz, be, mex, read_nuclear_data
-  Use reaction_data, Only: read_reaction_data
+  Use nuclear_data, Only: ny, aa, nname, ia, iz, be, mex, nuclear_data_initialize
+  Use reaction_data, Only: reaction_data_initialize
   Use xnet_abundances, Only: ystart, yo, y, yt, ydot, xext, aext, zext
   Use xnet_conditions, Only: t, tt, to, tdel, tdel_next, tdel_old, t9, t9t, t9o, t9dot, &
     & rho, rhot, rhoo, ye, yet, yeo, cv, etae, detaedt9, nt, ntt, nto, ints, intso, &
@@ -15,16 +15,16 @@ Program legacy_reference
     & nproc, tid, nthread, sweep
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
-  Use xnet_flux, Only: flux_init
-  Use xnet_gpu, Only: gpu_init
-  Use xnet_integrate_be, Only: be_init
-  Use xnet_integrate_bdf, Only: bdf_init
-  Use xnet_jacobian, Only: read_jacobian_data
-  Use xnet_match, Only: read_match_data
+  Use xnet_flux, Only: flux_initialize
+  Use xnet_gpu, Only: gpu_initialize
+  Use xnet_integrate_be, Only: be_initialize
+  Use xnet_integrate_bdf, Only: bdf_initialize
+  Use xnet_jacobian, Only: jacobian_initialize
+  Use xnet_match, Only: match_initialize
   Use xnet_nnu, Only: nnuspec, tmevnu, fluxcms
   Use xnet_nse, Only: nse_initialize, nse_solve, ynse
   Use xnet_parallel, Only: parallel_initialize, parallel_myproc, parallel_nprocs
-  Use xnet_screening, Only: screening_init
+  Use xnet_screening, Only: screening_initialize
   Use xnet_types, Only: dp
   Implicit None
 
@@ -58,10 +58,10 @@ Program legacy_reference
   tid = 1
   nthread = 1
   sweep = 'x'
-  Call gpu_init()
+  Call gpu_initialize()
 
   ! These are the compiled defaults, followed by the fixed test's execution and output choices.
-  ! Assign them directly rather than sharing apply_xnet_controls with the interface under test.
+  ! Assign them directly rather than sharing controls_initialize with the interface under test.
   descript = 'Legacy constant-condition library reference'
   szone = 1
   nzone = lanes
@@ -118,19 +118,19 @@ Program legacy_reference
   thermo_file = ' '
 
   ! The runner prepares the copied network with the production net_setup executable.
-  Call read_nuclear_data(Trim(data_dir),data_desc)
+  Call nuclear_data_initialize(Trim(data_dir),data_desc)
   Do i = 1, ny
     Write(*,'(a,1x,a,4(1x,es26.17e3))') 'META',Trim(Adjustl(nname(i))), &
       & Real(ia(i),dp),Real(iz(i),dp),be(i),mex(i)
   EndDo
-  Call read_reaction_data(Trim(data_dir))
-  Call read_jacobian_data(Trim(data_dir))
-  Call read_match_data(Trim(data_dir))
-  Call screening_init()
-  Call flux_init()
+  Call reaction_data_initialize(Trim(data_dir))
+  Call jacobian_initialize(Trim(data_dir))
+  Call match_initialize(Trim(data_dir))
+  Call screening_initialize()
+  Call flux_initialize()
   Call eos_initialize()
-  If ( isolv == 1 ) Call be_init()
-  If ( isolv == 3 ) Call bdf_init()
+  If ( isolv == 1 ) Call be_initialize()
+  If ( isolv == 3 ) Call bdf_initialize()
   Call nse_initialize()
 
   ! Allocate the legacy state as the standalone driver does, with just two history endpoints.

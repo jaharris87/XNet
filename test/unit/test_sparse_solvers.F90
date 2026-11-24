@@ -10,9 +10,9 @@ Module sparse_component_fixture
   Use xnet_conditions, Only: cv
   Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lzactive, lun_diag, nzbatch, nzbatchmx, szbatch, tid
 #if defined(TEST_DENSE)
-  Use xnet_jacobian, Only: msize, read_jacobian_data, jacobian_finalize
+  Use xnet_jacobian, Only: msize, jacobian_initialize, jacobian_finalize
 #else
-  Use xnet_jacobian, Only: cidx, msize, nnz, ns11, pb, read_jacobian_data, jacobian_finalize
+  Use xnet_jacobian, Only: cidx, msize, nnz, ns11, pb, jacobian_initialize, jacobian_finalize
 #endif
   Use xnet_types, Only: dp
   Implicit None
@@ -135,7 +135,7 @@ Contains
     !$omp   copyin(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
     !$omp end parallel
 #endif
-    Call read_jacobian_data(data_dir)
+    Call jacobian_initialize(data_dir)
 #if !defined(TEST_DENSE)
     Call apply_effectiveness_mutation
 #endif
@@ -673,7 +673,7 @@ Contains
     Call jacobian_finalize
 
     ! An initialized but unused solver has no factors to release.
-    Call read_jacobian_data(trim(component_data_dir))
+    Call jacobian_initialize(trim(component_data_dir))
 #if !defined(TEST_DENSE) && !defined(TEST_REAL_SOLVER)
     Call reset_solver_probe
 #endif
@@ -686,7 +686,7 @@ Contains
 #endif
 
     ! Reuse the numerical checks after a complete teardown and fresh initialization.
-    Call read_jacobian_data(trim(component_data_dir))
+    Call jacobian_initialize(trim(component_data_dir))
     Call test_known_system_solve(error)
     If ( allocated(error) ) Return
     Call jacobian_finalize
@@ -780,7 +780,7 @@ Contains
     EndDo
 #endif
     Call jacobian_finalize
-    Call read_jacobian_data(trim(component_data_dir))
+    Call jacobian_initialize(trim(component_data_dir))
 #if defined(TEST_PARDISO_MKL)
     Call test_worker_solver_indices(error)
     If ( allocated(error) ) Return
@@ -789,7 +789,7 @@ Contains
     Call test_worker_known_systems(error)
     If ( allocated(error) ) Return
     Call jacobian_finalize
-    Call read_jacobian_data(trim(component_data_dir))
+    Call jacobian_initialize(trim(component_data_dir))
 #else
     Call reset_solver_probe
 #endif

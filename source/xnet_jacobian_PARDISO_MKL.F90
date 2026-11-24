@@ -60,14 +60,14 @@ Module xnet_jacobian
   End Interface xnet_pardiso
 
   Interface xnet_pardisoinit
-    Module Procedure mkl_pardisoinit
+    Module Procedure mkl_pardiso_initialize
   End Interface xnet_pardisoinit
 
   !XOMP threadprivate(dydotdy,tvals,pt)
 
 Contains
 
-  Subroutine mkl_pardisoinit(error)
+  Subroutine mkl_pardiso_initialize(error)
     Implicit None
     Integer, Intent(out) :: error
     Interface
@@ -83,7 +83,7 @@ Contains
     dparm = 0.0_dp
     error = 0
     Return
-  End Subroutine mkl_pardisoinit
+  End Subroutine mkl_pardiso_initialize
 
   Subroutine mkl_pardiso(factor,a,b,x,error)
     Use xnet_types, Only: dp
@@ -120,7 +120,7 @@ Contains
     Return
   End Subroutine mkl_pardiso
 
-  Subroutine read_jacobian_data(data_dir)
+  Subroutine jacobian_initialize(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
@@ -296,7 +296,7 @@ Contains
 
 
     Return
-  End Subroutine read_jacobian_data
+  End Subroutine jacobian_initialize
 
   Subroutine jacobian_finalize
     !-----------------------------------------------------------------------------------------------

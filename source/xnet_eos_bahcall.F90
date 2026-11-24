@@ -12,7 +12,7 @@ Module xnet_eos
   Implicit None
   Real(dp), Allocatable :: ye(:), ytot(:), abar(:), zbar(:), z2bar(:), zibar(:), sratio(:)
 
-  Interface eos_interface
+  Interface eos_update
     Module Procedure eos_interface_scalar
     Module Procedure eos_interface_vector
   End Interface

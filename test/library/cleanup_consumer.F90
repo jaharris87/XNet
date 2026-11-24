@@ -86,7 +86,7 @@ Contains
     Use nuclear_data, Only: aa
     Use xnet_conditions, Only: t
     Use xnet_eos, Only: ytot
-    Use xnet_evolve, Only: initialize_evolve, finalize_evolve
+    Use xnet_evolve, Only: evolve_initialize, evolve_finalize
     Use xnet_jacobian, Only: dydotdy
     Use xnet_nnu, Only: sigmanu, tmevnu, fluxcms
     Use xnet_nse, Only: ynse
@@ -95,14 +95,14 @@ Contains
 
     Call check(allocated(sigmanu),'reaction tables exist before workspace cleanup')
     rate_sum = sum(sigmanu)
-    Call finalize_evolve
+    Call evolve_finalize
     Call check(.not. allocated(y) .and. .not. allocated(t),'zone composition and conditions released')
     Call check(.not. allocated(tmevnu) .and. .not. allocated(fluxcms),'neutrino histories released')
     Call check(.not. allocated(ynse),'NSE workspace released')
     Call check(allocated(aa) .and. allocated(sigmanu),'network and reaction tables survive evolution cleanup')
     Call check(sum(sigmanu) == rate_sum,'reaction tables unchanged by evolution cleanup')
     Call check(.not. allocated(ytot) .and. .not. allocated(dydotdy),'EOS and Jacobian workspace released')
-    Call initialize_evolve('Data_alpha',2)
+    Call evolve_initialize('Data_alpha',2)
     Call check(allocated(y) .and. allocated(t) .and. allocated(ynse),'zone workspace reinitialized')
     Call check(size(tmevnu,1) == 2 .and. size(fluxcms,1) == 2,'history shape restored')
     Return
@@ -112,7 +112,7 @@ Contains
     Integer :: saved_init_calls, saved_finalize_calls, attempt
     saved_init_calls = init_calls
     saved_finalize_calls = finalize_calls
-    ! Validation fails before gpu_init and before any owned allocation.
+    ! Validation fails before gpu_initialize and before any owned allocation.
     controls%nzone = 0
     Call xnet_initialize(controls,network,ierr,message)
     Call expect(xnet_invalid,'malformed initialization controls')
@@ -135,7 +135,7 @@ Contains
     Call xnet_finalize(ierr,message)
     Call expect(xnet_success,'finalize reinitialized lifetime')
 
-    ! gpu_init has already attempted rollback; the stub represents resources
+    ! gpu_initialize has already attempted rollback; the stub represents resources
     ! whose destructor keeps failing until the test clears the failure.
     init_failures_left = 1
     pending_on_init_failure = .true.

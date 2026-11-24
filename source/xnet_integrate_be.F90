@@ -25,7 +25,7 @@ Module xnet_integrate_be
   Real(dp), Allocatable :: t9rhs(:), dt9(:), relt9(:)
   Logical , Allocatable :: iterate(:), eval_rates(:), rebuild(:)
 
-  Public :: solve_be, be_init, be_finalize
+  Public :: solve_be, be_initialize, be_finalize
 
   !XOMP threadprivate(inr,mykts,lzstep,testc,testc2,testm,testn,toln,xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs)
   !XOMP threadprivate(dt9,relt9,iterate,eval_rates,rebuild)
@@ -496,7 +496,7 @@ Contains
     Return
   End Subroutine step_be
 
-  Subroutine be_init
+  Subroutine be_initialize
     !-----------------------------------------------------------------------------------------------
     ! This routine initializes the BE data structures
     !-----------------------------------------------------------------------------------------------
@@ -566,11 +566,11 @@ Contains
 
     !XOMP end parallel
 
-  End Subroutine be_init
+  End Subroutine be_initialize
 
   Subroutine be_finalize
     !-----------------------------------------------------------------------------------------------
-    ! This routine releases the device mappings and CPU workspace allocated by be_init.
+    ! This routine releases the device mappings and CPU workspace allocated by be_initialize.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: gpu_queue
     Implicit None

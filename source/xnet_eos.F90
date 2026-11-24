@@ -6,7 +6,7 @@
 ! xnet_eos_interface: source/xnet_eos_starkiller.F90 or an application source. This module converts
 ! them to XNet units (MeV per nucleon, GK).
 !
-! The generic eos_interface below updates XNet zone state and calls the provider through eosx; it
+! The generic eos_update below updates XNet zone state and calls the provider through eosx; it
 ! keeps its historical name and is not the provider module.
 !***************************************************************************************************
 
@@ -17,7 +17,7 @@ Module xnet_eos
   Implicit None
   Real(dp), Allocatable :: ye(:), ytot(:), abar(:), zbar(:), z2bar(:), zibar(:), sratio(:)
 
-  Interface eos_interface
+  Interface eos_update
     Module Procedure eos_interface_scalar
     Module Procedure eos_interface_vector
   End Interface

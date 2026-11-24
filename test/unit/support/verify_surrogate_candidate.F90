@@ -5,7 +5,7 @@ Program verify_surrogate_candidate
   !-----------------------------------------------------------------------------------------------
   Use actual_eos_module, Only: actual_eos, actual_eos_finalize, actual_eos_init
   Use eos_type_module, Only: eos_input_rt, eos_t
-  Use nuclear_data, Only: aa, be, nname, ny, read_nuclear_data, zz
+  Use nuclear_data, Only: aa, be, nname, ny, nuclear_data_initialize, zz
   Use xnet_constants, Only: avn, epmev
   Use xnet_controls, Only: iheat, tid, nzbatchmx
   Use xnet_surrogate_checks, Only: check_surrogate_result_with_energy, &
@@ -35,7 +35,7 @@ Program verify_surrogate_candidate
   iheat = 0
   nzbatchmx = 1
   tid = 1
-  Call read_nuclear_data(trim(data_dir),data_desc)
+  Call nuclear_data_initialize(trim(data_dir),data_desc)
 
   Open(newunit=lun_candidate,file=trim(candidate_file),status='old',action='read',iostat=ierr)
   Call require(ierr == 0,'failed to open candidate file')

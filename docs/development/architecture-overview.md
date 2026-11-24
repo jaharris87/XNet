@@ -80,8 +80,8 @@ chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
 [the Fortran library API guide](../library-api.md) for status and ownership limits.
 
-Both frontends load tables with `initialize_network_data` in `reaction_data`
-(`source/xnet_data.F90`), then call `initialize_evolve(data_dir,nhistory)`
+Both frontends load tables with `network_data_initialize` in `reaction_data`
+(`source/xnet_data.F90`), then call `evolve_initialize(data_dir,nhistory)`
 in `xnet_evolve` once during initialization. The latter reads Jacobian and
 matching data, initializes screening, fluxes, EOS, the selected BE/BDF integrator
 and NSE, and allocates reusable composition, condition and neutrino-history
@@ -94,12 +94,12 @@ regardless of `itsout`; an empty selection requires no work. Lookup remains
 between integrator and NSE initialization. Standalone logs the network
 description before the reaction-matching diagnostics.
 
-Cleanup uses `finalize_evolve`, then `finalize_network_data`, then
+Cleanup uses `evolve_finalize`, then `network_data_finalize`, then
 `controls_finalize`. The engine finalizer releases integrator, NSE/EOS,
 Jacobian, rate-evaluation and zone/history workspace. Each Jacobian provider
 releases its own arrays; PARDISO providers release library-owned factors first.
 Network tables remain available until the engine's cleanup is complete.
-`finalize_network_data` then releases weak/neutrino reaction tables and
+`network_data_finalize` then releases weak/neutrino reaction tables and
 nuclear/reaction data. GPU resources remain available until every owner has
 removed its device mappings and freed host storage.
 
@@ -119,12 +119,12 @@ order, followed by private helpers in the same order:
 
 | Part of a call | Where to read |
 | --- | --- |
-| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call; `initialize_network_data` (`reaction_data`) loads species and reactions; `initialize_evolve` prepares the engine and zone storage with two history points; `copy_network_data` returns the caller's metadata. |
-| Thread checks | `check_worker` checks the fixed OpenMP team and the calling thread's work arrays, which `apply_xnet_controls` allocates on every thread. |
+| Initialization | `check_initializable`, `prepare_data_files` and `thread_state_initialize` prepare the call; `network_data_initialize` (`reaction_data`) loads species and reactions; `evolve_initialize` prepares the engine and zone storage with two history points; `copy_network_data` returns the caller's metadata. |
+| Thread checks | `check_worker` checks the fixed OpenMP team and the calling thread's work arrays, which `controls_initialize` allocates on every thread. |
 | Batch evolution | `xnet_burn_batch` checks lifecycle, device mappings, extents and values, then sets `nzbatch = count(active)` and `lzactive(1:nz) = active`. `evolve_batch` stages the work arrays from host or device values (`XIF(on_device)`), calls `full_net` and copies results back. Batch position `izb` is caller column `izb`; only the standalone driver maps it to a run zone with `izone = szbatch+izb-1`. |
 | Validation and failures | `validate_inputs` applies the same range and mass checks on host or device, using a temporary verdict array that also carries the active mask. Host IEEE classification stays outside device loops. `zone_error_message` and `format_burn_failure` turn verdicts and `full_net` failures into status and message. |
 | Histories and timing | `open_burn_output` reserves the call number and names; `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` are shared with the standalone driver. `get_timing`/`get_timing_since` difference the calling thread's timers. |
-| Finalization | `finalize_evolve`, `finalize_network_data` and `controls_finalize` release XNet storage before `gpu_finalize`; a pending GPU cleanup skips the completed teardown on retry. |
+| Finalization | `evolve_finalize`, `network_data_finalize` and `controls_finalize` release XNet storage before `gpu_finalize`; a pending GPU cleanup skips the completed teardown on retry. |
 
 Invalid and all-inactive calls return before staging. `evolve_batch` opens
 history files before allocating its `loss_work` scratch, so an open failure
@@ -132,11 +132,11 @@ allocates nothing; on the device, `loss_work` stays mapped across `full_net`
 and result collection and is released before return.
 
 `source/xnet_gpu.F90` manages devices, streams and vendor handles for both
-drivers. CPU builds still call `gpu_init`, `gpu_check_device` and
+drivers. CPU builds still call `gpu_initialize`, `gpu_check_device` and
 `gpu_finalize`, which return success without GPU work; the API rejects a
 `gpu_context` or `data_on_device=.true.` before using them. On GPU builds,
-`init_thread_resources` validates supplied handles before creating missing
-ones and records which resources XNet owns; `finalize_thread_resources`
+`thread_resources_initialize` validates supplied handles before creating missing
+ones and records which resources XNet owns; `thread_resources_finalize`
 destroys handles before their stream and keeps any resource whose destructor
 failed for the next attempt.
 
@@ -150,7 +150,7 @@ The following files explain the state shared by both paths:
 | Question | Where to look |
 | --- | --- |
 | Which controls can I set, and in what units? | `xnet_controls_t` and its output-level table in `source/xnet_controls.F90`; call `set_xnet_controls_defaults` before overriding fields |
-| How do controls reach the runtime arrays? | `validate_xnet_controls`, `apply_xnet_controls`, and `controls_finalize` in the same module; standalone namelist reading follows them |
+| How do controls reach the runtime arrays? | `validate_xnet_controls`, `controls_initialize`, and `controls_finalize` in the same module; standalone namelist reading follows them |
 | What happens during a burn? | The six stages in `full_net` in `source/xnet_evolve.F90`, including solve/output masks and the separate caller-handled and standalone failure paths |
 | Who owns composition and trajectory storage? | Initialization/finalization routines at the top of `source/xnet_abundances.F90` and `source/xnet_conditions.F90`, including their persistent device mappings |
 | What is in the input/output files? | Reader headers in `source/model_input_ascii.F90` and file lifecycle, timestep output, and reproducer sections in `source/xnet_output.F90` |

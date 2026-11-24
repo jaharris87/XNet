@@ -1,5 +1,7 @@
 # Compile external callers with the configuration exported by the production build.
 # First run make -C ../.. BUILD_NAME=library-test libxnet net_setup xnet.
+# Do not interpret generated Fortran .mod files as Modula-2 sources.
+.SUFFIXES:
 XNET_CONFIG ?= ../../build/library-test/xnet-config.mk
 include $(XNET_CONFIG)
 

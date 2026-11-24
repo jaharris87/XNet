@@ -1123,9 +1123,9 @@ Contains
     !XDIR XCOPYIN(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XCOPYIN(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
     !XDIR XCOPYIN(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !XDIR XCOPYIN(iffn,ffnsum,ffnenu) &
+    !XDIR XCOPYIN(ffnsum,ffnenu) &
     !XDIR XCOPYIN(has_logft,ffn_ec,ffn_beta,ffn_qval) &
-    !XDIR XCOPYIN(innu,sigmanu)
+    !XDIR XCOPYIN(sigmanu)
     !XDIR XWAIT(gpu_queue)
 
     Return
@@ -1229,8 +1229,7 @@ Contains
       !XDIR XDELETE(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
       !XDIR XDELETE(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
       !XDIR XDELETE(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
-      !XDIR XDELETE(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-      !XDIR XDELETE(iffn,innu)
+      !XDIR XDELETE(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44)
       !XDIR XWAIT(gpu_queue)
     EndIf
     If ( Allocated(n1i) ) Deallocate (n1i)

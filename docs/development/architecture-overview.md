@@ -302,6 +302,6 @@ configurations have limited evidence.
 
 ## Experimental surrogate checks
 
-`source/xnet_surrogate_checks.F90` contains experimental burn-surrogate
+`test/unit/support/xnet_surrogate_checks.F90` contains experimental burn-surrogate
 admissibility checks exercised by `test/unit`. It is not included in `xnet`,
 `xnse`, `net_setup` or `libxnet.a` and is not part of the library API.

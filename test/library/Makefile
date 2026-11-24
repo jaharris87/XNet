@@ -341,7 +341,8 @@ host-batch-openmp-overlap-test:
 	@echo 'overlap test requires a CPU OPENMP_MODE=ON library' >&2; exit 2
 endif
 
-# Expose only the standalone failure handler through an isolated production module copy.
+# Give the test copy distinct module and source names, including GPU kernel identities.
+# Production API calls continue to use xnet_evolve from the archive.
 DIAGNOSTIC_DIR := $(BUILD_DIR)/diagnostics
 .PHONY: diagnostic-test
 diagnostic-test: $(DIAGNOSTIC_DIR)/diagnostic_checks
@@ -351,12 +352,14 @@ diagnostic-test: $(DIAGNOSTIC_DIR)/diagnostic_checks
 $(DIAGNOSTIC_DIR):
 	mkdir -p '$@'
 
-$(DIAGNOSTIC_DIR)/xnet_evolve.f90: ../../source/xnet_evolve.F90 ../../source/xnet_macros.fh \
+$(DIAGNOSTIC_DIR)/diagnostic_evolve.f90: ../../source/xnet_evolve.F90 ../../source/xnet_macros.fh \
     $(XNET_CONFIG) | $(DIAGNOSTIC_DIR)
-	sed 's/^  Private$$/  Private; Public :: terminate_on_zone_failure/' '$<' > '$@.exposed'
+	sed -e 's/^Module xnet_evolve$$/Module xnet_evolve_diagnostics/' \
+	  -e 's/^End Module xnet_evolve$$/End Module xnet_evolve_diagnostics/' \
+	  -e 's/^  Private$$/  Private; Public :: terminate_on_zone_failure/' '$<' > '$@.exposed'
 	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$@.exposed' > '$@'
 
-$(DIAGNOSTIC_DIR)/xnet_evolve.o: $(DIAGNOSTIC_DIR)/xnet_evolve.f90 $(XNET_CONFIG)
+$(DIAGNOSTIC_DIR)/diagnostic_evolve.o: $(DIAGNOSTIC_DIR)/diagnostic_evolve.f90 $(XNET_CONFIG)
 	cd '$(DIAGNOSTIC_DIR)' && $(XNET_FC) $(XNET_FFLAGS) $(XNET_MODFLAGS) -c '$(notdir $<)' -o '$(notdir $@)'
 
 $(DIAGNOSTIC_DIR)/diagnostic_checks.f90: diagnostic_checks.F90 ../../source/xnet_macros.fh \
@@ -364,9 +367,9 @@ $(DIAGNOSTIC_DIR)/diagnostic_checks.f90: diagnostic_checks.F90 ../../source/xnet
 	$(XNET_CPP) -P -C -nostdinc $(XNET_CPPFLAGS) '$<' > '$@'
 
 $(DIAGNOSTIC_DIR)/diagnostic_checks.o: $(DIAGNOSTIC_DIR)/diagnostic_checks.f90 \
-    $(DIAGNOSTIC_DIR)/xnet_evolve.o $(XNET_CONFIG)
+    $(DIAGNOSTIC_DIR)/diagnostic_evolve.o $(XNET_CONFIG)
 	$(XNET_FC) $(XNET_FFLAGS) -I'$(DIAGNOSTIC_DIR)' $(XNET_MODFLAGS) -c '$<' -o '$@'
 
 $(DIAGNOSTIC_DIR)/diagnostic_checks: $(DIAGNOSTIC_DIR)/diagnostic_checks.o \
-    $(DIAGNOSTIC_DIR)/xnet_evolve.o $(XNET_ARCHIVE)
+    $(DIAGNOSTIC_DIR)/diagnostic_evolve.o $(XNET_ARCHIVE)
 	$(XNET_LDR) $(XNET_LDFLAGS) -o '$@' $(filter %.o,$^) $(XNET_ARCHIVE) $(XNET_LIBS)

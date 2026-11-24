@@ -581,6 +581,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: idiag, lun_diag, szbatch, lzactive, gpu_queue, nzbatchmx
     Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
+#if defined(XNET_OMP_OL) && defined(XNET_LA_ROCM)
+    Use xnet_gpu, Only: stream, stream_sync
+#endif
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
 
@@ -641,8 +644,12 @@ Contains
 #endif
 
     If ( idiag >= 6 ) Then
+#if defined(XNET_OMP_OL) && defined(XNET_LA_ROCM)
+      ! OpenMP target updates are not ordered on the hipBLAS stream.
+      Call stream_sync(stream)
+#endif
       !XDIR XUPDATE XWAIT(gpu_queue) &
-      !XDIR XHOST(jac)
+      !XDIR XHOST(jac,info)
       Do izb = 1, nzbatchmx
         If ( mask(izb) ) Then
           izone = szbatch + izb - 1

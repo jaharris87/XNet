@@ -294,7 +294,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(nzbatchmx)
 
     ! Local variables
-    Integer :: izb
+    Integer :: izb, warning_count, iwarn
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -307,7 +307,9 @@ Contains
     !XDIR XENTER_DATA XASYNC(gpu_queue) &
     !XDIR XCOPYIN(mask,t9)
 
+    warning_count = 0
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
+    !XDIR XREDUCTION(+,warning_count) &
     !XDIR XPRESENT(mask,t9,iweak)
     Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
@@ -315,11 +317,17 @@ Contains
         ! Turn off strong interactions if the temperature is less than t9min
         If ( t9(izb) < t9min .and. iweak0 /= 0 ) Then
           iweak(izb) = -abs(iweak0)
-          Write(lun_stdout,*) 'Warning: Strong reactions ignored for T9 < T9min.'
+          warning_count = warning_count + 1
         Else
           iweak(izb) = iweak0
         EndIf
       EndIf
+    EndDo
+
+    ! Complete the reduction before host I/O; Fortran unit writes are not portable on devices.
+    !XDIR XWAIT(gpu_queue)
+    Do iwarn = 1, warning_count
+      Write(lun_stdout,*) 'Warning: Strong reactions ignored for T9 < T9min.'
     EndDo
 
     !XDIR XEXIT_DATA XASYNC(gpu_queue) &

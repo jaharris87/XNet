@@ -211,8 +211,8 @@ Contains
 
   Subroutine invalid_requests()
     Implicit None
-    Integer :: bad_ids(2,lanes), three_ids(3,lanes), five_ids(5,lanes), bad_counters(4,lanes)
-    Real(dp) :: value, aux_value
+    Integer :: bad_ids(2,lanes), three_ids(3,lanes), five_ids(5,lanes), bad_counters(4,lanes), neutron
+    Real(dp) :: value, aux_value, saved_aux(3)
     Logical :: saved_active(lanes)
 
     nan_value = ieee_value(0.0_dp,ieee_quiet_nan)
@@ -274,7 +274,35 @@ Contains
     ye(1) = 1.1_dp
     Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
     Call expect(xnet_invalid,'electron fraction range')
+    ye(1) = 0.0_dp
+    Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+    Call expect(xnet_invalid,'zero supplied electron fraction')
     ye = saved_ye
+    neutron = minloc(network%charge_number,dim=1)
+    If ( network%charge_number(neutron) == 0 ) Then
+      x(:,1) = 0.0_dp
+      x(neutron,1) = 1.0_dp
+      Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
+      Call expect(xnet_invalid,'zero composition electron fraction despite positive supplied Ye')
+      saved_aux = [aux_x(1),aux_a(1),aux_z(1)]
+      aux_x(1) = 0.5_dp
+      aux_a(1) = 1.0_dp
+      aux_z(1) = 0.0_dp
+      Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
+        & aux_x,aux_a,aux_z)
+      Call expect(xnet_invalid,'neutrons and neutral auxiliary matter have zero electron fraction')
+      aux_z(1) = 1.0_dp
+      Call xnet_burn_batch(1.0e-12_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message, &
+        & aux_x,aux_a,aux_z)
+      Call expect(xnet_success,'charged auxiliary matter supplies positive electron fraction')
+      aux_x(1) = saved_aux(1)
+      aux_a(1) = saved_aux(2)
+      aux_z(1) = saved_aux(3)
+      temperature = saved_temperature
+      ye = saved_ye
+      restart = saved_restart
+      x = saved_x
+    EndIf
     x(1,1) = -1.0_dp
     Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters,timing,ierr,message)
     Call expect(xnet_invalid,'negative mass fraction')
@@ -332,7 +360,7 @@ Contains
   Subroutine invalid_nse_requests()
     Implicit None
     Real(dp) :: oversized(Size(network%names)+1)
-    Real(dp) :: invalid_density(4), invalid_temperature(4), invalid_ye(4)
+    Real(dp) :: invalid_density(4), invalid_temperature(4), invalid_ye(5)
     Integer :: j
 
     Call remember_state()
@@ -347,7 +375,9 @@ Contains
     Call check(All(oversized == 0.0_dp),'long NSE output cleared')
     invalid_density = [0.0_dp,-1.0_dp,nan_value,inf_value]
     invalid_temperature = [0.0_dp,-1.0_dp,nan_value,inf_value]
-    invalid_ye = [-0.1_dp,1.1_dp,nan_value,inf_value]
+    invalid_ye = [0.0_dp,-0.1_dp,1.1_dp,nan_value,inf_value]
+    Call xnet_nse_composition(1.0e7_dp,9.0e9_dp,invalid_ye(5),nse_current,ierr,message)
+    Call expect(xnet_invalid,'infinite NSE Ye')
     Do j = 1, Size(invalid_density)
       nse_current = -1.0_dp
       Call xnet_nse_composition(invalid_density(j),9.0e9_dp,0.49_dp,nse_current,ierr,message)

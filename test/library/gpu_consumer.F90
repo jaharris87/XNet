@@ -402,6 +402,7 @@ Contains
       Call xnet_burn_batch(0.1_dp,active(:n),ids(:,:n),density(:n),temperature(:n),ye(:n),x(:,:n), &
         & restart(:n),loss(:n),counters(:,:n),timing,ierr,message,aux_x(:n),aux_a(:n),aux_z(:n), &
         & max_steps_taken=steps,data_on_device=.true.)
+      Call check(All(loss == -1.0_dp),Trim(label)//' unchanged host loss mirror')
       ! No stream wait here: the API must finish its device outputs before returning.
       !XDIR XUPDATE XHOST(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
     ElseIf ( phase == 1 ) Then
@@ -625,7 +626,7 @@ Contains
     Character(160) :: expected_message
     Integer :: invalid_case
 
-    Do invalid_case = 1, 4
+    Do invalid_case = 1, 6
       Call fixture_state(network%names,density,temperature,ye,x,restart,aux_x,aux_a,aux_z)
       expected_message = 'Active-zone inputs must be finite'
       Select Case (invalid_case)
@@ -644,6 +645,17 @@ Contains
         aux_x(1) = ieee_value(0.0_dp,ieee_quiet_nan)
         expected_message = 'Invalid active-zone density, temperature, Ye, composition or restart timestep'
         label = trim(prefix)//'_device_primary_before_aux'
+      Case (5)
+        ye(1) = 0.0_dp
+        expected_message = 'Invalid active-zone density, temperature, Ye, composition or restart timestep'
+        label = trim(prefix)//'_device_zero_ye'
+      Case (6)
+        x(:,1) = 0.0_dp
+        aux_x(1) = 1.0_dp
+        aux_a(1) = 1.0_dp
+        aux_z(1) = 0.0_dp
+        expected_message = 'Active-zone composition must have positive electron fraction'
+        label = trim(prefix)//'_device_neutral_composition'
       End Select
       active = .true.
       loss = -1.0_dp
@@ -656,8 +668,13 @@ Contains
       ! Keep the host mirror finite so the required rejection must read device data.
       density(1) = density(2)
       aux_x(1) = aux_x(2)
+      aux_a(1) = aux_a(2)
+      aux_z(1) = aux_z(2)
+      ye(1) = ye(2)
+      x(:,1) = x(:,2)
       Call xnet_burn_batch(0.1_dp,active,ids,density,temperature,ye,x,restart,loss,counters, &
         & timing,ierr,message,aux_x,aux_a,aux_z,max_steps_taken=steps,data_on_device=.true.)
+      Call check(All(loss == -1.0_dp),Trim(label)//' unchanged rejected host loss mirror')
       ! Release the mappings without copying or inspecting rejected scientific results.
       !XDIR XEXIT_DATA XDELETE(density,temperature,ye,x,restart,loss,aux_x,aux_a,aux_z)
       If ( ierr /= xnet_invalid ) Write(*,'(a,i0,2a)') 'Unexpected status ',ierr,': ',Trim(message)

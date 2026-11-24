@@ -187,7 +187,7 @@ Contains
     Real(dp) :: r1, r2, dr1, dr2, dr1_ec, dr2_ec
     Real(dp) :: qdr1, qdr2, qr1, qr2, qk
     Real(dp) :: rf_beta, rf_ec, cheme
-    Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt, drec_dt
+    Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt, drec_dt, table_slope
     Integer :: i, izb, k, le1, i1, i2, i3, i4
     Integer :: lt1(nzbatchmx)
     Logical, Pointer :: mask(:)
@@ -203,6 +203,7 @@ Contains
     !XDIR XCREATE(rf,dlnrfdt9,lt1) &
     !XDIR XCOPYIN(mask,t9,ene)
 
+    ! Phase space uses the actual state, independently of held logft table values.
     ! Pre-calculate phase space integrals and derivatives
     !XDIR XLOOP(2) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,etae,has_logft,ffn_qval,phasei,dphaseidt9) &
@@ -229,14 +230,14 @@ Contains
         Do i = 1, nt9grid
           If ( t9(izb) <= t9grid(i) ) Exit
         EndDo
-        lt1(izb) = max(i-1,1)
+        lt1(izb) = min(max(i-1,1),nt9grid-1)
       End If
     End Do
 
     !XDIR XLOOP(2) XASYNC(gpu_queue) &
     !XDIR XPRESENT(mask,t9,lt1,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
     !XDIR XPRESENT(phasei,dphaseidt9) &
-    !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
+    !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4,table_slope) &
     !XDIR XPRIVATE(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt) &
     !XDIR XPRIVATE(qdr1,qdr2,qr1,qr2,qk)
     Do izb = 1, nzbatchmx
@@ -244,12 +245,17 @@ Contains
         If ( mask(izb) ) Then
 
           ! Find the density grid point (on log grid)
-          enel = log10(ene(izb))
-          le1 = max(int(enel),1)
+          enel = min(max(log10(ene(izb)),enegrid(1)),enegrid(nenegrid))
+          le1 = min(max(int(enel),1),nenegrid-1)
+
+          ! Hold the nearest table edge outside either grid, without extrapolation.
+          ! At a temperature endpoint retain the adjacent interior derivative.
+          table_slope = 1.0_dp
+          If ( t9(izb) < t9grid(1) .or. t9(izb) > t9grid(nt9grid) ) table_slope = 0.0_dp
 
           ! Bi-linear interpolation
           dt9 = t9grid(lt1(izb)+1) - t9grid(lt1(izb))
-          rdt9 = (t9(izb) - t9grid(lt1(izb))) / dt9
+          rdt9 = min(max((t9(izb) - t9grid(lt1(izb))) / dt9,0.0_dp),1.0_dp)
           dene = enegrid(le1+1) - enegrid(le1)
           rdene = (enel - enegrid(le1)) / dene
           i1 = nt9grid*(le1-1) + lt1(izb)
@@ -299,10 +305,10 @@ Contains
               dlnrfdt9(k,izb) = 0.0
             Else
               If (rf_ec < rfmin) Then
-                dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+                dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) * table_slope / dt9
               Else
-                drbeta_dt = rf_beta*ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
-                drec_dt = rf_ec * ( -ln_10 * ( rdene*dr2_ec + (1.0-rdene)*dr1_ec ) / dt9 &
+                drbeta_dt = rf_beta*ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) * table_slope / dt9
+                drec_dt = rf_ec * ( -ln_10 * ( rdene*dr2_ec + (1.0-rdene)*dr1_ec ) * table_slope / dt9 &
                   & + dphaseidt9(k,izb) / phasei(k,izb) )
                 dlnrfdt9(k,izb) = ( drbeta_dt + drec_dt ) / rf(k,izb)
               EndIf
@@ -318,7 +324,7 @@ Contains
               dlnrfdt9(k,izb) = 0.0
             Else
               rf(k,izb) = 10.0**rf(k,izb)
-              dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+              dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) * table_slope / dt9
             EndIf
           EndIf
         EndIf

@@ -233,3 +233,56 @@ They do not qualify MPI, accelerators, optional external sparse solvers, other
 compilers, production nuclear-data quality, or long scientific calculations.
 Passing the suite demonstrates the named component and interoperability
 behavior only.
+
+## FFN table edges
+
+Run `make -C test/unit ffn-test` (or append `CMODE=DEBUG` for bounds and
+floating-point traps). The check links production FFN, Fermi-integral,
+conditions, and controls modules. Six synthetic reactions exercise ordinary
+tables, electron/positron logft entries, beta-only logft, and rate/loss cutoffs.
+Bilinear log tables with a temperature-density mixed term give analytic
+values and temperature slopes. The coordinate cross-product includes every
+knot and points just inside/outside it, both outer edges, and all corners;
+a second active lane remains interior and an inactive middle lane checks a
+partial batch. Calls alternate the optional mask and the default active mask.
+
+The checks require held table values outside `T9 = 0.01..100` and
+`log10(rho*Ye) = 1..11`, zero table temperature slopes strictly outside,
+and the adjacent interior slope at an endpoint. Logft capture phase space and
+its derivative are compared with production `effphase` at the actual state;
+this checks their composition with the held table factors, not independent
+scientific validation of the phase-space approximation. Cold synthetic states
+choose a chemical potential that avoids overflowing the existing phase-space
+exponential. Analytic checks allow `512*epsilon` relative error for values
+and `512*epsilon*max(1,abs(expected))` for logarithmic derivatives. Central
+differences of the ordinary log rate use step `epsilon**(1/3)*T9` and absolute
+error `1e-7` per GK away from knots. These bounds describe this synthetic test
+and do not change the regression suite's references or tolerances.
+
+The executable also accepts `bounds-density` and `bounds-temperature` to
+isolate the original upper-index overruns under `CMODE=DEBUG`.
+
+## NSE index safety
+
+`make -C test/unit CMODE=DEBUG nse-index-test` checks the full independent NSE
+network, CNO, and subsets without heavy nuclei, He4/Si28, common Fe/Ni nuclei,
+or bound nuclei. Each network is initialized, solved, and finalized twice.
+The tests check finite normalized mass fractions and charge at three Ye values,
+repeatability, valid public indices, and finite chemical-potential guesses from
+all six heuristics. Before each direct guess, the composition is cleared; the
+missing-He4/Si28 heuristics must put positive mass at the closest available Z/A
+for the query, rather than pass solely because a fixed seed is finite.
+Only `nse_guess` is exposed in the test copy of the module;
+the production interface is unchanged. These checks establish software behavior
+for restricted networks, not independent scientific accuracy of their NSE states.
+The existing independent NSE validation supplies the ordinary-network comparison.
+
+Run the same index checks with host worker scratch enabled in a separate directory:
+
+```sh
+OMP_NUM_THREADS=2 OMP_DYNAMIC=FALSE make -C test/unit CMODE=DEBUG \
+    OPENMP_MODE=ON BUILD_DIR=build/nse-debug-omp nse-index-test
+```
+
+The output records the number of workers that executed the checks.
+

@@ -78,7 +78,7 @@ existing output routines. Both drivers use `xnet_output` to open binary and ASCI
 files, write their headers, and close the current thread's files. Each driver
 chooses its filenames and file-creation policy; the standalone driver retains
 its general input histories. See
-[the Fortran library API guide](embedding.md) for status and ownership limits.
+[the Fortran library API guide](../library-api.md) for status and ownership limits.
 
 Both frontends load tables with `initialize_network_data` in `reaction_data`
 (`source/xnet_data.F90`), then call `initialize_evolve(data_dir,nhistory)`
@@ -112,11 +112,40 @@ Standalone keeps MPI, trajectory input, scheduling, filenames and rank-based
 device selection in `net.F90`. The setup/cleanup banner in `xnet_evolve` gives
 the ordering at the call sites.
 
+## Library API implementation
+
+`source/xnet_api.F90` lists its four public procedures first, in lifecycle
+order, followed by private helpers in the same order:
+
+| Part of a call | Where to read |
+| --- | --- |
+| Initialization | `check_initializable`, `prepare_data_files` and `initialize_thread_state` prepare the call; `initialize_network_data` (`reaction_data`) loads species and reactions; `initialize_evolve` prepares the engine and zone storage with two history points; `copy_network_data` returns the caller's metadata. |
+| Thread checks | `check_worker` checks the fixed OpenMP team and the calling thread's work arrays, which `apply_xnet_controls` allocates on every thread. |
+| Batch evolution | `xnet_burn_batch` checks lifecycle, device mappings, extents and values, then sets `nzbatch = count(active)` and `lzactive(1:nz) = active`. `evolve_batch` stages the work arrays from host or device values (`XIF(on_device)`), calls `full_net` and copies results back. Batch position `izb` is caller column `izb`; only the standalone driver maps it to a run zone with `izone = szbatch+izb-1`. |
+| Validation and failures | `validate_inputs` applies the same range and mass checks on host or device, using a temporary verdict array that also carries the active mask. Host IEEE classification stays outside device loops. `zone_error_message` and `format_burn_failure` turn verdicts and `full_net` failures into status and message. |
+| Histories and timing | `open_burn_output` reserves the call number and names; `open_ts_file`, `open_ev_file` and `close_output_files` in `xnet_output` are shared with the standalone driver. `get_timing`/`get_timing_since` difference the calling thread's timers. |
+| Finalization | `finalize_evolve`, `finalize_network_data` and `controls_finalize` release XNet storage before `gpu_finalize`; a pending GPU cleanup skips the completed teardown on retry. |
+
+Invalid and all-inactive calls return before staging. `evolve_batch` opens
+history files before allocating its `loss_work` scratch, so an open failure
+allocates nothing; on the device, `loss_work` stays mapped across `full_net`
+and result collection and is released before return.
+
+`source/xnet_gpu.F90` manages devices, streams and vendor handles for both
+drivers. CPU builds still call `gpu_init`, `gpu_check_device` and
+`gpu_finalize`, which return success without GPU work; the API rejects a
+`gpu_context` or `data_on_device=.true.` before using them. On GPU builds,
+`init_thread_resources` validates supplied handles before creating missing
+ones and records which resources XNet owns; `finalize_thread_resources`
+destroys handles before their stream and keeps any resource whose destructor
+failed for the next attempt.
+
 ## Reading the driver and library source
 
-For an application integration, start with [embedding.md](embedding.md) and
-`source/xnet_api.F90`. For a trajectory calculation, start with the six stages
-in `source/net.F90`. The following files explain the state shared by both paths:
+For an application integration, start with the [library API guide](../library-api.md)
+and the [library API implementation](#library-api-implementation) notes above.
+For a trajectory calculation, start with the six stages in `source/net.F90`.
+The following files explain the state shared by both paths:
 
 | Question | Where to look |
 | --- | --- |
@@ -270,3 +299,9 @@ For a change spanning modules:
 
 Document uncertainty when the current implementation or supported
 configurations have limited evidence.
+
+## Experimental surrogate checks
+
+`source/xnet_surrogate_checks.F90` contains experimental burn-surrogate
+admissibility checks exercised by `test/unit`. It is not included in `xnet`,
+`xnse`, `net_setup` or `libxnet.a` and is not part of the library API.

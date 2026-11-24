@@ -7,7 +7,7 @@
 ! distributed over MPI ranks and, within a rank, over batches handled by OpenMP threads.
 !
 ! To embed XNet inside a hydrodynamics or multiphysics application, use the library interface in
-! xnet_api.F90 (documented in docs/development/embedding.md) rather than calling full_net directly.
+! xnet_api.F90 (documented in docs/library-api.md) rather than calling full_net directly.
 !***************************************************************************************************
 
 #include "xnet_macros.fh"

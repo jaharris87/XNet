@@ -735,8 +735,11 @@ Contains
     ! Local variables
     Character(controls_path_length) :: include_path, normalized_filename
     Character(:), Allocatable :: line
-    Integer :: lun, ierr, i, staging_size, input_count, output_count, file_size
+    Character(256) :: io_message
+    Character(12) :: number_string
+    Integer :: lun, ierr, i, staging_size, input_count, output_count, file_size, line_number, slash
     Integer :: largest_inab_index, largest_thermo_index, largest_output_index, largest_include_index
+    Logical :: legacy_control
 
     ! 1. Normalize path and verify include nesting depth and cycle freedom
     message = ' '
@@ -755,9 +758,17 @@ Contains
     ancestor_paths(depth) = normalized_filename
 
     ! 2. Open the controls file and pre-scan lines for maximum explicit array indices
-    Open(newunit=lun,file=trim(normalized_filename),status='old',action='read',iostat=ierr)
+    io_message = ' '
+    Open(newunit=lun,file=trim(normalized_filename),status='old',action='read',iostat=ierr,iomsg=io_message)
     If ( ierr /= 0 ) Then
-      message = 'Failed to open controls file: '//trim(normalized_filename)
+      message = 'Failed to open controls file: '//trim(normalized_filename)//': '//trim(io_message)
+      ! A v8 run directory holds a positional control file instead of controls.nml.
+      If ( depth == 1 ) Then
+        slash = scan(normalized_filename,'/',back=.true.)
+        Inquire(file=normalized_filename(:slash)//'control',exist=legacy_control)
+        If ( legacy_control ) message = trim(message)// &
+          & "; found a v8 'control' file, convert it with tools/convert_control.py"
+      EndIf
       Return
     EndIf
 
@@ -779,9 +790,11 @@ Contains
     largest_thermo_index  = 0
     largest_output_index  = 0
     largest_include_index = 0
+    line_number           = 0
     Do
       Read(lun,'(a)',iostat=ierr) line
       If ( ierr < 0 ) Exit
+      line_number = line_number + 1
       If ( ierr > 0 ) Then
         message = 'Failed to inspect controls file: '//trim(normalized_filename)
         Close(lun)
@@ -794,8 +807,10 @@ Contains
       If ( ierr == 0 ) Call inspect_array_control(line,'output_nuclei',largest_output_index,ierr)
       If ( ierr == 0 ) Call inspect_array_control(line,'include_files',largest_include_index,ierr)
       If ( ierr /= 0 ) Then
+        Write(number_string,'(i0)') line_number
         message = 'Dynamically sized controls require explicit positive indices in '// &
-          & trim(normalized_filename)
+          & trim(normalized_filename)//', line '//trim(number_string)//': assign inab_files, '// &
+          & 'thermo_files, output_nuclei and include_files one entry at a time, e.g. inab_files(1) = ...'
         Close(lun)
         Deallocate (line)
         Return
@@ -865,11 +880,14 @@ Contains
     EndIf
 
     ! 4. Read the namelist and copy updated fields back into controls
-    Read(lun,nml=xnet_controls,iostat=ierr)
+    ! The runtime iomsg text names the unknown or malformed entry.
+    io_message = ' '
+    Read(lun,nml=xnet_controls,iostat=ierr,iomsg=io_message)
     Close(lun)
     If ( ierr /= 0 ) Then
-      Write(message,'(a,i0,a)') 'Malformed or unknown xnet_controls namelist, iostat=',ierr, &
-        & ' in '//trim(normalized_filename)
+      Write(number_string,'(i0)') ierr
+      message = 'Malformed or unknown xnet_controls namelist, iostat='//trim(number_string)// &
+        & ' in '//trim(normalized_filename)//': '//trim(io_message)
       Deallocate (inab_files,thermo_files,output_nuclei)
       Return
     ElseIf ( len_trim(include_files(max_includes_per_file+1)) /= 0 ) Then

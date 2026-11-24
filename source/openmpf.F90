@@ -1,6 +1,6 @@
 !***************************************************************************************************
 ! openmpf.f90 10/18/17
-! This file contains the module defining Fortran interfaces for the OpenACC Runtime Library
+! This file contains the module defining Fortran interfaces for the OpenMP Runtime Library
 !***************************************************************************************************
 
 module xnet_openmpf

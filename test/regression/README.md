@@ -183,16 +183,16 @@ solver behavior. Holding block size at 1 keeps batching out of the integrator
 comparison; no evidence from the isolated runs indicated a BDF semantic
 dependency on the legacy block size of 4. Testing `szbatch > 1` remains
 separate work. `source/xnet_evolve.F90` imports `solve_bdf` and dispatches
-`isolv == 3` to it, `source/net.F90` calls `bdf_init` for the same choice, and
-the normal root-level production build contains
+`isolv == 3` to it, its `initialize_evolve` calls `bdf_init` for the same
+choice, and the normal root-level production build contains
 `xnet_integrate_bdf.o`. `source/xnet_controls.F90` replaces both input
 abundance- and temperature-change timestep limits with the effective value
 `1e10` for `isolv == 3`; the committed reference records that effective state.
 
 The maintained solver is Backward Differentiation Formula (BDF). Integration
 choice 3 selects BDF; the obsolete Bader-Deuflhard (BD) choice 2 is not built.
-The commented `Case (2)` in `source/xnet_evolve.F90` and the absent
-`xnet_integrate_bd.o` production object provide additional confirmation.
+`validate_xnet_controls` rejects any `isolv` other than 1 or 3, and the
+production build contains no `xnet_integrate_bd.o` object.
 
 Legacy ID 2 names `tnsn_torch47` and calls `do_test`, which concatenates
 `test/test_settings` and `test/Test_Problems/setup_tnsn_torch47`. The settings

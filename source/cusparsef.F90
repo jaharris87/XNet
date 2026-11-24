@@ -1,6 +1,6 @@
 !***************************************************************************************************
 ! cusparsef.f90 10/18/17
-! this file contains the module defining fortran interfaces for the cublas library
+! This file contains the module defining Fortran interfaces for the cuSPARSE library
 !***************************************************************************************************
 
 #include "xnet_macros.fh"

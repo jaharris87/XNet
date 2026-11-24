@@ -1,8 +1,13 @@
 !***************************************************************************************************
-! xnet_eos.f90 10/18/17
-! XNet composition and screening with build-selected thermodynamics
-! This file contains routines which calculate EoS quantites needed to calculate screening
-! corrections for reaction rates.
+! xnet_eos.F90
+! Common EoS layer for the EOS=STARKILLER and EOS=EXTERNAL builds. It computes composition moments,
+! the plasma quantities needed for screening corrections, and the EoS updates used by self-heating.
+! Thermodynamics (cv, eta and d(eta)/dT in CGS and K) come from the build-selected provider module
+! xnet_eos_interface: source/xnet_eos_starkiller.F90 or an application source. This module converts
+! them to XNet units (MeV per nucleon, GK).
+!
+! The generic eos_interface below updates XNet zone state and calls the provider through eosx; it
+! keeps its historical name and is not the provider module.
 !***************************************************************************************************
 
 #include "xnet_macros.fh"

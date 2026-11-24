@@ -8,7 +8,7 @@ Program diagnostic_checks
   Use xnet_abundances, Only: yo, xext
   Use xnet_integrate, Only: update_iweak
   Use xnet_jacobian, Only: jac, info, msize, jacobian_decomp
-  Use xnet_evolve, Only: terminate_on_zone_failure
+  Use xnet_evolve_diagnostics, Only: terminate_on_zone_failure
 #if defined(XNET_OACC)
   Use openacc, Only: acc_on_device, acc_device_host
 #elif defined(XNET_OMP_OL)

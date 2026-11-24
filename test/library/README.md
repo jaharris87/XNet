@@ -94,7 +94,8 @@ switch on a mixed active mask, two low-temperature warnings, LU matrix and
 status diagnostics, and the pre-step abundance written by the standalone
 failure handler. The runner expects the final failure exit status 1 and
 checks the generated abundance and thermodynamic files. It exposes only that
-private handler in an isolated copy of the production evolution module. This
+private handler in a copy with distinct module and source names, so production
+API calls use the archive module and GPU kernel names do not collide. This
 check is included in the CPU `test` target. It can also use a dense GPU archive;
 GPU builds assert device execution and poison host matrix and abundance
 mirrors before diagnostic reads. Native accelerator compilation and execution

@@ -101,21 +101,25 @@ The exact opt-in component and same-source dense comparison commands are in
 
 ## Platform status
 
-| Configuration | Current status |
-| --- | --- |
-| GNU serial | The maintained serial regression suite passed in the optimized GNU configuration, and the component suite passed in both OPT and DEBUG configurations during the staged sequence on macOS arm64 with GNU Fortran 16.2.0. This is not a general cross-platform claim. |
-| GNU MPI and OpenMP | Serial, two-rank MPI, and two-thread OpenMP results agreed on the ten-zone qualification problem on macOS arm64 with GNU Fortran 16.2.0 and Open MPI 5.0.10. This checks the selected functional and numerical behavior, not scaling, multi-node placement, binding performance, or hybrid MPI+OpenMP execution. |
-| Frontier HIP/ROCm OpenMP offload | The accepted source `64951196032bf4622ee6c887323db33cf1de5beb`, included in this tree, passed Frontier job `5512553` on one MI250X with CPE 25.09, Cray Fortran 20.0.0, ROCm 6.4.2, hipfort 6.4.2, OpenMP target offload, Starkiller EOS, dense solver, and MPI off. The device-probe maximum residual was `3.552713678800501e-17` against a `1e-12` limit. The ten-zone partial batch and six-zone `heat_sn160` comparisons passed; the latter's maximum numerical-limit fraction was `0.16072834133922473`, with nonzero neutrino loss in every zone. CPE 26.03 with ROCm 7.0.2 encountered a hipfort/rocBLAS link incompatibility and is not qualified. |
-| Perlmutter CUDA/OpenACC | Supplemental evidence for the same accepted source passed Perlmutter job `58588659` on one A100-SXM4-80GB with NVHPC 26.5, PrgEnv-nvidia 8.7.0, CUDA 13.2, OpenACC, and the cuBLAS pointer-array batched solve. Device-probe residuals were zero. The ten-zone partial batch and `heat_sn160` comparisons passed; the latter's maximum numerical-limit fraction was `0.07912200248018902`, with nonzero neutrino loss in every zone. This evidence applies only to that tested configuration. |
-| Other host names | Use the generic machine defaults unless `MACHINE` or other build variables are supplied explicitly. |
+| Configuration | Compiler, runtime and hardware | Checked result and limits |
+| --- | --- | --- |
+| GNU serial | GNU Fortran 16.2.0; macOS arm64 | Optimized serial regressions and OPT/DEBUG component suites passed during the staged sequence. Other platforms are not established by these runs. |
+| GNU MPI and OpenMP | GNU Fortran 16.2.0, Open MPI 5.0.10; macOS arm64 | Serial, two-rank MPI and two-thread OpenMP results agreed on the ten-zone problem. Scaling, multi-node placement, binding performance and hybrid MPI+OpenMP were not checked. |
+| Frontier HIP/OpenMP target | Cray Fortran 20.0.0, CPE 25.09, ROCm/hipfort 6.4.2; one MI250X | Device probe, ten-zone partial batch and six-zone `heat_sn160` comparisons passed. CPE 26.03 with ROCm 7.0.2 had a hipfort/rocBLAS link incompatibility and is not qualified. |
+| Perlmutter CUDA/OpenACC | NVHPC 26.5, PrgEnv-nvidia 8.7.0, CUDA 13.2; one A100-SXM4-80GB | Device probe, ten-zone partial batch and `heat_sn160` comparisons passed using the cuBLAS pointer-array batched solve. Applies only to this tested configuration. |
 
-The exact commands, source revision, and any launcher-specific options belong
-in the issue or pull-request evidence for each run. A successful build alone
-does not establish runtime or numerical agreement.
+The accelerator rows used Starkiller EOS, the dense solver and MPI off at
+source `64951196032bf4622ee6c887323db33cf1de5beb`. Upstream staging merge
+`1f41d9be38f8d3f171b1cc37f9977a3e815a53ad` has the same source tree. The
+[public run record](https://github.com/jaharris87/XNet/issues/101#issuecomment-5745080421)
+links the reviewed source and records both jobs, probe residuals and numerical
+comparison results. Both `heat_sn160` checks returned nonzero neutrino loss
+in every zone.
 
-The Frontier and Perlmutter runs used source
-`64951196032bf4622ee6c887323db33cf1de5beb`. Upstream staging merge
-`1f41d9be38f8d3f171b1cc37f9977a3e815a53ad` has the same source tree.
+For other host names, use the generic machine defaults unless `MACHINE` or
+other build variables are supplied explicitly. The commands, source revision
+and launcher options belong in the issue or PR for each run. A successful
+build alone does not establish runtime or numerical agreement.
 
 The accelerator checks above do not establish performance, scaling,
 multi-GPU or MPI+GPU behavior, BDF numerical behavior, other GPU generations,

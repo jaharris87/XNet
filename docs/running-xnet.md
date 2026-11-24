@@ -6,6 +6,11 @@ network. The run is configured by `controls.nml` in the working directory,
 using the `&xnet_controls` namelist group. The v8 line-oriented `control` file
 is no longer read; [convert it](#converting-v8-ascii-controls) once.
 
+**Contents:** [Run a trajectory](#running-a-trajectory) ·
+[Controls file](#the-controls-file) · [Controls reference](#controls-reference) ·
+[Weak-rate limits](#weak-rate-table-limits) ·
+[Convert v8 controls](#converting-v8-ascii-controls)
+
 ## Running a trajectory
 
 Build the default configuration from the repository root with `make -j`. The

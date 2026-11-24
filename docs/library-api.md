@@ -24,6 +24,16 @@ HIP/ROCm. One initialized network per process is supported.
 from that batch is usable and the application must shut down. Some errors
 still stop the process inside XNet; see [status and shutdown](#status-and-shutdown).
 
+**Contents:** [CPU quickstart](#cpu-quickstart) ·
+[Execution models](#choosing-an-execution-model) ·
+[CPU OpenMP](#cpu-openmp-batches) · [Mapped GPU batch](#mapped-gpu-batch) ·
+[Inputs and results](#batch-inputs-and-returned-values) ·
+[Status and shutdown](#status-and-shutdown) · [Controls](#controls-in-the-library) ·
+[Histories](#per-call-histories) · [GPU resources](#gpu-builds-and-resources) ·
+[Application EOS](#application-eos-interface) · [NSE](#nse-composition-queries) ·
+[Updating a caller](#updating-a-development-caller) ·
+[CHIMERA and Flash-X](#application-notes-chimera-and-flash-x)
+
 ## CPU quickstart
 
 Build from the repository root:

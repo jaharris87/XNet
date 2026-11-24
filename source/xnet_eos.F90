@@ -106,6 +106,7 @@ Contains
       detaedt9 = detadt * 1e9
     EndIf
 
+    Return
   End Subroutine eosx
 
   Subroutine eos_interface_scalar(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext)
@@ -234,7 +235,7 @@ Contains
     ! Calculate Ye and other needed moments of the abundance distribution
     Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,xext,aext,zext)
 
-    ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
+    ! Calculate ratio (df/deta)/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
     Call salpeter_ratio(etae,sratio,dztildedt9)
     ztilde = sqrt(z2bar + zbar*sratio) ! DGC, Eq. 4
     dztildedt9 = 0.5*zbar/ztilde * dztildedt9*detaedt9
@@ -292,7 +293,7 @@ Contains
       & abar,zbar,z2bar,zibar, &
       & xext,aext,zext,mask_in = mask_in)
 
-    ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
+    ! Calculate ratio (df/deta)/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
     Call salpeter_ratio(etae,sratio,dztildedt9,mask_in = mask_in)
 
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
@@ -330,9 +331,9 @@ Contains
 
   Subroutine salpeter_ratio_scalar(eta,ratio,dratiodeta)
     !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the Salpeter (1954) ratio f'/f(eta) needed for electron screening.
+    ! This routine calculates the Salpeter (1954) ratio (df/deta)/f(eta) needed for electron screening.
     ! eta is the ratio of electron chemical potential to kT.
-    ! f'/f is also defined as theta_e in DeWitt+ (1973).
+    ! (df/deta)/f is also defined as theta_e in DeWitt+ (1973).
     !
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
@@ -372,9 +373,9 @@ Contains
 
   Subroutine salpeter_ratio_vector(eta,ratio,dratiodeta,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the Salpeter (1954) ratio f'/f(eta) needed for electron screening.
+    ! This routine calculates the Salpeter (1954) ratio (df/deta)/f(eta) needed for electron screening.
     ! eta is the ratio of electron chemical potential to kT.
-    ! f'/f is also defined as theta_e in DeWitt+ (1973).
+    ! (df/deta)/f is also defined as theta_e in DeWitt+ (1973).
     !
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.

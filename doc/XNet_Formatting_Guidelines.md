@@ -25,11 +25,15 @@ XNet Formatting Guidelines
   ```
 * Always specify `Intent` for subroutine/function arguments
 * Use `iso_fortran_env` variables when appropriate (e.g. `output_unit` instead of unit number 6)
-* Use `Integer` instead of `Logical` for execution flags (e.g. `isolv`)
+* Keep integer-valued runtime controls as `Integer` (e.g. `isolv`). Use
+  `Logical` for predicates and API masks such as `active`; preserve existing
+  interface types.
 * Explicitly `Deallocate` local `Allocatable` variables
 * Explicitly use `Return` and end of subroutine or function
 * Avoid `While` loops
-* Avoid post-Fortran2003 language features
+* Follow the existing Fortran 2008 usage, including `iso_fortran_env` and
+  `Newunit`. This describes current source practice; new compiler requirements
+  need separate approval.
 * Avoid magic numbers (i.e. use variables for scalars):
   * Bad: 
     ```fortran

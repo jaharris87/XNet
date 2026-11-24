@@ -213,6 +213,12 @@ threading and CUDA/OpenACC selection remain separate.
 Each selected path requires its compiler, headers, libraries, and runtime.
 Validate support and numerical behavior for the exact combination used.
 
+The bundled external HELMHOLTZ provider uses shared COMMON-block storage and
+does not support concurrent XNet calls. Make rejects `EOS=HELMHOLTZ` with
+`OPENMP_MODE=ON`. Use `OPENMP_MODE=OFF` to serialize XNet calls; the host
+application may still use OpenMP for unrelated work. `EOS=STARKILLER` supports
+XNet's CPU OpenMP mode.
+
 ## Production and utility targets
 
 The default target builds `build/GNU-OPT/bin/xnet` with the tracked defaults.

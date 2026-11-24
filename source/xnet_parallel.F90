@@ -305,9 +305,9 @@ contains
     integer :: ierr
     if ( parallel_IOProcessor() ) then
        if ( present(str) ) then
-          print*, 'parallel_abort(): ', str
+          print*, 'XNet error: ', str
        else
-          print*, 'parallel_abort() !!!'
+          print*, 'XNet error: unspecified failure'
        end if
     end if
     if ( present(errorcode) ) then

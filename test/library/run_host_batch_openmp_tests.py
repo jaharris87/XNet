@@ -227,6 +227,11 @@ def main() -> None:
         if timeout_error is not None:
             raise timeout_error
         require(returncode == 0, f"direct exit {returncode}: {log}")
+        if argv[0] == str(exe) and len(argv) > 5 and argv[5] != "topology":
+            records = [line.split() for line in output.splitlines() if line.startswith("HOST_BATCH_INVALID_OUTPUT_")]
+            require(records == [[marker, str(threads)] for marker in
+                                ("HOST_BATCH_INVALID_OUTPUT_REJECTED", "HOST_BATCH_INVALID_OUTPUT_RECOVERED")],
+                    f"missing/duplicate rejected setup and corrected retry: {log}")
         return output
     source_files = subprocess.check_output(["git", "ls-files", "-z", "source", "make", "Makefile", "Makefile.opt", "Makefile.internal",
                                             "test/library/consumer_fixture.F90", "test/library/run_library_tests.py", "test/library/run_output_tests.py",

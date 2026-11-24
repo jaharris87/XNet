@@ -445,6 +445,14 @@ solver storage or require applications to inspect `sunet` or `netwinv`.
 | `timing` | Stage durations in seconds; see below. |
 | Network metadata | Copied names and integer A/Z. `binding_energy_mev` is binding energy in MeV per nucleus; `mass_excess_mev` is mass-excess energy in MeV per nucleus. |
 
+FFN table interpolation holds the nearest edge value outside
+`T9 = 0.01..100` (GK) and `log10(rho*Ye) = 1..11` (`rho*Ye` in g/cm^3),
+independently on each axis. Table-derived temperature slopes are zero strictly
+outside the temperature grid; endpoints use the adjacent interior slope.
+For logft data, only the tabulated factors are held: capture phase space and
+its temperature derivative continue to use the actual thermodynamic state,
+so the total logft capture rate can still vary beyond a table edge.
+
 The active composition must contain positive total mass, including any
 auxiliary reservoir. The API does not enforce `sum(X)+aux_x=1` or check input
 Ye against X. The composition-based value is

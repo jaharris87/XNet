@@ -24,10 +24,16 @@ Program preprocess_consumer
     Call Get_Command_Argument(1,data_dir)
     controls%data_dir = data_dir
     controls%iprocess = 0
+    Call Get_Command_Argument(2,filename)
+    If ( filename == 'quiet_preprocess' .or. filename == 'verbose_preprocess' ) Then
+      controls%iprocess = 1
+      If ( filename == 'verbose_preprocess' ) controls%idiag = 0
+    EndIf
     Call xnet_initialize(controls,network,ierr,message)
-    Call check(ierr == xnet_success,'load-only prepared network')
+    Call check(ierr == xnet_success,'prepared network initialization')
     Call xnet_finalize(ierr,message)
-    Call check(ierr == xnet_success,'load-only finalization')
+    Call check(ierr == xnet_success,'prepared network finalization')
+    Write(*,'(a)') 'PREPROCESS_MODE_CHECKS_PASSED'
     Stop
   EndIf
   Call check(Command_Argument_Count() == 5,'expected two network copies and three missing-ASCII directories')

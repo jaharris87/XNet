@@ -146,7 +146,7 @@ def check_ascii(path: Path, trace: dict, names: list[str], selected: list[int]) 
             ["k", "Time", "T(GK)", "Density", "dE/dt", "sqnu", "Timestep"] and
             lines[0][69+9*species:].strip() == "It", f"ASCII fixed-column header mismatch: {path}")
     require([lines[0][69+9*i:78+9*i].strip() for i in range(species)] == [names[i] for i in selected],
-            f"ASCII selected-species header/fallback mismatch: {path}")
+            f"ASCII selected-species header mismatch: {path}")
     widths = (4, 15, 10, 10, 10, 10, 10) + (9,) * species + (2, 2)
     for line, step in zip(lines[1:], trace["steps"]):
         require(len(line) == sum(widths), f"malformed ASCII row width: {path}")
@@ -276,8 +276,7 @@ def main() -> None:
             case = new_case(label, network)
             text = run([consumer, f"Data_{network}", str(solver), str(heat), str(level), mode], case, case / "consumer.log")
             require("OUTPUT_CHECKS_PASSED" in text, f"consumer did not finish: {case}")
-            require(any("Output Nuc:" in line and "badxx" in line and "not found" in line
-                        for line in text.splitlines()), f"missing output-species warning at itsout={level}: {case}")
+            require("Could not find" not in text, f"quiet initialization printed NSE seed diagnostics: {case}")
             log = parsed_log(text)
             iterations = (1, 2) if network == "alpha" else (3,)
             require(all(preprocess_metadata[i] == log["metadata"] for i in iterations),
@@ -296,8 +295,7 @@ def main() -> None:
                 else:
                     require(result_lines == baseline_lines, f"itsout changed physical results/counters/steps: {label}")
                 names = [row[0] for row in log["metadata"]]
-                # The missing-name fallback is the standalone final-species rule.
-                selected = [names.index("c12"), names.index("o16"), len(names)-1]
+                selected = [names.index("c12"), names.index("o16"), names.index("ni56")]
                 enabled[level] = check_case(case, log, level, solver, heat, selected)
         require(set(reference) == set(enabled[1]), f"reference output inventory differs: {network}")
         for name, trace in enabled[1].items():
@@ -360,7 +358,7 @@ def main() -> None:
             partial = binary(case / "ts_call1_zone2")
             names = [row[0] for row in parsed_log(text)["metadata"]]
             check_ascii(case / "ev_call1_zone2", partial, names,
-                        [names.index("c12"), names.index("o16"), len(names)-1])
+                        [names.index("c12"), names.index("o16"), names.index("ni56")])
             require({p.name for p in case.glob("ts*")} == {"ts_call1_zone2"} and
                     {p.name for p in case.glob("ev*")} == {"ev_call1_zone2"}, f"wrong failed-call inventory: {case}")
             require(partial["steps"][-1]["time"] < 0.1, f"failure unexpectedly wrote completed burn: {case}")

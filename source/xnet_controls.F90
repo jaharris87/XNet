@@ -815,8 +815,8 @@ Contains
         Deallocate (line)
         Return
       ElseIf ( largest_include_index > max_includes_per_file+1 ) Then
-        Write(message,'(a,i0,a)') 'Controls file has more than ',max_includes_per_file, &
-          & ' direct includes: '//trim(normalized_filename)
+        Write(number_string,'(i0)') max_includes_per_file
+        message = 'Controls file has more than '//trim(number_string)//' direct includes: '//trim(normalized_filename)
         Close(lun)
         Deallocate (line)
         Return
@@ -891,8 +891,8 @@ Contains
       Deallocate (inab_files,thermo_files,output_nuclei)
       Return
     ElseIf ( len_trim(include_files(max_includes_per_file+1)) /= 0 ) Then
-      Write(message,'(a,i0,a)') 'Controls file has more than ',max_includes_per_file, &
-        & ' direct includes: '//trim(normalized_filename)
+      Write(number_string,'(i0)') max_includes_per_file
+      message = 'Controls file has more than '//trim(number_string)//' direct includes: '//trim(normalized_filename)
       Deallocate (inab_files,thermo_files,output_nuclei)
       Return
     EndIf

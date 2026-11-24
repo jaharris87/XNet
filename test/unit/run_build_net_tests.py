@@ -305,7 +305,7 @@ def require_reader_rejection(
         fail(f"{label} unexpectedly reached dependent reader use")
     if diagnostic.lower() not in output.lower():
         fail(f"{label} failed without expected early diagnostic: {diagnostic}")
-    termination = f"parallel_abort(): {diagnostic}"
+    termination = f"XNet error: {diagnostic}"
     if termination.lower() not in output.lower():
         fail(f"{label} did not use the expected reader termination path")
     if "build_net production reader semantics passed" in output:

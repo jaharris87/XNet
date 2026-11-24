@@ -502,9 +502,10 @@ Contains
     Return
   End Subroutine sparse_check
 
-  Subroutine net_preprocess(lun_out,data_dir,data_desc)
+  Subroutine net_preprocess(lun_out,data_dir,data_desc,show_progress)
     !-----------------------------------------------------------------------------------------------
     ! This is the outer shell of net_setup. This routine also reformats the reaction data.
+    ! show_progress defaults to true; warnings/errors and generated files are always written.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: iostat_end
     Use nuclear_data, Only: ny, nname, aa, zz, nn, be, mex, iz, in, mex_n, mex_p, &
@@ -513,11 +514,13 @@ Contains
     Implicit None
 
     ! Input variables
-    Integer, Intent(in) :: lun_out    ! The logical unit for progress output
+    Integer, Intent(in) :: lun_out    ! The logical unit for progress and warning/error output
     Character(*), Intent(in) :: data_dir  ! The location of the data directory
     Character(*), Intent(in) :: data_desc ! Description of data directory
+    Logical, Optional, Intent(in) :: show_progress ! Suppress only informational progress when false.
 
     ! Local variables
+    Logical :: progress
     Integer, Parameter :: ndesc = 171 ! Number of unique REACLIB rate labels
     Integer      :: n, i, j, k, l, jj ! Loop indicies
     Integer      :: nk1, nk2, nk3, nk4
@@ -555,6 +558,9 @@ Contains
       &   'mm11','si13','sa12','ks12','hg12','rk12','ac12','gl12', &
       &   'mv09','lhnn','lhna'/)
 
+    progress = .true.
+    If ( present(show_progress) ) progress = show_progress
+
     nnew_desc = 1
     desc_new(1) = '    '
 
@@ -564,13 +570,15 @@ Contains
     Open(newunit=lun_ndiag, file=trim(data_dir)//'/net_diag')
 
     ! Read and Reformat the nuclear data
-    Call format_nuclear_data(lun_out,data_dir)
-    Write(lun_out,"('Listing Nuclei')")
-    Write(lun_out,"(10a6)") (nname(i),i=1,ny)
-    Write(lun_out,"(1x,'Number of species=',i4)") ny
+    Call format_nuclear_data(lun_out,data_dir,progress)
+    If ( progress ) Then
+      Write(lun_out,"('Listing Nuclei')")
+      Write(lun_out,"(10a6)") (nname(i),i=1,ny)
+      Write(lun_out,"(1x,'Number of species=',i4)") ny
+    EndIf
 
     ! Read and reformat the reaction data
-    Write(lun_out,"('Reading and reformating reactions data')")
+    If ( progress ) Write(lun_out,"('Reading and reformating reactions data')")
     Read(lun_su,"(i5,i6)") nffn, nnnu
     la(:) = 1
     le(:) = 0
@@ -870,7 +878,7 @@ Contains
     ! In order to build the Jacobian efficiently (row or column wise rather than scattered),
     ! information about which reactions affect each nucleus is necessary.
     !-------------------------------------------------------------------------------------------------
-    Write(lun_out,"('Registering reactions to species')")
+    If ( progress ) Write(lun_out,"('Registering reactions to species')")
 
     Allocate (l1a(ny),l1e(ny),l2a(ny),l2e(ny),l3a(ny),l3e(ny),l4a(ny),l4e(ny))
 
@@ -972,12 +980,14 @@ Contains
     Do i = 1, ny
       Write(lun_s4) i,l1a(i),l1e(i),l2a(i),l2e(i),l3a(i),l3e(i),l4a(i),l4e(i)
     EndDo
-    Write(lun_out,"(10x,'number of reactions of different types')")
-    Write(lun_out,"(3(10x,i8))") (j,la(j),le(j),j=1,nchap)
-    Write(lun_out,"(10x,'necessary dimensions')")
-    Write(lun_out,"(4(10x,i8))") (nreac(k),k=1,4)
-    Write(lun_out,"(4(10x,i8))") (nan(k),k=1,4)
-    Write(lun_out,"(3(10x,i8))") nffn, nnnu
+    If ( progress ) Then
+      Write(lun_out,"(10x,'number of reactions of different types')")
+      Write(lun_out,"(3(10x,i8))") (j,la(j),le(j),j=1,nchap)
+      Write(lun_out,"(10x,'necessary dimensions')")
+      Write(lun_out,"(4(10x,i8))") (nreac(k),k=1,4)
+      Write(lun_out,"(4(10x,i8))") (nan(k),k=1,4)
+      Write(lun_out,"(3(10x,i8))") nffn, nnnu
+    EndIf
 
     ! Prepare network description file
     Open(newunit=lun_desc, file=trim(data_dir)//'/net_desc')
@@ -992,11 +1002,11 @@ Contains
     Write(lun_desc,"(a7,i8,a7,i8)") 'nffn=',nffn,' nnu=',nnnu
 
     ! Match reactions
-    Write(lun_out,*) "Matching forward and reverse reactions"
+    If ( progress ) Write(lun_out,*) "Matching forward and reverse reactions"
     Call match_react(data_dir)
 
     ! Calculate sparseness
-    Write(lun_out,*) "Determining network sparsity pattern"
+    If ( progress ) Write(lun_out,*) "Determining network sparsity pattern"
     Call sparse_check(data_dir)
     Close(lun_s4)
 

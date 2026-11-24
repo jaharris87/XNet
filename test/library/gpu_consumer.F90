@@ -40,7 +40,7 @@ Program gpu_consumer
   Real(dp), Parameter :: loss_rtol = 1.0e-6_dp
   Character(8), Parameter :: phase_names(phases) = [Character(8) :: 'first','repeat','short','hole','inactive']
   ! CCE 20.0.0 loses the inline character constructor; a parameter preserves its values.
-  Character(5), Parameter :: output_names(3) = [Character(5) :: 'c12','o16','badxx']
+  Character(5), Parameter :: output_names(3) = [Character(5) :: 'c12','o16','ni56']
   Type :: result_t
     Real(dp), Allocatable :: x(:,:)
     Real(dp) :: temperature(lanes), ye(lanes), loss(lanes)
@@ -168,6 +168,7 @@ Program gpu_consumer
 #if defined(XNET_OACC)
       owned_queue_stream = acc_get_cuda_stream(1_C_LONG_LONG)
 #endif
+      Call invalid_output_initialization()
       Call xnet_initialize(controls,network,ierr,message)
     Else
       prefix = 'borrowed'
@@ -180,9 +181,11 @@ Program gpu_consumer
       resources%hipblas_handle = host_handle
 #endif
       resources%queue = host_queue
+      Call invalid_output_initialization()
       Call xnet_initialize(controls,network,ierr,message,gpu_context=resources)
     EndIf
     Call api_ok(Trim(prefix)//' initialize')
+    Write(*,'(a,1x,a)') 'GPU_INVALID_OUTPUT_RECOVERED',Trim(prefix)
     Call selected_device_unchanged()
     Call application_work(Trim(prefix)//'_after_initialize')
     If ( ownership == 1 ) Then
@@ -275,6 +278,54 @@ Program gpu_consumer
   Write(*,'(a)') 'GPU_CONSUMER_CHECKS_COMPLETED'
 
 Contains
+
+  Subroutine invalid_output_initialization()
+    ! Exercise loaded device-table cleanup before evolution setup, then retry with valid controls.
+    Implicit None
+    Character(5), Parameter :: invalid_names(1) = [Character(5) :: 'badxx']
+    Type(xnet_controls_t) :: invalid_controls
+    Type(xnet_network_t) :: rejected_network
+
+    invalid_controls = controls
+    invalid_controls%nnucout = 1
+    invalid_controls%output_nuclei = invalid_names
+    If ( ownership == 1 ) Then
+      Call xnet_initialize(invalid_controls,rejected_network,ierr,message)
+    Else
+      Call xnet_initialize(invalid_controls,rejected_network,ierr,message,gpu_context=resources)
+    EndIf
+    If ( ierr /= xnet_invalid ) Write(*,'(a,i0,2a)') 'Unexpected status ',ierr,': ',Trim(message)
+    Call check(ierr == xnet_invalid,Trim(prefix)//' unknown output species initialization status')
+    Call check(Trim(message) == 'Unknown output_nuclei species: badxx',Trim(prefix)//' output species diagnostic')
+    Call check(.not. Allocated(rejected_network%names),Trim(prefix)//' rejected setup publishes no network')
+    Call selected_device_unchanged()
+    If ( ownership == 2 ) Then
+#if defined(XNET_CUDA)
+      status = cublasGetStream_v2(host_handle,queried_stream)
+#elif defined(XNET_HIP)
+      status = hipblasGetStream(host_handle,queried_stream)
+#endif
+      Call runtime_ok('borrowed BLAS after rejected output setup')
+      Call check(C_Associated(queried_stream,host_stream),'borrowed BLAS stream survives rejected output setup')
+#if defined(XNET_CUDA)
+      status = cudaStreamSynchronize(host_stream)
+#elif defined(XNET_HIP)
+      status = hipStreamSynchronize(host_stream)
+#endif
+      Call runtime_ok('borrowed stream after rejected output setup')
+    EndIf
+#if defined(XNET_OACC)
+    If ( ownership == 1 ) Then
+      queried_stream = acc_get_cuda_stream(1_C_LONG_LONG)
+      Call check(C_Associated(queried_stream,owned_queue_stream),'owned queue survives rejected output setup')
+    Else
+      queried_stream = acc_get_cuda_stream(Int(host_queue,C_LONG_LONG))
+      Call check(C_Associated(queried_stream,host_stream),'borrowed queue survives rejected output setup')
+    EndIf
+#endif
+    Write(*,'(a,1x,a)') 'GPU_INVALID_OUTPUT_REJECTED',Trim(prefix)
+    Return
+  End Subroutine invalid_output_initialization
 
   Subroutine runtime_ok(operation)
     Implicit None

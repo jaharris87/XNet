@@ -28,7 +28,7 @@ Program net
   Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_match, Only: mflx, nflx
   Use xnet_nnu, Only: tmevnu, fluxcms
-  Use xnet_output, Only: open_ts_file, open_ev_file, close_output_files
+  Use xnet_output, Only: map_output_nuc, open_ts_file, open_ev_file, close_output_files
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, &
     & parallel_nprocs, parallel_IOProcessor
   Use xnet_preprocess, Only: net_preprocess
@@ -45,6 +45,7 @@ Program net
   Real(dp), Allocatable :: dyf(:), flx_diff(:), denu(:)
 
   ! Input data and trajectory descriptions
+  Character(256) :: message
   Character(80) :: data_desc, data_dir
   Character(80), Allocatable :: abund_desc(:), thermo_desc(:)
 
@@ -113,6 +114,8 @@ Program net
   ! 4. Load network data and initialize the evolution engine
   !-------------------------------------------------------------------------------------------------
   Call initialize_network_data(data_dir,data_desc)
+  Call map_output_nuc(ierr,message)
+  If ( ierr /= 0 ) Call xnet_terminate(trim(message))
   If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
   Call initialize_evolve(data_dir,nhmx)
 

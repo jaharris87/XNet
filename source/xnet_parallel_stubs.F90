@@ -294,9 +294,9 @@ contains
     character(len=*), optional :: str
     integer, optional :: errorcode
     if ( present(str) ) then
-       print*, 'parallel_abort(): ', str
+       print*, 'XNet error: ', str
     else
-       print*, 'parallel_abort() !!!'
+       print*, 'XNet error: unspecified failure'
     end if
     stop 1
   end subroutine parallel_abort

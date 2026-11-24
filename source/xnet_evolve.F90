@@ -85,7 +85,6 @@ Contains
     Use xnet_match, Only: read_match_data
     Use xnet_nnu, Only: nnu_initialize
     Use xnet_nse, Only: nse_initialize
-    Use xnet_output, Only: map_output_nuc
     Use xnet_screening, Only: screening_init
     Implicit None
 
@@ -100,7 +99,6 @@ Contains
     Call eos_initialize
     If ( isolv == 1 ) Call be_init
     If ( isolv == 3 ) Call bdf_init
-    Call map_output_nuc
     Call nse_initialize
     Call abundances_initialize
     Call conditions_initialize(nhistory)

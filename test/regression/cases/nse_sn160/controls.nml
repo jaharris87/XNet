@@ -49,8 +49,9 @@
   output_nuclei(10) = 'zn60',
   output_nuclei(11) = 'zn61',
   output_nuclei(12) = 'ge64',
-  output_nuclei(13) = 'ge65',
-  output_nuclei(14) = 'as68',
+  ! Preserve the repeated Ge64 columns formerly selected by absent Ge65/As68 names.
+  output_nuclei(13) = 'ge64',
+  output_nuclei(14) = 'ge64',
 
   ! Standalone Input Controls
   data_dir = 'Data_SN160',

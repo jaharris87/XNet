@@ -423,7 +423,7 @@ Contains
     info0 = info
     uvec0(:) = uvec(:)
 
-    ! Now use XNet's screening to match network
+    ! Now use XNet screening to match the network
     If ( iscrn > 0 ) Then
       use_CP98 = .false.
       If ( info0 > 0 ) Then

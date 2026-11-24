@@ -718,7 +718,7 @@ Contains
           EndIf
         EndDo
 
-        ! Don't trust the Q-values in the netsu file
+        ! Do not trust the Q-values in the netsu file
         qtemp = 0.0
         Do i = 1, nmax
           If ( i > nreactant(krt) ) Then

@@ -1,8 +1,7 @@
 !***************************************************************************************************
 ! eos_bahcall.f90 10/18/17
 ! EoS Replacement based on Bahcall ().
-! This file contains routines which calculate EoS quantites needed to calculate screening
-! corrections for reaction rates.
+! This file supplies EoS quantities for reaction-rate screening and self-heating.
 !***************************************************************************************************
 
 #include "xnet_macros.fh"
@@ -115,6 +114,7 @@ Contains
       cv = deiondt9 + deraddt9 + decouldt9
     EndIf
 
+    Return
   End Subroutine eosx
 
   Subroutine eos_interface_scalar(t9,rho,y,ye,cv,efermkt,defermktdt9,xext,aext,zext)

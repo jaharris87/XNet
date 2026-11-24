@@ -173,7 +173,7 @@ Contains
       If ( .not. any( lzstep ) ) Exit
     EndDo
 
-    ! Mark TS convergence only for zones which haven't previously failed or converged
+    ! Mark TS convergence only for zones which have not previously failed or converged
     !XDIR XLOOP_OUTER(1) XASYNC(gpu_queue) &
     !XDIR XPRESENT(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt) &
@@ -566,6 +566,7 @@ Contains
 
     !XOMP end parallel
 
+    Return
   End Subroutine be_init
 
   Subroutine be_finalize

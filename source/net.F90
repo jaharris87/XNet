@@ -59,13 +59,16 @@ Program net
   myid  = parallel_myproc()
   nproc = parallel_nprocs()
 
+  ! Offload may enable compiler OpenMP without enabling XNet host threading.
+  nthread = 1
   !XOMP parallel default(shared)
   tid = 1
-  !$ tid = omp_get_thread_num() + 1
-  !$omp single
-  nthread = 1
-  !$ nthread = omp_get_num_threads()
-  !$omp end single
+#ifdef XNET_OMP
+  tid = omp_get_thread_num() + 1
+  !XOMP single
+  nthread = omp_get_num_threads()
+  !XOMP end single
+#endif
   !XOMP end parallel
 
   Call gpu_init()

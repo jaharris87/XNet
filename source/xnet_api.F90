@@ -297,7 +297,7 @@ Contains
 
     ! 2. Verify GPU device state and device-array mappings when requested
     Call gpu_check_device(ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= xnet_success ) Return
     If ( on_device ) Then
 #ifdef XNET_OMP_OL
       ! OpenMP target work is not ordered on the vendor stream of the application.
@@ -310,7 +310,7 @@ Contains
 #endif
       Call check_device_batch(density,temperature,ye,mass_fraction,restart_dt_s,neutrino_loss, &
         & ierr,message,aux_x,aux_a,aux_z)
-      If ( ierr /= 0 ) Return
+      If ( ierr /= xnet_success ) Return
     EndIf
 
     ! 3. Validate batch extents, duration, and active scientific inputs
@@ -385,7 +385,7 @@ Contains
     If ( ierr /= xnet_success ) Return
 
     Call gpu_check_device(ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= xnet_success ) Return
 
     ierr = xnet_invalid
     If ( size(mass_fraction) /= ny ) Then
@@ -498,7 +498,7 @@ Contains
 #endif
 
     Call validate_xnet_controls(controls,ierr,message)
-    If ( ierr /= 0 ) Return
+    If ( ierr /= xnet_success ) Return
     ierr = xnet_invalid
     If ( len_trim(controls%data_dir) == 0 ) Then
       message = 'data_dir is required'
@@ -580,6 +580,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Initialize XNet thread IDs and diagnostic units; record the actual OpenMP team size.
     ! The application controls OpenMP settings. Serial builds use one thread.
+    ! XNET_OMP guards host thread IDs even when offload enables compiler OpenMP independently.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: tid, nthread, lun_diag, lun_stdout
     Implicit None
@@ -588,10 +589,10 @@ Contains
     !XOMP parallel default(shared)
     tid = 1
 #ifdef XNET_OMP
-    tid = omp_get_thread_num()+1
-    !$omp single
+    tid = omp_get_thread_num() + 1
+    !XOMP single
     nthread = omp_get_num_threads()
-    !$omp end single
+    !XOMP end single
 #endif
     lun_diag = lun_stdout
     !XOMP end parallel
@@ -656,7 +657,7 @@ Contains
   Subroutine evolve_batch(dt_s,on_device,active,density,temperature,electron_fraction,mass_fraction,restart_dt_s, &
     & neutrino_loss,aux_x,aux_a,aux_z,kstep,evolve_status,failed_zone,ierr,message)
     !-----------------------------------------------------------------------------------------------
-    ! Load the batch into the calling thread's work arrays, evolve once, and return results in the
+    ! Load the batch into the work arrays of the calling thread, evolve once, and return results in the
     ! requested memory space.
     ! The caller has validated inputs and selected at least one active zone.
     ! Use host values when on_device is false, even if device mappings already exist.
@@ -706,7 +707,7 @@ Contains
       !XDIR XDEVICE(lzactive)
     EndIf
 
-    ! Zone izb of the batch is column izb of the caller's arrays.
+    ! Zone izb of the batch is column izb of the caller arrays.
     ! Reset inactive and unused zones without reading their scientific inputs.
     ! XIF(on_device) selects the device or host copy of every array in these loops.
     !XDIR XLOOP_OUTER(1) XIF(on_device) XASYNC(gpu_queue) &
@@ -849,7 +850,7 @@ Contains
         Return
       EndIf
     EndIf
-    tid = omp_get_thread_num()+1
+    tid = omp_get_thread_num() + 1
 #endif
 
     If ( tid < 1 .or. tid > nthread .or. .not. allocated(ynse) ) Then
@@ -896,6 +897,8 @@ Contains
       message = 'Inconsistent batch dimensions or batch larger than nzbatchmx'
       Return
     EndIf
+    ! Fortran need not short-circuit logical expressions. Reject nonfinite duration before
+    ! the ordered comparison so a NaN does not reach dt_s <= 0.
     If ( .not. ieee_is_finite(dt_s) ) Then
       message = 'Burn duration must be finite and positive'
       Return
@@ -1244,7 +1247,7 @@ Contains
     ! in the current batch. Reserve a unique process-wide call number under a short
     ! critical region while keeping file writes and evolution outside the critical region.
     ! Each call has its own 0..dt_s history. The filename identifies the position in the batch;
-    ! the binary header records the caller's zone ID.
+    ! the binary header records the caller zone ID.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: itsout, lzactive, bin_file_base, ev_file_base, zone_id, nzbatchmx
     Use xnet_flux, Only: flx
@@ -1281,6 +1284,7 @@ Contains
     EndIf
 
     ! Open ts/ev files for each active zone.
+    output_status = 0
     Do izb = 1, nzbatchmx
       If ( .not. lzactive(izb) ) Cycle
       Write(suffix,'(a,i0,a,i0)') '_call',call_number,'_zone',izb

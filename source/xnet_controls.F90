@@ -174,8 +174,6 @@ Module xnet_controls
   !XOMP threadprivate(lun_diag)
 
   ! Standalone input file controls
-  Character(80) :: inab_file_base      ! Legacy initial-abundance filename prefix
-  Character(80) :: thermo_file_base    ! Legacy thermodynamic-trajectory filename prefix
   Character(80), Allocatable :: inab_file(:)   ! Per-zone initial-abundance filenames (1:nzone)
   Character(80), Allocatable :: thermo_file(:) ! Per-zone thermodynamic-trajectory filenames (1:nzone)
   Integer, Allocatable :: iaux(:)      ! Allow auxiliary nuclei when reading abundance files (nzbatchmx)

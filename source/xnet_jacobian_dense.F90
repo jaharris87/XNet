@@ -312,7 +312,7 @@ Contains
     !XDIR XPRESENT(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
     !XDIR XPRESENT(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
     !XDIR XPRESENT(mu1,mu2,mu3,mu4,a1,a2,a3,a4) &
-    !XDIR XPRESENT(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+    !XDIR XPRESENT(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
     Do izb = 1, nzbatchmx
       Do i0 = 1, ny
         If ( mask(izb) ) Then

@@ -150,7 +150,7 @@ else ifeq ($(PE_ENV),GNU)
     ifeq ($(OPENMP_MODE),ON)
         OPENMP    = -fopenmp
     else
-        OPENMP    = -lgomp
+        OPENMP    =
     endif
     ifeq ($(OPENACC_MODE),ON)
         OPENACC   = -fopenacc

@@ -6,12 +6,13 @@ Program host_batch_openmp_consumer
     & omp_set_dynamic, omp_set_num_threads, omp_set_max_active_levels, omp_get_max_active_levels
   Use xnet_api, Only: dp, xnet_controls_t, xnet_network_t, xnet_timing_t, set_xnet_controls_defaults, &
     & xnet_initialize, xnet_burn_batch, xnet_nse_composition, xnet_finalize, xnet_success, &
-    & xnet_step_limit, xnet_integrator_failure, xnet_unsupported
+    & xnet_step_limit, xnet_integrator_failure, xnet_unsupported, xnet_invalid
   Use consumer_fixture, Only: fixture_state, write_state, check, check_ye_consistency
   Implicit None
 
   Integer, Parameter :: lanes = 4, batches = 8, calls = 6
   Character(5), Parameter :: output_names(2) = [Character(5) :: 'c12', 'o16']
+  Character(5), Parameter :: invalid_names(1) = [Character(5) :: 'badxx']
   Type :: result_t
     Integer :: owner = -1, team = 0, n = lanes, nids = 4, status = -1, steps = -1
     Integer :: ids(4,lanes), counters(5,lanes)
@@ -33,8 +34,8 @@ Program host_batch_openmp_consumer
     Logical :: unchanged = .false., cleared = .false.
     Character(512) :: burn_message, nse_message
   End Type rejected_result_t
-  Type(xnet_controls_t) :: controls
-  Type(xnet_network_t) :: network
+  Type(xnet_controls_t) :: controls, invalid_controls
+  Type(xnet_network_t) :: network, rejected_network
   Type(result_t) :: results(calls,batches)
   Type(nse_result_t) :: nse_results(2,batches)
   Integer :: solver, heat, level, ierr, b, c, p, expected_threads, first_batch, last_batch
@@ -111,9 +112,21 @@ Program host_batch_openmp_consumer
     Flush(output_unit)
     Stop
   EndIf
+  ! Failed setup must release every worker's controls before a direct corrected retry.
+  invalid_controls = controls
+  invalid_controls%nnucout = 1
+  invalid_controls%output_nuclei = invalid_names
+  Call xnet_initialize(invalid_controls,rejected_network,ierr,message)
+  If ( ierr /= xnet_invalid ) Write(*,'(a,i0,2a)') 'Unexpected status ',ierr,': ',Trim(message)
+  Call check(ierr == xnet_invalid,'unknown output species initialization status')
+  Call check(Trim(message) == 'Unknown output_nuclei species: badxx','output species diagnostic')
+  Call check(.not. Allocated(rejected_network%names),'rejected setup publishes no network')
+  Call check(omp_get_max_threads() == expected_threads,'rejected setup preserves application team setting')
+  Write(*,'(a,1x,i0)') 'HOST_BATCH_INVALID_OUTPUT_REJECTED',expected_threads
   Call xnet_initialize(controls,network,ierr,message)
   If ( ierr /= xnet_success ) Write(*,'(a)') Trim(message)
   Call check(ierr == xnet_success,'initialization')
+  Write(*,'(a,1x,i0)') 'HOST_BATCH_INVALID_OUTPUT_RECOVERED',expected_threads
   Call check(omp_get_max_threads() == expected_threads,'initialization preserves application team setting')
   Do b = first_batch, last_batch
     Do c = 1, calls
